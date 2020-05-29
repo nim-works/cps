@@ -2,35 +2,12 @@ import os
 import eventqueue
 
 
-type
-  Fn = proc(i: int): Cont
-
-  Cont = object
-    fn: Fn
-    arg: int
-
-proc newCont(fn: Fn, arg: int): Cont =
-  Cont(fn: fn, arg: arg)
-
-# Trampoline
-
-proc run(cont: Cont) =
-  var cont = cont
-  while cont.fn != nil:
-    cont = cont.fn(cont.arg)
 
 # Yield/sleep
 
-proc sleep(cont: Cont): Cont =
-
-  if false:
-    sleep(10)
-    return cont
-
-  discard addTimer(0.3, proc(): bool =
-    cont.run())
-  
-  return newCont(nil, 0)
+proc sleep(t: float, c: Cont): Cont =
+  discard addTimer(t, c)
+  return Cont()
 
 
 # proc ticker() =
@@ -40,17 +17,23 @@ proc sleep(cont: Cont): Cont =
 #     inc i
 #     sleep()
 
-proc ticker_1(i: int): Cont
+type
+  ContTicker1 = ref object of Cont
+    i: int
 
-proc ticker_1(i: int): Cont =
-  var i = i
+  ContTicker = ref object of Cont
+    i: int
+
+proc ticker_1(c: Cont): Cont =
+  var i = c.ContTicker1.i
   echo "tick ", i
   inc i
-  return sleep(newCont(ticker_1, i))
+  let c2 = ContTicker1(fn: ticker_1, i: i)
+  sleep(0.3,  c2)
 
-proc ticker(i: int): Cont =
-  var i = i
-  return newCont(ticker_1, i)
+proc ticker(c: Cont): Cont =
+  var i = c.ContTicker.i
+  return ContTicker1(fn: ticker_1, i: i)
 
 
 # proc tocker() =
@@ -60,29 +43,40 @@ proc ticker(i: int): Cont =
 #     echo "tock"
 #     dec j
 
-proc tocker_1(j: int): Cont
-proc tocker_2(j: int): Cont
+type
+  ContTocker1 = ref object of Cont
+    j: int
+  
+  ContTocker2 = ref object of Cont
+    j: int
+  
+  ContTocker = ref object of Cont
+    j: int
 
-proc tocker_1(j: int): Cont =
-  var j = j
+proc tocker_1(c: Cont): Cont
+proc tocker_2(c: Cont): Cont
+
+proc tocker_1(c: Cont): Cont =
+  var j = c.ContTocker1.j
   echo "tock ", j
   dec j
-  return newCont(tocker_2, j)
+  return ContTocker2(fn: tocker_2, j: j)
   
-proc tocker_2(j: int): Cont =
-  var j = j
-  return sleep(newCont(tocker_1, j))
+proc tocker_2(c: Cont): Cont =
+  var j = c.ContTocker2.j
+  let c2 = ContTocker1(fn: tocker_1, j: j)
+  sleep(0.5, c2)
 
-proc tocker(j: int): Cont =
-  var j = j
-  return newCont(tocker_2, j)
+proc tocker(c: Cont): Cont =
+  var j = c.ContTocker.j
+  return ContTocker2(fn: tocker_2, j: j)
 
 
 # Start tickers and tockers
 
-newCont(ticker,   0).run()
-newCont(ticker, 100).run()
-newCont(tocker,   0).run()
+ContTicker(fn: ticker, i:   0).run()
+ContTicker(fn: ticker, i: 100).run()
+ContTocker(fn: tocker, j:   0).run()
 
 # Run event loop forever
 
