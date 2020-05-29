@@ -1,3 +1,5 @@
+
+
 import os
 import eventqueue
 
@@ -18,22 +20,22 @@ proc sleep(t: float, c: Cont): Cont =
 #     sleep()
 
 type
-  ContTicker1 = ref object of Cont
+  Ticker1Cont = ref object of Cont
     i: int
 
-  ContTicker = ref object of Cont
+  TickerCont = ref object of Cont
     i: int
 
 proc ticker_1(c: Cont): Cont =
-  var i = c.ContTicker1.i
+  var i = c.Ticker1Cont.i
   echo "tick ", i
   inc i
-  let c2 = ContTicker1(fn: ticker_1, i: i)
+  let c2 = Ticker1Cont(fn: ticker_1, i: i)
   sleep(0.3,  c2)
 
 proc ticker(c: Cont): Cont =
-  var i = c.ContTicker.i
-  return ContTicker1(fn: ticker_1, i: i)
+  var i = c.TickerCont.i
+  Ticker1Cont(fn: ticker_1, i: i)
 
 
 # proc tocker() =
@@ -44,39 +46,39 @@ proc ticker(c: Cont): Cont =
 #     dec j
 
 type
-  ContTocker1 = ref object of Cont
+  Tocker1Cont = ref object of Cont
     j: int
   
-  ContTocker2 = ref object of Cont
+  Tocker2Cont = ref object of Cont
     j: int
   
-  ContTocker = ref object of Cont
+  TockerCont = ref object of Cont
     j: int
 
 proc tocker_1(c: Cont): Cont
 proc tocker_2(c: Cont): Cont
 
 proc tocker_1(c: Cont): Cont =
-  var j = c.ContTocker1.j
+  var j = c.Tocker1Cont.j
   echo "tock ", j
   dec j
-  return ContTocker2(fn: tocker_2, j: j)
+  Tocker2Cont(fn: tocker_2, j: j)
   
 proc tocker_2(c: Cont): Cont =
-  var j = c.ContTocker2.j
-  let c2 = ContTocker1(fn: tocker_1, j: j)
+  var j = c.Tocker2Cont.j
+  let c2 = Tocker1Cont(fn: tocker_1, j: j)
   sleep(0.5, c2)
 
 proc tocker(c: Cont): Cont =
-  var j = c.ContTocker.j
-  return ContTocker2(fn: tocker_2, j: j)
+  var j = c.TockerCont.j
+  Tocker2Cont(fn: tocker_2, j: j)
 
 
 # Start tickers and tockers
 
-ContTicker(fn: ticker, i:   0).run()
-ContTicker(fn: ticker, i: 100).run()
-ContTocker(fn: tocker, j:   0).run()
+TickerCont(fn: ticker, i:   0).run()
+TickerCont(fn: ticker, i: 100).run()
+TockerCont(fn: tocker, j:   0).run()
 
 # Run event loop forever
 
