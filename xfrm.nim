@@ -159,6 +159,8 @@ proc cps_sleep(cont: Cont, t: float): Cont =
   discard addTimer(t, cont)
   return Cont()
 
+# This is the proc we are converting to CPS form
+
 proc tocker(cont: Cont): Cont {.cps.} =
   var j = cont.Cont_tocker_1.j
   echo "start"
@@ -170,6 +172,11 @@ proc tocker(cont: Cont): Cont {.cps.} =
     echo "tock ", j
     inc j
 
+# Instantiate two parallel tockers, starting at different numbers
+
 Cont_Tocker_1(fn: tocker, j:   0).run()
 Cont_Tocker_1(fn: tocker, j: 100).run()
+
+# Forever run the event queue
+
 run()
