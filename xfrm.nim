@@ -5,7 +5,7 @@ import eventqueue
 
 # Any call to a proc starting with "cps_" is a CPS call
 proc isCpsCall(n: NimNode): bool = 
-  return n.kind == nnkCall and ($n[0]).find("cps_") == 0
+  n.kind == nnkCall and ($n[0]).find("cps_") == 0
 
 # Every block with calls to CPS procs is a CPS block
 proc isCpsBlock(n: NimNode): bool =
@@ -19,11 +19,11 @@ proc isCpsBlock(n: NimNode): bool =
 proc split(n: Nimnode): NimNode =
 
   let name = $n[0]
-  var contTypes = newStmtList()
-  var contProcs = newStmtList()
+  var contTypes = newStmtList() # Continuation types for split procs
+  var contProcs = newStmtList() # Forward declaratiosn of all split procs
   var id = 0
 
-  # Create a new CPS proc with the given body
+  # Create a new CPS proc with prelude and the given body
   proc addProc(body: NimNode): NimNode =
     inc id
     let procId = ident("cps_" & name & "_" & $id)
@@ -46,13 +46,13 @@ proc split(n: Nimnode): NimNode =
       proc `procId$`(`contId`: Cont): Cont
 
     result = quote do:
-      return `contT`(fn: `procId`, j: j)
+      result = `contT`(fn: `procId`, j: j)
       proc `procId`(`contId`: Cont): Cont =
         `prelude`
         `body`
 
 
-  # Split on 'while'
+  # Split on 'while' CPS blocks
   proc auxWhile(n: Nimnode): NimNode =
     if n.kind == nnkWhileStmt and n[1].isCpsBlock():
       let (expr, stmt) = (n[0], auxWhile(n[1]))
@@ -73,29 +73,30 @@ proc split(n: Nimnode): NimNode =
 
     if n.kind == nnkStmtList and n.isCpsBlock():
       
-      result = copyNimNode(n)
-
       type State = enum sPre, sCPSCalls, sPost
       var state = sPre
-      var postblock = newStmtList()
+      var a0 = newStmtList()
+      var a1 = newStmtList()
       
       for nc in n:
         case state
         of sPre:
-          result.add auxSplit(nc)
+          a0.add auxSplit(nc)
           if nc.isCpsCall():
             state = sCPSCalls
         of sCPSCalls:
           if nc.isCpsCall():
-            result.add auxSplit(nc)
+            a0.add auxSplit(nc)
           else:
             state = sPost
-            postblock.add auxSplit(nc)
+            a1.add auxSplit(nc)
         of sPost:
-            postblock.add auxSplit(nc)
-            
-      if postblock.len > 0:
-        result.add addProc auxSplit(postblock)
+            a1.add auxSplit(nc)
+      
+      result = copyNimNode(n)
+      result.add a0
+      if a1.len > 0:
+        result.add addProc auxSplit(a1)
 
     else:
       result = copyNimNode(n)
@@ -116,8 +117,24 @@ proc split(n: Nimnode): NimNode =
     procs.add aux(n)
     return procs
 
+  # hack: chain csp_sleep() calls
+  var chainNode: NimNode
+  proc auxChain(n: NimNode): NimNode =
+    result = copyNimNode(n)
+    for nc in n:
+      if nc.kind == nnkCall:
+        chainNode = nc
+      else:
+        if chainNode != nil:
+          echo nc.astGenRepr
+          let rv = nc[0][1]
+          result.add quote do:
+            result = cps_sleep(`rv`, 0.3)
+          chainNode = nil
+        else:
+          result.add auxChain(nc)
 
-  var body = n.auxWhile.auxSplit.auxToplevel
+  var body = n.auxWhile.auxSplit.auxToplevel.auxChain
 
   result = newStmtList(contTypes, contProcs, body)
 
@@ -135,13 +152,15 @@ macro cps(n: untyped) =
   xfrmCps(n)
 
 
-proc cps_sleep() = discard # stub
+proc cps_sleep(cont: Cont, t: float): Cont =
+  discard addTimer(t, cont)
+  return Cont()
 
 proc tocker(cont: Cont): Cont {.cps.} =
   var j = cont.Cont_tocker_1.j
   echo "start"
   while true:
-    cps_sleep()
+    cps_sleep(0.3)
     echo "tock ", j
     inc j
 

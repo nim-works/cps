@@ -3,7 +3,7 @@ import eventqueue
 
 # Yield/sleep
 
-proc sleep(t: float, c: Cont): Cont =
+proc sleep(c: Cont, t: float): Cont =
   discard addTimer(t, c)
   return Cont()
 
@@ -26,8 +26,7 @@ proc ticker_1(c: Cont): Cont =
   var i = c.Ticker1Cont.i
   echo "tick ", i
   inc i
-  let c2 = Ticker1Cont(fn: ticker_1, i: i)
-  sleep(0.3,  c2)
+  Ticker1Cont(fn: ticker_1, i: i).sleep(0.3)
 
 proc ticker(c: Cont): Cont =
   var i = c.TickerCont.i
@@ -62,8 +61,7 @@ proc tocker_1(c: Cont): Cont =
   
 proc tocker_2(c: Cont): Cont =
   var j = c.Tocker2Cont.j
-  let c2 = Tocker1Cont(fn: tocker_1, j: j)
-  sleep(0.5, c2)
+  Tocker1Cont(fn: tocker_1, j: j).sleep(0.5)
 
 proc tocker(c: Cont): Cont =
   var j = c.TockerCont.j
