@@ -124,7 +124,8 @@ proc split(n: Nimnode): NimNode =
   proc auxChain(n: NimNode): NimNode =
     result = copyNimNode(n)
     for nc in n:
-      if nc.kind == nnkCall:
+      if nc.kind == nnkCall and nc[0].eqIdent("cps_sleep"):
+        echo nc.astGenRepr
         chainNode = nc
       else:
         if chainNode != nil:
@@ -164,9 +165,11 @@ proc tocker(cont: Cont): Cont {.cps.} =
   while true:
     cps_sleep(0.3)
     echo "tick ", j
+    inc j
     cps_sleep(0.3)
     echo "tock ", j
     inc j
 
-Cont_Tocker_1(fn: tocker, j: 0).run()
+Cont_Tocker_1(fn: tocker, j:   0).run()
+Cont_Tocker_1(fn: tocker, j: 100).run()
 run()
