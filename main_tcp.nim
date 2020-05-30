@@ -65,7 +65,7 @@ proc doClient(cont: Cont): Cont =
 #   while true:
 #     waitForSock(sock)
 #     var sa: Sockaddr_in
-#     var saLen: SockLen
+#     var saLen = sizeof(sa).SockLen
 #     let sockc = accept(sock, cast[ptr SockAddr](sa.addr), saLen.addr)
 #     echo "Accepted new client"
 #     doClient(sockc)
