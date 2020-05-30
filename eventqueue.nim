@@ -1,18 +1,15 @@
 
 # Basic poll based event loop
 
-import posix, tables
-
-export POLLIN, POLLOUT, POLLERR
+import nativesockets, tables, times
 
 type
 
   HandlerId = int
 
-  FdHandler = ref object
+  SockHandler = ref object
     id: HandlerId
-    fd: int
-    events: int
+    sock: SocketHandle
     cont: Cont
     deleted: bool
 
@@ -26,7 +23,7 @@ type
   Evq* = object
     stop: bool
     tNow: float
-    fdHandlers: Table[HandlerId, FdHandler]
+    sockHandlers: Table[HandlerId, SockHandler]
     timerHandlers: Table[HandlerId, TimerHandler]
     nextHandlerId: HandlerId
 
@@ -45,9 +42,7 @@ proc run*(c: Cont) =
 var evq {.threadvar.}: Evq
 
 proc now(): float =
-  var ts: Timespec
-  discard clock_gettime(CLOCK_MONOTONIC, ts)
-  return ts.tv_sec.float + ts.tv_nsec.float * 1.0e-9
+  getTime().toUnixFloat()
 
 proc nextId(): HandlerId =
   inc evq.nextHandlerId
@@ -55,14 +50,14 @@ proc nextId(): HandlerId =
 
 # Register/unregister a file descriptor to the loop
 
-proc addFd*(fd: int, events: int, cont: Cont): HandlerId =
+proc addFd*(sock: SocketHandle, cont: Cont): HandlerId =
   let id = nextId()
-  evq.fdHandlers[id] = FdHandler(id: id, fd: fd, events: events, cont: cont)
+  evq.sockHandlers[id] = SockHandler(id: id, sock: sock, cont: cont)
   return id
 
 proc delFd*(id: HandlerId) =
-  evq.fdHandlers[id].deleted = true
-  evq.fdHandlers.del id
+  evq.sockHandlers[id].deleted = true
+  evq.sockHandlers.del id
 
 # Register/unregister timers
 
@@ -88,16 +83,17 @@ proc poll() =
       let dt = th.tWhen - evq.tNow
       tSleep = min(tSleep, dt)
 
-  # Collect file descriptors for poll set
+  # Collect sockets for select
 
-  var pfds: seq[TPollfd]
-  for id, fdh in evq.fdHandlers:
-    if not fdh.deleted:
-      pfds.add TPollfd(fd: fdh.fd.cint, events: fdh.events.cshort)
+  var readSocks: seq[SocketHandle]
+  for id, sh in evq.sockHandlers:
+    if not sh.deleted:
+      readSocks.add sh.sock
 
-  let r = posix.poll(if pfds.len > 0: pfds[0].addr else: nil, pfds.len.Tnfds, int(tSleep * 1000.0))
+  let r = selectRead(readSocks, int(tSleep * 1000))
 
-  # Call expired timer handlers
+  # Call expired timer handlers. Don't call while iterating because callbacks
+  # might mutate the list
   
   evq.tNow = now()
   var ths: seq[TimerHandler]
@@ -116,22 +112,21 @@ proc poll() =
       else:
         delTimer(th.id)
 
-  # Call fd handlers with events
+  if r > 0:
 
-  if r == 0:
-    return
+    # Call sock handlers with events. Don't call while iterating because
+    # callbacks might mutate the list
 
-  var fdhs: seq[FdHandler]
+    var shs: seq[SockHandler]
 
-  for pfd in pfds:
-    if pfd.revents != 0:
-      for id, fdh in evq.fdHandlers:
-        if not fdh.deleted and fdh.fd == pfd.fd and pfd.revents == fdh.events:
-          fdhs.add fdh
+    for s in readSocks:
+      for id, sh in evq.sockHandlers:
+        if not sh.deleted and sh.sock == s:
+          shs.add sh
 
-  for fdh in fdhs:
-    if not fdh.deleted:
-      fdh.cont.run()
+    for sh in shs:
+      if not sh.deleted:
+        sh.cont.run()
 
 
 proc stop*() =

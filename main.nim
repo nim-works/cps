@@ -1,9 +1,5 @@
 
-
-import os
 import eventqueue
-
-
 
 # Yield/sleep
 
