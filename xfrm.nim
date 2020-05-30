@@ -30,6 +30,7 @@ proc split(n: Nimnode): NimNode =
     let contId = ident("cont")
     let contT = ident("Cont_" & name & "_" & $id)
 
+    # hack: the prelude now has one hardcoded val
     let prelude = nnkVarSection.newTree(
       nnkIdentDefs.newTree(
         newIdentNode("j"),
@@ -40,6 +41,7 @@ proc split(n: Nimnode): NimNode =
 
     contTypes.add quote do:
       type `contT` = ref object of Cont
+        # hack: continuation types should be derived from lambda lifting
         j: int
 
     contProcs.add quote do:
@@ -160,6 +162,8 @@ proc tocker(cont: Cont): Cont {.cps.} =
   var j = cont.Cont_tocker_1.j
   echo "start"
   while true:
+    cps_sleep(0.3)
+    echo "tick ", j
     cps_sleep(0.3)
     echo "tock ", j
     inc j
