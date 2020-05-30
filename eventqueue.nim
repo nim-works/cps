@@ -28,7 +28,7 @@ type
     nextHandlerId: HandlerId
 
   Cont* = ref object of RootObj
-    fn*: proc(c: Cont): Cont
+    fn*: proc(c: Cont): Cont {.nimcall.}
 
 
 # Continuation trampoline
