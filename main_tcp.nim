@@ -15,9 +15,6 @@ type SocketCont = ref object of Cont
 
 # Some helper procs
 
-proc waitForSock(s: SocketHandle, c: Cont) =
-  discard addFd(s, c)
-
 proc write(s: SocketHandle, buf: string) =
   discard send(s, buf[0].unsafeAddr, buf.len.cint, 0)
 
@@ -53,7 +50,7 @@ proc doClient1(cont: Cont): Cont =
   
 proc doClient2(cont: Cont): Cont =
   var sock = cont.SocketCont.sock
-  waitForSock sock, SocketCont(fn: doClient1, sock: sock)
+  addFd sock, SocketCont(fn: doClient1, sock: sock)
 
 proc doClient(cont: Cont): Cont =
   var sock = cont.SocketCont.sock
@@ -83,7 +80,7 @@ proc doServer1(c: Cont): Cont =
   
 proc doServer2(c: Cont): Cont =
   var sock = c.SocketCont.sock
-  waitForSock sock, SocketCont(fn: doServer1, sock: sock)
+  addFd sock, SocketCont(fn: doServer1, sock: sock)
 
 proc doServer(c: Cont): Cont =
   var sock = c.SocketCont.sock
