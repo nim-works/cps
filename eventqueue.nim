@@ -35,7 +35,7 @@ type
 
 proc run*(c: Cont) =
   var c = c
-  while c.fn != nil:
+  while c != nil and c.fn != nil:
     c = c.fn(c)
 
 
@@ -112,6 +112,8 @@ proc poll() =
       else:
         delTimer(th.id)
 
+  doAssert r != -1
+
   if r > 0:
 
     # Call sock handlers with events. Don't call while iterating because
@@ -127,6 +129,7 @@ proc poll() =
     for sh in shs:
       if not sh.deleted:
         sh.cont.run()
+        delFd(sh.id)
 
 
 proc stop*() =
