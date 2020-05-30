@@ -124,7 +124,7 @@ proc split(n: Nimnode): NimNode =
   proc auxChain(n: NimNode): NimNode =
     result = copyNimNode(n)
     for nc in n:
-      if nc.kind == nnkCall and nc[0].eqIdent("cps_sleep"):
+      if nc.kind == nnkCall and ($nc[0]).find("cps_") == 0:
         echo nc.astGenRepr
         chainNode = nc
       else:
