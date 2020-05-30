@@ -1,6 +1,9 @@
 
 # Continuation Passing Style (CPS) in Nim
 
+
+## Introduction
+
 This is a test bench to see what needs to be done for implementing CPS with Nim
 macros. The goal is to provide a method for transforming any Nim proc into a
 series of procs passing continuations, and using this as building blocks to
@@ -8,10 +11,8 @@ implement non-linear control flow like ultra-light coroutines and iterators.
 
 - `main.nim`: three concurrent procs counting up and down, sleeping inbetween
 - `main_tcp.nim`: concurrent multi-client TCP server process
+- `xfrm.nim`: first try at the macro
 
-There is no macro yet, The example code in main.nim has two procs that are
-manually translated to CPS form, and are run concurrently with the help of
-simple event loop.
 
 If this all works out right, the next step would be to see if the
 transformation can be moved into the Nim compiler itself.
