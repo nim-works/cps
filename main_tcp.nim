@@ -42,7 +42,6 @@ proc read(sock: SocketHandle, len=256): string =
 proc doClient2(cont: Cont): Cont
 
 proc doClient1(cont: Cont): Cont =
-  echo "doClient1"
   var sock = cont.SocketCont.sock
   var buf = sock.read()
   echo "buf ", buf, " ", buf.len
@@ -53,12 +52,10 @@ proc doClient1(cont: Cont): Cont =
     echo "Client went away"
   
 proc doClient2(cont: Cont): Cont =
-  echo "doClient2"
   var sock = cont.SocketCont.sock
   waitForSock sock, SocketCont(fn: doClient1, sock: sock)
 
 proc doClient(cont: Cont): Cont =
-  echo "doClient"
   var sock = cont.SocketCont.sock
   sock.write("Hello! Please type something.\n")
   SocketCont(fn: doClient2, sock: sock)
