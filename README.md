@@ -8,10 +8,12 @@ macros. The goal is to provide a method for transforming any Nim proc into a
 series of procs passing continuations, and using this as building blocks to
 implement non-linear control flow like ultra-light coroutines and iterators.
 
-- `main.nim`: three concurrent procs counting up and down, sleeping inbetween
-- `main_tcp.nim`: concurrent multi-client TCP server process
-- `xfrm.nim`: first try at the macro
-
+- `main.nim`: three concurrent procs counting up and down, sleeping
+  inbetween (manually transformd)
+- `main_tcp.nim`: concurrent multi-client TCP server process (also manually
+  transformed)
+- `xfrm.nim`: first try at the macro; this is now able to transform a
+  very trivial proc, but is full of hacks and assumptions
 
 If this all works out right, the next step would be to see if the
 transformation can be moved into the Nim compiler itself.
