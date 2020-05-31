@@ -30,7 +30,8 @@ proc split(n: Nimnode): NimNode =
     let contId = ident("cont")
     let contT = ident("Cont_" & name & "_" & $id)
 
-    # hack: the prelude now has one hardcoded val
+    # hack: the prelude now has one hardcoded val, this should be
+    # generated from the lifted locals of the proc instead
     let prelude = nnkVarSection.newTree(
       nnkIdentDefs.newTree(
         newIdentNode("j"),
@@ -135,9 +136,14 @@ proc split(n: Nimnode): NimNode =
         else:
           result.add auxChain(nc)
 
+  # Chain all the above transformations
   var body = n.auxWhile.auxSplit.auxToplevel.auxChain
 
-  result = newStmtList(contTypes, contProcs, body)
+  # Move al the types into one type block
+  let types = nnkTypeSection.newTree()
+  for t in contTypes: types.add t[0]
+
+  result = newStmtList(types, contProcs, body)
 
 
 proc xfrmCps(n: NimNode): NimNode =
