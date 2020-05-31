@@ -82,6 +82,7 @@ proc poll() =
     if not th.deleted:
       let dt = th.tWhen - evq.tNow
       tSleep = min(tSleep, dt)
+  tSleep = max(tSleep, 0)
 
   # Collect sockets for select
 

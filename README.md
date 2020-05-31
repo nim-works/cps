@@ -1,7 +1,6 @@
 
 # Continuation Passing Style (CPS) in Nim
 
-
 ## Introduction
 
 This is a test bench to see what needs to be done for implementing CPS with Nim
@@ -44,6 +43,8 @@ queue, which will resume the continuation after the given delay.
 
 
 ## Conversion example
+
+Below is an example of what a CPS transform should look like:
 
 ### Original proc:
 
