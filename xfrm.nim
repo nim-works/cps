@@ -125,11 +125,9 @@ proc split(n: Nimnode): NimNode =
     result = copyNimNode(n)
     for nc in n:
       if nc.kind == nnkCall and ($nc[0]).find("cps_") == 0:
-        echo nc.astGenRepr
         chainNode = nc
       else:
         if chainNode != nil:
-          echo nc.astGenRepr
           let rv = nc[0][1]
           result.add quote do:
             result = cps_sleep(`rv`, 0.3)
