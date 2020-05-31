@@ -22,6 +22,18 @@ This project is releated to https://github.com/zevv/nimcoro/, which uses
 ucontext based coroutines with all the overhead and complications.
 
 
+## Random list of open questions
+
+- Does it even make sens to do this from a macro? Some things will be hard or
+  even impossible, given the lack of information and the stage at which marcros
+  run. For example, how would this need to handle template injected locals, or
+  iterator based for loops?
+
+- How should we handle lineinfo, will stack traces still make sense after the
+  translation?
+
+- Many many more
+
 ## Implementation notes
 
 Continuations are implemented as objects inheriting from `Cont`, and consist of
