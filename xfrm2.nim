@@ -37,7 +37,7 @@ proc filter(n: NimNode, fn: NimNodeFilter=ident): NimNode =
 
 # Pre-semcheck transformation
 
-proc doCspPre(n: NimNode): NimNode =
+proc doPre(n: NimNode): NimNode =
 
   proc mkLabel(s: string): NimNode =
     #return ident(s)
@@ -80,19 +80,8 @@ proc doCspPre(n: NimNode): NimNode =
   echo "========"
 
 macro spawnPre(n: untyped) =
-  doCspPre(n)
+  doPre(n)
 
-
-# Post-semcheck transformation
-
-proc doCspPost(n: NimNode): NimNode =
-  result = n.filter()
-  echo "======== post out"
-  echo result.repr
-  echo "========"
-
-macro spawnPost(n: untyped) =
-  doCspPost(n)
 
 template goto(n: untyped) = discard
 template label(n: untyped) = discard
@@ -116,7 +105,6 @@ proc main() =
       else:
         break
       sleep(0.3)
-    #writeStackTrace()
     echo "spawnPre done"
   echo "main done"
 
