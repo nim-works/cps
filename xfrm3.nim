@@ -18,8 +18,28 @@ proc xfrm(n: NimNode): NimNode =
         labels.incl l
         return ident(l)
 
-  # Insert goto/label pair after CPS calls
+  proc tailCall(n: NimNode): NimNode =
+    nnkReturnStmt.newTree(
+      newCall(n)
+    )
+  
+  # Make sure all CPS calls become tail calls
   proc auxCpsCall(n: NimNode): NimNode =
+    result = n.copyNimNode
+    for i, nc in n:
+      result.add auxCpsCall(nc)
+      if nc.isCpscall() and i < n.len-1:
+        echo "-- converting CPS call to tail call"
+        let lNext = mklabel "tailcall"
+        let nBody = newStmtList()
+        let nNext = auxCpsCall(newStmtList(n[i+1..<n.len]))
+        result.add tailCall(lNext)
+        result.add newProc(name=lNext, body=nNext)
+        break
+
+
+  # Make sure all CPS calls become tail calls
+  proc auxCpsCall2(n: NimNode): NimNode =
     if n.kind == nnkStmtList:
       result = n.copyNimNode
       var blk: NimNode
@@ -29,7 +49,7 @@ proc xfrm(n: NimNode): NimNode =
           if nc.isCpsCall() and i < n.len-1:
             let l = mkLabel "cpscall"
             blk = nnkBlockStmt.newTree(l)
-            echo "-- inserting goto/block after ", nc[0].strVal, ": ", l
+            echo "-- inserting tailcall/proc after ", nc[0].strVal, ": ", l
             result.add nnkCommand.newTree(ident("goto"), l)
             result.add blk
         else:
@@ -39,44 +59,34 @@ proc xfrm(n: NimNode): NimNode =
       for nc in n:
         result.add auxCpsCall(nc)
 
-  # Convert while to if + gotos
-  proc auxWhile(n: NimNode): NimNode =
+  # Convert while to if + tail calls
+  proc auxWhile(n: NimNode, lBreak: NimNode=nil): NimNode =
 
-    var nBreak: NimNode
+    if n.kind == nnkBreakStmt:
+      echo "-- converting break to ", lBreak.repr, "()"
+      return tailCall(lBreak)
+
     result = n.copyNimNode
-
     for i, nc in n:
-      if nc.kind == nnkWhileStmt:
+      if nc.kind == nnkBreakStmt:
+        echo "-- converting break to ", lBreak.repr, "()"
+        result.add tailCall(lBreak)
+      elif nc.kind == nnkWhileStmt:
+        let lBreak = mkLabel "break"
         echo "-- converting 'while ", nc[0].repr, "'"
-        let (lWhile, lBreak) = (mkLabel "while", mkLabel "break")
-        let (expr, body) = (nc[0], nc[1])
-        let nBody = quote do:
-          if `expr`:
-            `body`
-            `lWhile`()
-
-        result.add quote do:
-          `lWhile`()
-          proc `lWhile`() =
-            `nBody`
-
+        let lWhile = mkLabel "while"
+        let (expr, body) = (nc[0], auxWhile(nc[1], lBreak))
+        let nBody = newStmtList(newIfStmt((expr, newStmtList(body, tailCall(lWhile)))))
+        result.add tailCall(lWhile)
+        result.add newProc(name=lWhile, body=nBody)
         if i < n.len-1:
-          echo "notlast"
-          nBody.add quote do:
-            `lBreak`()
-          nBreak = quote do:
-            echo "break"
-          result.add quote do:
-            proc `lBreak`() =
-              `nBreak`
-
+          nBody.add tailCall(lBreak)
+          let nBreak = newStmtList()
+          nBody.add newProc(name=lBreak, body=nBreak)
+          nBreak.add auxWhile(newStmtList(n[i+1..<n.len]), lBreak)
+          break
       else:
-
-        if nBreak == nil:
-          result.add auxWhile(nc)
-        else:
-          echo "addbrk ", nc.repr
-          nBreak.add auxWhile(nc)
+        result.add auxWhile(nc, lBreak)
 
 
   result = n
@@ -84,38 +94,38 @@ proc xfrm(n: NimNode): NimNode =
   result = result.auxWhile()
 
 
-macro test(name: static[string], a, b: untyped) =
+macro test(name: static[string], nIn, nExp: untyped) =
   echo "======[ ", name, " ]========="
-  let aa = a.xfrm
-  if aa.repr == b.repr:
+  let nOut = nIn.xfrm
+  if nOut.repr == nExp.repr:
     echo "ok  "
   else:
+    echo "-- in: --------------------"
+    echo nIn.repr
+    echo "-- out: -------------------"
+    echo nOut.repr
+    echo "-- expected: --------------"
+    echo nExp.repr
     echo "---------------------------"
-    echo a.treeRepr
-    echo "-- got: -------------------"
-    echo aa.repr
-    echo "-- expectd: ---------------"
-    echo b.repr
-    echo "---------------------------"
-    writeFile("/tmp/a", aa.repr)
-    writeFile("/tmp/b", b.repr)
+    writeFile("/tmp/nExp", nExp.treerepr)
+    writeFile("/tmp/nOut", nOut.treerepr)
     quit 1
 
 
-
-template goto(_: untyped) = discard
-template label(_: untyped) = discard
+# ----------------------------------------------------------------------
+# Unit tests
+# ----------------------------------------------------------------------
 
 
 test "while0":
   while exp1:
     stmt2
 do:
-  while1()
+  return while1()
   proc while1() =
     if exp1:
       stmt2
-      while1()
+      return while1()
 
 
 test "while1":
@@ -126,11 +136,11 @@ test "while1":
 do:
   stmt1
   stmt2
-  while1()
+  return while1()
   proc while1() =
     if exp1:
       stmt3
-      while1()
+      return while1()
     
 
 
@@ -145,16 +155,16 @@ test "while2":
 do:
   stmt1
   stmt2
-  while1()
+  return while1()
   proc while1() =
     if exp1:
       stmt3
       stmt4
-      while1()
-    break1()
-  proc break1() =
-    stmt5
-    stmt6
+      return while1()
+    return break1()
+    proc break1() =
+      stmt5
+      stmt6
 
 
 test "while3":
@@ -166,21 +176,21 @@ test "while3":
   stmt4
 do:
   stmt1
-  while1()
+  return while1()
   proc while1() =
     if exp1:
       stmt2
-      while1()
-    break1()
-  proc break1() =
-    while2()
-    proc while2() =
-      if exp2:
-        stmt3
-        while2()
-      break2()
-    proc break2() =
-      stmt3
+      return while1()
+    return break1()
+    proc break1() =
+      return while2()
+      proc while2() =
+        if exp2:
+          stmt3
+          return while2()
+        return break2()
+        proc break2() =
+          stmt4
     
 
 
@@ -199,9 +209,27 @@ test "cps2":
 do:
   stmt1
   cps_call()
-  goto cpscall1
-  block cpscall1:
+  return tailcall1()
+  proc tailcall1() =
     stmt2
+
+
+test "cps3":
+  stmt1
+  cps_call1()
+  stmt2
+  cps_call2()
+  stmt3
+do:
+  stmt1
+  cps_call1()
+  return tailcall1()
+  proc tailcall1() =
+    stmt2
+    cps_call2()
+    return tailcall2()
+    proc tailcall2() =
+      stmt3
 
 
 test "flop":
@@ -212,21 +240,20 @@ test "flop":
     cps_write()
   reset_timeout();
 do:
-  goto while1
-  block while1:
+  return while1()
+  proc while1() =
     if not timeout:
       cps_read()
-      goto cpscall1
-      label cpscall1
-      if rc <= 0:
-        goto break1
-      cps_write()
-      goto cpscall2
-      label cpscall2
-      goto while1
-  goto break1
-  label break1
-  reset_timeout()
+      return tailcall1()
+      proc tailcall1() =
+        if rc <= 0:
+          return break1()
+        cps_write()
+      return while1()
+     
+    return break1()
+    proc break1() =
+      reset_timeout()
 
 test "4":
   if rc < 0:
@@ -236,8 +263,11 @@ test "4":
 do:
   if rc < 0:
     cps_yield()
-    goto cpscall1
-    label cpscall1
-    rc = 0
-  stmt1
+    return tailcall1()
+    proc tailcall1() =
+      rc = 0
+      return exit1()
+  return exit1()
+  proc exit1() =
+    stmt1
 
