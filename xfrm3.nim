@@ -1,9 +1,47 @@
 
 import macros, tables, sets, strutils
 
+const
+  whiley = true
 
-proc isCpsCall(n: NimNode): bool = 
+func tailCall(n: NimNode): NimNode = nnkReturnStmt.newTree(newCall(n))
+
+func isReturnCall(n: NimNode): bool =
+  case n.kind
+  # simple `return foo()`
+  of nnkReturnStmt:
+    if n.len > 0:
+      if n[0].kind == nnkCall:
+        result = true
+  # `return foo(); proc foo() = ...`
+  of nnkStmtList:
+    result = case n.len
+    of 1:
+      n[0].isReturnCall
+    of 2:
+      n[0].isReturnCall and n[1].kind == nnkProcDef and n[1].name == n[0][0][0]
+    else:
+      false
+  else: discard
+
+func isCpsCall(n: NimNode): bool =
   n.kind == nnkCall and n[0].strVal.find("cps_") == 0
+
+# Every block with calls to CPS procs is a CPS block
+func isCpsBlock(n: NimNode): bool =
+  if n.isCpsCall:
+    result = true
+  elif n.kind != nnkProcDef:
+    for i, nc in n.pairs:
+      #if i < n.len-1:
+      result = nc.isCpsBlock
+      if result:
+        break
+  when false:
+    if result:
+      debugEcho "CPS BLOCK ", n.repr
+    else:
+      debugEcho "NAH BLOCK ", n.repr
 
 proc xfrm(n: NimNode): NimNode =
 
@@ -18,88 +56,123 @@ proc xfrm(n: NimNode): NimNode =
         labels.incl l
         return ident(l)
 
-  proc tailCall(n: NimNode): NimNode =
-    nnkReturnStmt.newTree(
-      newCall(n)
-    )
-  
-  # Make sure all CPS calls become tail calls
-  proc auxCpsCall(n: NimNode): NimNode =
-    result = n.copyNimNode
-    for i, nc in n:
-      result.add auxCpsCall(nc)
-      if nc.isCpscall() and i < n.len-1:
-        echo "-- converting CPS call to tail call"
-        let lNext = mklabel "tailcall"
-        let nBody = newStmtList()
-        let nNext = auxCpsCall(newStmtList(n[i+1..<n.len]))
-        result.add tailCall(lNext)
-        result.add newProc(name=lNext, body=nNext)
-        break
-
-
-  # Make sure all CPS calls become tail calls
-  proc auxCpsCall2(n: NimNode): NimNode =
-    if n.kind == nnkStmtList:
-      result = n.copyNimNode
-      var blk: NimNode
-      for i, nc in n:
-        if blk == nil:
-          result.add auxCpsCall(nc)
-          if nc.isCpsCall() and i < n.len-1:
-            let l = mkLabel "cpscall"
-            blk = nnkBlockStmt.newTree(l)
-            echo "-- inserting tailcall/proc after ", nc[0].strVal, ": ", l
-            result.add nnkCommand.newTree(ident("goto"), l)
-            result.add blk
-        else:
-          blk.add auxCpsCall(nc)
+  proc callTail(name: NimNode; prc: NimNode): NimNode =
+    ## make a tail call into a single statement list
+    result = newStmtList()
+    result.add tailCall(name)
+    if prc.kind == nnkProcDef:
+      result.add prc
     else:
-      result = n.copyNimNode
-      for nc in n:
-        result.add auxCpsCall(nc)
+      result.add newProc(name = name, body = prc)
 
-  # Convert while to if + tail calls
-  proc auxWhile(n: NimNode, lBreak: NimNode=nil): NimNode =
+  proc callTail(prc: NimNode): NimNode =
+    ## make a proc or statement list into a tail call
+    if prc.kind == nnkProcDef:
+      result = callTail(prc.name, prc)
+    else:
+      result = callTail(newProc(name = mklabel"tailcall", body = prc))
 
-    if n.kind == nnkBreakStmt:
-      echo "-- converting break to ", lBreak.repr, "()"
-      return tailCall(lBreak)
+  var
+    x = newStmtList()
+  x.add tailCall(ident"goats")
 
+  assert x.isReturnCall, treeRepr(x)
+
+  var y = callTail(ident"pigs", x)
+  assert y.isReturnCall, treeRepr(y)
+
+  proc saften(n: NimNode; r: NimNode = nil): NimNode
+
+  proc splitAt(n: NimNode; name: string; i: int; r: NimNode = nil): NimNode =
+    # split a statement list to create a tail call given
+    # a label prefix and an index at which to split
+    let label = mklabel name
+    echo "converting tail call " & label.repr
+    var body = newStmtList(n[i+1 ..< n.len])
+    body = saften(body, r)
+    result = newProc(name = label, body = body)
+
+  # Make sure all CPS calls become tail calls
+  proc saften(n: NimNode; r: NimNode = nil): NimNode =
+    # xfrm the input into a mutually-recursive "cps convertible form".
     result = n.copyNimNode
-    for i, nc in n:
-      if nc.kind == nnkBreakStmt:
-        echo "-- converting break to ", lBreak.repr, "()"
-        result.add tailCall(lBreak)
-      elif nc.kind == nnkWhileStmt:
-        let lBreak = mkLabel "break"
-        echo "-- converting 'while ", nc[0].repr, "'"
-        let lWhile = mkLabel "while"
-        let (expr, body) = (nc[0], auxWhile(nc[1], lBreak))
-        let nBody = newStmtList(newIfStmt((expr, newStmtList(body, tailCall(lWhile)))))
-        result.add tailCall(lWhile)
-        result.add newProc(name=lWhile, body=nBody)
-        if i < n.len-1:
-          nBody.add tailCall(lBreak)
-          let nBreak = newStmtList()
-          nBody.add newProc(name=lBreak, body=nBreak)
-          nBreak.add auxWhile(newStmtList(n[i+1..<n.len]), lBreak)
+
+    var rl, ep: NimNode
+
+    const
+      unexiter = {nnkWhileStmt, nnkBreakStmt}
+      returner = {nnkIfStmt, nnkBlockStmt, nnkElifBranch, nnkStmtList}
+
+    for i, nc in n.pairs:
+      var nc = nc
+
+      # if the child is a cps block (not a call), then prepare
+      # an extra call and pass it to the child for its use
+      if i < n.len-1:
+        if nc.isCpsBlock and not nc.isCpsCall and nc.kind notin unexiter:
+          ep = n.splitAt("exit", i, r)
+
+          # tailcalls below will use this new return label
+          result.add saften(nc, ep.name)
+
+          when false:
+            # add the return label call with the exit proc
+            result.add callTail(ep)
+          else:
+            # just add the exit proc definition
+            result.add ep
+
+          # we've completed the split, so we're done here
           break
+
+      case nc.kind
+      of nnkBreakStmt:
+        # simple break statement
+        result.add tailCall(r)
+      of nnkWhileStmt:
+        let w = mklabel "while"
+        var bp = n.splitAt("break", i, r)
+        # guys, lemme tell you about where we're goin'
+        let (expr, body) = (nc[0], saften(nc[1], bp.name))
+        let loop = newStmtList(newIfStmt((expr,
+                                          newStmtList(body, tailCall(w)))))
+        result.add callTail(w, loop)
+        if i < n.len-1:
+          loop.add callTail(bp)
+          break
+
       else:
-        result.add auxWhile(nc, lBreak)
+        # add the child normally, with the current exit label
+        result.add saften(nc, r)
 
+      # if the child isn't last,
+      if i < n.len-1:
+        # and it's a cps call,
+        if nc.isCpsCall:
+          # perform a more typical tailcall split with current return label
+          let x = n.splitAt("tailcall", i, r)
+          result.add callTail(x)
+          # the split is complete
+          break
 
-  result = n
-  result = result.auxCpsCall()
-  result = result.auxWhile()
+    # add the "return" clause if it exists
+    if r != nil:
+      if n.kind in returner:
+        # XXX: ugly hack; we don't add "break" via this naive method
+        if not startsWith(r.repr, "break"):
+          # if the block ends with a tailcall, we don't add one
+          if not isReturnCall(result[^1]):
+            echo "adding return call " & r.repr & " to " & $n.kind
+            result.add tailCall(r)
 
+  result = n.saften()
 
+import diffoutput
+import diff
 macro test(name: static[string], nIn, nExp: untyped) =
   echo "======[ ", name, " ]========="
   let nOut = nIn.xfrm
-  if nOut.repr == nExp.repr:
-    echo "ok  "
-  else:
+  if nOut.repr != nExp.repr:
     echo "-- in: --------------------"
     echo nIn.repr
     echo "-- out: -------------------"
@@ -109,6 +182,9 @@ macro test(name: static[string], nIn, nExp: untyped) =
     echo "---------------------------"
     writeFile("/tmp/nExp", nExp.treerepr)
     writeFile("/tmp/nOut", nOut.treerepr)
+    when compiles(outputUnixDiffStr):
+      let diff = newDiff(nOut.repr.splitLines, nExp.repr.splitLines)
+      echo outputUnixDiffStr(diff)
     quit 1
 
 
@@ -117,81 +193,104 @@ macro test(name: static[string], nIn, nExp: untyped) =
 # ----------------------------------------------------------------------
 
 
-test "while0":
-  while exp1:
-    stmt2
-do:
-  return while1()
-  proc while1() =
-    if exp1:
+when whiley:
+  test "while0":
+    while exp1:
       stmt2
-      return while1()
+  do:
+    return while1()
+    proc while1() =
+      if exp1:
+        stmt2
+        return while1()
 
 
-test "while1":
-  stmt1
-  stmt2
-  while exp1:
-    stmt3
-do:
-  stmt1
-  stmt2
-  return while1()
-  proc while1() =
-    if exp1:
+  test "while1":
+    stmt1
+    stmt2
+    while exp1:
       stmt3
-      return while1()
-    
+  do:
+    stmt1
+    stmt2
+    return while1()
+    proc while1() =
+      if exp1:
+        stmt3
+        return while1()
 
 
-test "while2":
-  stmt1
-  stmt2
-  while exp1:
-    stmt3
-    stmt4
-  stmt5
-  stmt6
-do:
-  stmt1
-  stmt2
-  return while1()
-  proc while1() =
-    if exp1:
+  test "while2":
+    stmt1
+    stmt2
+    while exp1:
       stmt3
       stmt4
-      return while1()
-    return break1()
-    proc break1() =
-      stmt5
-      stmt6
-
-
-test "while3":
-  stmt1
-  while exp1:
+    stmt5
+    stmt6
+  do:
+    stmt1
     stmt2
-  while exp2:
-    stmt3
-  stmt4
-do:
-  stmt1
-  return while1()
-  proc while1() =
-    if exp1:
-      stmt2
-      return while1()
-    return break1()
-    proc break1() =
-      return while2()
-      proc while2() =
-        if exp2:
-          stmt3
-          return while2()
-        return break2()
-        proc break2() =
-          stmt4
-    
+    return while1()
+    proc while1() =
+      if exp1:
+        stmt3
+        stmt4
+        return while1()
+      return break1()
+      proc break1() =
+        stmt5
+        stmt6
+
+
+  test "while3":
+    stmt1
+    while exp1:
+      cps_call1()
+    while exp2:
+      cps_call2()
+    stmt4
+  do:
+    stmt1
+    return while1()
+    proc while1() =
+      if exp1:
+        cps_call1()
+        return while1()
+      return break1()
+      proc break1() =
+        return while2()
+        proc while2() =
+          if exp2:
+            cps_call2()
+            return while2()
+          return break2()
+          proc break2() =
+            stmt4
+
+  test "flop":
+    while not timeout:
+      cps_read()
+      if rc <= 0:
+        break;
+      cps_write()
+    reset_timeout();
+  do:
+    return while1()
+    proc while1() =
+      if not timeout:
+        cps_read()
+        return tailcall1()
+        proc tailcall1() =
+          if rc <= 0:
+            return break1()
+          cps_write()
+        return while1()
+
+      return break1()
+      proc break1() =
+        reset_timeout()
+
 
 
 test "cps1":
@@ -213,7 +312,6 @@ do:
   proc tailcall1() =
     stmt2
 
-
 test "cps3":
   stmt1
   cps_call1()
@@ -231,31 +329,7 @@ do:
     proc tailcall2() =
       stmt3
 
-
-test "flop":
-  while not timeout:
-    cps_read()
-    if rc <= 0:
-      break;
-    cps_write()
-  reset_timeout();
-do:
-  return while1()
-  proc while1() =
-    if not timeout:
-      cps_read()
-      return tailcall1()
-      proc tailcall1() =
-        if rc <= 0:
-          return break1()
-        cps_write()
-      return while1()
-     
-    return break1()
-    proc break1() =
-      reset_timeout()
-
-test "4":
+test "cps4":
   if rc < 0:
     cps_yield()
     rc = 0
@@ -270,4 +344,3 @@ do:
   return exit1()
   proc exit1() =
     stmt1
-
