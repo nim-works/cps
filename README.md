@@ -71,7 +71,7 @@ proc tocker(start: int) =
     dec j
 ```
 
-### Splitting with 'virual' gotos
+### Splitting with 'virtual' gotos
 
 This step makes sure all CPS calls are followed by a goto, and control flow is
 made explicit with gotos as well. (pseudo-Nim, can not be implemented directly
