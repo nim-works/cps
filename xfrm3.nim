@@ -1,12 +1,62 @@
+import macros, tables, sets, strutils, sequtils
 
-import macros, tables, sets, strutils
+##[
+## To transform a CPC program into CPS-convertible form, the CPC
+## translator needs to ensure that every call to a cps function is either
+## in tail position or followed by a tail call to another cps function.
+]##
+
 
 const
+  comments = true
   whiley = true
 
-func tailCall(n: NimNode): NimNode = nnkReturnStmt.newTree(newCall(n))
+  unexiter = {nnkWhileStmt, nnkBreakStmt}
+  # if statements are not "returners"; it's elif branches we care about
+  returner = {nnkBlockStmt, nnkElifBranch, nnkStmtList}
+
+
+func tailCall(n: NimNode): NimNode =
+  if n.kind == nnkNilLit:
+    nnkReturnStmt.newTree(n)
+  else:
+    nnkReturnStmt.newTree(newCall(n))
+
+func doc(s: string): NimNode =
+  #debugEcho s
+  when comments:
+    newCommentStmtNode(s)
+  else:
+    newEmptyNode()
+
+proc doc(n: var NimNode; s: string) =
+  when comments:
+    if n.kind == nnkStmtList:
+      n.add doc(s)
+
+func stripComments(n: NimNode): NimNode =
+  result = n.copyNimNode
+  for child in items(n):
+    if child.kind != nnkCommentStmt:
+      result.add child.stripComments
+
+func returnTo(n: NimNode): NimNode =
+  ## take a `return foo()` or (proc foo() = ...) and yield `foo`
+  let n = n.stripComments
+  case n.kind
+  of nnkProcDef:
+    result = n.name
+  of nnkCall:
+    result = n[0]
+  of nnkIdent:
+    result = n
+  of nnkNilLit:
+    result = n
+  else:
+    result = returnTo(n[0])
 
 func isReturnCall(n: NimNode): bool =
+  let n = n.stripComments
   case n.kind
   # simple `return foo()`
   of nnkReturnStmt:
@@ -23,6 +73,18 @@ func isReturnCall(n: NimNode): bool =
     else:
       false
   else: discard
+
+func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
+  ## fill `r` with `return foo()` if that is a safe simplification
+  var n = n.stripComments
+  block done:
+    while n.kind == nnkStmtList:
+      if len(n) != 1:
+        break done
+      n = n[0]
+    result = isReturnCall(n)
+    if result:
+      r = newStmtList([doc"simple return call", n])
 
 func isCpsCall(n: NimNode): bool =
   n.kind == nnkCall and n[0].strVal.find("cps_") == 0
@@ -47,6 +109,10 @@ proc xfrm(n: NimNode): NimNode =
 
   var labels: HashSet[string]
 
+  # identifiers of future break or return targets
+  var goto: seq[NimNode]
+  var breaks: seq[NimNode]
+
   proc mkLabel(s: string): NimNode =
     var i: int
     while true:
@@ -56,127 +122,215 @@ proc xfrm(n: NimNode): NimNode =
         labels.incl l
         return ident(l)
 
-  proc callTail(name: NimNode; prc: NimNode): NimNode =
-    ## make a tail call into a single statement list
+  proc foldTailCalls(n: NimNode): NimNode =
+    ## this may optimize a `proc foo() = return bar()` to `return bar()`
+    result = n
+    if n.kind == nnkProcDef:
+      if not asSimpleReturnCall(n, result):
+        if isReturnCall(n[^1]):
+          result = newStmtList()
+          result.doc "optimized proc into tail call"
+          result.add n[^1]
+    else:
+      assert false, "not a proc"
+
+  proc makeTail(name: NimNode; n: NimNode): NimNode =
+    ## make a tail call and put it in a single statement list;
+    ## this will always create a tail call proc and call it
     result = newStmtList()
+    result.doc "new tail call: " & name.repr
     result.add tailCall(name)
-    if prc.kind == nnkProcDef:
-      result.add prc
+    if n.kind == nnkProcDef:
+      result.doc "adding the proc verbatim"
+      result.add n
+    elif n.kind == nnkStmtList:
+      if len(n) == 0:
+        {.warning: "creating an empty tail call".}
+      result.doc "creating a new proc: " & name.repr
+      result.add newProc(name = name, body = n)
     else:
-      result.add newProc(name = name, body = prc)
+      result.doc "created a creepy proc: " & name.repr
+      result.add newProc(name = name, body = newStmtList(n))
 
-  proc callTail(prc: NimNode): NimNode =
-    ## make a proc or statement list into a tail call
-    if prc.kind == nnkProcDef:
-      result = callTail(prc.name, prc)
+  proc returnTail(name: NimNode; n: NimNode): NimNode =
+    ## either create and return a tail call proc, or return nil
+    if len(n) == 0:
+      # no code to run means we just `return nil`
+      result = nnkReturnStmt.newNimNode(newNilLit())
     else:
-      result = callTail(newProc(name = mklabel"tailcall", body = prc))
+      # create a tail call with the given body
+      result = makeTail(mklabel"tailcall", n)
 
-  var
-    x = newStmtList()
+  proc callTail(n: NimNode): NimNode =
+    ## given a node, either turn it into a `return call(); proc call() = ...`
+    ## or optimize it into a `return subcall()`
+    case n.kind
+    of nnkProcDef:
+      # if you already put it in a proc, we should just use it
+      result = n
+    of nnkIdent:
+      # if it's an identifier, we'll just issue a call of it
+      result = tailCall(n)
+    of nnkStmtList:
+      # maybe we can optimize it out
+      if asSimpleReturnCall(n, result):
+        discard "the call was stuffed into result"
+      elif isReturnCall(n):
+        # just copy the call
+        result = newStmtList([doc"verbatim tail call", n])
+      else:
+        if len(n) == 0:
+          # no code to run means we just `return nil`
+          result = nnkReturnStmt.newNimNode(newNilLit())
+        else:
+          # create a tail call and, uh, call it
+          result = returnTail(mklabel"tailcall", n)
+    else:
+      # wrap whatever it is and recurse on it
+      result = callTail(newStmtList(n))
+
+  var x = newStmtList()
+  var z: NimNode
   x.add tailCall(ident"goats")
-
   assert x.isReturnCall, treeRepr(x)
+  assert x.asSimpleReturnCall(z), treeRepr(x)
 
-  var y = callTail(ident"pigs", x)
+  var y = makeTail(ident"pigs", x)
   assert y.isReturnCall, treeRepr(y)
+  assert not y.asSimpleReturnCall(z), treeRepr(y)
 
-  proc saften(n: NimNode; r: NimNode = nil): NimNode
+  proc saften(n: NimNode): NimNode
 
-  proc splitAt(n: NimNode; name: string; i: int; r: NimNode = nil): NimNode =
+  proc splitAt(n: NimNode; name: string; i: int): NimNode =
     # split a statement list to create a tail call given
     # a label prefix and an index at which to split
     let label = mklabel name
-    echo "converting tail call " & label.repr
-    var body = newStmtList(n[i+1 ..< n.len])
-    body = saften(body, r)
-    result = newProc(name = label, body = body)
+    var body = newStmtList()
+    body.doc "split as " & label.repr & " at index " & $i
+    if i < n.len-1:
+      body.add n[i+1 ..< n.len]
+    body = saften(body)
+    result = makeTail(label, body)
+
+  func next(ns: seq[NimNode]): NimNode =
+    if len(ns) == 0:
+      newNilLit()
+    else:
+      ns[^1]
+
+  template withGoto(n: NimNode; body: untyped): untyped =
+    add(goto, n)
+    try:
+      body
+    finally:
+      assert len(goto) > 0
+      discard pop(goto)
 
   # Make sure all CPS calls become tail calls
-  proc saften(n: NimNode; r: NimNode = nil): NimNode =
+  proc saften(n: NimNode): NimNode =
     # xfrm the input into a mutually-recursive "cps convertible form".
     result = n.copyNimNode
 
-    var rl, ep: NimNode
-
-    const
-      unexiter = {nnkWhileStmt, nnkBreakStmt}
-      returner = {nnkIfStmt, nnkBlockStmt, nnkElifBranch, nnkStmtList}
-
-    for i, nc in n.pairs:
-      var nc = nc
-
-      # if the child is a cps block (not a call), then prepare
-      # an extra call and pass it to the child for its use
+    let n = n.stripComments
+    #result.doc "saften " & $n.kind & " with returnTo " & $next().returnTo
+    result.doc "saften $1 with $2 gotos and $3 breaks" %
+      [ $n.kind, $len(goto), $len(breaks) ]
+    for i, nc in pairs(n):
+      # if the child is a cps block (not a call), then push a tailcall
+      # onto the stack during the saftening of the child
       if i < n.len-1:
-        if nc.isCpsBlock and not nc.isCpsCall and nc.kind notin unexiter:
-          ep = n.splitAt("exit", i, r)
+        if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
+          withGoto n.splitAt("exit", i):
+            result.add saften(nc)
+            result.doc "add the exit proc definition"
+            result.add next(goto)
 
-          # tailcalls below will use this new return label
-          result.add saften(nc, ep.name)
-
-          when false:
-            # add the return label call with the exit proc
-            result.add callTail(ep)
-          else:
-            # just add the exit proc definition
-            result.add ep
-
-          # we've completed the split, so we're done here
-          break
+            # we've completed the split, so we're done here
+            return
 
       case nc.kind
       of nnkBreakStmt:
-        # simple break statement
-        result.add tailCall(r)
+        if len(breaks) > 0:
+          result.doc "simple break statement"
+          result.add tailCall(next(breaks).returnTo)
+        else:
+          result.doc "no break statements to pop"
+
+      of nnkBlockStmt:
+        let bp = n.splitAt("break", i)
+        add(breaks, bp)
+        try:
+          #echo bp.repr
+          result.add saften(nc)
+          #echo result.repr
+          #assert false, "made it"
+          if i < n.len-1:
+            result.doc "add tail call for block-break proc"
+            result.add callTail(next(breaks))
+            return
+        finally:
+          discard pop(breaks)
+
       of nnkWhileStmt:
         let w = mklabel "while"
-        var bp = n.splitAt("break", i, r)
-        # guys, lemme tell you about where we're goin'
-        let (expr, body) = (nc[0], saften(nc[1], bp.name))
-        let loop = newStmtList(newIfStmt((expr,
-                                          newStmtList(body, tailCall(w)))))
-        result.add callTail(w, loop)
-        if i < n.len-1:
-          loop.add callTail(bp)
-          break
-
+        let bp = n.splitAt("break", i)
+        add(breaks, bp)
+        add(goto, w)
+        try:
+          var loop = newStmtList()
+          result.doc "add tail call for while loop"
+          result.add makeTail(w, loop)
+          # guys, lemme tell you about where we're goin'
+          let (expr, body) = (nc[0], saften(nc[1]))
+          loop.add newIfStmt((expr, newStmtList(body)))
+          discard pop(goto)
+          if i < n.len-1:
+            loop.doc "add tail call for break proc"
+            loop.add callTail(next(breaks))
+            return
+        finally:
+          discard pop(breaks)
       else:
-        # add the child normally, with the current exit label
-        result.add saften(nc, r)
+        result.doc "adding normal saften child"
+        result.add saften(nc)
 
       # if the child isn't last,
       if i < n.len-1:
         # and it's a cps call,
         if nc.isCpsCall:
-          # perform a more typical tailcall split with current return label
-          let x = n.splitAt("tailcall", i, r)
-          result.add callTail(x)
+          let x = n.splitAt("tailcall", i)
+          var simple: NimNode
+          if asSimpleReturnCall(x[^1][^1], simple):
+            result.doc "possibly unsafe optimization"
+            result.add simple
+          else:
+            result.doc "add a normal tail call"
+            result.add callTail(x)
           # the split is complete
-          break
+          return
 
-    # add the "return" clause if it exists
-    if r != nil:
-      if n.kind in returner:
-        # XXX: ugly hack; we don't add "break" via this naive method
-        if not startsWith(r.repr, "break"):
-          # if the block ends with a tailcall, we don't add one
-          if not isReturnCall(result[^1]):
-            echo "adding return call " & r.repr & " to " & $n.kind
-            result.add tailCall(r)
+    if n.kind in returner:
+      if next(goto).kind != nnkNilLit:
+        let duh = result.stripComments
+        if len(duh) > 0 and isReturnCall(duh[^1]):
+          result.doc "omit return call from " & $n.kind
+        else:
+          result.doc "adding return call to " & $n.kind
+          result.add tailCall(next(goto).returnTo)
 
-  result = n.saften()
+  result = saften(n)
 
 import diffoutput
 import diff
 macro test(name: static[string], nIn, nExp: untyped) =
   echo "======[ ", name, " ]========="
-  let nOut = nIn.xfrm
+  let nOutComments = xfrm(nIn)
+  let nOut = nOutComments.stripComments
   if nOut.repr != nExp.repr:
     echo "-- in: --------------------"
     echo nIn.repr
     echo "-- out: -------------------"
-    echo nOut.repr
+    echo nOutComments.repr
     echo "-- expected: --------------"
     echo nExp.repr
     echo "---------------------------"
@@ -285,7 +439,7 @@ when whiley:
           if rc <= 0:
             return break1()
           cps_write()
-        return while1()
+          return while1()
 
       return break1()
       proc break1() =
@@ -344,3 +498,28 @@ do:
   return exit1()
   proc exit1() =
     stmt1
+
+test "cps4.5":
+  block:
+    cps_yield()
+  rc = 0
+do:
+  block:
+    cps_yield()
+    return exit1()
+  return exit1()
+  proc exit1() =
+    rc = 0
+
+test "cps5":
+  block:
+    cps_yield()
+    break
+  rc = 0
+do:
+  block:
+    cps_yield()
+    return exit1()
+  return exit1()
+  proc exit1() =
+    rc = 0
