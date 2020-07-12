@@ -1,4 +1,8 @@
-import macros, tables, sets, strutils, sequtils
+import std/macros
+import std/tables
+import std/sets
+import std/strutils
+import std/sequtils
 
 ##[
 ## To transform a CPC program into CPS-convertible form, the CPC
@@ -9,7 +13,6 @@ import macros, tables, sets, strutils, sequtils
 
 const
   comments = true
-  whiley = true
 
   unexiter = {nnkWhileStmt, nnkBreakStmt}
   # if statements are not "returners"; it's elif branches we care about
@@ -23,7 +26,6 @@ func tailCall(n: NimNode): NimNode =
     nnkReturnStmt.newTree(newCall(n))
 
 func doc(s: string): NimNode =
-  #debugEcho s
   when comments:
     newCommentStmtNode(s)
   else:
@@ -87,7 +89,8 @@ func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
       r = newStmtList([doc "simple return call: " & n.repr, n])
 
 func isCpsCall(n: NimNode): bool =
-  n.kind == nnkCall and n[0].strVal.find("cps_") == 0
+  result = n.kind == nnkCall and n[0].strVal.find("cps_") == 0
+  #debugEcho treeRepr(n)
 
 # Every block with calls to CPS procs is a CPS block
 func isCpsBlock(n: NimNode): bool =
@@ -106,7 +109,7 @@ func isCpsBlock(n: NimNode): bool =
   else:
     discard
 
-  when true:
+  when false:
     if result:
       debugEcho "CPS BLOCK ", n.repr
     else:
@@ -144,9 +147,13 @@ proc xfrm(n: NimNode): NimNode =
     else:
       assert false, "not a proc"
 
+  template cpsLift() {.pragma.}
+
   proc makeTail(name: NimNode; n: NimNode): NimNode =
     ## make a tail call and put it in a single statement list;
     ## this will always create a tail call proc and call it
+    let
+      lifter = bindSym"cpsLift"
     result = newStmtList()
     result.doc "new tail call: " & name.repr
     result.add tailCall(name)
@@ -158,9 +165,11 @@ proc xfrm(n: NimNode): NimNode =
         {.warning: "creating an empty tail call".}
       result.doc "creating a new proc: " & name.repr
       result.add newProc(name = name, body = n)
+      result[^1].addPragma lifter
     else:
       result.doc "created a creepy proc: " & name.repr
       result.add newProc(name = name, body = newStmtList(n))
+      result[^1].addPragma lifter
 
   proc returnTail(name: NimNode; n: NimNode): NimNode =
     ## either create and return a tail call proc, or return nil
@@ -199,15 +208,16 @@ proc xfrm(n: NimNode): NimNode =
       # wrap whatever it is and recurse on it
       result = callTail(newStmtList(n))
 
-  var x = newStmtList()
-  var z: NimNode
-  x.add tailCall(ident"goats")
-  assert x.isReturnCall, treeRepr(x)
-  assert x.asSimpleReturnCall(z), treeRepr(x)
+  when false:
+    var x = newStmtList()
+    var z: NimNode
+    x.add tailCall(ident"goats")
+    assert x.isReturnCall, treeRepr(x)
+    assert x.asSimpleReturnCall(z), treeRepr(x)
 
-  var y = makeTail(ident"pigs", x)
-  assert y.isReturnCall, treeRepr(y)
-  assert not y.asSimpleReturnCall(z), treeRepr(y)
+    var y = makeTail(ident"pigs", x)
+    assert y.isReturnCall, treeRepr(y)
+    assert not y.asSimpleReturnCall(z), treeRepr(y)
 
   proc saften(n: NimNode): NimNode
 
@@ -249,6 +259,20 @@ proc xfrm(n: NimNode): NimNode =
     else:
       into.doc "add a normal tail call; not " & n.repr
       into.add callTail(n)
+
+  proc liften(n: var NimNode): NimNode =
+    let lifter = bindSym"cpsLift"
+    result = newStmtList()
+    var dad = n.copyNimNode
+    for kid in items(n):
+      var kid = kid
+      for k in liften(kid):
+        add(result, k)
+      if kid.kind == nnkProcDef and lifter in toSeq(kid.pragma):
+        add(result, kid)
+      else:
+        add(dad, kid)
+    n = dad
 
   # Make sure all CPS calls become tail calls
   proc saften(n: NimNode): NimNode =
@@ -351,290 +375,12 @@ proc xfrm(n: NimNode): NimNode =
       else:
         result.doc "nil return"
 
-  result = saften(n)
-
-import diffoutput
-import diff
-macro test(name: static[string], nIn, nExp: untyped) =
-  echo "======[ ", name, " ]========="
-  let nOutComments = xfrm(nIn)
-  let nOut = nOutComments.stripComments
-  if nOut.repr != nExp.repr:
-    echo "-- tree: ------------------"
-    echo indent(treeRepr(nIn), 2)
-    echo "-- out comments: ----------"
-    echo indent(nOutComments.repr, 2)
-    echo "-- in: --------------------"
-    echo indent(nIn.repr, 2)
-    echo "-- out: -------------------"
-    echo indent(nOut.repr, 2)
-    echo "-- expected: --------------"
-    echo indent(nExp.repr, 2)
-    echo "---------------------------"
-    writeFile("/tmp/nExp", nExp.treerepr)
-    writeFile("/tmp/nOut", nOut.treerepr)
-    when compiles(outputUnixDiffStr):
-      let diff = newDiff(nOut.repr.splitLines, nExp.repr.splitLines)
-      echo outputUnixDiffStr(diff)
-    quit 1
-
-
-# ----------------------------------------------------------------------
-# Unit tests
-# ----------------------------------------------------------------------
-
-
-when whiley:
-  test "while0":
-    while exp1:
-      stmt2
-  do:
-    return while1()
-    proc while1() =
-      if exp1:
-        stmt2
-        return while1()
-
-
-  test "while1":
-    stmt1
-    stmt2
-    while exp1:
-      stmt3
-  do:
-    stmt1
-    stmt2
-    return while1()
-    proc while1() =
-      if exp1:
-        stmt3
-        return while1()
-
-
-  test "while2":
-    stmt1
-    stmt2
-    while exp1:
-      stmt3
-      stmt4
-    stmt5
-    stmt6
-  do:
-    stmt1
-    stmt2
-    return while1()
-    proc while1() =
-      if exp1:
-        stmt3
-        stmt4
-        return while1()
-      return break1()
-      proc break1() =
-        stmt5
-        stmt6
-
-
-  test "while3":
-    stmt1
-    while exp1:
-      cps_call1()
-    while exp2:
-      cps_call2()
-    stmt4
-  do:
-    stmt1
-    return while1()
-    proc while1() =
-      if exp1:
-        cps_call1()
-        return while1()
-      return break1()
-      proc break1() =
-        return while2()
-        proc while2() =
-          if exp2:
-            cps_call2()
-            return while2()
-          return break2()
-          proc break2() =
-            stmt4
-
-  test "flop":
-    while not timeout:
-      cps_read()
-      if rc <= 0:
-        break;
-      cps_write()
-    reset_timeout();
-  do:
-    return while1()
-    proc while1() =
-      if not timeout:
-        cps_read()
-        return tailcall1()
-        proc tailcall1() =
-          if rc <= 0:
-            return break1()
-          cps_write()
-          return while1()
-
-      return break1()
-      proc break1() =
-        reset_timeout()
-
-
-
-test "cps1":
-  stmt1
-  cps_call()
-do:
-  stmt1
-  cps_call()
-
-
-test "cps2":
-  stmt1
-  cps_call()
-  stmt2
-do:
-  stmt1
-  cps_call()
-  return tailcall1()
-  proc tailcall1() =
-    stmt2
-
-test "cps3":
-  stmt1
-  cps_call1()
-  stmt2
-  cps_call2()
-  stmt3
-do:
-  stmt1
-  cps_call1()
-  return tailcall1()
-  proc tailcall1() =
-    stmt2
-    cps_call2()
-    return tailcall2()
-    proc tailcall2() =
-      stmt3
-
-test "cps4":
-  if rc < 0:
-    cps_yield()
-    rc = 0
-  stmt1
-do:
-  if rc < 0:
-    cps_yield()
-    return tailcall1()
-    proc tailcall1() =
-      rc = 0
-      return exit2()
-  return exit2()
-  proc exit2() =
-    stmt1
-
-when false:
-  test "cps5":
-    block:
-      cps_yield()
-    rc = 0
-  do:
-    block:
-      cps_yield()
-      return exit1()
-    return exit1()
-    proc exit1() =
-      rc = 0
-
-  test "cps6":
-    block:
-      cps_yield()
-      break
-    rc = 0
-  do:
-    block:
-      cps_yield()
-      return exit1()
-    return exit1()
-    proc exit1() =
-      rc = 0
-
-else:
-  test "cps5":
-    block:
-      cps_yield()
-    rc = 0
-  do:
-    block:
-      cps_yield()
-    return break1()
-    proc break1() =
-      rc = 0
-
-  test "cps6":
-    block:
-      cps_yield()
-      break
-    rc = 0
-  do:
-    block:
-      cps_yield()
-      return break1()
-    return break1()
-    proc break1() =
-      rc = 0
-
-test "cps7":
-  if true:
-    cps_yield()
-  else:
-    stmt2
-do:
-  if true:
-    cps_yield()
-  else:
-    stmt2
-
-test "cps8":
-  block:
-    if rc < 0:
-      cps_yield()
-      break
-  rc = 0
-do:
-  block:
-    if rc < 0:
-      cps_yield()
-      return break1()
-  return break1()
-  proc break1() =
-    rc = 0
-
-test "cps9":
-  block:
-    if rc < 0:
-      cps_yield()
-      rc = 0
-    else:
-      break
-  stmt2
-do:
-  block:
-    if rc < 0:
-      cps_yield()
-      return exit1()
-    return break1()
-    proc break1() =
-      stmt2
-  return exit1()
-  proc exit1() =
-    rc = 0
-    break1()
+  result = newStmtList(saften(n))
+  let decls = liften(result)
+  result = newStmtList(decls, result)
+  echo repr(result)
 
 macro cps*(n: untyped) =
   assert n.kind == nnkProcDef
   result = n
-  result[^1] = xfrm(result.last)
+  result[^1] = xfrm(result[^1])
