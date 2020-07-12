@@ -499,7 +499,7 @@ do:
   proc exit1() =
     stmt1
 
-test "cps4.5":
+test "cps5":
   block:
     cps_yield()
   rc = 0
@@ -511,7 +511,7 @@ do:
   proc exit1() =
     rc = 0
 
-test "cps5":
+test "cps6":
   block:
     cps_yield()
     break
@@ -519,6 +519,22 @@ test "cps5":
 do:
   block:
     cps_yield()
+    return exit1()
+  return exit1()
+  proc exit1() =
+    rc = 0
+
+test "cps7":
+  block:
+    if rc < 0:
+      cps_yield()
+      break
+  rc = 0
+do:
+  block:
+    if rc < 0:
+      cps_yield()
+      return exit1()
     return exit1()
   return exit1()
   proc exit1() =
