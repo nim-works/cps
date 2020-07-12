@@ -13,7 +13,7 @@ const
 
   unexiter = {nnkWhileStmt, nnkBreakStmt}
   # if statements are not "returners"; it's elif branches we care about
-  returner = {nnkBlockStmt, nnkElifBranch, nnkStmtList}
+  returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
 
 func tailCall(n: NimNode): NimNode =
@@ -84,21 +84,23 @@ func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
       n = n[0]
     result = isReturnCall(n)
     if result:
-      r = newStmtList([doc"simple return call", n])
+      r = newStmtList([doc "simple return call: " & n.repr, n])
 
 func isCpsCall(n: NimNode): bool =
   n.kind == nnkCall and n[0].strVal.find("cps_") == 0
 
 # Every block with calls to CPS procs is a CPS block
 func isCpsBlock(n: NimNode): bool =
-  if n.isCpsCall:
-    result = true
-  elif n.kind != nnkProcDef:
-    for i, nc in n.pairs:
-      #if i < n.len-1:
-      result = nc.isCpsBlock
+  case n.kind
+  of nnkProcDef, nnkElse, nnkElifBranch, nnkIfStmt:
+    result = isCpsBlock(n[^1])
+  of nnkStmtList:
+    for i, nc in pairs(n):
+      result = (i != n.len-1 and nc.isCpsCall) or nc.isCpsBlock
       if result:
         break
+  else:
+    discard
   when false:
     if result:
       debugEcho "CPS BLOCK ", n.repr
@@ -112,6 +114,8 @@ proc xfrm(n: NimNode): NimNode =
   # identifiers of future break or return targets
   var goto: seq[NimNode]
   var breaks: seq[NimNode]
+
+  func insideCps(): bool = len(goto) > 0 or len(breaks) > 0
 
   proc mkLabel(s: string): NimNode =
     var i: int
@@ -209,8 +213,10 @@ proc xfrm(n: NimNode): NimNode =
     body.doc "split as " & label.repr & " at index " & $i
     if i < n.len-1:
       body.add n[i+1 ..< n.len]
-    body = saften(body)
-    result = makeTail(label, body)
+      body = saften(body)
+      result = makeTail(label, body)
+    else:
+      result = callTail(newStmtList())
 
   func next(ns: seq[NimNode]): NimNode =
     if len(ns) == 0:
@@ -219,12 +225,24 @@ proc xfrm(n: NimNode): NimNode =
       ns[^1]
 
   template withGoto(n: NimNode; body: untyped): untyped =
-    add(goto, n)
-    try:
+    if len(n.stripComments) > 0:
+      add(goto, n)
+      try:
+        body
+      finally:
+        discard pop(goto)
+    else:
       body
-    finally:
-      assert len(goto) > 0
-      discard pop(goto)
+
+  proc optimizeSimpleReturn(into: var NimNode; n: NimNode) =
+    var simple: NimNode
+    var n = n.stripComments
+    if asSimpleReturnCall(n[^1][^1], simple):
+      into.doc "possibly unsafe optimization: " & n.repr
+      optimizeSimpleReturn(into, simple)
+    else:
+      into.doc "add a normal tail call; not " & n.repr
+      into.add callTail(n)
 
   # Make sure all CPS calls become tail calls
   proc saften(n: NimNode): NimNode =
@@ -232,7 +250,6 @@ proc xfrm(n: NimNode): NimNode =
     result = n.copyNimNode
 
     let n = n.stripComments
-    #result.doc "saften " & $n.kind & " with returnTo " & $next().returnTo
     result.doc "saften $1 with $2 gotos and $3 breaks" %
       [ $n.kind, $len(goto), $len(breaks) ]
     for i, nc in pairs(n):
@@ -260,10 +277,7 @@ proc xfrm(n: NimNode): NimNode =
         let bp = n.splitAt("break", i)
         add(breaks, bp)
         try:
-          #echo bp.repr
           result.add saften(nc)
-          #echo result.repr
-          #assert false, "made it"
           if i < n.len-1:
             result.doc "add tail call for block-break proc"
             result.add callTail(next(breaks))
@@ -290,8 +304,25 @@ proc xfrm(n: NimNode): NimNode =
             return
         finally:
           discard pop(breaks)
+
+      of nnkIfStmt:
+        # if any `if` clause is a cps block, then every clause must be
+        # if we've pushed any goto or breaks, then we're already in cps
+        if nc.isCpsBlock:
+          let x = n.splitAt("if", i)
+          echo x.treeRepr
+          withGoto x:
+            result.add saften(nc)
+            if len(x.stripComments) > 0:
+              result.add next(goto)
+          return
+        elif insideCps():
+          result.add saften(nc)
+        else:
+          result.add nc
+
       else:
-        result.doc "adding normal saften child"
+        result.doc "adding normal saften child " & $nc.kind
         result.add saften(nc)
 
       # if the child isn't last,
@@ -299,13 +330,7 @@ proc xfrm(n: NimNode): NimNode =
         # and it's a cps call,
         if nc.isCpsCall:
           let x = n.splitAt("tailcall", i)
-          var simple: NimNode
-          if asSimpleReturnCall(x[^1][^1], simple):
-            result.doc "possibly unsafe optimization"
-            result.add simple
-          else:
-            result.doc "add a normal tail call"
-            result.add callTail(x)
+          optimizeSimpleReturn(result, x)
           # the split is complete
           return
 
@@ -317,6 +342,8 @@ proc xfrm(n: NimNode): NimNode =
         else:
           result.doc "adding return call to " & $n.kind
           result.add tailCall(next(goto).returnTo)
+      else:
+        result.doc "nil return"
 
   result = saften(n)
 
@@ -327,12 +354,16 @@ macro test(name: static[string], nIn, nExp: untyped) =
   let nOutComments = xfrm(nIn)
   let nOut = nOutComments.stripComments
   if nOut.repr != nExp.repr:
+    echo "-- tree: ------------------"
+    echo indent(treeRepr(nIn), 2)
+    echo "-- out comments: ----------"
+    echo indent(nOutComments.repr, 2)
     echo "-- in: --------------------"
-    echo nIn.repr
+    echo indent(nIn.repr, 2)
     echo "-- out: -------------------"
-    echo nOutComments.repr
+    echo indent(nOut.repr, 2)
     echo "-- expected: --------------"
-    echo nExp.repr
+    echo indent(nExp.repr, 2)
     echo "---------------------------"
     writeFile("/tmp/nExp", nExp.treerepr)
     writeFile("/tmp/nOut", nOut.treerepr)
@@ -494,37 +525,74 @@ do:
     return tailcall1()
     proc tailcall1() =
       rc = 0
-      return exit1()
-  return exit1()
-  proc exit1() =
+      return exit2()
+  return exit2()
+  proc exit2() =
     stmt1
 
-test "cps5":
-  block:
-    cps_yield()
-  rc = 0
-do:
-  block:
-    cps_yield()
-    return exit1()
-  return exit1()
-  proc exit1() =
+when false:
+  test "cps5":
+    block:
+      cps_yield()
     rc = 0
+  do:
+    block:
+      cps_yield()
+      return exit1()
+    return exit1()
+    proc exit1() =
+      rc = 0
 
-test "cps6":
-  block:
-    cps_yield()
-    break
-  rc = 0
-do:
-  block:
-    cps_yield()
-    return exit1()
-  return exit1()
-  proc exit1() =
+  test "cps6":
+    block:
+      cps_yield()
+      break
     rc = 0
+  do:
+    block:
+      cps_yield()
+      return exit1()
+    return exit1()
+    proc exit1() =
+      rc = 0
+
+else:
+  test "cps5":
+    block:
+      cps_yield()
+    rc = 0
+  do:
+    block:
+      cps_yield()
+    return break1()
+    proc break1() =
+      rc = 0
+
+  test "cps6":
+    block:
+      cps_yield()
+      break
+    rc = 0
+  do:
+    block:
+      cps_yield()
+      return break1()
+    return break1()
+    proc break1() =
+      rc = 0
 
 test "cps7":
+  if true:
+    cps_yield()
+  else:
+    stmt2
+do:
+  if true:
+    cps_yield()
+  else:
+    stmt2
+
+test "cps8":
   block:
     if rc < 0:
       cps_yield()
@@ -534,8 +602,28 @@ do:
   block:
     if rc < 0:
       cps_yield()
+      return break1()
+  return break1()
+  proc break1() =
+    rc = 0
+
+test "cps9":
+  block:
+    if rc < 0:
+      cps_yield()
+      rc = 0
+    else:
+      break
+  stmt2
+do:
+  block:
+    if rc < 0:
+      cps_yield()
       return exit1()
-    return exit1()
+    return break1()
+    proc break1() =
+      stmt2
   return exit1()
   proc exit1() =
     rc = 0
+    break1()
