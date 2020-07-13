@@ -107,7 +107,10 @@ func isCpsBlock(n: NimNode): bool =
   #of nnkBreakStmt:
   #  result = insideCps()
   of nnkIfStmt:
-    result = any(toSeq(n.children), isCpsBlock)
+    for child in n.children:
+      result = child.isCpsBlock
+      if result:
+        break
   of nnkStmtList:
     for i, nc in pairs(n):
       result = (i != n.len-1 and nc.isCpsCall) or nc.isCpsBlock
