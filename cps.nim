@@ -384,6 +384,7 @@ proc xfrm(n: NimNode): NimNode =
   echo repr(result)
 
 macro cps*(n: untyped) =
-  assert n.kind == nnkProcDef
+  assert n.kind in RoutineNodes
   result = n
-  result[^1] = xfrm(result[^1])
+  when not defined(nimdoc):
+    result[^1] = xfrm(result[^1])
