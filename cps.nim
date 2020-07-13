@@ -267,17 +267,21 @@ proc xfrm(n: NimNode): NimNode =
       into.add callTail(n)
 
   proc liften(n: var NimNode): NimNode =
-    let lifter = bindSym"cpsLift"
+    ## lift cps procs to top-level
     result = newStmtList()
     var dad = n.copyNimNode
     for kid in items(n):
       var kid = kid
+
+      # lift any procs below
       for k in liften(kid):
         add(result, k)
+
       if kid.isCpsCall:
-        add(result, kid)
+        result.add kid      # cps calls go in the result
       else:
-        add(dad, kid)
+        dad.add kid         # other stuff stays where it is
+
     n = dad
 
   # Make sure all CPS calls become tail calls
