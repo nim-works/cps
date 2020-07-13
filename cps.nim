@@ -19,6 +19,8 @@ const
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
+when NimMinor < 3:
+  {.fatal: "requires nim-1.3".}
 
 func tailCall(n: NimNode): NimNode =
   if n.kind == nnkNilLit:
