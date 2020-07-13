@@ -265,7 +265,7 @@ proc xfrm(n: NimNode): NimNode =
       into.doc "possibly unsafe optimization: " & n.repr
       optimizeSimpleReturn(into, simple)
     else:
-      into.doc "add a normal tail call; not " & n.repr
+      into.doc "add an unoptimized tail call"
       into.add callTail(n)
 
   proc liften(n: var NimNode): NimNode =
