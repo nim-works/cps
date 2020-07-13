@@ -1,3 +1,4 @@
+import std/hashes
 import std/macros
 import std/tables
 import std/sets
@@ -50,7 +51,7 @@ func returnTo(n: NimNode): NimNode =
     result = n.name
   of nnkCall:
     result = n[0]
-  of nnkIdent:
+  of nnkIdent, nnkSym:
     result = n
   of nnkNilLit:
     result = n
@@ -88,9 +89,15 @@ func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
     if result:
       r = newStmtList([doc "simple return call: " & n.repr, n])
 
+template cpsLift() {.pragma.}
+
 func isCpsCall(n: NimNode): bool =
-  result = n.kind == nnkCall and n[0].strVal.find("cps_") == 0
-  #debugEcho treeRepr(n)
+  let lifter = bindSym"cpsLift"
+  case n.kind
+  of RoutineNodes:
+    result = lifter in toSeq(n.pragma)
+  else:
+    discard
 
 # Every block with calls to CPS procs is a CPS block
 func isCpsBlock(n: NimNode): bool =
@@ -115,10 +122,14 @@ func isCpsBlock(n: NimNode): bool =
     else:
       debugEcho "NAH BLOCK ", n.repr
 
+when false:
+  proc hash(n: NimNode): Hash =
+    ## only really used for a hashset of nimnodes (labels)
+    var h: Hash = 0
+    h = h !& hash($n)
+    result = !$h
 
 proc xfrm(n: NimNode): NimNode =
-
-  var labels: HashSet[string]
 
   # identifiers of future break or return targets
   var goto: seq[NimNode]
@@ -127,13 +138,7 @@ proc xfrm(n: NimNode): NimNode =
   func insideCps(): bool = len(goto) > 0 or len(breaks) > 0
 
   proc mkLabel(s: string): NimNode =
-    var i: int
-    while true:
-      inc i
-      let l = s & $i
-      if l notin labels:
-        labels.incl l
-        return ident(l)
+    result = genSym(nskProc, ident = s)
 
   proc foldTailCalls(n: NimNode): NimNode =
     ## this may optimize a `proc foo() = return bar()` to `return bar()`
@@ -146,8 +151,6 @@ proc xfrm(n: NimNode): NimNode =
           result.add n.last
     else:
       assert false, "not a proc"
-
-  template cpsLift() {.pragma.}
 
   proc makeTail(name: NimNode; n: NimNode): NimNode =
     ## make a tail call and put it in a single statement list;
@@ -178,7 +181,7 @@ proc xfrm(n: NimNode): NimNode =
       result = nnkReturnStmt.newNimNode(newNilLit())
     else:
       # create a tail call with the given body
-      result = makeTail(mklabel"tailcall", n)
+      result = makeTail(mkLabel"tailcall", n)
 
   proc callTail(n: NimNode): NimNode =
     ## given a node, either turn it into a `return call(); proc call() = ...`
@@ -203,7 +206,7 @@ proc xfrm(n: NimNode): NimNode =
           result = nnkReturnStmt.newNimNode(newNilLit())
         else:
           # create a tail call and, uh, call it
-          result = returnTail(mklabel"tailcall", n)
+          result = returnTail(mkLabel"tailcall", n)
     else:
       # wrap whatever it is and recurse on it
       result = callTail(newStmtList(n))
@@ -224,7 +227,7 @@ proc xfrm(n: NimNode): NimNode =
   proc splitAt(n: NimNode; name: string; i: int): NimNode =
     # split a statement list to create a tail call given
     # a label prefix and an index at which to split
-    let label = mklabel name
+    let label = mkLabel name
     var body = newStmtList()
     body.doc "split as " & label.repr & " at index " & $i
     if i < n.len-1:
@@ -268,7 +271,7 @@ proc xfrm(n: NimNode): NimNode =
       var kid = kid
       for k in liften(kid):
         add(result, k)
-      if kid.kind == nnkProcDef and lifter in toSeq(kid.pragma):
+      if kid.isCpsCall:
         add(result, kid)
       else:
         add(dad, kid)
@@ -317,7 +320,7 @@ proc xfrm(n: NimNode): NimNode =
           discard pop(breaks)
 
       of nnkWhileStmt:
-        let w = mklabel "while"
+        let w = mkLabel "while"
         let bp = n.splitAt("break", i)
         add(breaks, bp)
         add(goto, w)
