@@ -183,7 +183,6 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
     let section = newNimNode(value.kind)
     # value[0][1] is the (only) identdefs of the section; [1] is type
     section.add newIdentDefs(name, value[0][1], newDotExpr(locals, name))
-    echo treeRepr(section)
     yield (key: name, val: section)
 
 proc defineLocals*(into: var NimNode; e: Env): NimNode =

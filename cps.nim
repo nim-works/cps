@@ -190,10 +190,6 @@ proc isLiftable(n: NimNode): bool =
     anyIt(toSeq items(n), it.hasPragma("cpsLift"))
   else:
     false
-  if not result and n.kind == nnkTypeSection:
-    debugEcho result, " for ", n.kind
-    debugEcho treerepr(n)
-    debugEcho repr(n)
 
 func isCpsType(n: NimNode): bool =
   ## it's a liftable continuation typedef
