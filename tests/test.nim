@@ -13,7 +13,7 @@ suite "cps":
   test "1":
     proc foo(): Cont {.cps.} =
       cup = 1
-    discard foo()
+    run foo()
     check cup == 1
 
   test "2":
@@ -21,7 +21,8 @@ suite "cps":
       var i: int = 0
       while i < 2:
         adder(i)
-    discard foo()
+      cup = i
+    run foo()
     check cup == 2
 
   test "3":
@@ -30,5 +31,6 @@ suite "cps":
       while i < 3:
         yield
         adder(i)
-    discard foo()
+      cup = i
+    run foo()
     check cup == 3

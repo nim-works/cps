@@ -25,12 +25,14 @@ export Cont, cpsLift
 
 type
   Operation = enum    ## "native" cps operations
+    # cps context
     Yield
     Sleep
     Wait
     Io
     Attach
     Detach
+    # any context
     Spawn
     Signal
     SignalAll
@@ -50,14 +52,14 @@ func makeIdent(op: Operation): NimNode =
 
 proc makeIdents(): seq[NimNode] {.compileTime.} =
   for op in items(Operation):
-    result.add ident("cps_" & $op)
-let cpsIdents {.compileTime.} = mapIt(toSeq(Operation.items),
-                                      it.makeIdent)
+    result.add makeIdent(op)
+let cpsIdents {.compileTime.} = makeIdents()
 
 template cps_yield*() = echo "yield"
 template cps_sleep*() = echo "sleep"
 
 proc tailCall(e: Env; n: NimNode): NimNode =
+  ## compose a tail call from the environment `e` to ident (or nil) `n`
   if n.kind == nnkNilLit:
     result = nnkReturnStmt.newTree(n)
   else:
@@ -69,17 +71,20 @@ proc tailCall(e: Env; n: NimNode): NimNode =
     result.add nnkReturnStmt.newTree(newCall(n, locals))
 
 func doc(s: string): NimNode =
+  ## generate a doc statement for debugging
   when comments:
     newCommentStmtNode(s)
   else:
     newEmptyNode()
 
 proc doc(n: var NimNode; s: string) =
+  ## add a doc statement to the ast for debugging
   when comments:
     if n.kind == nnkStmtList:
       n.add doc(s)
 
 func stripComments(n: NimNode): NimNode =
+  ## remove doc statements because that was a stupid idea
   result = n.copyNimNode
   for child in items(n):
     if child.kind != nnkCommentStmt:
@@ -101,6 +106,7 @@ func returnTo(n: NimNode): NimNode =
     result = returnTo(n[0])
 
 func isReturnCall(n: NimNode): bool =
+  ## true if the node looks like a tail call
   let n = n.stripComments
   case n.kind
   # simple `return foo()`
@@ -110,6 +116,7 @@ func isReturnCall(n: NimNode): bool =
         result = true
   # `return foo(); proc foo() = ...`
   of nnkStmtList:
+    # FIXME: this is stupid and will misbehave on type sections
     result = case n.len
     of 1:
       n[0].isReturnCall
@@ -117,7 +124,8 @@ func isReturnCall(n: NimNode): bool =
       n[0].isReturnCall and n[1].kind == nnkProcDef and n[1].name == n[0][0][0]
     else:
       false
-  else: discard
+  else:
+    discard
 
 func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
   ## fill `r` with `return foo()` if that is a safe simplification
@@ -135,6 +143,7 @@ proc isCpsProc(n: NimNode): bool
 
 proc hasPragma(n: NimNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
+  assert not n.isNil
   case n.kind
   of RoutineNodes:
     result = bindSym(s) in toSeq(n.pragma)
@@ -147,11 +156,12 @@ proc hasPragma(n: NimNode; s: static[string]): bool =
   of nnkTypeSection:
     result = anyIt(toSeq items(n), hasPragma(it, s))
   else:
-    assert false, "wut"
+    assert false, "unimplemented for " & $n.kind
 
 proc filterPragma(ns: seq[NimNode], liftee: NimNode): NimNode =
+  ## given a seq of pragmas, omit a match and return Pragma or Empty
   var pragmas = nnkPragma.newNimNode
-  for p in filterIt(ns, it != liftee):  # pragmas; sorry!
+  for p in filterIt(ns, it != liftee):
     pragmas.add p
   if len(pragmas) > 0:
     pragmas
@@ -159,6 +169,7 @@ proc filterPragma(ns: seq[NimNode], liftee: NimNode): NimNode =
     newEmptyNode()
 
 proc stripPragma(n: NimNode; s: static[string]): NimNode =
+  ## filter a pragma with the matching name from various nodes
   case n.kind
   of nnkPragma:
     result = filterPragma(toSeq n, bindSym(s))
@@ -191,23 +202,19 @@ proc isLiftable(n: NimNode): bool =
   else:
     false
 
-func isCpsType(n: NimNode): bool =
-  ## it's a liftable continuation typedef
-  result = n.kind == nnkTypeSection and n.isLiftable
-
 proc isCpsIdent(n: NimNode): bool =
   ## it's a cps identifier
   result = n.kind == nnkIdent and anyIt(cpsIdents, eqIdent(n, it))
 
 proc isCpsCall(n: NimNode): bool =
-  ## it's a call to a cps routine
+  ## `true` if `n` is a call to a cps routine
   result = n.kind == nnkCall and n[0].isCpsIdent
   when not strict:
     result = result or n.kind in RoutineNodes and n.isLiftable
     result = result or n.isCpsProc
 
-# Every block with calls to CPS procs is a CPS block
 proc isCpsBlock(n: NimNode): bool =
+  ## `true` if the block `n` contains a cps call
   case n.kind
   of nnkProcDef, nnkElse, nnkElifBranch:
     result = isCpsBlock(n.last)
@@ -227,22 +234,21 @@ proc isCpsBlock(n: NimNode): bool =
     discard
 
 proc mkLabel(s: string): NimNode =
+  ## how we name a generated proc
   result = genSym(nskProc, ident = s)
 
 proc foldTailCalls(n: NimNode): NimNode =
   ## this may optimize a `proc foo() = return bar()` to `return bar()`
   result = n
-  if n.kind == nnkProcDef:
-    if not asSimpleReturnCall(n, result):
-      if isReturnCall(n.last):
-        result = newStmtList()
-        result.doc "optimized proc into tail call"
-        result.add n.last
-  else:
-    assert false, "not a proc"
+  assert result.kind == nnkProcDef, "not a proc"
+  if not asSimpleReturnCall(n, result):
+    if isReturnCall(n.last):
+      result = newStmtList()
+      result.doc "optimized proc into tail call"
+      result.add n.last
 
 proc liften(n: var NimNode): NimNode =
-  ## lift cps procs to top-level
+  ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
   result = newStmtList()
   var dad = n.copyNimNode
   for kid in items(n):
@@ -260,13 +266,10 @@ proc liften(n: var NimNode): NimNode =
 
   n = dad
 
-proc xfrm(prc: NimNode; n: NimNode = nil; c: NimNode = nil): NimNode =
+proc xfrm(prc: NimNode; n: NimNode; c: NimNode): NimNode =
   assert prc.kind in RoutineNodes
-  if n == nil:
-    return xfrm(prc, prc.last, c = prc.params[0])
 
   # make sure we have a valid continuation type to work with
-  assert c != nil
   if c.kind == nnkEmpty:
     error "provide a continuation return type on " & $prc.name
   else:
@@ -321,7 +324,8 @@ proc xfrm(prc: NimNode; n: NimNode = nil; c: NimNode = nil): NimNode =
       result = env.makeTail(name, n)
 
   proc callTail(env: var Env; n: NimNode): NimNode =
-    ## given a node, either turn it into a `return call(); proc call() = ...`
+    ## given a node, either turn it into a
+    ## `return call(); proc call() = ...`
     ## or optimize it into a `return subcall()`
     case n.kind
     of nnkProcDef:
@@ -359,12 +363,14 @@ proc xfrm(prc: NimNode; n: NimNode = nil; c: NimNode = nil): NimNode =
       result = env.callTail(newStmtList())
 
   func next(ns: seq[NimNode]): NimNode =
+    ## read the next call off the stack
     if len(ns) == 0:
       newNilLit()
     else:
       ns[^1]
 
   template withGoto(n: NimNode; body: untyped): untyped =
+    ## run a body with a longer goto stack
     if len(n.stripComments) > 0:
       add(goto, n)
       try:
@@ -375,6 +381,7 @@ proc xfrm(prc: NimNode; n: NimNode = nil; c: NimNode = nil): NimNode =
       body
 
   proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
+    ## experimental optimization
     var simple: NimNode
     var n = n.stripComments
     if asSimpleReturnCall(n.last.last, simple):
@@ -384,9 +391,8 @@ proc xfrm(prc: NimNode; n: NimNode = nil; c: NimNode = nil): NimNode =
       into.doc "add an unoptimized tail call"
       into.add env.callTail(n)
 
-  # Make sure all CPS calls become tail calls
   proc saften(penv: var Env; input: NimNode): NimNode =
-    # xfrm the input into a mutually-recursive "cps convertible form".
+    ## transform `input` into a mutually-recursive cps convertible form
     result = input.copyNimNode
 
     # the accumulated environment
@@ -532,9 +538,10 @@ macro cps*(n: untyped) =
   assert n.kind in RoutineNodes
   result = n
   when not defined(nimdoc):
-    result = xfrm(result)
+    result = xfrm(result, n.last, n.params[0])
     echo repr(result)
 
 proc isCpsProc(n: NimNode): bool =
+  ## `true` if the node is a routine with our .cps. pragma
   let liftee = bindSym"cps"
   result = n.kind in RoutineNodes and liftee in toSeq(n.pragma)
