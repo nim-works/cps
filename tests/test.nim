@@ -2,22 +2,33 @@ import std/macros
 import std/unittest
 
 import cps
+import eventqueue
 
-proc adder(x: int): int {.cps.} =
-  return x + 1
+proc adder(x: var int) =
+  inc x
 
 suite "cps":
+  var cup: int
+
   test "1":
-    proc foo(): bool {.cps.} =
-      result = true
-    check foo() == true
+    proc foo(): Cont {.cps.} =
+      cup = 1
+    discard foo()
+    check cup == 1
 
   test "2":
-    expandMacros:
-      proc foo(): int {.cps.} =
-        var i = 0
-        while i < 34:
-          i = adder(i)
-        return i
+    proc foo(): Cont {.cps.} =
+      var i: int = 0
+      while i < 2:
+        adder(i)
+    discard foo()
+    check cup == 2
 
-    check foo() == 34
+  test "3":
+    proc foo(): Cont {.cps.} =
+      var i: int = 0
+      while i < 3:
+        yield
+        adder(i)
+    discard foo()
+    check cup == 3
