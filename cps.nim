@@ -15,7 +15,7 @@ const
   comments = true   ## embed comments within the transformation
   lifting = true    ## whether to lift generated symbols to top-level
 
-when NimMinor < 3:
+when NimMajor < 1 or NimMinor < 3:
   {.fatal: "requires nim-1.3".}
 
 import environment
