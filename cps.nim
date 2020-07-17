@@ -21,42 +21,49 @@ when NimMajor < 1 or NimMinor < 3:
 import environment
 import eventqueue
 
-export Cont, cpsLift
+export Cont
 
 type
-  Operation = enum    ## "native" cps operations
-    # cps context
+  Primitive = enum    ## operations on which all others are based
+    Spawn
+    Signal
+    SignalAll
     Yield
     Sleep
     Wait
     Io
     Attach
     Detach
-    # any context
-    Spawn
-    Signal
-    SignalAll
 
 const
   unexiter = {nnkWhileStmt, nnkBreakStmt}
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
-  cpsContext = {Yield .. Detach}
-  cpsAnywhere = {Spawn .. SignalAll}
-assert cpsContext + cpsAnywhere == {Operation.low .. Operation.high}
+when strict:
+  # currently, we only run Spawn from anywhere
+  const
+    cpsContext = {Signal .. high(Primitive)}
+    cpsAnywhere = {Spawn}
+else:
+  # i think we may want to also run Signals from anywhere
+  const
+    cpsContext = {Yield .. high(Primitive)}
+    cpsAnywhere = {Spawn .. SignalAll}
+assert cpsContext + cpsAnywhere == {Primitive.low .. Primitive.high}
 assert cpsContext * cpsAnywhere == {}
 
-func makeIdent(op: Operation): NimNode =
+func makeIdent(op: Primitive): NimNode =
   ident("cps_" & $op)
 
 proc makeIdents(): seq[NimNode] {.compileTime.} =
-  for op in items(Operation):
+  for op in items(Primitive):
     result.add makeIdent(op)
 let cpsIdents {.compileTime.} = makeIdents()
 
 template cps_yield*() = echo "yield"
-template cps_sleep*() = echo "sleep"
+proc cps_sleep(cont: Cont; t: float): Cont =
+  discard addTimer(cont, t)
 
 proc tailCall(e: Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
@@ -266,15 +273,95 @@ proc liften(n: var NimNode): NimNode =
 
   n = dad
 
-proc xfrm(prc: NimNode; n: NimNode; c: NimNode): NimNode =
-  assert prc.kind in RoutineNodes
+proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
+  ## make a tail call and put it in a single statement list;
+  ## this will always create a tail call proc and call it
+  let lifter = bindSym"cpsLift"
+  result = newStmtList()
+  result.doc "new tail call: " & name.repr
+  result.add env.tailCall(name)
+  if n.kind == nnkProcDef:
+    result.doc "adding the proc verbatim"
+    result.add n
+  else:
+    # add the required type section
+    result.doc "add type section"
+    env.storeTypeSection(result)
+    var body = newStmtList()
+    var locals = genSym(nskParam, "locals")
+    for name, asgn in localRetrievals(env, locals):
+      body.add asgn
+    body.add n
+    var fun = newProc(name = name, body = body,
+                      params = [env.inherits,
+                                newIdentDefs(locals, env.identity)])
+    if len(n) == 0:
+      {.warning: "creating an empty tail call".}
+    result.doc "creating a new proc: " & name.repr
 
-  # make sure we have a valid continuation type to work with
+    # prep it for lifting and add it to the result
+    fun.addPragma lifter
+    result.add fun
+
+proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
+  ## either create and return a tail call proc, or return nil
+  let cont = bindSym"Cont"
+  if len(n) == 0:
+    # no code to run means we just `return Cont()`
+    result = nnkReturnStmt.newNimNode(newCall(cont))
+  else:
+    # create a tail call with the given body
+    result = env.makeTail(name, n)
+
+proc callTail(env: var Env; n: NimNode): NimNode =
+  ## given a node, either turn it into a
+  ## `return call(); proc call() = ...`
+  ## or optimize it into a `return subcall()`
+  case n.kind
+  of nnkProcDef:
+    # if you already put it in a proc, we should just use it
+    result = n
+  of nnkIdent:
+    # if it's an identifier, we'll just issue a call of it
+    result = env.tailCall(n)
+  of nnkStmtList:
+    # maybe we can optimize it out
+    if asSimpleReturnCall(n, result):
+      discard "the call was stuffed into result"
+    elif isReturnCall(n):
+      # just copy the call
+      result = newStmtList([doc"verbatim tail call", n])
+    else:
+      result = env.returnTail(mkLabel"tailcall", n)
+  else:
+    # wrap whatever it is and recurse on it
+    result = env.callTail(newStmtList(n))
+
+func next(ns: seq[NimNode]): NimNode =
+  ## read the next call off the stack
+  if len(ns) == 0:
+    newNilLit()
+  else:
+    ns[^1]
+
+proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
+  ## experimental optimization
+  var simple: NimNode
+  var n = n.stripComments
+  if asSimpleReturnCall(n.last.last, simple):
+    into.doc "possibly unsafe optimization: " & n.repr
+    env.optimizeSimpleReturn(into, simple)
+  else:
+    into.doc "add an unoptimized tail call"
+    into.add env.callTail(n)
+
+proc xfrm(n: NimNode; c: NimNode): NimNode =
   if c.kind == nnkEmpty:
-    error "provide a continuation return type on " & $prc.name
+    error "provide a continuation return type"
   else:
     hint "continuation return type " & repr(c)
 
+  # create the environment in which we'll store locals
   var env = newEnv(c)
 
   # identifiers of future break or return targets
@@ -282,70 +369,6 @@ proc xfrm(prc: NimNode; n: NimNode; c: NimNode): NimNode =
   var breaks: seq[NimNode]
 
   func insideCps(): bool = len(goto) > 0 or len(breaks) > 0
-
-  proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
-    ## make a tail call and put it in a single statement list;
-    ## this will always create a tail call proc and call it
-    let lifter = bindSym"cpsLift"
-    result = newStmtList()
-    result.doc "new tail call: " & name.repr
-    result.add env.tailCall(name)
-    if n.kind == nnkProcDef:
-      result.doc "adding the proc verbatim"
-      result.add n
-    else:
-      # add the required type section
-      result.doc "add type section"
-      env.storeTypeSection(result)
-      var body = newStmtList()
-      var locals = genSym(nskParam, "locals")
-      for name, asgn in localRetrievals(env, locals):
-        body.add asgn
-      body.add n
-      var fun = newProc(name = name, body = body,
-                        params = [env.inherits,
-                                  newIdentDefs(locals, env.identity)])
-      if len(n) == 0:
-        {.warning: "creating an empty tail call".}
-      result.doc "creating a new proc: " & name.repr
-
-      # prep it for lifting and add it to the result
-      fun.addPragma lifter
-      result.add fun
-
-  proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
-    ## either create and return a tail call proc, or return nil
-    let cont = bindSym"Cont"
-    if len(n) == 0:
-      # no code to run means we just `return Cont()`
-      result = nnkReturnStmt.newNimNode(newCall(cont))
-    else:
-      # create a tail call with the given body
-      result = env.makeTail(name, n)
-
-  proc callTail(env: var Env; n: NimNode): NimNode =
-    ## given a node, either turn it into a
-    ## `return call(); proc call() = ...`
-    ## or optimize it into a `return subcall()`
-    case n.kind
-    of nnkProcDef:
-      # if you already put it in a proc, we should just use it
-      result = n
-    of nnkIdent:
-      # if it's an identifier, we'll just issue a call of it
-      result = env.tailCall(n)
-    of nnkStmtList:
-      # maybe we can optimize it out
-      if asSimpleReturnCall(n, result):
-        discard "the call was stuffed into result"
-      elif isReturnCall(n):
-        # just copy the call
-        result = newStmtList([doc"verbatim tail call", n])
-      else:
-        result = env.returnTail(mkLabel"tailcall", n)
-    else:
-      # wrap whatever it is and recurse on it
-      result = env.callTail(newStmtList(n))
 
   proc saften(penv: var Env; input: NimNode): NimNode
 
@@ -362,13 +385,6 @@ proc xfrm(prc: NimNode; n: NimNode; c: NimNode): NimNode =
     else:
       result = env.callTail(newStmtList())
 
-  func next(ns: seq[NimNode]): NimNode =
-    ## read the next call off the stack
-    if len(ns) == 0:
-      newNilLit()
-    else:
-      ns[^1]
-
   template withGoto(n: NimNode; body: untyped): untyped =
     ## run a body with a longer goto stack
     if len(n.stripComments) > 0:
@@ -379,17 +395,6 @@ proc xfrm(prc: NimNode; n: NimNode; c: NimNode): NimNode =
         discard pop(goto)
     else:
       body
-
-  proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
-    ## experimental optimization
-    var simple: NimNode
-    var n = n.stripComments
-    if asSimpleReturnCall(n.last.last, simple):
-      into.doc "possibly unsafe optimization: " & n.repr
-      env.optimizeSimpleReturn(into, simple)
-    else:
-      into.doc "add an unoptimized tail call"
-      into.add env.callTail(n)
 
   proc saften(penv: var Env; input: NimNode): NimNode =
     ## transform `input` into a mutually-recursive cps convertible form
@@ -520,26 +525,35 @@ proc xfrm(prc: NimNode; n: NimNode; c: NimNode): NimNode =
       else:
         result.doc "nil return"
 
-  var safe = env.saften(n)
-  when lifting:
-    safe = newStmtList(safe) # wrap it for liften
-    let decls = liften(safe)
-    if len(decls) == 0:
-      prc.body = n
-      result = prc
-    else:
-      prc.body = safe
-      result = newStmtList(decls, prc)
-  else:
-    prc.body = safe
-    result = prc
+  result = env.saften(n)
 
-macro cps*(n: untyped) =
-  assert n.kind in RoutineNodes
-  result = n
-  when not defined(nimdoc):
-    result = xfrm(result, n.last, n.params[0])
-    echo repr(result)
+proc transform(n: NimNode; c: NimNode): NimNode =
+  ## returns a statement list that might be transformed
+  var body =
+    if n.kind in RoutineNodes:
+      n.last
+    else:
+      n
+  var safe = xfrm(body, c).newStmtList # wrap it for liften
+  let decls = liften(safe)
+  if len(decls) == 0:
+    # nothing lifted, nothing gained
+    result = newStmtList(n)
+  else:
+    if n.kind in RoutineNodes:
+      n.body = safe
+      safe = n
+    result = newStmtList(decls, safe)
+
+macro cps*(n: typed) =
+  when defined(nimdoc): return n
+  if n.kind in RoutineNodes:
+    result = transform(n, n.params[0])
+  else:
+    result = transform(n, bindSym"Cont")
+
+macro cps*(c: typed; n: typed) =
+  result = transform(n, c)
 
 proc isCpsProc(n: NimNode): bool =
   ## `true` if the node is a routine with our .cps. pragma

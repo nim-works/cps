@@ -84,11 +84,13 @@ proc populateType(e: Env; n: var NimNode) =
       if value[1].kind == nnkEmpty:
         error "give " & $name & " a type: " & repr(section)
       else:
-        n.add newIdentDefs(name, value[1])
+        # name is an ident or symbol
+        n.add newIdentDefs(ident($name), value[1])
 
 template cpsLift*() {.pragma.}
 
 proc isDirty(e: Env): bool =
+  assert not e.isNil
   result = e.id.isNil or e.id.kind == nnkEmpty
 
 proc identity*(e: Env): NimNode =
@@ -97,11 +99,12 @@ proc identity*(e: Env): NimNode =
   result = e.id
 
 proc setDirty(e: var Env) =
+  assert not e.isNil
   e.id = newEmptyNode()
   assert e.isDirty
 
 proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
-  assert key.kind == nnkIdent
+  assert key.kind == nnkSym
   assert val.kind in {nnkVarSection, nnkLetSection}
   e.child[key] = val
   setDirty e
@@ -166,13 +169,15 @@ proc newEnv*(into: var NimNode; parent: var Env): Env =
   ## a new env from the given parent; add a typedef for the
   ## parent into `into` if necessary
   assert not into.isNil
+  assert not parent.isNil
   if into.kind == nnkStmtList:
     if parent.isDirty:
       parent.storeTypeSection(into)
     result = newEnv(parent.id)
     result.parent = parent
   else:
-    warning "kind is " & $into.kind
+    # just pass the parent when we aren't prepared to record env changes
+    result = parent
 
 iterator localAssignments*(e: Env; locals: NimNode): Pair =
   for name, section in pairs(e):

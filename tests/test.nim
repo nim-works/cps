@@ -27,10 +27,18 @@ suite "cps":
 
   test "3":
     proc foo(): Cont {.cps.} =
-      var i: int = 0
+      var i = 0
       while i < 3:
-        yield
+        #yield
         adder(i)
       cup = i
     run foo()
     check cup == 3
+
+  test "4":
+    cps Cont:
+      var i: int = 0
+      while i < 4:
+        adder(i)
+      cup = i
+    check cup == 4
