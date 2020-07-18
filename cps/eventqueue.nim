@@ -172,7 +172,9 @@ proc poll*() =
       let id = getData(eq.selector, event.fd)
       # the id will be InvalidId if it's a wake-up event
       if id != InvalidId:
-        run getOrDefault(eq.goto, id, nil)
+        var cont: Cont
+        if pop(eq.goto, id, cont):
+          run cont
 
     # at this point, we've handled all timers and i/o so we can simply
     # iterate over the yields and run them.  to make sure we don't run

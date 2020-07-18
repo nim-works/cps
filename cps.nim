@@ -61,10 +61,8 @@ proc makeIdents(): seq[NimNode] {.compileTime.} =
     result.add makeIdent(op)
 let cpsIdents {.compileTime.} = makeIdents()
 
-proc cps_yield*(cont: Cont) = discard
-
-proc cps_sleep*(ms: int) {.deprecated.} =
-  addTimer(nil.Cont, ms)
+proc cps_yield*(cont: Cont): Cont =
+  addYield(cont)
 
 proc cps_sleep*(cont: Cont; ms: int): Cont =
   addTimer(cont, ms)
@@ -75,11 +73,8 @@ proc tailCall(e: Env; n: NimNode): NimNode =
     result = nnkReturnStmt.newTree(n)
   else:
     result = newStmtList()
-    let locals = result.defineLocals(e)
-    result.add newAssignment(locals, newCall(e.identity))
-    for name, asgn in e.localAssignments(locals):
-      result.add asgn
-    result.add nnkReturnStmt.newTree(newCall(n, locals))
+    let locals = result.defineLocals(e, n)
+    result.add nnkReturnStmt.newTree(newDotExpr(locals, ident"Cont"))
 
 func doc(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -297,8 +292,7 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
       body.add asgn
     body.add n
     var fun = newProc(name = name, body = body,
-                      params = [env.inherits,
-                                newIdentDefs(locals, env.identity)])
+                      params = [env.root, newIdentDefs(locals, env.root)])
     if len(n) == 0:
       {.warning: "creating an empty tail call".}
     result.doc "creating a new proc: " & name.repr
@@ -553,6 +547,7 @@ proc transform(n: NimNode; c: NimNode): NimNode =
       new.body = safe
       safe = new
     result = newStmtList(decls, safe)
+    echo treeRepr(result)
 
 macro cps*(n: typed) =
   when defined(nimdoc): return n

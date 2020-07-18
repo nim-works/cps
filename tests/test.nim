@@ -2,7 +2,7 @@ import std/macros
 import std/unittest
 
 import cps
-import eventqueue
+import cps/eventqueue
 
 proc adder(x: var int) =
   inc x

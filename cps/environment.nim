@@ -60,6 +60,26 @@ proc inherits*(e: Env): NimNode =
   assert e.via.kind != nnkEmpty
   result = e.via
 
+proc isDirty(e: Env): bool =
+  assert not e.isNil
+  result = e.id.isNil or e.id.kind == nnkEmpty
+
+proc identity*(e: Env): NimNode =
+  assert not e.isNil
+  assert not e.isDirty
+  result = e.id
+
+proc setDirty(e: var Env) =
+  assert not e.isNil
+  e.id = newEmptyNode()
+  assert e.isDirty
+
+proc root*(e: Env): NimNode =
+  var r = e
+  while not r.parent.isNil:
+    r = r.parent
+  result = r.inherits
+
 proc newEnv*(via: NimNode): Env =
   assert not via.isNil
   assert via.kind != nnkEmpty
@@ -88,20 +108,6 @@ proc populateType(e: Env; n: var NimNode) =
         n.add newIdentDefs(ident($name), value[1])
 
 template cpsLift*() {.pragma.}
-
-proc isDirty(e: Env): bool =
-  assert not e.isNil
-  result = e.id.isNil or e.id.kind == nnkEmpty
-
-proc identity*(e: Env): NimNode =
-  assert not e.isNil
-  assert not e.isDirty
-  result = e.id
-
-proc setDirty(e: var Env) =
-  assert not e.isNil
-  e.id = newEmptyNode()
-  assert e.isDirty
 
 proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
   assert key.kind == nnkSym
@@ -179,30 +185,26 @@ proc newEnv*(into: var NimNode; parent: var Env): Env =
     # just pass the parent when we aren't prepared to record env changes
     result = parent
 
-iterator localAssignments*(e: Env; locals: NimNode): Pair =
+iterator localAssignments*(e: Env; locals: NimNode): Pair {.deprecated.} =
   for name, section in pairs(e):
     yield (key: name, val: newAssignment(newDotExpr(locals, name), name))
 
 iterator localRetrievals*(e: Env; locals: NimNode): Pair =
+  let locals = newDotExpr(locals, e.identity)
   for name, value in pairs(e):
     let section = newNimNode(value.kind)
     # value[0][1] is the (only) identdefs of the section; [1] is type
     section.add newIdentDefs(name, value[0][1], newDotExpr(locals, name))
     yield (key: name, val: section)
 
-proc defineLocals*(into: var NimNode; e: Env): NimNode =
+proc defineLocals*(into: var NimNode; e: Env; goto: NimNode): NimNode =
   assert not e.isDirty
-  #if not e.parent.isDirty and eqIdent(e.identity, e.inherits):
-  if false:
-    result = e.parent.identity
-  else:
-    result = gensym(nskVar, "locals")
-    var vs = nnkVarSection.newNimNode
-    when true:
-      vs.add newIdentDefs(result, e.identity)
-    else:
-      if e.parent.isDirty or len(e.parent) == 0:
-        vs.add newIdentDefs(result, e.identity)
-      else:
-        vs.add newIdentDefs(result, e.identity, e.parent.identity)
-    into.add vs
+  result = gensym(nskVar, "locals")
+  var vs = nnkLetSection.newNimNode
+  var obj = nnkObjConstr.newNimNode
+  obj.add e.identity
+  obj.add newColonExpr(ident"fn", goto)
+  for name, section in pairs(e):
+    obj.add newColonExpr(name, name)
+  vs.add newIdentDefs(result, newEmptyNode(), obj)
+  into.add vs
