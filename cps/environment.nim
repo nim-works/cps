@@ -190,7 +190,7 @@ iterator localAssignments*(e: Env; locals: NimNode): Pair {.deprecated.} =
     yield (key: name, val: newAssignment(newDotExpr(locals, name), name))
 
 iterator localRetrievals*(e: Env; locals: NimNode): Pair =
-  let locals = newDotExpr(locals, e.identity)
+  let locals = newCall(e.identity, locals)
   for name, value in pairs(e):
     let section = newNimNode(value.kind)
     # value[0][1] is the (only) identdefs of the section; [1] is type
@@ -199,7 +199,7 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
 
 proc defineLocals*(into: var NimNode; e: Env; goto: NimNode): NimNode =
   assert not e.isDirty
-  result = gensym(nskVar, "locals")
+  result = gensym(nskLet, "locals")
   var vs = nnkLetSection.newNimNode
   var obj = nnkObjConstr.newNimNode
   obj.add e.identity
