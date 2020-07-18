@@ -1,3 +1,4 @@
+import std/sets
 import std/options
 import std/sequtils
 import std/hashes
@@ -5,8 +6,6 @@ import std/tables
 import std/macros
 
 #[
-
-XXX: need to handle shadowing with a dedupe or something
 
 the idea here is that we can make a type hierarchy like
   grandparent
@@ -24,7 +23,7 @@ the environment gets unpacked in procs; this could even be swapped
 
 ]#
 
-import eventqueue
+import cps/eventqueue
 
 type
   Pair = tuple
@@ -91,11 +90,13 @@ proc children(e: Env): seq[Pair] =
     result.add children(e.parent)
 
 iterator pairs(e: Env): Pair =
-  ## FIXME: don't emit shadowed nodes
+  var seen = initHashSet[string](len(e))
   for key, val in pairs(e.child):
+    seen.incl key.strVal
     yield (key: key, val: val)
   for pair in children(e.parent):
-    yield pair
+    if not seen.containsOrIncl(pair[0].strVal):
+      yield pair
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
@@ -199,12 +200,15 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
 
 proc defineLocals*(into: var NimNode; e: Env; goto: NimNode): NimNode =
   assert not e.isDirty
-  result = gensym(nskLet, "locals")
-  var vs = nnkLetSection.newNimNode
   var obj = nnkObjConstr.newNimNode
   obj.add e.identity
   obj.add newColonExpr(ident"fn", goto)
   for name, section in pairs(e):
     obj.add newColonExpr(name, name)
-  vs.add newIdentDefs(result, newEmptyNode(), obj)
-  into.add vs
+  when true:
+    result = obj
+  else:
+    result = gensym(nskLet, "locals")
+    var vs = nnkLetSection.newNimNode
+    vs.add newIdentDefs(result, newEmptyNode(), obj)
+    into.add vs
