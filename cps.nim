@@ -18,8 +18,8 @@ const
 when NimMajor < 1 or NimMinor < 3:
   {.fatal: "requires nim-1.3".}
 
-import environment
-import eventqueue
+import cps/environment
+import cps/eventqueue
 
 export Cont
 
@@ -61,9 +61,13 @@ proc makeIdents(): seq[NimNode] {.compileTime.} =
     result.add makeIdent(op)
 let cpsIdents {.compileTime.} = makeIdents()
 
-template cps_yield*() = echo "yield"
-proc cps_sleep(cont: Cont; t: float): Cont =
-  discard addTimer(cont, t)
+proc cps_yield*(cont: Cont) = discard
+
+proc cps_sleep*(ms: int) {.deprecated.} =
+  addTimer(nil.Cont, ms)
+
+proc cps_sleep*(cont: Cont; ms: int): Cont =
+  addTimer(cont, ms)
 
 proc tailCall(e: Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
@@ -426,22 +430,25 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
         env.add nc
         # include the section normally (for now)
         result.add nc
-      #[
 
-      cute, but not yet.
-
-      of nnkIdent:
-        if isCpsIdent(nc):
-          result.add newCall(nc)
-        elif isCpsIdent(ident("cps_" & nc.strVal)):
-          result.add newCall(ident("cps_" & nc.strVal))
-        else:
-          result.add nc
-
-      ]#
       of nnkYieldStmt:
         if insideCps() or (i < n.len-1 and nc.isCpsCall):
           result.add newCall(ident"cps_yield")
+        else:
+          result.add nc
+
+      of nnkCall:
+        echo treeRepr(nc)
+        if isCpsIdent(nc[0]):
+          let x = env.splitAt(n, "cps", i)
+          var p = x.params
+          echo treeRepr(p)
+          withGoto x:
+            result.add env.saften(nc)
+            if len(x.stripComments) > 0:
+              result.add next(goto)
+          # the split is complete
+          return
         else:
           result.add nc
 
@@ -467,6 +474,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       of nnkWhileStmt:
         let w = mkLabel "while"
         let bp = env.splitAt(n, "break", i)
+        echo treeRepr(n)
         add(breaks, bp)
         add(goto, w)
         try:
@@ -531,7 +539,7 @@ proc transform(n: NimNode; c: NimNode): NimNode =
   ## returns a statement list that might be transformed
   var body =
     if n.kind in RoutineNodes:
-      n.last
+      n.body
     else:
       n
   var safe = xfrm(body, c).newStmtList # wrap it for liften
@@ -541,8 +549,9 @@ proc transform(n: NimNode; c: NimNode): NimNode =
     result = newStmtList(n)
   else:
     if n.kind in RoutineNodes:
-      n.body = safe
-      safe = n
+      var new = copyNimTree(n)
+      new.body = safe
+      safe = new
     result = newStmtList(decls, safe)
 
 macro cps*(n: typed) =
@@ -551,6 +560,7 @@ macro cps*(n: typed) =
     result = transform(n, n.params[0])
   else:
     result = transform(n, bindSym"Cont")
+  echo repr(result)
 
 macro cps*(c: typed; n: typed) =
   result = transform(n, c)

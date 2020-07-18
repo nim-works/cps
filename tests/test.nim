@@ -29,12 +29,13 @@ suite "cps":
     proc foo(): Cont {.cps.} =
       var i = 0
       while i < 3:
-        #yield
+        cps_sleep(1000)
         adder(i)
       cup = i
     run foo()
     check cup == 3
 
+when false:
   test "4":
     cps Cont:
       var i: int = 0
