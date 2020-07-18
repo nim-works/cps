@@ -1,3 +1,4 @@
+import std/selectors
 import std/monotimes
 import std/nativesockets
 import std/tables
@@ -8,143 +9,126 @@ import std/times
 type
   Id = int
 
-  Ticks = int64
+  State = enum
+    Stopped
+    Running
+    Stopping
 
-  Timer* = ref object   ## timer handler
-    id: Id
-    interval: Duration
-    tWhen: MonoTime
-    cont: Cont
-    deleted: bool
+  Clock = MonoTime
+  Fd = int
 
-  Socker = ref object   ## socket handler
-    id: Id
-    sock: SocketHandle
-    cont: Cont
-    deleted: bool
-
-  Evq* = object
-    stop: bool
-    tNow: MonoTime
-    sockers: Table[Id, Socker]
-    timers: Table[Id, Timer]
-    nextId: Id
+  EventQueue = object
+    state: State                    ## dispatcher readiness
+    clock: Clock                    ## time of latest poll loop
+    goto: Table[Id, Cont]           ## where to go from here!
+    lastId: Id                      ## id of last-issued registration
+    selector: Selector[Id]
+    manager: Selector[Clock]
+    timer: Fd
 
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
 
+var eq {.threadvar.}: EventQueue
+eq.selector = newSelector[Id]()
+let WakeUp = newSelectEvent()
 
-# Continuation trampoline
-
-proc run*(c: Cont) =
-  var c = c
-  while c != nil and c.fn != nil:
-    c = c.fn(c)
-
-var evq {.threadvar.}: Evq
-
-template now(): MonoTime = getMonoTime()
+template now(): Clock = getMonoTime()
 
 proc nextId(): Id =
-  inc evq.nextId
-  return evq.nextId
+  inc eq.lastId
+  result = eq.lastId
 
-# Register/unregister a file descriptor to the loop
+template wakeAfter(body: untyped): untyped =
+  try:
+    body
+  finally:
+    if eq.state == Running:
+      trigger WakeUp
 
-proc addFd*(sock: SocketHandle, cont: Cont): Id =
-  let id = nextId()
-  evq.sockers[id] = Socker(id: id, sock: sock, cont: cont)
-  return id
+proc `[]=`(eq: var EventQueue; id: Id; cont: Cont) =
+  assert id != 0
+  assert not cont.isNil
+  assert not cont.fn.isNil
+  assert id notin eq.goto
+  eq.goto[id] = cont
 
-proc delFd*(id: Id) =
-  evq.sockers[id].deleted = true
-  evq.sockers.del id
-
-# Register/unregister timers
-
-proc addTimer*(cont: Cont; interval: Duration): Id =
+proc add(eq: var EventQueue; cont: Cont): Id =
   result = nextId()
-  evq.timers[result] = Timer(id: result, tWhen: now() + interval,
-                             interval: interval, cont: cont)
+  eq[result] = cont
 
-proc addTimer*(cont: Cont; ticks: int64): Id =
-  result = addTimer(cont, initDuration(nanoseconds = ticks))
+proc addTimer*(cont: Cont; interval: Duration) =
+  wakeAfter:
+    let fd = eq.selector.registerTimer(
+      timeout = interval.inMilliseconds.int,
+      oneshot = true, data = eq.add(cont))
+    echo "added timer ", fd
 
-proc addTimer*(cont: Cont; time: float): Id =
-  result = addTimer(cont, initDuration(nanoseconds = (int64) time * 1_000_000))
+proc addTimer*(cont: Cont; ms: int) =
+  let interval = initDuration(milliseconds = ms)
+  addTimer(cont, interval)
 
-proc delTimer*(id: Id) =
-  evq.timers[id].deleted = true
-  evq.timers.del id
-
-# Run one iteration
-
-proc poll() =
-
-  # Calculate sleep time
-
-  evq.tNow = now()
-  var tSleep = initDuration(milliseconds = 1)
-  for id, th in evq.timers:
-    if not th.deleted:
-      let dt = th.tWhen - evq.tNow
-      if dt > DurationZero:
-        tSleep = min(tSleep, dt)
-
-  # Collect sockets for select
-
-  var readSocks: seq[SocketHandle]
-  for id, sh in evq.sockers:
-    if not sh.deleted:
-      readSocks.add sh.sock
-
-  let r = selectRead(readSocks, tSleep.inMilliseconds.int)
-
-  # Call expired timer handlers. Don't call while iterating because callbacks
-  # might mutate the list
-
-  evq.tNow = now()
-  var ths: seq[Timer]
-
-  for id, th in evq.timers:
-    if not th.deleted:
-      if evq.tNow > th.tWhen:
-        ths.add th
-
-  for th in ths:
-    if not th.deleted:
-      th.cont.run()
-      let repeat = false
-      if repeat:
-        th.tWhen = th.tWhen + th.interval
-      else:
-        delTimer(th.id)
-
-  doAssert r != -1
-
-  if r > 0:
-
-    # Call sock handlers with events. Don't call while iterating because
-    # callbacks might mutate the list
-
-    var shs: seq[Socker]
-
-    for s in readSocks:
-      for id, sh in evq.sockers:
-        if not sh.deleted and sh.sock == s:
-          shs.add sh
-
-    for sh in shs:
-      if not sh.deleted:
-        sh.cont.run()
-        delFd(sh.id)
-
+proc addTimer*(cont: Cont; seconds: float) =
+  let interval = initDuration(milliseconds = (1_000 * seconds).int)
+  addTimer(cont, interval)
 
 proc stop*() =
-  evq.stop = true
+  ## tell the dispatcher to stop
+  if eq.state == Running:
+    eq.state = Stopping
 
-# Run forever
+    # tear down the manager
+    assert not eq.manager.isNil
+    eq.manager.unregister WakeUp
+    assert eq.timer != -1
+    eq.manager.unregister eq.timer
+    eq.timer = -1
+    close(eq.manager)
 
-proc run*() =
-  while not evq.stop:
+    # discard the current selector to dismiss any pending events
+    close(eq.selector)
+    # open a new one so we can attach events while stopped
+    eq.selector = newSelector[Id]()
+
+    # the dispatcher is now stopped
+    eq.state = Stopped
+
+proc run*(c: Cont) =
+  ## trampoline
+  var c = c
+  while not c.isNil and not c.fn.isNil:
+    c = c.fn(c)
+
+proc poll() =
+  ## see what needs doing and do it
+  if eq.state != Running: return
+
+  if isEmpty(eq.selector):
+    stop()
+  else:
+    let clock = now()
+    let ready = eq.selector.select(-1)
+    if len(ready) > 0:
+      for event in items(ready):
+        echo event.fd, " is ready"
+
+    if eq.state == Running:
+      # wait until the next polling interval or signal
+      discard eq.manager.select(-1)
+
+proc run*(interval: Duration = initDuration(seconds = 1)) =
+  ## the dispatcher runs with a maximal polling interval
+  let began = now()
+  assert eq.state == Stopped
+  # create a new manager
+  eq.manager = newSelector[Clock]()
+  # the manager wakes up repeatedly
+  eq.timer = registerTimer(eq.manager,
+                           timeout = interval.inMilliseconds.int,
+                           oneshot = false, data = began)
+  # the manager wakes up when triggered to do so
+  eq.manager.registerEvent(WakeUp, began)
+  # the dispatcher is now running
+  eq.state = Running
+  while eq.state == Running:
     poll()
