@@ -76,20 +76,16 @@ proc isCpsCall(n: NimNode): bool =
 proc tailCall(e: Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
   if n.kind == nnkNilLit:
-    result = nnkReturnStmt.newTree n
+    result = nnkReturnStmt.newNimNode(n).add n
   elif isCpsCall(n):
     result = newStmtList()
-    var call = nnkCall.newNimNode
     var locals = result.defineLocals(e, n[0])
-    for i, node in pairs(n):
-      call.add node
-      if i == 0:
-        # elide .Cont from Cont(...).Cont
-        if not eqIdent(locals[0], e.root):
-          call.add newDotExpr(locals, e.root)
-        else:
-          call.add locals
-    result.add nnkReturnStmt.newTree(call)
+    # elide .Cont from Cont(...).Cont and install it as 1st argument
+    if not eqIdent(locals[0], e.root):
+      n.insert(1, newDotExpr(locals, e.root))
+    else:
+      n.insert(1, locals)
+    result.add nnkReturnStmt.newNimNode(n).add n
   else:
     result = newStmtList()
     let locals = result.defineLocals(e, n)
@@ -189,6 +185,7 @@ proc filterPragma(ns: seq[NimNode], liftee: NimNode): NimNode =
   var pragmas = nnkPragma.newNimNode
   for p in filterIt(ns, it != liftee):
     pragmas.add p
+    copyLineInfo(pragmas, p)
   if len(pragmas) > 0:
     pragmas
   else:
@@ -212,7 +209,7 @@ proc stripPragma(n: NimNode; s: static[string]): NimNode =
     n[^1] = stripPragma(n.last, s)
     result = n
   of nnkTypeSection:
-    result = newNimNode(n.kind)
+    result = newNimNode(n.kind, n)
     for item in items(n):
       result.add stripPragma(item, s)
   else:
@@ -305,7 +302,7 @@ proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## either create and return a tail call proc, or return nil
   if len(n) == 0:
     # no code to run means we just `return Cont()`
-    result = nnkReturnStmt.newNimNode(newCall(env.root))
+    result = nnkReturnStmt.newNimNode(n).add newCall(env.root)
   else:
     # create a tail call with the given body
     result = env.makeTail(name, n)
@@ -551,15 +548,16 @@ macro cpsMagic*(n: untyped): untyped =
   m.params[0] = newEmptyNode()
   when false:
     m.addPragma newColonExpr(ident"error", msg.newLit)
-    m.body = nnkDiscardStmt.newTree(newEmptyNode())
+    m.body = nnkDiscardStmt.newNimNode(n).add newEmptyNode()
   elif true:
-    m.body = nnkPragma.newTree newColonExpr(ident"warning", msg.newLit)
+    m.body = nnkPragma.newNimNode(n).add newColonExpr(ident"warning",
+                                                      msg.newLit)
   else:
-    m.body = nnkCall.newTree(ident"error", msg.newLit)
+    m.body = nnkCall.newNimNode(n).newTree(ident"error", msg.newLit)
   result.add m
 
   # manipulate the primitive to take its return type as a first arg
-  var prefixed = nnkFormalParams.newNimNode
+  var prefixed = nnkFormalParams.newNimNode(n)
   prefixed.add n.params[0]
   prefixed.add newIdentDefs(ident"c", n.params[0])
   prefixed.add n.params[1..^1]
