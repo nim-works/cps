@@ -272,12 +272,15 @@ when false:
 
 proc liften(n: NimNode): NimNode =
   ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
+  result = newStmtList()
   if n.isLiftable:
-    result = newStmtList(n)
+    result.add n.stripPragma("cpsLift")
     for k in items(n):
       result.add liften(k)
   else:
-    result = n
+    for k in items(n):
+      result.add liften(k)
+    result.add n
 
 proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## make a tail call and put it in a single statement list;
