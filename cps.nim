@@ -263,24 +263,15 @@ when false:
         result.doc "optimized proc into tail call"
         result.add n.last
 
-proc liften(n: var NimNode): NimNode =
+proc liften(n: NimNode): NimNode =
   ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
-  result = newStmtList()
-  var dad = n.copyNimNode
-  for kid in items(n):
-    var kid = kid
-
-    # lift anything below
-    for k in items(liften(kid)):
-      result.add k
-
-    if kid.isLiftable:
-      kid = stripPragma(kid, "cpsLift")
-      result.add kid      # cps calls and types go in the result
-    else:
-      dad.add kid         # other stuff stays where it is
-
-  n = dad
+  #var p = n.copyNimNode
+  if n.isLiftable:
+    result = newStmtList(n)
+    for k in items(n):
+      result.add k.liften
+  else:
+    result = n
 
 proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## make a tail call and put it in a single statement list;
@@ -531,24 +522,14 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
   result = env.saften(n)
 
-macro cps*(n: untyped) =
+macro cps*(n: untyped): untyped =
   when defined(nimdoc): return n
-  var safe, decls: NimNode
-  safe = xfrm(n.body, n.params[0]).newStmtList
-  decls = liften(safe)
-
-  var p = newProc(name = n.name, procType = n.kind,
-                  params = toSeq n.params, body = safe,
-                  pragmas = stripPragma(n.pragma, "cps"))
-
-  result = newStmtList()
-  if len(decls) > 0:
-    result.add decls
-  result.add p
+  n.body = xfrm(n.body, n.params[0]).newStmtList
+  result = liften(n)
   echo repr(result)
 
 when false:
-  macro cps*(c: typed; n: typed) =
+  macro cps*(c: typed; n: typed): untyped =
     var
       safe = xfrm(n, c)
       decls = liften(safe)
@@ -558,7 +539,7 @@ when false:
     result.add safe
     assert false
 
-macro cpsMagic*(n: untyped) =
+macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
   when defined(nimdoc): return n
@@ -569,10 +550,10 @@ macro cpsMagic*(n: untyped) =
   var m = n.copyNimTree
   let msg = $n.name & "() is only valid in {.cps.} context"
   m.params[0] = newEmptyNode()
-  when true:
+  when false:
     m.addPragma newColonExpr(ident"error", msg.newLit)
     m.body = nnkDiscardStmt.newTree(newEmptyNode())
-  elif false:
+  elif true:
     m.body = nnkPragma.newTree newColonExpr(ident"warning", msg.newLit)
   else:
     m.body = nnkCall.newTree(ident"error", msg.newLit)
