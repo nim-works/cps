@@ -265,11 +265,10 @@ when false:
 
 proc liften(n: NimNode): NimNode =
   ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
-  #var p = n.copyNimNode
   if n.isLiftable:
     result = newStmtList(n)
     for k in items(n):
-      result.add k.liften
+      result.add liften(k)
   else:
     result = n
 
