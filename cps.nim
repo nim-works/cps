@@ -63,8 +63,8 @@ let cpsIdents {.compileTime.} = makeIdents()
 
 proc isCpsIdent(n: NimNode): bool =
   ## it's a cps identifier
-  #result = n.kind == nnkIdent and anyIt(cpsIdents, eqIdent(n, it))
-  result = anyIt(cpsIdents, eqIdent(n, it))
+  result = n.kind in {nnkIdent, nnkSym} and
+             anyIt(cpsIdents, eqIdent(n, it))
 
 proc isCpsCall(n: NimNode): bool =
   ## `true` if `n` is a call to a cps routine
@@ -73,23 +73,33 @@ proc isCpsCall(n: NimNode): bool =
     result = result or n.kind in RoutineNodes and n.isLiftable
     result = result or n.isCpsProc
 
-proc tailCall(e: Env; n: NimNode): NimNode =
-  ## compose a tail call from the environment `e` to ident (or nil) `n`
-  if n.kind == nnkNilLit:
-    result = nnkReturnStmt.newNimNode(n).add n
-  elif isCpsCall(n):
-    result = newStmtList()
-    var locals = result.defineLocals(e, n[0])
-    # elide .Cont from Cont(...).Cont and install it as 1st argument
-    if not eqIdent(locals[0], e.root):
-      n.insert(1, newDotExpr(locals, e.root))
-    else:
-      n.insert(1, locals)
-    result.add nnkReturnStmt.newNimNode(n).add n
+proc maybeConvertToRoot(e: Env; locals: NimNode): NimNode =
+  ## add an Obj(foo: bar).Other conversion if necessary
+  if not eqIdent(locals[0], e.root):
+    newDotExpr(locals, e.root)
   else:
-    result = newStmtList()
-    let locals = result.defineLocals(e, n)
-    result.add nnkReturnStmt.newTree newDotExpr(locals, e.root)
+    locals
+
+proc tailCall(e: Env; p: NimNode; n: NimNode): NimNode =
+  # install locals as the 1st argument
+  result = newStmtList()
+  let locals = result.defineLocals(e, n)
+  p.insert(1, e.maybeConvertToRoot(locals))
+  result.add nnkReturnStmt.newNimNode(n).add p
+
+proc tailCall(env: Env; n: NimNode): NimNode =
+  ## compose a tail call from the environment `e` to ident (or nil) `n`
+  assert not isCpsCall(n)
+  var ret = nnkReturnStmt.newNimNode(n)
+  result = newStmtList()
+  if n.kind == nnkNilLit:
+    ret.add n
+  else:
+    # return a statement list including the setup for the locals
+    # and the return statement casting those locals to the root type
+    let locals = result.defineLocals(env, n)
+    ret.add env.maybeConvertToRoot(locals)
+  result.add ret
 
 func doc(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -392,15 +402,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
     ## transform `input` into a mutually-recursive cps convertible form
 
     if isCpsCall(input):
-      result = newStmtList()
-      var env = result.newEnv(penv)
-      result.add env.tailCall(input)
-      #result.add env.saften(nc)
-      # FIXME
-      # if len(x.stripComments) > 0:
-      #  result.add next(goto)
-      # the split is complete
-      return
+      return penv.tailCall(input, next(goto))
 
     result = input.copyNimNode
 
