@@ -560,7 +560,41 @@ macro cps*(n: typed) =
 macro cps*(c: typed; n: typed) =
   result = transform(n, c)
 
-proc isCpsProc(n: NimNode): bool =
-  ## `true` if the node is a routine with our .cps. pragma
-  let liftee = bindSym"cps"
-  result = n.kind in RoutineNodes and liftee in toSeq(n.pragma)
+macro cpsMagic*(n: untyped) =
+  ## upgrade cps primitives to generate errors out of context
+  ## and take continuations as input inside {.cps.} blocks
+  when defined(nimdoc): return n
+  expectKind(n, nnkProcDef)
+  result = newStmtList()
+
+  # create a version of the proc that pukes outside of cps context
+  var m = n.copyNimTree
+  let msg = $n.name & "() is only valid in {.cps.} context"
+  m.params[0] = newEmptyNode()
+  m.addPragma newColonExpr(ident"error", msg.newLit)
+  m.body = nnkDiscardStmt.newTree(newEmptyNode())
+  result.add m
+  echo treeRepr(m)
+
+  # manipulate the primitive to take its return type as a first arg
+  var prefixed = nnkFormalParams.newNimNode
+  prefixed.add n.params[0]
+  prefixed.add newIdentDefs(ident"c", n.params[0])
+  prefixed.add n.params[1..^1]
+  n.params = prefixed
+  result.add n
+  echo result.repr
+
+when not strict:
+  proc isCpsProc(n: NimNode): bool =
+    ## `true` if the node is a routine with our .cps. pragma
+    let liftee = bindSym"cps"
+    result = n.kind in RoutineNodes and liftee in toSeq(n.pragma)
+
+proc cps_yield*(): Cont {.cpsMagic.} =
+  ## yield to pending continuations in the dispatcher before continuing
+  addYield(c)
+
+proc cps_sleep*(ms: int): Cont {.cpsMagic.} =
+  ## sleep for `ms` milliseconds before continuing
+  addTimer(c, ms)
