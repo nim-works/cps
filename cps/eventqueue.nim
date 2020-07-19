@@ -20,7 +20,7 @@ type
 
   EventQueue = object
     state: State                    ## dispatcher readiness
-    clock: Clock                    ## time of latest poll loop
+    #clock: Clock                    ## time of latest poll loop
     goto: Table[Id, Cont]           ## where to go from here!
     lastId: Id                      ## id of last-issued registration
     selector: Selector[Id]
@@ -162,8 +162,8 @@ proc poll*() =
   ]#
 
   if len(eq) > 0:
-    let clock = now()
-    let ready = eq.selector.select(-1)
+    #let clock = now()
+    let ready = select(eq.selector, -1)
 
     # ready holds the ready file descriptors and their events.
 
@@ -175,6 +175,8 @@ proc poll*() =
         var cont: Cont
         if pop(eq.goto, id, cont):
           run cont
+        else:
+          raise newException(KeyError, "missing registration " & $id)
 
     # at this point, we've handled all timers and i/o so we can simply
     # iterate over the yields and run them.  to make sure we don't run

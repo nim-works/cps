@@ -1,5 +1,4 @@
 import std/macros
-import std/unittest
 
 import cps
 import cps/eventqueue
@@ -7,25 +6,33 @@ import cps/eventqueue
 proc adder(x: var int) =
   inc x
 
-suite "cps":
-  var cup: int
+var cup: int
 
-  test "1":
+when true:
+  block:
     proc foo(): Cont {.cps.} =
       cup = 1
     run foo()
-    check cup == 1
+    assert cup == 1
 
-  test "2":
+
+  block:
+    proc foo(): Cont {.cps.} =
+      cps_yield()
+    run foo()
+
+when false:
+  block:
     proc foo(): Cont {.cps.} =
       var i: int = 0
       while i < 2:
         adder(i)
       cup = i
     run foo()
-    check cup == 2
+    assert cup == 2
 
-  test "3":
+when false:
+  block:
     proc foo(): Cont {.cps.} =
       var i = 0
       while i < 3:
@@ -33,13 +40,13 @@ suite "cps":
         adder(i)
       cup = i
     run foo()
-    check cup == 3
+    assert cup == 3
 
 when false:
-  test "4":
+  block:
     cps Cont:
       var i: int = 0
       while i < 4:
         adder(i)
       cup = i
-    check cup == 4
+    assert cup == 4

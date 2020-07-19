@@ -13,7 +13,7 @@ import std/sequtils
 const
   strict = true     ## only cps operations are strictly cps operations
   comments = true   ## embed comments within the transformation
-  lifting = true    ## whether to lift generated symbols to top-level
+  #lifting = true    ## whether to lift generated symbols to top-level
 
 when NimMajor < 1 or NimMinor < 3:
   {.fatal: "requires nim-1.3".}
@@ -61,20 +61,39 @@ proc makeIdents(): seq[NimNode] {.compileTime.} =
     result.add makeIdent(op)
 let cpsIdents {.compileTime.} = makeIdents()
 
-proc cps_yield*(cont: Cont): Cont =
-  addYield(cont)
+proc isCpsIdent(n: NimNode): bool =
+  ## it's a cps identifier
+  #result = n.kind == nnkIdent and anyIt(cpsIdents, eqIdent(n, it))
+  result = anyIt(cpsIdents, eqIdent(n, it))
 
-proc cps_sleep*(cont: Cont; ms: int): Cont =
-  addTimer(cont, ms)
+proc isCpsCall(n: NimNode): bool =
+  ## `true` if `n` is a call to a cps routine
+  result = n.kind == nnkCall and n[0].isCpsIdent
+  when not strict:
+    result = result or n.kind in RoutineNodes and n.isLiftable
+    result = result or n.isCpsProc
 
 proc tailCall(e: Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
   if n.kind == nnkNilLit:
-    result = nnkReturnStmt.newTree(n)
+    result = nnkReturnStmt.newTree n
+  elif isCpsCall(n):
+    result = newStmtList()
+    var call = nnkCall.newNimNode
+    var locals = result.defineLocals(e, n[0])
+    for i, node in pairs(n):
+      call.add node
+      if i == 0:
+        # elide .Cont from Cont(...).Cont
+        if not eqIdent(locals[0], e.root):
+          call.add newDotExpr(locals, e.root)
+        else:
+          call.add locals
+    result.add nnkReturnStmt.newTree(call)
   else:
     result = newStmtList()
     let locals = result.defineLocals(e, n)
-    result.add nnkReturnStmt.newTree(newDotExpr(locals, ident"Cont"))
+    result.add nnkReturnStmt.newTree newDotExpr(locals, e.root)
 
 func doc(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -122,7 +141,7 @@ func isReturnCall(n: NimNode): bool =
         result = true
   # `return foo(); proc foo() = ...`
   of nnkStmtList:
-    # FIXME: this is stupid and will misbehave on type sections
+    # FIXME: this is stupid and does misbehave
     result = case n.len
     of 1:
       n[0].isReturnCall
@@ -145,7 +164,8 @@ func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
     if result:
       r = newStmtList([doc "simple return call: " & n.repr, n])
 
-proc isCpsProc(n: NimNode): bool
+when not strict:
+  proc isCpsProc(n: NimNode): bool
 
 proc hasPragma(n: NimNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
@@ -208,17 +228,6 @@ proc isLiftable(n: NimNode): bool =
   else:
     false
 
-proc isCpsIdent(n: NimNode): bool =
-  ## it's a cps identifier
-  result = n.kind == nnkIdent and anyIt(cpsIdents, eqIdent(n, it))
-
-proc isCpsCall(n: NimNode): bool =
-  ## `true` if `n` is a call to a cps routine
-  result = n.kind == nnkCall and n[0].isCpsIdent
-  when not strict:
-    result = result or n.kind in RoutineNodes and n.isLiftable
-    result = result or n.isCpsProc
-
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call
   case n.kind
@@ -243,15 +252,16 @@ proc mkLabel(s: string): NimNode =
   ## how we name a generated proc
   result = genSym(nskProc, ident = s)
 
-proc foldTailCalls(n: NimNode): NimNode =
-  ## this may optimize a `proc foo() = return bar()` to `return bar()`
-  result = n
-  assert result.kind == nnkProcDef, "not a proc"
-  if not asSimpleReturnCall(n, result):
-    if isReturnCall(n.last):
-      result = newStmtList()
-      result.doc "optimized proc into tail call"
-      result.add n.last
+when false:
+  proc foldTailCalls(n: NimNode): NimNode =
+    ## this may optimize a `proc foo() = return bar()` to `return bar()`
+    result = n
+    assert result.kind == nnkProcDef, "not a proc"
+    if not asSimpleReturnCall(n, result):
+      if isReturnCall(n.last):
+        result = newStmtList()
+        result.doc "optimized proc into tail call"
+        result.add n.last
 
 proc liften(n: var NimNode): NimNode =
   ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
@@ -262,7 +272,7 @@ proc liften(n: var NimNode): NimNode =
 
     # lift anything below
     for k in items(liften(kid)):
-      add(result, k)
+      result.add k
 
     if kid.isLiftable:
       kid = stripPragma(kid, "cpsLift")
@@ -303,10 +313,9 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
 
 proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## either create and return a tail call proc, or return nil
-  let cont = bindSym"Cont"
   if len(n) == 0:
     # no code to run means we just `return Cont()`
-    result = nnkReturnStmt.newNimNode(newCall(cont))
+    result = nnkReturnStmt.newNimNode(newCall(env.root))
   else:
     # create a tail call with the given body
     result = env.makeTail(name, n)
@@ -356,8 +365,6 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
 proc xfrm(n: NimNode; c: NimNode): NimNode =
   if c.kind == nnkEmpty:
     error "provide a continuation return type"
-  else:
-    hint "continuation return type " & repr(c)
 
   # create the environment in which we'll store locals
   var env = newEnv(c)
@@ -396,6 +403,18 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
   proc saften(penv: var Env; input: NimNode): NimNode =
     ## transform `input` into a mutually-recursive cps convertible form
+
+    if isCpsCall(input):
+      result = newStmtList()
+      var env = result.newEnv(penv)
+      result.add env.tailCall(input)
+      #result.add env.saften(nc)
+      # FIXME
+      # if len(x.stripComments) > 0:
+      #  result.add next(goto)
+      # the split is complete
+      return
+
     result = input.copyNimNode
 
     # the accumulated environment
@@ -425,27 +444,6 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
         # include the section normally (for now)
         result.add nc
 
-      of nnkYieldStmt:
-        if insideCps() or (i < n.len-1 and nc.isCpsCall):
-          result.add newCall(ident"cps_yield")
-        else:
-          result.add nc
-
-      of nnkCall:
-        echo treeRepr(nc)
-        if isCpsIdent(nc[0]):
-          let x = env.splitAt(n, "cps", i)
-          var p = x.params
-          echo treeRepr(p)
-          withGoto x:
-            result.add env.saften(nc)
-            if len(x.stripComments) > 0:
-              result.add next(goto)
-          # the split is complete
-          return
-        else:
-          result.add nc
-
       of nnkBreakStmt:
         if len(breaks) > 0:
           result.doc "simple break statement"
@@ -466,26 +464,30 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
           discard pop(breaks)
 
       of nnkWhileStmt:
-        let w = mkLabel "while"
-        let bp = env.splitAt(n, "break", i)
-        echo treeRepr(n)
-        add(breaks, bp)
-        add(goto, w)
-        try:
-          var loop = newStmtList()
-          result.doc "add tail call for while loop"
-          env.storeTypeSection(result)
-          result.add env.makeTail(w, loop)
-          # guys, lemme tell you about where we're goin'
-          let (expr, body) = (nc[0], env.saften(nc[1]))
-          loop.add newIfStmt((expr, newStmtList(body)))
-          discard pop(goto)
-          if i < n.len-1:
-            loop.doc "add tail call for break proc"
-            loop.add env.callTail(next(breaks))
-            return
-        finally:
-          discard pop(breaks)
+        if false and not nc.isCpsBlock:
+          # FIXME
+          result.add env.saften(nc)
+        else:
+          let w = mkLabel "while"
+          let bp = env.splitAt(n, "break", i)
+          add(breaks, bp)
+          add(goto, w)
+          try:
+            var loop = newStmtList()
+            result.doc "add tail call for while loop"
+            env.storeTypeSection(result)
+            result.add env.makeTail(w, loop)
+            # guys, lemme tell you about where we're goin'
+            let (expr, body) = (nc[0], env.saften(nc[1]))
+            loop.add newIfStmt((expr, newStmtList(body)))
+            discard pop(goto)
+            if i < n.len-1:
+              loop.doc "add tail call for break proc"
+              #loop.doc n.repr
+              loop.add env.callTail(next(breaks))
+              return
+          finally:
+            discard pop(breaks)
 
       of nnkIfStmt:
         # if any `if` clause is a cps block, then every clause must be
@@ -529,36 +531,32 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
   result = env.saften(n)
 
-proc transform(n: NimNode; c: NimNode): NimNode =
-  ## returns a statement list that might be transformed
-  var body =
-    if n.kind in RoutineNodes:
-      n.body
-    else:
-      n
-  var safe = xfrm(body, c).newStmtList # wrap it for liften
-  let decls = liften(safe)
-  if len(decls) == 0:
-    # nothing lifted, nothing gained
-    result = newStmtList(n)
-  else:
-    if n.kind in RoutineNodes:
-      var new = copyNimTree(n)
-      new.body = safe
-      safe = new
-    result = newStmtList(decls, safe)
-    echo treeRepr(result)
-
-macro cps*(n: typed) =
+macro cps*(n: untyped) =
   when defined(nimdoc): return n
-  if n.kind in RoutineNodes:
-    result = transform(n, n.params[0])
-  else:
-    result = transform(n, bindSym"Cont")
+  var safe, decls: NimNode
+  safe = xfrm(n.body, n.params[0]).newStmtList
+  decls = liften(safe)
+
+  var p = newProc(name = n.name, procType = n.kind,
+                  params = toSeq n.params, body = safe,
+                  pragmas = stripPragma(n.pragma, "cps"))
+
+  result = newStmtList()
+  if len(decls) > 0:
+    result.add decls
+  result.add p
   echo repr(result)
 
-macro cps*(c: typed; n: typed) =
-  result = transform(n, c)
+when false:
+  macro cps*(c: typed; n: typed) =
+    var
+      safe = xfrm(n, c)
+      decls = liften(safe)
+    result = newStmtList()
+    if len(decls) > 0:
+      result.add decls
+    result.add safe
+    assert false
 
 macro cpsMagic*(n: untyped) =
   ## upgrade cps primitives to generate errors out of context
@@ -571,10 +569,14 @@ macro cpsMagic*(n: untyped) =
   var m = n.copyNimTree
   let msg = $n.name & "() is only valid in {.cps.} context"
   m.params[0] = newEmptyNode()
-  m.addPragma newColonExpr(ident"error", msg.newLit)
-  m.body = nnkDiscardStmt.newTree(newEmptyNode())
+  when true:
+    m.addPragma newColonExpr(ident"error", msg.newLit)
+    m.body = nnkDiscardStmt.newTree(newEmptyNode())
+  elif false:
+    m.body = nnkPragma.newTree newColonExpr(ident"warning", msg.newLit)
+  else:
+    m.body = nnkCall.newTree(ident"error", msg.newLit)
   result.add m
-  echo treeRepr(m)
 
   # manipulate the primitive to take its return type as a first arg
   var prefixed = nnkFormalParams.newNimNode
@@ -583,7 +585,6 @@ macro cpsMagic*(n: untyped) =
   prefixed.add n.params[1..^1]
   n.params = prefixed
   result.add n
-  echo result.repr
 
 when not strict:
   proc isCpsProc(n: NimNode): bool =

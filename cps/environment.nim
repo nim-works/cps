@@ -23,8 +23,6 @@ the environment gets unpacked in procs; this could even be swapped
 
 ]#
 
-import cps/eventqueue
-
 type
   Pair = tuple
     key: NimNode
