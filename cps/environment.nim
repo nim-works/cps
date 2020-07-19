@@ -154,11 +154,10 @@ proc makeType*(e: var Env): Option[NimNode] =
   ## turn an env into a named object typedef `foo = object ...`
   if e.isDirty:
     var typedef = newNimNode(nnkTypeDef)
-    let name = genSym(nskType, "env")
-    typedef.add name
+    e.id = genSym(nskType, "env")
+    typedef.add e.id
     typedef.add newEmptyNode()
     typedef.add e.objectType
-    e.id = name
     result = some(typedef)
     assert not e.isDirty
 
