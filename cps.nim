@@ -396,7 +396,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       result = env.makeTail(label, body)
     else:
       # FIXME: we should pop goto here, right?
-      result = env.callTail next(goto)
+      result = env.callTail goto.next
 
   template withGoto(result: NimNode; n: NimNode; body: untyped): untyped =
     ## run a body with a longer goto stack
@@ -405,8 +405,8 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       try:
         body
       finally:
-        result.add next(goto)
-        discard pop(goto)
+        result.add goto.next
+        discard goto.pop
     else:
       body
 
@@ -436,7 +436,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
         if isCpsCall(nc):
           env.storeTypeSection(result)
           result.withGoto env.splitAt(n, "after", i):
-            result.add env.tailCall(nc, next(goto).returnTo)
+            result.add env.tailCall(nc, goto.next.returnTo)
             return
           assert false, "unexpected"
 
@@ -450,7 +450,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       of nnkBreakStmt:
         if len(breaks) > 0:
           result.doc "simple break statement"
-          result.add env.tailCall(next(breaks).returnTo)
+          result.add env.tailCall breaks.next.returnTo
         else:
           result.doc "no break statements to pop"
 
@@ -461,10 +461,10 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
           result.add env.saften(nc)
           if i < n.len-1:
             result.doc "add tail call for block-break proc"
-            result.add env.callTail(next(breaks))
+            result.add env.callTail breaks.next
             return
         finally:
-          discard pop(breaks)
+          discard breaks.pop
 
       of nnkWhileStmt:
         if false and not nc.isCpsBlock:
@@ -473,8 +473,8 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
         else:
           let w = mkLabel "while"
           let bp = env.splitAt(n, "break", i)
-          add(breaks, bp)
-          add(goto, w)
+          breaks.add bp
+          goto.add w
           try:
             var loop = newStmtList()
             result.doc "add tail call for while loop"
@@ -483,14 +483,14 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
             # guys, lemme tell you about where we're goin'
             let (expr, body) = (nc[0], env.saften(nc[1]))
             loop.add newIfStmt((expr, newStmtList(body)))
-            discard pop(goto)
+            discard goto.pop
             if i < n.len-1:
               loop.doc "add tail call for break proc"
               #loop.doc n.repr
-              loop.add env.callTail(next(breaks))
+              loop.add env.callTail breaks.next
               return
           finally:
-            discard pop(breaks)
+            discard breaks.pop
 
       of nnkIfStmt:
         # if any `if` clause is a cps block, then every clause must be
@@ -522,13 +522,13 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
           return
 
     if n.kind in returner:
-      if next(goto).kind != nnkNilLit:
+      if goto.next.kind != nnkNilLit:
         let duh = stripComments result
         if len(duh) > 0 and isReturnCall(duh.last):
           result.doc "omit return call from " & $n.kind
         else:
           result.doc "adding return call to " & $n.kind
-          result.add env.tailCall(next(goto).returnTo)
+          result.add env.tailCall goto.next.returnTo
       else:
         result.doc "nil return"
 
