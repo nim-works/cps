@@ -183,7 +183,7 @@ proc poll*() =
         if pop(eq.goto, id, cont):
           when cpsDebug:
             cont.clock = clock
-            cont.delay = clock - now()
+            cont.delay = now() - clock
             echo "💈delay ", cont.delay
           run cont
         else:
