@@ -44,7 +44,7 @@ var eq {.threadvar.}: EventQueue
 
 template now(): Clock = getMonoTime()
 
-proc init() =
+proc init() {.inline.} =
   ## initialize the event queue to prepare it for requests
   if eq.state == Unready:
     # create a new manager
@@ -79,6 +79,7 @@ proc wakeUp() =
 
 template wakeAfter(body: untyped): untyped =
   ## wake up the dispatcher after performing the following block
+  init()
   try:
     body
   finally:
