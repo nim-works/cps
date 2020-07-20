@@ -576,11 +576,7 @@ macro cpsMagic*(n: untyped): untyped =
   result.add m
 
   # manipulate the primitive to take its return type as a first arg
-  var prefixed = nnkFormalParams.newNimNode(n)
-  prefixed.add n.params[0]
-  prefixed.add newIdentDefs(ident"c", n.params[0])
-  prefixed.add n.params[1..^1]
-  n.params = prefixed
+  n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
   result.add n
 
 when not strict:
