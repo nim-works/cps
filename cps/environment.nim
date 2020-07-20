@@ -37,6 +37,17 @@ type
     parent: Env
     child: Table[NimNode, NimNode]
     flags: set[Flag]
+    goto*: seq[NimNode]        # identifiers of future gotos
+    breaks*: seq[NimNode]      # identifiers of future breaks
+
+func insideCps*(e: Env): bool = len(e.goto) > 0 or len(e.breaks) > 0
+
+func next*(ns: seq[NimNode]): NimNode =
+  ## read the next call off the stack
+  if len(ns) == 0:
+    newNilLit()
+  else:
+    ns[^1]
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty

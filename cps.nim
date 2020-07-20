@@ -351,13 +351,6 @@ proc callTail(env: var Env; n: NimNode): NimNode =
     # wrap whatever it is and recurse on it
     result = env.callTail(newStmtList(n))
 
-func next(ns: seq[NimNode]): NimNode =
-  ## read the next call off the stack
-  if len(ns) == 0:
-    newNilLit()
-  else:
-    ns[^1]
-
 proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
   ## experimental optimization
   var simple: NimNode
@@ -376,12 +369,6 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
   # create the environment in which we'll store locals
   var env = newEnv(c)
 
-  # identifiers of future break or return targets
-  var goto: seq[NimNode]
-  var breaks: seq[NimNode]
-
-  func insideCps(): bool = len(goto) > 0 or len(breaks) > 0
-
   proc saften(penv: var Env; input: NimNode): NimNode
 
   proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
@@ -395,18 +382,16 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       body = env.saften(body)
       result = env.makeTail(label, body)
     else:
-      # FIXME: we should pop goto here, right?
-      result = env.callTail goto.next
+      result = env.callTail returnTo(env.goto.next)
 
-  template withGoto(result: NimNode; n: NimNode; body: untyped): untyped =
+  template withGoto(n: NimNode; body: untyped): untyped {.dirty.} =
     ## run a body with a longer goto stack
     if len(stripComments n) > 0:
-      add(goto, n)
+      env.goto.add n
       try:
         body
       finally:
-        result.add goto.next
-        discard goto.pop
+        result.add env.goto.pop
     else:
       body
 
@@ -417,6 +402,8 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
     # the accumulated environment
     var env = result.newEnv(penv)
+    template goto(): seq[NimNode] = env.goto
+    template breaks(): seq[NimNode] = env.breaks
 
     let n = stripComments input
     result.doc "saften $1 with $2 gotos and $3 breaks" %
@@ -427,7 +414,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       # onto the stack during the saftening of the child
       if i < n.len-1:
         if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
-          result.withGoto env.splitAt(n, "exit", i):
+          withGoto env.splitAt(n, "exit", i):
             result.add env.saften(nc)
             result.doc "add the exit proc definition"
             # we've completed the split, so we're done here
@@ -435,7 +422,8 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
         if isCpsCall(nc):
           env.storeTypeSection(result)
-          result.withGoto env.splitAt(n, "after", i):
+          withGoto env.splitAt(n, "after", i):
+            result.doc "GOTO: " & goto.next.repr
             result.add env.tailCall(nc, goto.next.returnTo)
             return
           assert false, "unexpected"
@@ -456,7 +444,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
       of nnkBlockStmt:
         let bp = env.splitAt(n, "break", i)
-        add(breaks, bp)
+        breaks.add bp
         try:
           result.add env.saften(nc)
           if i < n.len-1:
@@ -496,14 +484,14 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
         # if any `if` clause is a cps block, then every clause must be
         # if we've pushed any goto or breaks, then we're already in cps
         if nc.isCpsBlock:
-          result.withGoto env.splitAt(n, "if", i):
+          withGoto env.splitAt(n, "if", i):
             result.add env.saften(nc)
             # the split is complete
             return
           # if we didn't return, then this is the last block
           assert false, "unexpected"
           result.add nc
-        elif insideCps():
+        elif insideCps(env):
           result.add env.saften(nc)
         else:
           result.add nc
