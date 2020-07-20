@@ -38,6 +38,10 @@ type
     child: Table[NimNode, NimNode]
     flags: set[Flag]
 
+func isEmpty*(n: NimNode): bool =
+  ## `true` if the node `n` is Empty
+  result = not n.isNil and n.kind == nnkEmpty
+
 proc hash*(n: NimNode): Hash =
   var h: Hash = 0
   h = h !& hash($n)
@@ -54,12 +58,12 @@ proc isEmpty*(e: Env): bool =
 proc inherits*(e: Env): NimNode =
   assert not e.isNil
   assert not e.via.isNil
-  assert e.via.kind != nnkEmpty
+  assert not e.via.isEmpty
   result = e.via
 
-proc isDirty(e: Env): bool =
+proc isDirty*(e: Env): bool =
   assert not e.isNil
-  result = e.id.isNil or e.id.kind == nnkEmpty
+  result = e.id.isNil or e.id.isEmpty
 
 proc identity*(e: Env): NimNode =
   assert not e.isNil
@@ -79,7 +83,7 @@ proc root*(e: Env): NimNode =
 
 proc newEnv*(via: NimNode): Env =
   assert not via.isNil
-  assert via.kind != nnkEmpty
+  assert not via.isEmpty
   result = Env(via: via, id: via)
 
 proc children(e: Env): seq[Pair] =
@@ -100,7 +104,7 @@ proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
   for name, section in pairs(e):
     for value in items(section):
-      if value[1].kind == nnkEmpty:
+      if value[1].isEmpty:
         error "give " & $name & " a type: " & repr(section)
       else:
         # name is an ident or symbol
@@ -165,9 +169,11 @@ proc storeTypeSection*(e: var Env; into: var NimNode) =
   ## turn an env into a complete typedef in a type section
   let made = e.makeType
   if made.isSome:
+    into.add newCommentStmtNode"stored the env into typesection here"
     var ts = newNimNode(nnkTypeSection)
     ts.add get(made)
     into.add ts
+  assert not e.isDirty
 
 proc newEnv*(into: var NimNode; parent: var Env): Env =
   ## a new env from the given parent; add a typedef for the
@@ -202,9 +208,8 @@ proc defineLocals*(into: var NimNode; e: Env; goto: NimNode): NimNode =
   obj.add newColonExpr(ident"fn", goto)
   for name, section in pairs(e):
     obj.add newColonExpr(name, name)
-  when true:
-    result = obj
-  else:
+  result = obj
+  when false:
     result = gensym(nskLet, "locals")
     var vs = nnkLetSection.newNimNode
     vs.add newIdentDefs(result, newEmptyNode(), obj)

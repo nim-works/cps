@@ -1,5 +1,3 @@
-import std/macros
-
 import cps
 import cps/eventqueue
 
@@ -8,7 +6,7 @@ proc adder(x: var int) =
 
 var cup: int
 
-when true:
+when false:
   block:
     proc foo(): Cont {.cps.} =
       cup = 1
@@ -21,7 +19,7 @@ when true:
       cps_yield()
     run foo()
 
-when true:
+when false:
   block:
     proc foo(): Cont {.cps.} =
       var i: int = 0
@@ -50,3 +48,5 @@ when false:
         adder(i)
       cup = i
     assert cup == 4
+
+run()

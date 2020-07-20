@@ -57,10 +57,6 @@ assert cpsContext * cpsAnywhere == {}
 
 proc identityFilter(n: NimNode): NimNode = n
 
-proc isEmpty(n: NimNode): bool =
-  ## `true` if the node `n` is Empty
-  result = not n.isNil and n.kind == nnkEmpty
-
 proc filter(n: NimNode; f: NodeFilter = identityFilter): NimNode =
   result = f(n)
   if result.isNil:
@@ -96,13 +92,15 @@ proc maybeConvertToRoot(e: Env; locals: NimNode): NimNode =
     locals
 
 proc tailCall(e: Env; p: NimNode; n: NimNode): NimNode =
+  ## compose a tail call from the environment `e` via cps call `p`
+  assert p.isCpsCall
   # install locals as the 1st argument
   result = newStmtList()
   let locals = result.defineLocals(e, n)
   p.insert(1, e.maybeConvertToRoot(locals))
   result.add nnkReturnStmt.newNimNode(n).add p
 
-proc tailCall(env: Env; n: NimNode): NimNode =
+proc tailCall(e: Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
   assert not isCpsCall(n)
   var ret = nnkReturnStmt.newNimNode(n)
@@ -112,8 +110,8 @@ proc tailCall(env: Env; n: NimNode): NimNode =
   else:
     # return a statement list including the setup for the locals
     # and the return statement casting those locals to the root type
-    let locals = result.defineLocals(env, n)
-    ret.add env.maybeConvertToRoot(locals)
+    let locals = result.defineLocals(e, n)
+    ret.add e.maybeConvertToRoot(locals)
   result.add ret
 
 func doc(s: string): NimNode =
@@ -304,7 +302,6 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     result.add n
   else:
     # add the required type section
-    result.doc "add type section"
     env.storeTypeSection(result)
     var body = newStmtList()
     var locals = genSym(nskParam, "locals")
@@ -398,24 +395,23 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       body = env.saften(body)
       result = env.makeTail(label, body)
     else:
-      result = env.callTail(newStmtList())
+      # FIXME: we should pop goto here, right?
+      result = env.callTail next(goto)
 
-  template withGoto(n: NimNode; body: untyped): untyped =
+  template withGoto(result: NimNode; n: NimNode; body: untyped): untyped =
     ## run a body with a longer goto stack
     if len(stripComments n) > 0:
       add(goto, n)
       try:
         body
       finally:
+        result.add next(goto)
         discard pop(goto)
     else:
       body
 
   proc saften(penv: var Env; input: NimNode): NimNode =
     ## transform `input` into a mutually-recursive cps convertible form
-
-    if isCpsCall(input):
-      return penv.tailCall(input, next(goto))
 
     result = copyNimNode input
 
@@ -431,13 +427,18 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
       # onto the stack during the saftening of the child
       if i < n.len-1:
         if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
-          withGoto env.splitAt(n, "exit", i):
+          result.withGoto env.splitAt(n, "exit", i):
             result.add env.saften(nc)
             result.doc "add the exit proc definition"
-            result.add next(goto)
-
             # we've completed the split, so we're done here
             return
+
+        if isCpsCall(nc):
+          env.storeTypeSection(result)
+          result.withGoto env.splitAt(n, "after", i):
+            result.add env.tailCall(nc, next(goto).returnTo)
+            return
+          assert false, "unexpected"
 
       case nc.kind
       of nnkVarSection, nnkLetSection:
@@ -495,13 +496,13 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
         # if any `if` clause is a cps block, then every clause must be
         # if we've pushed any goto or breaks, then we're already in cps
         if nc.isCpsBlock:
-          let x = env.splitAt(n, "if", i)
-          withGoto x:
+          result.withGoto env.splitAt(n, "if", i):
             result.add env.saften(nc)
-            if len(stripComments x) > 0:
-              result.add next(goto)
-          # the split is complete
-          return
+            # the split is complete
+            return
+          # if we didn't return, then this is the last block
+          assert false, "unexpected"
+          result.add nc
         elif insideCps():
           result.add env.saften(nc)
         else:
@@ -539,6 +540,7 @@ macro cps*(n: untyped): untyped =
   result = newStmtList()
   var x = liften(result, n)
   result = newStmtList(result, x)
+  echo treeRepr(result)
   echo repr(result)
 
 when false:

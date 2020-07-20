@@ -6,6 +6,9 @@ import std/tables
 import std/times
 import std/deques
 
+const
+  cpsDebug {.booldefine.} = false
+
 type
   Id = int
 
@@ -20,7 +23,6 @@ type
 
   EventQueue = object
     state: State                    ## dispatcher readiness
-    #clock: Clock                    ## time of latest poll loop
     goto: Table[Id, Cont]           ## where to go from here!
     lastId: Id                      ## id of last-issued registration
     selector: Selector[Id]
@@ -31,6 +33,9 @@ type
 
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
+    when cpsDebug:
+      clock: Clock                  ## time of latest poll loop
+      delay: Duration               ## polling overhead
 
 const
   InvalidId = 0.Id
@@ -142,7 +147,8 @@ proc run*(c: Cont) =
   ## trampoline
   var c = c
   while not c.isNil and not c.fn.isNil:
-    echo "🎪"
+    when cpsDebug:
+      echo "🎪clock ", c.clock
     c = c.fn(c)
 
 proc poll*() =
@@ -162,7 +168,8 @@ proc poll*() =
   ]#
 
   if len(eq) > 0:
-    #let clock = now()
+    when cpsDebug:
+      let clock = now()
     let ready = select(eq.selector, -1)
 
     # ready holds the ready file descriptors and their events.
@@ -174,6 +181,10 @@ proc poll*() =
       if id != InvalidId:
         var cont: Cont
         if pop(eq.goto, id, cont):
+          when cpsDebug:
+            cont.clock = clock
+            cont.delay = clock - now()
+            echo "💈delay ", cont.delay
           run cont
         else:
           raise newException(KeyError, "missing registration " & $id)
@@ -184,8 +195,10 @@ proc poll*() =
     # the current number of queued yields...
 
     for index in 1 .. len(eq.yields):
-      let fun = popFirst eq.yields
-      run fun
+      when cpsDebug:
+        echo "🔻yield ", index
+      let cont = popFirst eq.yields
+      run cont
 
   elif eq.timer == -1:
     # if there's no timer and we have no pending continuations,
