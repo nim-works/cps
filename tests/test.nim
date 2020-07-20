@@ -21,7 +21,7 @@ when true:
       cps_yield()
     run foo()
 
-when false:
+when true:
   block:
     proc foo(): Cont {.cps.} =
       var i: int = 0
@@ -31,10 +31,10 @@ when false:
     run foo()
     assert cup == 2
 
-when false:
+when true:
   block:
     proc foo(): Cont {.cps.} =
-      var i = 0
+      var i: int = 0
       while i < 3:
         cps_sleep(1000)
         adder(i)

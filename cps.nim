@@ -35,6 +35,8 @@ type
     Attach
     Detach
 
+  NodeFilter = proc(n: NimNode): NimNode
+
 const
   unexiter = {nnkWhileStmt, nnkBreakStmt}
   # if statements are not "returners"; it's elif branches we care about
@@ -52,6 +54,19 @@ else:
     cpsAnywhere = {Spawn .. SignalAll}
 assert cpsContext + cpsAnywhere == {Primitive.low .. Primitive.high}
 assert cpsContext * cpsAnywhere == {}
+
+proc identityFilter(n: NimNode): NimNode = n
+
+proc isEmpty(n: NimNode): bool =
+  ## `true` if the node `n` is Empty
+  result = not n.isNil and n.kind == nnkEmpty
+
+proc filter(n: NimNode; f: NodeFilter = identityFilter): NimNode =
+  result = f(n)
+  if result.isNil:
+    result = copyNimNode n
+    for kid in items(n):
+      result.add filter(kid, f)
 
 func makeIdent(op: Primitive): NimNode =
   ident("cps_" & $op)
@@ -116,14 +131,14 @@ proc doc(n: var NimNode; s: string) =
 
 func stripComments(n: NimNode): NimNode =
   ## remove doc statements because that was a stupid idea
-  result = n.copyNimNode
+  result = copyNimNode n
   for child in items(n):
     if child.kind != nnkCommentStmt:
-      result.add child.stripComments
+      result.add stripComments(child)
 
 func returnTo(n: NimNode): NimNode =
   ## take a `return foo()` or (proc foo() = ...) and yield `foo`
-  let n = n.stripComments
+  let n = stripComments n
   case n.kind
   of nnkProcDef:
     result = n.name
@@ -138,7 +153,7 @@ func returnTo(n: NimNode): NimNode =
 
 func isReturnCall(n: NimNode): bool =
   ## true if the node looks like a tail call
-  let n = n.stripComments
+  let n = stripComments n
   case n.kind
   # simple `return foo()`
   of nnkReturnStmt:
@@ -160,7 +175,7 @@ func isReturnCall(n: NimNode): bool =
 
 func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
   ## fill `r` with `return foo()` if that is a safe simplification
-  var n = n.stripComments
+  var n = stripComments n
   block done:
     while n.kind == nnkStmtList:
       if len(n) != 1:
@@ -188,7 +203,7 @@ proc hasPragma(n: NimNode; s: static[string]): bool =
   of nnkTypeSection:
     result = anyIt(toSeq items(n), hasPragma(it, s))
   else:
-    assert false, "unimplemented for " & $n.kind
+    result = false
 
 proc filterPragma(ns: seq[NimNode], liftee: NimNode): NimNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
@@ -227,13 +242,10 @@ proc stripPragma(n: NimNode; s: static[string]): NimNode =
 
 proc isLiftable(n: NimNode): bool =
   ## is this a node we should float to top-level?
-  result = case n.kind
-  of RoutineNodes:
-    n.hasPragma("cpsLift")
-  of nnkTypeSection:
-    anyIt(toSeq items(n), it.hasPragma("cpsLift"))
-  else:
-    false
+  result = n.hasPragma "cpsLift"
+
+proc hasLiftableChild(n: NimNode): bool =
+  result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
 
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call
@@ -270,17 +282,15 @@ when false:
         result.doc "optimized proc into tail call"
         result.add n.last
 
-proc liften(n: NimNode): NimNode =
+proc liften(lifted: NimNode; n: NimNode): NimNode =
   ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
-  result = newStmtList()
-  if n.isLiftable:
-    result.add n.stripPragma("cpsLift")
-    for k in items(n):
-      result.add liften(k)
-  else:
-    for k in items(n):
-      result.add liften(k)
-    result.add n
+  proc doLift(n: NimNode): NimNode =
+    if n.isLiftable:
+      lifted.add filter(n.stripPragma "cpsLift", doLift)
+      result = newEmptyNode()
+
+  result = filter(n, doLift)
+  result = newStmtList(lifted, result)
 
 proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## make a tail call and put it in a single statement list;
@@ -354,7 +364,7 @@ func next(ns: seq[NimNode]): NimNode =
 proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
   ## experimental optimization
   var simple: NimNode
-  var n = n.stripComments
+  var n = stripComments n
   if asSimpleReturnCall(n.last.last, simple):
     into.doc "possibly unsafe optimization: " & n.repr
     env.optimizeSimpleReturn(into, simple)
@@ -363,7 +373,7 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
     into.add env.callTail(n)
 
 proc xfrm(n: NimNode; c: NimNode): NimNode =
-  if c.kind == nnkEmpty:
+  if c.isEmpty:
     error "provide a continuation return type"
 
   # create the environment in which we'll store locals
@@ -392,7 +402,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
   template withGoto(n: NimNode; body: untyped): untyped =
     ## run a body with a longer goto stack
-    if len(n.stripComments) > 0:
+    if len(stripComments n) > 0:
       add(goto, n)
       try:
         body
@@ -407,12 +417,12 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
     if isCpsCall(input):
       return penv.tailCall(input, next(goto))
 
-    result = input.copyNimNode
+    result = copyNimNode input
 
     # the accumulated environment
     var env = result.newEnv(penv)
 
-    let n = input.stripComments
+    let n = stripComments input
     result.doc "saften $1 with $2 gotos and $3 breaks" %
       [ $n.kind, $len(goto), $len(breaks) ]
 
@@ -488,7 +498,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
           let x = env.splitAt(n, "if", i)
           withGoto x:
             result.add env.saften(nc)
-            if len(x.stripComments) > 0:
+            if len(stripComments x) > 0:
               result.add next(goto)
           # the split is complete
           return
@@ -512,7 +522,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
     if n.kind in returner:
       if next(goto).kind != nnkNilLit:
-        let duh = result.stripComments
+        let duh = stripComments result
         if len(duh) > 0 and isReturnCall(duh.last):
           result.doc "omit return call from " & $n.kind
         else:
@@ -525,8 +535,10 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 
 macro cps*(n: untyped): untyped =
   when defined(nimdoc): return n
-  n.body = xfrm(n.body, n.params[0]).newStmtList
-  result = liften(n)
+  n.body = xfrm(n.body, n.params[0])
+  result = newStmtList()
+  var x = liften(result, n)
+  result = newStmtList(result, x)
   echo repr(result)
 
 when false:
@@ -548,7 +560,7 @@ macro cpsMagic*(n: untyped): untyped =
   result = newStmtList()
 
   # create a version of the proc that pukes outside of cps context
-  var m = n.copyNimTree
+  var m = copyNimTree n
   let msg = $n.name & "() is only valid in {.cps.} context"
   m.params[0] = newEmptyNode()
   when false:

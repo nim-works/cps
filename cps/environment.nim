@@ -109,7 +109,7 @@ proc populateType(e: Env; n: var NimNode) =
 template cpsLift*() {.pragma.}
 
 proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
-  assert key.kind == nnkSym
+  assert key.kind in {nnkSym, nnkIdent}
   assert val.kind in {nnkVarSection, nnkLetSection}
   e.child[key] = val
   setDirty e
