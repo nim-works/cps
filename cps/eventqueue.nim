@@ -204,7 +204,9 @@ proc run*(interval: Duration = DurationZero) =
   # make sure the eventqueue is ready to run
   init()
   assert eq.state == Stopped
-  if interval.inMilliseconds > 0:
+  if interval.inMilliseconds == 0:
+    discard "the dispatcher returns after emptying the queue"
+  else:
     # the manager wakes up repeatedly, according to the provided interval
     eq.timer = registerTimer(eq.manager,
                              timeout = interval.inMilliseconds.int,
