@@ -62,7 +62,7 @@ proc init() =
 
 proc nextId(): Id =
   ## generate a new registration identifier
-  assert eq.state != Unready
+  init()
   inc eq.lastId
   result = eq.lastId
 
