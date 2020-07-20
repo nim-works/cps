@@ -10,7 +10,7 @@ const
   cpsDebug {.booldefine.} = false
 
 type
-  Id = int
+  Id = distinct int
 
   State = enum
     Unready = "the default state, pre-initialized"
@@ -19,7 +19,7 @@ type
     Stopping = "we're tearing down the dispatcher and it will shortly stop"
 
   Clock = MonoTime
-  Fd = int
+  Fd = distinct int
 
   EventQueue = object
     state: State                    ## dispatcher readiness
@@ -38,17 +38,24 @@ type
       delay: Duration               ## polling overhead
 
 const
-  InvalidId = 0.Id
+  InvalidId = Id(0)
+  InvalidFd = Fd(-1)
 
 var eq {.threadvar.}: EventQueue
 
 template now(): Clock = getMonoTime()
 
+proc `$`(id: Id): string = "{" & system.`$`(id.int) & "}"
+proc `$`(fd: Fd): string = "[" & system.`$`(fd.int) & "]"
+
+proc `==`(a, b: Id): bool {.borrow.}
+proc `==`(a, b: Fd): bool {.borrow.}
+
 proc init() {.inline.} =
   ## initialize the event queue to prepare it for requests
   if eq.state == Unready:
     # create a new manager
-    eq.timer = -1
+    eq.timer = InvalidFd
     eq.manager = newSelector[Clock]()
     eq.wake = newSelectEvent()
     eq.selector = newSelector[Id]()
@@ -91,7 +98,7 @@ proc len*(eq: EventQueue): int =
 
 proc `[]=`(eq: var EventQueue; id: Id; cont: Cont) =
   ## put a continuation into the queue according to its registration
-  assert id != 0
+  assert id != InvalidId
   assert not cont.isNil
   assert not cont.fn.isNil
   assert id notin eq.goto
@@ -101,14 +108,17 @@ proc add*(eq: var EventQueue; cont: Cont): Id =
   ## add a continuation to the queue; returns a registration
   result = nextId()
   eq[result] = cont
+  when cpsDebug:
+    echo "🤞queue ", $result
 
 proc addTimer*(cont: Cont; interval: Duration) =
   ## run a continuation after an interval
   wakeAfter:
     let fd = registerTimer(eq.selector,
       timeout = interval.inMilliseconds.int,
-      oneshot = true, data = eq.add(cont))
-    echo "added timer ", fd
+      oneshot = true, data = eq.add(cont)).Fd
+    when cpsDebug:
+      echo "⏰timer ", fd
 
 proc addTimer*(cont: Cont; ms: int) =
   ## run a continuation after some milliseconds have passed
@@ -131,9 +141,9 @@ proc stop*() =
     # tear down the manager
     assert not eq.manager.isNil
     eq.manager.unregister eq.wake
-    if eq.timer != -1:
-      eq.manager.unregister eq.timer
-      eq.timer = -1
+    if eq.timer != InvalidFd:
+      eq.manager.unregister eq.timer.int
+      eq.timer = InvalidFd
     close(eq.manager)
 
     # discard the current selector to dismiss any pending events
@@ -144,12 +154,12 @@ proc stop*() =
     eq.state = Unready
     init()
 
-proc run*(c: Cont) =
+proc trampoline*(c: Cont) =
   ## trampoline
   var c = c
   while not c.isNil and not c.fn.isNil:
     when cpsDebug:
-      echo "🎪clock ", c.clock
+      echo "🎪tramp ", cast[uint](c.fn), " at ", c.clock
     c = c.fn(c)
 
 proc poll*() =
@@ -185,8 +195,8 @@ proc poll*() =
           when cpsDebug:
             cont.clock = clock
             cont.delay = now() - clock
-            echo "💈delay ", cont.delay
-          run cont
+            echo "💈delay ", id, " ", cont.delay
+          trampoline cont
         else:
           raise newException(KeyError, "missing registration " & $id)
 
@@ -196,12 +206,12 @@ proc poll*() =
     # the current number of queued yields...
 
     for index in 1 .. len(eq.yields):
-      when cpsDebug:
-        echo "🔻yield ", index
       let cont = popFirst eq.yields
-      run cont
+      when cpsDebug:
+        echo "🔻yield #", index
+      trampoline cont
 
-  elif eq.timer == -1:
+  elif eq.timer == InvalidFd:
     # if there's no timer and we have no pending continuations,
     stop()
   else:
@@ -214,7 +224,9 @@ proc poll*() =
         raiseOSError(ready.errorCode, "cps eventqueue error")
 
 proc run*(interval: Duration = DurationZero) =
-  ## the dispatcher runs with a maximal polling interval
+  ## the dispatcher runs with a maximal polling interval; an interval of
+  ## `DurationZero` causes the dispatcher to return when the queue is empty.
+
   # make sure the eventqueue is ready to run
   init()
   assert eq.state == Stopped
@@ -224,7 +236,7 @@ proc run*(interval: Duration = DurationZero) =
     # the manager wakes up repeatedly, according to the provided interval
     eq.timer = registerTimer(eq.manager,
                              timeout = interval.inMilliseconds.int,
-                             oneshot = false, data = now())
+                             oneshot = false, data = now()).Fd
   # the dispatcher is now running
   eq.state = Running
   while eq.state == Running:
