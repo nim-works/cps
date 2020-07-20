@@ -225,3 +225,14 @@ proc defineLocals*(into: var NimNode; e: Env; goto: NimNode): NimNode =
     var vs = nnkLetSection.newNimNode
     vs.add newIdentDefs(result, newEmptyNode(), obj)
     into.add vs
+
+template withGoto*(n: NimNode; body: untyped): untyped {.dirty.} =
+  ## run a body with a longer goto stack
+  if len(stripComments n) > 0:
+    env.goto.add n
+    try:
+      body
+    finally:
+      result.add env.goto.pop
+  else:
+    body
