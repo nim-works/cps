@@ -6,19 +6,18 @@ proc adder(x: var int) =
 
 var cup: int
 
-block:
-  proc foo(): Cont {.cps.} =
-    cup = 1
-  trampoline foo()
-  assert cup == 1
+when false:
+  block:
+    proc foo(): Cont {.cps.} =
+      cup = 1
+    trampoline foo()
+    assert cup == 1
 
+  block:
+    proc foo(): Cont {.cps.} =
+      cps_yield()
+    trampoline foo()
 
-block:
-  proc foo(): Cont {.cps.} =
-    cps_yield()
-  trampoline foo()
-
-when true:
   block:
     proc foo(): Cont {.cps.} =
       var i: int = 0
@@ -28,16 +27,15 @@ when true:
       assert cup == 2
     trampoline foo()
 
-when false:
-  block:
-    proc foo(): Cont {.cps.} =
-      var i: int = 0
-      while i < 3:
-        cps_sleep(100)
-        adder(i)
-      cup = i
-      assert cup == 3
-    trampoline foo()
+block:
+  proc foo(): Cont {.cps.} =
+    var i: int = 0
+    while i < 3:
+      cps_sleep(100)
+      adder(i)
+    cup = i
+    assert cup == 3
+  trampoline foo()
 
 when false:
   block:

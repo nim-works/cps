@@ -57,9 +57,7 @@ else:
 assert cpsContext + cpsAnywhere == {Primitive.low .. Primitive.high}
 assert cpsContext * cpsAnywhere == {}
 
-proc identityFilter(n: NimNode): NimNode = n
-
-proc filter(n: NimNode; f: NodeFilter = identityFilter): NimNode =
+proc filter(n: NimNode; f: NodeFilter): NimNode =
   result = f(n)
   if result.isNil:
     result = copyNimNode n
@@ -278,31 +276,48 @@ when false:
         result.doc "optimized proc into tail call"
         result.add n.last
 
-proc flatten(n: NimNode): seq[NimNode] =
-  if n.kind == nnkStmtList:
-    for child in items(n):
-      result.add flatten(child)
-  else:
-    result.add n
-
-proc liften(lifted: NimNode; n: NimNode): NimNode =
-  ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
-  proc doLift(n: NimNode): NimNode =
-    if n.isLiftable:
-      lifted.add filter(n.stripPragma "cpsLift", doLift)
-      result = newEmptyNode()
-
-  proc cmpKind(a, b: NimNode): int =
-    if a.kind == b.kind:
-      result = 0
-    elif a.kind == nnkProcDef:
-      result = 1
+proc cmpKind(a, b: NimNode): int =
+  if a.kind == b.kind:
+    if a.kind == nnkProcDef:
+      result = cmp(a.body.kind, b.body.kind)
     else:
-      result = -1
+      result = 0
+  elif a.kind == nnkProcDef:
+    result = 1
+  else:
+    result = -1
 
-  result = filter(n, doLift)
-  var lifted = flatten(lifted).sorted(cmpKind).newStmtList
-  result = newStmtList(lifted, result)
+proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
+  ## lift ast tagged with cpsLift pragma to top-level and omit the pragma
+
+  # pull the liftable procs out of the input; the result is, uh, `result`
+  proc liften(n: NimNode): NimNode =
+    if n.isLiftable:
+      lifted.add filter(n.stripPragma "cpsLift", liften)
+      result = newEmptyNode()
+  result = filter(n, liften)
+
+  # clone the proc declarations
+  proc declaren(n: NimNode): NimNode =
+    if n.kind == nnkProcDef:
+      var decl = copyNimTree(n)
+      decl.body = newEmptyNode()
+      result = newStmtList(decl, n)
+  var lifted = filter(lifted, declaren)
+
+  # flatten the series of declarations
+  var flatter: seq[NimNode]
+  proc flatten(n: NimNode): NimNode =
+    if n.kind != nnkStmtList:
+      flatter.add n
+      result = newEmptyNode()
+  discard filter(lifted, flatten)
+
+  # sort the declarations so that we predeclare types and procs
+  sort(flatter, cmpKind)
+
+  # the result is the lifted stuff followed by the original code
+  result = newStmtList(flatter.newStmtList, result)
 
 proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## make a tail call and put it in a single statement list;
@@ -490,16 +505,15 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         # the split is complete
         return
 
-  if n.kind in returner:
-    if env.nextGoto.kind != nnkNilLit:
+    if result.kind == nnkStmtList and n.kind in returner:
       let duh = stripComments result
       if len(duh) > 0 and isReturnCall(duh.last):
         result.doc "omit return call from " & $n.kind
-      else:
+      elif env.nextGoto.kind != nnkNilLit:
         result.doc "adding return call to " & $n.kind
         result.add env.tailCall returnTo(env.nextGoto)
-    else:
-      result.doc "nil return; no remaining goto for " & $n.kind
+      else:
+        result.doc "nil return; no remaining goto for " & $n.kind
 
 proc xfrm(n: NimNode; c: NimNode): NimNode =
   if c.isEmpty:
@@ -510,7 +524,7 @@ proc xfrm(n: NimNode; c: NimNode): NimNode =
 macro cps*(n: untyped): untyped =
   when defined(nimdoc): return n
   n.body = xfrm(n.body, n.params[0])
-  result = liften(newStmtList(), n)
+  result = lambdaLift(newStmtList(), n)
   echo "=== .cps. ==="
   echo repr(result)
 
@@ -518,7 +532,7 @@ when false:
   macro cps*(c: typed; n: typed): untyped =
     var
       safe = xfrm(n, c)
-      decls = liften(safe)
+      decls = lambdaLift(safe)
     result = newStmtList()
     if len(decls) > 0:
       result.add decls
