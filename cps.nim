@@ -309,7 +309,7 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
 
   # flatten the series of declarations
   var flatter: seq[NimNode]
-  proc flatten(n: NimNode): NimNode =
+  proc flatten(n: NimNode): NimNode {.nosinks.} =
     if n.kind != nnkStmtList:
       flatter.add n
       result = newEmptyNode()
