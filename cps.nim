@@ -324,7 +324,7 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
 proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## make a tail call and put it in a single statement list;
   ## this will always create a tail call proc and call it
-  let lifter = bindSym"cpsLift"
+  let pragmas = nnkPragma.newTree bindSym"cpsLift"
   result = newStmtList()
   result.doc "new tail call: " & name.repr
   result.add env.tailCall(name)

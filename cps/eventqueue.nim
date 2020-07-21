@@ -23,7 +23,7 @@ type
 
   EventQueue = object
     state: State                    ## dispatcher readiness
-    goto: Table[Id, Cont]           ## where to go from here!
+    goto: OrderedTable[Id, Cont]    ## where to go from here!
     lastId: Id                      ## id of last-issued registration
     selector: Selector[Id]
     manager: Selector[Clock]
@@ -38,8 +38,9 @@ type
       delay: Duration               ## polling overhead
 
 const
-  InvalidId = Id(0)
-  InvalidFd = Fd(-1)
+  invalidId = Id(0)
+  invalidFd = Fd(-1)
+  oneMs = initDuration(milliseconds = 1)
 
 var eq {.threadvar.}: EventQueue
 
@@ -55,15 +56,15 @@ proc init() {.inline.} =
   ## initialize the event queue to prepare it for requests
   if eq.state == Unready:
     # create a new manager
-    eq.timer = InvalidFd
+    eq.timer = invalidFd
     eq.manager = newSelector[Clock]()
     eq.wake = newSelectEvent()
     eq.selector = newSelector[Id]()
     # the manager wakes up when triggered to do so
     registerEvent(eq.manager, eq.wake, now())
     # so does the main selector
-    registerEvent(eq.selector, eq.wake, InvalidId)
-    eq.lastId = InvalidId
+    registerEvent(eq.selector, eq.wake, invalidId)
+    eq.lastId = invalidId
     eq.yields = initDeque[Cont]()
     eq.state = Stopped
 
@@ -98,7 +99,7 @@ proc len*(eq: EventQueue): int =
 
 proc `[]=`(eq: var EventQueue; id: Id; cont: Cont) =
   ## put a continuation into the queue according to its registration
-  assert id != InvalidId
+  assert id != invalidId
   assert not cont.isNil
   assert not cont.fn.isNil
   assert id notin eq.goto
@@ -113,12 +114,15 @@ proc add*(eq: var EventQueue; cont: Cont): Id =
 
 proc addTimer*(cont: Cont; interval: Duration) =
   ## run a continuation after an interval
-  wakeAfter:
-    let fd = registerTimer(eq.selector,
-      timeout = interval.inMilliseconds.int,
-      oneshot = true, data = eq.add(cont)).Fd
-    when cpsDebug:
-      echo "⏰timer ", fd
+  if interval < oneMs:
+    raise newException(ValueError, "intervals < 1ms unsupported")
+  else:
+    wakeAfter:
+      let fd = registerTimer(eq.selector,
+        timeout = interval.inMilliseconds.int,
+        oneshot = true, data = eq.add(cont)).Fd
+      when cpsDebug:
+        echo "⏰timer ", fd
 
 proc addTimer*(cont: Cont; ms: int) =
   ## run a continuation after some milliseconds have passed
@@ -141,9 +145,9 @@ proc stop*() =
     # tear down the manager
     assert not eq.manager.isNil
     eq.manager.unregister eq.wake
-    if eq.timer != InvalidFd:
+    if eq.timer != invalidFd:
       eq.manager.unregister eq.timer.int
-      eq.timer = InvalidFd
+      eq.timer = invalidFd
     close(eq.manager)
 
     # discard the current selector to dismiss any pending events
@@ -188,8 +192,8 @@ proc poll*() =
     for event in items(ready):
       # get the registration of the pending continuation
       let id = getData(eq.selector, event.fd)
-      # the id will be InvalidId if it's a wake-up event
-      if id != InvalidId:
+      # the id will be invalidId if it's a wake-up event
+      if id != invalidId:
         var cont: Cont
         if pop(eq.goto, id, cont):
           when cpsDebug:
@@ -211,7 +215,7 @@ proc poll*() =
         echo "🔻yield #", index
       trampoline cont
 
-  elif eq.timer == InvalidFd:
+  elif eq.timer == invalidFd:
     # if there's no timer and we have no pending continuations,
     stop()
   else:

@@ -31,7 +31,7 @@ block:
   proc foo(): Cont {.cps.} =
     var i: int = 0
     while i < 3:
-      cps_sleep(100)
+      cps_sleep(i + 1)
       adder(i)
     cup = i
     assert cup == 3
