@@ -515,7 +515,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         result.doc "adding return call to " & $n.kind
         result.add env.tailCall returnTo(env.nextGoto)
       else:
-        result.doc "nil return; no remaining goto for " & $n.kind
+        discard "nil return; no remaining goto for " & $n.kind
 
 proc xfrm(n: NimNode; c: NimNode): NimNode =
   if c.isEmpty:
