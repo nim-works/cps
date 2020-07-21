@@ -579,3 +579,7 @@ proc cps_yield*(): Cont {.cpsMagic.} =
 proc cps_sleep*(ms: int): Cont {.cpsMagic.} =
   ## sleep for `ms` milliseconds before continuing
   addTimer(c, ms)
+
+proc cps_done*(): Cont {.cpsMagic.} =
+  ## discard the current continuation
+  discard
