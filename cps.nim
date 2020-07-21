@@ -297,13 +297,15 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
       result = newEmptyNode()
   result = filter(n, liften)
 
-  # clone the proc declarations
-  proc declaren(n: NimNode): NimNode =
-    if n.kind == nnkProcDef:
-      var decl = copyNimTree(n)
-      decl.body = newEmptyNode()
-      result = newStmtList(decl, n)
-  var lifted = filter(lifted, declaren)
+  # we currently install proc declarations during proc construction
+  when false:
+    # clone the proc declarations
+    proc declaren(n: NimNode): NimNode =
+      if n.kind == nnkProcDef:
+        var decl = copyNimTree(n)
+        decl.body = newEmptyNode()
+        result = newStmtList(decl, n)
+    var lifted = filter(lifted, declaren)
 
   # flatten the series of declarations
   var flatter: seq[NimNode]
@@ -334,13 +336,13 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     var locals = genSym(nskParam, "locals")
     for name, asgn in localRetrievals(env, locals):
       body.insert(0, asgn)
-    var fun = newProc(name = name, body = body,
-                      params = [env.root, newIdentDefs(locals, env.root)])
     result.doc "creating a new proc: " & name.repr
-
-    # prep it for lifting and add it to the result
-    fun.addPragma lifter
-    result.add fun
+    # add the declaration
+    result.add newProc(name = name, pragmas = nnkPragma.newTree(lifter),
+                       params = [env.root, newIdentDefs(locals, env.root)])
+    # add the implementation
+    result.add newProc(name = name, pragmas = nnkPragma.newTree(lifter),
+          body = body, params = [env.root, newIdentDefs(locals, env.root)])
 
 proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## either create and return a tail call proc, or return nil
