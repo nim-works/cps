@@ -511,15 +511,15 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         # the split is complete
         return
 
-    if result.kind == nnkStmtList and n.kind in returner:
-      let duh = stripComments result
-      if len(duh) > 0 and isReturnCall(duh.last):
-        result.doc "omit return call from " & $n.kind
-      elif env.nextGoto.kind != nnkNilLit:
-        result.doc "adding return call to " & $n.kind
-        result.add env.tailCall returnTo(env.nextGoto)
-      else:
-        discard "nil return; no remaining goto for " & $n.kind
+  if result.kind == nnkStmtList and n.kind in returner:
+    let duh = stripComments result
+    if len(duh) > 0 and isReturnCall(duh.last):
+      result.doc "omit return call from " & $n.kind
+    elif env.nextGoto.kind != nnkNilLit:
+      result.doc "adding return call to " & $n.kind
+      result.add env.tailCall returnTo(env.nextGoto)
+    else:
+      discard "nil return; no remaining goto for " & $n.kind
 
 proc xfrm(n: NimNode; c: NimNode): NimNode =
   if c.isEmpty:
