@@ -37,17 +37,33 @@ type
     parent: Env
     child: Table[NimNode, NimNode]
     flags: set[Flag]
-    goto*: seq[NimNode]        # identifiers of future gotos
-    breaks*: seq[NimNode]      # identifiers of future breaks
+    goto: seq[NimNode]        # identifiers of future gotos
+    breaks: seq[NimNode]      # identifiers of future breaks
 
 func insideCps*(e: Env): bool = len(e.goto) > 0 or len(e.breaks) > 0
 
-func next*(ns: seq[NimNode]): NimNode =
+func next(ns: seq[NimNode]): NimNode =
   ## read the next call off the stack
   if len(ns) == 0:
     newNilLit()
   else:
     ns[^1]
+
+template nextOf(x: untyped): typed =
+  var e = e
+  while not e.isNil:
+    result = next(e.`x`)
+    if result.kind == nnkNilLit:
+      e = e.parent
+    else:
+      break
+
+func nextGoto*(e: Env): NimNode = nextOf(goto)
+func nextBreak*(e: Env): NimNode = nextOf(breaks)
+proc addGoto*(e: var Env; n: NimNode) = e.goto.add n
+proc addBreak*(e: var Env; n: NimNode) = e.breaks.add n
+proc popGoto*(e: var Env): NimNode = pop e.goto
+proc popBreak*(e: var Env): NimNode = pop e.breaks
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty

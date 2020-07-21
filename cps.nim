@@ -12,9 +12,10 @@ import std/algorithm
 ]##
 
 const
-  strict = true     ## only cps operations are strictly cps operations
-  comments = true   ## embed comments within the transformation
-  #lifting = true    ## whether to lift generated symbols to top-level
+  cpsDebug {.booldefine.} = false
+  strict = true        ## only cps operations are strictly cps operations
+  comments = cpsDebug  ## embed comments within the transformation
+  #lifting = true       ## whether to lift generated symbols to top-level
 
 when NimMajor < 1 or NimMinor < 3:
   {.fatal: "requires nim-1.3".}
@@ -115,7 +116,7 @@ proc tailCall(e: Env; p: NimNode; n: NimNode): NimNode =
   assert p.isCpsCall
   # install locals as the 1st argument
   result = newStmtList()
-  let locals = result.defineLocals(e, e.goto.next.returnTo)
+  let locals = result.defineLocals(e, returnTo(e.nextGoto))
   p.insert(1, e.maybeConvertToRoot(locals))
   result.add nnkReturnStmt.newNimNode(n).add p
 
@@ -123,15 +124,19 @@ proc tailCall(e: Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
   assert not isCpsCall(n)
   var ret = nnkReturnStmt.newNimNode(n)
-  result = newStmtList()
   if n.kind == nnkNilLit:
-    ret.add n
+    if insideCps(e):
+      result = tailCall(e, returnTo(e.nextGoto))
+    else:
+      ret.add n
+      result = ret
   else:
     # return a statement list including the setup for the locals
     # and the return statement casting those locals to the root type
+    result = newStmtList()
     let locals = result.defineLocals(e, n)
     ret.add e.maybeConvertToRoot(locals)
-  result.add ret
+    result.add ret
 
 func doc(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -314,15 +319,12 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     result.doc "adding the proc verbatim"
     result.add n
   else:
-    var body = newStmtList()
+    var body = newStmtList(n)
     var locals = genSym(nskParam, "locals")
     for name, asgn in localRetrievals(env, locals):
-      body.add asgn
-    body.add n
+      body.insert(0, asgn)
     var fun = newProc(name = name, body = body,
                       params = [env.root, newIdentDefs(locals, env.root)])
-    if len(n) == 0:
-      {.warning: "creating an empty tail call".}
     result.doc "creating a new proc: " & name.repr
 
     # prep it for lifting and add it to the result
@@ -381,35 +383,30 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
   let label = mkLabel name
   var body = newStmtList()
   body.doc "split as " & label.repr & " at index " & $i
+  result = newStmtList()
   if i < n.len-1:
     body.add n[i+1 ..< n.len]
     body = env.saften(body)
-    result = env.makeTail(label, body)
+    result.doc "split at: " & name
+    result.add env.makeTail(label, body)
   else:
-    result = env.callTail returnTo(env.goto.next)
+    result.doc "split at: " & name & " - no body left"
+    result.add env.callTail returnTo(env.nextGoto)
 
 proc saften(penv: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
-
   result = copyNimNode input
 
   # the accumulated environment
   var env = result.newEnv(penv)
-  template goto(): seq[NimNode] = env.goto
-  template breaks(): seq[NimNode] = env.breaks
 
   let n = stripComments input
-  result.doc "saften $1 with $2 gotos and $3 breaks" %
-    [ $n.kind, $len(goto), $len(breaks) ]
-
   for i, nc in pairs(n):
     # if the child is a cps block (not a call), then push a tailcall
     # onto the stack during the saftening of the child
     if isCpsCall(nc):
       withGoto env.splitAt(n, "after", i):
-        #assert goto.next.returnTo.repr == "", goto.next.returnTo.repr
-        #assert goto.next.repr == "", goto.next.repr
-        result.add env.tailCall(nc, goto.next.returnTo)
+        result.add env.tailCall(nc, returnTo(env.nextGoto))
         result.doc "post-cps call; time to bail"
         return
       assert false, "unexpected"
@@ -430,48 +427,41 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       result.add nc
 
     of nnkBreakStmt:
-      if len(breaks) > 0:
+      if env.nextBreak.kind != nnkNilLit:
         result.doc "simple break statement"
-        result.add env.tailCall breaks.next.returnTo
+        result.add env.tailCall(returnTo(env.nextBreak))
       else:
         result.doc "no break statements to pop"
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, "break", i)
-      breaks.add bp
+      env.addBreak bp
       try:
         result.add env.saften(nc)
         if i < n.len-1:
           result.doc "add tail call for block-break proc"
-          result.add env.callTail breaks.next
+          result.add env.callTail(env.nextBreak)
           return
       finally:
-        discard breaks.pop
+        discard env.popBreak
 
     of nnkWhileStmt:
-      if false and not nc.isCpsBlock:
-        # FIXME
-        result.add env.saften(nc)
-      else:
-        let w = mkLabel "while"
-        let bp = env.splitAt(n, "break", i)
-        breaks.add bp
-        goto.add w
-        try:
-          var loop = newStmtList()
-          result.doc "add tail call for while loop"
-          result.add env.makeTail(w, loop)
-          # guys, lemme tell you about where we're goin'
-          let (expr, body) = (nc[0], env.saften(nc[1]))
-          loop.add newIfStmt((expr, newStmtList(body)))
-          discard goto.pop
-          if i < n.len-1:
-            loop.doc "add tail call for break proc"
-            #loop.doc n.repr
-            loop.add env.callTail breaks.next
-            return
-        finally:
-          discard breaks.pop
+      let w = mkLabel "while"
+      let bp = env.splitAt(n, "break", i)
+      env.addGoto w
+      env.addBreak bp
+      try:
+        var loop = newStmtList()
+        result.doc "add tail call for while loop with body " & $nc[1].kind
+        result.add env.makeTail(w, loop)
+        loop.add newIfStmt((nc[0], newStmtList(env.saften(nc[1]))))
+        discard env.popGoto # the loop rewind was added to the body
+        if i < n.len-1:
+          loop.doc "add tail call for break proc"
+          loop.add env.callTail(env.nextBreak)
+          return
+      finally:
+        discard env.popBreak
 
     of nnkIfStmt:
       # if any `if` clause is a cps block, then every clause must be
@@ -493,7 +483,6 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         result.add nc
 
     else:
-      result.doc "adding normal saften child " & $nc.kind
       result.add env.saften(nc)
 
     # if the child isn't last,
@@ -506,15 +495,15 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         return
 
   if n.kind in returner:
-    if goto.next.kind != nnkNilLit:
+    if env.nextGoto.kind != nnkNilLit:
       let duh = stripComments result
       if len(duh) > 0 and isReturnCall(duh.last):
         result.doc "omit return call from " & $n.kind
       else:
         result.doc "adding return call to " & $n.kind
-        result.add env.tailCall goto.next.returnTo
+        result.add env.tailCall returnTo(env.nextGoto)
     else:
-      result.doc "nil return"
+      result.doc "nil return; no remaining goto for " & $n.kind
 
 proc xfrm(n: NimNode; c: NimNode): NimNode =
   if c.isEmpty:
@@ -526,6 +515,7 @@ macro cps*(n: untyped): untyped =
   when defined(nimdoc): return n
   n.body = xfrm(n.body, n.params[0])
   result = liften(newStmtList(), n)
+  echo "=== .cps. ==="
   echo repr(result)
 
 when false:
