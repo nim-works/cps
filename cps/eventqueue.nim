@@ -215,7 +215,8 @@ proc poll*() =
     # if there's no timer and we have no pending continuations,
     stop()
   else:
-    echo "💈"
+    when cpsDebug:
+      echo "💈"
     # else wait until the next polling interval or signal
     for ready in eq.manager.select(-1):
       # if we get any kind of error, all we can reasonably do is stop
