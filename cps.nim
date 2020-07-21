@@ -267,10 +267,6 @@ proc isCpsBlock(n: NimNode): bool =
   else:
     discard
 
-proc mkLabel(s: string): NimNode =
-  ## how we name a generated proc
-  result = genSym(nskProc, ident = s)
-
 when false:
   proc foldTailCalls(n: NimNode): NimNode =
     ## this may optimize a `proc foo() = return bar()` to `return bar()`
@@ -359,7 +355,7 @@ proc callTail(env: var Env; n: NimNode): NimNode =
       # just copy the call
       result = newStmtList([doc"verbatim tail call", n])
     else:
-      result = env.returnTail(mkLabel"tailcall", n)
+      result = env.returnTail(genSym(nskProc, "tail"), n)
   else:
     # wrap whatever it is and recurse on it
     result = env.callTail(newStmtList(n))
@@ -380,7 +376,7 @@ proc saften(penv: var Env; input: NimNode): NimNode
 proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
   ## split a statement list to create a tail call given
   ## a label prefix and an index at which to split
-  let label = mkLabel name
+  let label = genSym(nskProc, name)
   var body = newStmtList()
   body.doc "split as " & label.repr & " at index " & $i
   result = newStmtList()
@@ -446,8 +442,8 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         discard env.popBreak
 
     of nnkWhileStmt:
-      let w = mkLabel "while"
-      let bp = env.splitAt(n, "break", i)
+      let w = genSym(nskProc, "loop")
+      let bp = env.splitAt(n, "brake", i)
       env.addGoto w
       env.addBreak bp
       try:
@@ -489,7 +485,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
     if i < n.len-1:
       # and it's a cps call,
       if nc.isCpsCall or nc.isCpsBlock:
-        let x = env.splitAt(n, "tailcall", i)
+        let x = env.splitAt(n, "tail", i)
         env.optimizeSimpleReturn(result, x)
         # the split is complete
         return
