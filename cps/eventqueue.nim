@@ -112,7 +112,7 @@ proc add*(eq: var EventQueue; cont: Cont): Id =
   result = nextId()
   eq[result] = cont
   when cpsDebug:
-    echo "🤞queue ", $result
+    echo "🤞queue ", $result, " now ", len(eq), " items"
 
 proc addTimer*(cont: Cont; interval: Duration) =
   ## run a continuation after an interval
@@ -161,7 +161,7 @@ proc stop*() =
     init()
 
 proc trampoline*(c: Cont) =
-  ## trampoline
+  ## run the supplied continuation until it is complete
   var c = c
   while not c.isNil and not c.fn.isNil:
     when cpsDebug:
@@ -196,6 +196,8 @@ proc poll*() =
       let id = getData(eq.selector, event.fd)
       # the id will be invalidId if it's a wake-up event
       if id != invalidId:
+        # stop listening on this fd
+        unregister(eq.selector, event.fd)
         var cont: Cont
         if pop(eq.goto, id, cont):
           when cpsDebug:
