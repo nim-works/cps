@@ -149,6 +149,7 @@ proc populateType(e: Env; n: var NimNode) =
 template cpsLift*() {.pragma.}
 
 proc contains*(e: Env; key: NimNode): bool =
+  assert not key.isNil
   assert key.kind in {nnkSym, nnkIdent}
   result = key.strVal in e.seen
 
