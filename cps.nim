@@ -356,6 +356,9 @@ proc callTail(env: var Env; n: NimNode): NimNode =
   of nnkProcDef:
     # if you already put it in a proc, we should just use it
     result = n
+  of nnkNilLit:
+    # if it's nil, let the tailCall() issue the return normally
+    result = env.tailCall(n)
   of nnkIdent, nnkSym:
     # if it's an identifier, we'll just issue a call of it
     result = env.tailCall(n)
@@ -368,8 +371,6 @@ proc callTail(env: var Env; n: NimNode): NimNode =
       result = newStmtList([doc"verbatim tail call", n])
     else:
       result = env.returnTail(genSym(nskProc, "tail"), n)
-  of nnkNilLit:
-    raise newException(Defect, "what are you trying to do?")
   else:
     # wrap whatever it is and recurse on it
     result = env.callTail(newStmtList(n))
@@ -402,7 +403,7 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
   else:
     result.doc "split at: " & name & " - no body left"
     if returnTo(env.nextGoto).kind == nnkNilLit:
-      raise newException(Defect, "nil goto at end of split")
+      warning "nil goto at end of split"
     result.add env.callTail returnTo(env.nextGoto)
 
 proc saften(penv: var Env; input: NimNode): NimNode =
