@@ -189,7 +189,7 @@ proc objectType(e: Env): NimNode =
   populateType(e, record)
   var parent = nnkOfInherit.newNimNode
   if e.parent.isNil:
-    parent.add ident"RootObj"
+    parent.add e.via
   else:
     parent.add e.parent.identity
   var obj = newNimNode(nnkObjectTy)
