@@ -1,49 +1,33 @@
+import std/unittest
+
 import cps
 import cps/eventqueue
 
 proc adder(x: var int) =
   inc x
 
-var cup: int
+suite "cps":
 
-when false:
-  block:
+  setup:
+    var cup: int
+
+  test "simple":
     proc foo(): Cont {.cps.} =
       cup = 1
     trampoline foo()
-    assert cup == 1
+    check cup == 1
 
-  block:
+  test "yield":
     proc foo(): Cont {.cps.} =
       cps_yield()
     trampoline foo()
 
-  block:
+  test "sleep":
     proc foo(): Cont {.cps.} =
       var i: int = 0
-      while i < 2:
+      while i < 3:
+        cps_sleep(i + 1)
         adder(i)
       cup = i
-      assert cup == 2
+      check cup == 3
     trampoline foo()
-
-block:
-  proc foo(): Cont {.cps.} =
-    var i: int = 0
-    while i < 3:
-      cps_sleep(i + 1)
-      adder(i)
-    cup = i
-    assert cup == 3
-  trampoline foo()
-
-when false:
-  block:
-    cps Cont:
-      var i: int = 0
-      while i < 4:
-        adder(i)
-      cup = i
-    assert cup == 4
-
-run()
