@@ -49,6 +49,36 @@ trampoline tock("tock", initDuration(milliseconds = 700))
 # run the dispatcher to invoke pending continuations
 run()
 ```
+...is rewritten during compilation to something like...
+
+```nim
+type
+  env_16446076 = ref object of Cont
+    name: string
+    interval: Duration
+
+  env_16446209 = ref object of env_16446076
+    count: int
+
+proc loop_16446121(locals_16446228: Cont): Cont =
+  let interval: Duration = env_16446209(locals_16446228).interval
+  let name: string = env_16446209(locals_16446228).name
+  var count: int = env_16446209(locals_16446228).count
+  if true:
+    inc count
+    cps_sleep interval
+    echo name, " ", count
+    return env_16446209(fn: loop_16446121, count: count, name: name, interval: interval).Cont
+
+proc tock(name: string; interval: Duration): Cont =
+  var count: int = 0
+  return env_16446209(fn: loop_16446121, count: count, name: name, interval: interval).Cont
+
+trampoline tock("tick", initDuration(milliseconds = 300))
+trampoline tock("tock", initDuration(milliseconds = 700))
+
+run()
+```
 
 ## Documentation
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
