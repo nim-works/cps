@@ -6,6 +6,7 @@ rewrite it to use continuations for control flow.
 For a description of the origins of this concept, see the included papers
 and https://github.com/zevv/nimcsp.
 
+_Windows is not supported yet; feel free to submit a pull request!_
 
 ## Usage
 ```nim
