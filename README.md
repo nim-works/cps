@@ -28,8 +28,8 @@ own implementation if you choose.
 ```nim
 import std/times
 
-import cps
-import cps/eventqueue
+import cps             # .cps. macro
+import cps/eventqueue  # cps_sleep(), trampoline, run(), Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
 proc tock(name: var string; interval: Duration): Cont {.cps.} =
@@ -38,7 +38,7 @@ proc tock(name: var string; interval: Duration): Cont {.cps.} =
     inc count
     # this primitive sends the continuation to the dispatcher
     cps_sleep interval
-    # this is executed later
+    # this is executed from the dispatcher
     echo name, " ", count
 
 # the trampoline repeatedly invokes continuations...
