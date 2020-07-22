@@ -17,8 +17,6 @@ when NimMajor < 1 or NimMinor < 3:
 import cps/environment
 import cps/eventqueue
 
-export Cont
-
 type
   Primitive = enum    ## operations on which all others are based
     Spawn
