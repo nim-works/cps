@@ -5,9 +5,9 @@ import cps/eventqueue  # cps_sleep(), trampoline, run(), Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
 proc tock(name: string; interval: Duration): Cont {.cps.} =
-  var count: int = 0
-  while true:
-    inc count
+  var count: int = 20
+  while count > 0:
+    dec count
     # this primitive sends the continuation to the dispatcher
     cps_sleep interval
     # this is executed from the dispatcher

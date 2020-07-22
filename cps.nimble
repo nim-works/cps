@@ -1,4 +1,4 @@
-version = "0.0.2"
+version = "0.0.3"
 author = "disruptek"
 description = "continuation-passing style"
 license = "MIT"
@@ -19,3 +19,4 @@ proc execTest(test: string) =
 
 task test, "run tests for travis":
   execTest("tests/test.nim")
+  execTest("tests/tock.nim")
