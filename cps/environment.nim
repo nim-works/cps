@@ -140,26 +140,44 @@ proc populateType(e: Env; n: var NimNode) =
 template cpsLift*() {.pragma.}
 
 proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
+  ## set [ident|sym] = let/var section
   assert key.kind in {nnkSym, nnkIdent}
   assert val.kind in {nnkVarSection, nnkLetSection}
   e.child[key] = val
   setDirty e
 
+proc addSection(e: var Env; n: NimNode) =
+  ## add a let/var section to the env
+  assert n.kind in {nnkVarSection, nnkLetSection}
+  assert len(n) == 1, "pass 1-item sections"
+  var (n, ts) = (n[0], n)
+  if len(n) == 2:
+    # ident: type
+    n.add newEmptyNode()
+  # ident: type = default
+  e[n[0]] = ts
+
+proc letOrVar(n: NimNode): NimNode =
+  ## used on params to turn them into let/var sections
+  assert n.kind == nnkIdentDefs
+  case n[1].kind
+  of nnkEmpty:
+    error "i need a type: " & repr(n)
+  of nnkVarTy:
+    result = nnkVarSection.newTree newIdentDefs(n[0], n[1][0])
+  else:
+    result = nnkLetSection.newTree newIdentDefs(n[0], n[1])
+  if len(result.last) < len(n):
+    result.last.add n.last
+
 proc add*(e: var Env; n: NimNode) =
+  ## add a let/var section or proc param to the env
   case n.kind
   of nnkVarSection, nnkLetSection:
     for defs in items(n):
-      var s = newNimNode(n.kind)
-      case len(defs)
-      of 2:
-        # ident = value; glwt
-        s.add newIdentDefs(defs[0], defs[1], newEmptyNode())
-      of 3:
-        # ident = value, default
-        s.add newIdentDefs(defs[0], defs[1], defs[2])
-      else:
-        assert false, "wut"
-      e[defs[0]] = s
+      addSection(e, newTree(n.kind, defs))
+  of nnkIdentDefs:
+    e.add letOrVar(n)
   else:
     assert false, "unrecognized input node " & repr(n)
 
@@ -228,7 +246,8 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
     section.add newIdentDefs(name, value[0][1], newDotExpr(locals, name))
     yield (key: name, val: section)
 
-proc defineLocals*(into: var NimNode; e: Env; goto: NimNode): NimNode =
+proc defineLocals*(into: var NimNode; e: var Env; goto: NimNode): NimNode =
+  e.storeTypeSection(into)
   assert not e.isDirty
   var obj = nnkObjConstr.newNimNode
   obj.add e.identity

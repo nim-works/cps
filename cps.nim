@@ -109,7 +109,7 @@ func returnTo(n: NimNode): NimNode {.deprecated.} =
   else:
     result = returnTo(n[0])
 
-proc tailCall(e: Env; p: NimNode; n: NimNode): NimNode =
+proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   assert p.isCpsCall
   # install locals as the 1st argument
@@ -118,7 +118,7 @@ proc tailCall(e: Env; p: NimNode; n: NimNode): NimNode =
   p.insert(1, e.maybeConvertToRoot(locals))
   result.add nnkReturnStmt.newNimNode(n).add p
 
-proc tailCall(e: Env; n: NimNode): NimNode =
+proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
   assert not isCpsCall(n)
   var ret = nnkReturnStmt.newNimNode(n)
@@ -521,15 +521,14 @@ proc saften(penv: var Env; input: NimNode): NimNode =
     else:
       discard "nil return; no remaining goto for " & $n.kind
 
-proc xfrm(n: NimNode; c: NimNode): NimNode =
-  if c.isEmpty:
-    error "provide a continuation return type"
-  var env = newEnv(c)       # new env to store locals
-  result = env.saften(n)    # saften the block
-
 macro cps*(n: untyped): untyped =
   when defined(nimdoc): return n
-  n.body = xfrm(n.body, n.params[0])
+  if n.params[0].isEmpty:
+    error "provide a continuation return type"
+  var env = newEnv(n.params[0])
+  for defs in n.params[1..^1]:
+    env.add defs
+  n.body = env.saften(n.body)
   result = lambdaLift(newStmtList(), n)
   echo "=== .cps. ==="
   echo repr(result)
