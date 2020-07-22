@@ -1,0 +1,27 @@
+Env	cps/environment.html#Env	environment: Env	
+insideCps	cps/environment.html#insideCps,Env	environment: insideCps(e: Env): bool	
+nextGoto	cps/environment.html#nextGoto,Env	environment: nextGoto(e: Env): NimNode	
+nextBreak	cps/environment.html#nextBreak,Env	environment: nextBreak(e: Env): NimNode	
+addGoto	cps/environment.html#addGoto,Env,NimNode	environment: addGoto(e: var Env; n: NimNode)	
+addBreak	cps/environment.html#addBreak,Env,NimNode	environment: addBreak(e: var Env; n: NimNode)	
+popGoto	cps/environment.html#popGoto,Env	environment: popGoto(e: var Env): NimNode	
+popBreak	cps/environment.html#popBreak,Env	environment: popBreak(e: var Env): NimNode	
+isEmpty	cps/environment.html#isEmpty,NimNode	environment: isEmpty(n: NimNode): bool	
+hash	cps/environment.html#hash,NimNode	environment: hash(n: NimNode): Hash	
+len	cps/environment.html#len,Env	environment: len(e: Env): int	
+isEmpty	cps/environment.html#isEmpty,Env	environment: isEmpty(e: Env): bool	
+inherits	cps/environment.html#inherits,Env	environment: inherits(e: Env): NimNode	
+isDirty	cps/environment.html#isDirty,Env	environment: isDirty(e: Env): bool	
+identity	cps/environment.html#identity,Env	environment: identity(e: Env): NimNode	
+root	cps/environment.html#root,Env	environment: root(e: Env): NimNode	
+newEnv	cps/environment.html#newEnv,NimNode	environment: newEnv(via: NimNode): Env	
+cpsLift	cps/environment.html#cpsLift.t	environment: cpsLift()	
+`[]=`	cps/environment.html#[]=,Env,NimNode,NimNode	environment: `[]=`(e: var Env; key: NimNode; val: NimNode)	
+add	cps/environment.html#add,Env,NimNode	environment: add(e: var Env; n: NimNode)	
+makeType	cps/environment.html#makeType,Env	environment: makeType(e: var Env): Option[NimNode]	
+storeTypeSection	cps/environment.html#storeTypeSection,Env,NimNode	environment: storeTypeSection(e: var Env; into: var NimNode)	
+newEnv	cps/environment.html#newEnv,NimNode,Env	environment: newEnv(into: var NimNode; parent: var Env): Env	
+localAssignments	cps/environment.html#localAssignments.i,Env,NimNode	environment: localAssignments(e: Env; locals: NimNode): Pair	
+localRetrievals	cps/environment.html#localRetrievals.i,Env,NimNode	environment: localRetrievals(e: Env; locals: NimNode): Pair	
+defineLocals	cps/environment.html#defineLocals,NimNode,Env,NimNode	environment: defineLocals(into: var NimNode; e: var Env; goto: NimNode): NimNode	
+withGoto	cps/environment.html#withGoto.t,NimNode,untyped	environment: withGoto(n: NimNode; body: untyped): untyped	
