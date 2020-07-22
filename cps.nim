@@ -356,7 +356,7 @@ proc callTail(env: var Env; n: NimNode): NimNode =
   of nnkProcDef:
     # if you already put it in a proc, we should just use it
     result = n
-  of nnkIdent:
+  of nnkIdent, nnkSym:
     # if it's an identifier, we'll just issue a call of it
     result = env.tailCall(n)
   of nnkStmtList:
@@ -368,6 +368,8 @@ proc callTail(env: var Env; n: NimNode): NimNode =
       result = newStmtList([doc"verbatim tail call", n])
     else:
       result = env.returnTail(genSym(nskProc, "tail"), n)
+  of nnkNilLit:
+    raise newException(Defect, "what are you trying to do?")
   else:
     # wrap whatever it is and recurse on it
     result = env.callTail(newStmtList(n))
@@ -399,6 +401,8 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
     result.add env.makeTail(label, body)
   else:
     result.doc "split at: " & name & " - no body left"
+    if returnTo(env.nextGoto).kind == nnkNilLit:
+      raise newException(Defect, "nil goto at end of split")
     result.add env.callTail returnTo(env.nextGoto)
 
 proc saften(penv: var Env; input: NimNode): NimNode =
@@ -444,6 +448,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         result.add env.tailCall(returnTo(env.nextBreak))
       else:
         result.doc "no break statements to pop"
+        assert false, "wut"
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, "break", i)
@@ -459,9 +464,10 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
-      let bp = env.splitAt(n, "brake", i)
       env.addGoto w
-      env.addBreak bp
+      if i < n.len-1:
+        let bp = env.splitAt(n, "brake", i)
+        env.addBreak bp
       try:
         var loop = newStmtList()
         result.doc "add tail call for while loop with body " & $nc[1].kind
@@ -473,7 +479,8 @@ proc saften(penv: var Env; input: NimNode): NimNode =
           loop.add env.callTail(env.nextBreak)
           return
       finally:
-        discard env.popBreak
+        if i < n.len-1:
+          discard env.popBreak
 
     of nnkIfStmt:
       # if any `if` clause is a cps block, then every clause must be
@@ -519,6 +526,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 macro cps*(n: untyped): untyped =
   ## rewrite the target procedure in Continuation-Passing Style
   when defined(nimdoc): return n
+  assert n.kind in RoutineNodes
   if n.params[0].isEmpty:
     error "provide a continuation return type"
   var types = newStmtList()
@@ -528,7 +536,7 @@ macro cps*(n: untyped): untyped =
   n.body = env.saften(n.body)
   result = lambdaLift(types, n)
   when cpsDebug:
-    debugEcho "=== .cps. ==="
+    debugEcho "=== .cps. on " & $n.name & " ==="
     debugEcho repr(result)
 
 when false:
