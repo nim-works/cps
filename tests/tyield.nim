@@ -28,4 +28,5 @@ trampoline lower(1)
 
 run()
 
-assert count == tiny
+if count != tiny:
+  raise newException(ValueError, "you're a terrible coder")
