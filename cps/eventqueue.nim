@@ -253,6 +253,10 @@ proc cps_yield*(): Cont {.cpsMagic.} =
   ## yield to pending continuations in the dispatcher before continuing
   addYield(c)
 
+proc cps_sleep*(interval: Duration): Cont {.cpsMagic.} =
+  ## sleep for `interval` before continuing
+  addTimer(c, interval)
+
 proc cps_sleep*(ms: int): Cont {.cpsMagic.} =
   ## sleep for `ms` milliseconds before continuing
   addTimer(c, ms)

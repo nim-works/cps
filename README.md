@@ -32,7 +32,7 @@ import cps             # .cps. macro
 import cps/eventqueue  # cps_sleep(), trampoline, run(), Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
-proc tock(name: var string; interval: Duration): Cont {.cps.} =
+proc tock(name: string; interval: Duration): Cont {.cps.} =
   var count: int = 0
   while true:
     inc count

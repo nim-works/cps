@@ -138,7 +138,7 @@ iterator pairs(e: Env): Pair =
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
-  for name, section in pairs(e):
+  for name, section in pairs(e.child):
     for defs in items(section):
       if defs[1].isEmpty:
         error "give " & $name & " a type: " & repr(section)
@@ -166,12 +166,12 @@ proc addSection(e: var Env; n: NimNode) =
   ## add a let/var section to the env
   assert n.kind in {nnkVarSection, nnkLetSection}
   assert len(n) == 1, "pass 1-item sections"
-  var (n, ts) = (n[0], n)
+  var (name, n, ts) = (n[0][0], n[0], n)
   if len(n) == 2:
     # ident: type
     n.add newEmptyNode()
   # ident: type = default
-  e[n[0]] = ts
+  e[name] = ts
 
 proc letOrVar(n: NimNode): NimNode =
   ## used on params to turn them into let/var sections
