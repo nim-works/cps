@@ -122,9 +122,9 @@ proc children(e: Env): seq[Pair] =
 
 proc seen(e: Env; size = 4): HashSet[string] =
   ## a hashset of identifiers defined in the env or its parent
-  if e.isNil:
+  if e.isNil or e.parent.isNil:
     result = initHashSet[string](size)
-  elif not e.parent.isNil:
+  else:
     result = e.parent.seen(len(e))
   if not e.isNil:
     for key in keys(e.child):
