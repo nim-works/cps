@@ -53,31 +53,34 @@ run()
 
 ```nim
 type
-  env_16446076 = ref object of Cont
+  env_16451076 = ref object of Cont
     name: string
     interval: Duration
 
-  env_16446209 = ref object of env_16446076
+  env_16451209 = ref object of env_16451076
     count: int
 
-proc loop_16446121(locals_16446228: Cont): Cont =
-  let interval: Duration = env_16446209(locals_16446228).interval
-  let name: string = env_16446209(locals_16446228).name
-  var count: int = env_16446209(locals_16446228).count
+proc after_16451243(locals_16451244: Cont): Cont =
+  let interval: Duration = env_16451209(locals_16451244).interval
+  let name: string = env_16451209(locals_16451244).name
+  var count: int = env_16451209(locals_16451244).count
+  echo name, " ", count
+  return env_16451209(fn: loop_16451121, count: count, name: name, interval: interval).Cont
+
+proc loop_16451121(locals_16451228: Cont): Cont =
+  let interval: Duration = env_16451209(locals_16451228).interval
+  let name: string = env_16451209(locals_16451228).name
+  var count: int = env_16451209(locals_16451228).count
   if true:
     inc count
-    cps_sleep interval
-    echo name, " ", count
-    return env_16446209(fn: loop_16446121, count: count, name: name, interval: interval).Cont
+    return cps_sleep env_16451209(fn: after_16451243, count: count, name: name,
+                                interval: interval).Cont, interval
+    return env_16451209(fn: after_16451243, count: count, name: name,
+                       interval: interval).Cont
 
 proc tock(name: string; interval: Duration): Cont =
   var count: int = 0
-  return env_16446209(fn: loop_16446121, count: count, name: name, interval: interval).Cont
-
-trampoline tock("tick", initDuration(milliseconds = 300))
-trampoline tock("tock", initDuration(milliseconds = 700))
-
-run()
+  return env_16451209(fn: loop_16451121, count: count, name: name, interval: interval).Cont
 ```
 
 ## Documentation

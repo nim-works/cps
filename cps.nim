@@ -65,12 +65,11 @@ let cpsIdents {.compileTime.} = makeIdents()
 
 proc isCpsIdent(n: NimNode): bool =
   ## it's a cps identifier
-  result = n.kind in {nnkIdent, nnkSym} and
-             anyIt(cpsIdents, eqIdent(n, it))
+  result = n.kind in {nnkIdent, nnkSym} and anyIt(cpsIdents, eqIdent(n, it))
 
 proc isCpsCall(n: NimNode): bool =
   ## `true` if `n` is a call to a cps routine
-  result = n.kind == nnkCall and n[0].isCpsIdent
+  result = n.kind in {nnkCall, nnkCommand} and n[0].isCpsIdent
   when not strict:
     result = result or n.kind in RoutineNodes and n.isLiftable
     result = result or n.isCpsProc
