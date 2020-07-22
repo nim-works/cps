@@ -175,39 +175,29 @@ proc add*(e: var Env; n: NimNode) =
   case n.kind
   of nnkVarSection, nnkLetSection:
     for defs in items(n):
-      addSection(e, newTree(n.kind, defs))
+      e.addSection newTree(n.kind, defs)
   of nnkIdentDefs:
-    e.add letOrVar(n)
+    e.addSection letOrVar(n)
   else:
     assert false, "unrecognized input node " & repr(n)
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
-  var pragma = newNimNode(nnkPragma)
-  pragma.add bindSym"cpsLift"
-  var record = newNimNode(nnkRecList)
+  var pragma = nnkPragma.newTree bindSym"cpsLift"
+  var record = nnkRecList.newNimNode
   populateType(e, record)
   var parent = nnkOfInherit.newNimNode
   if e.parent.isNil:
     parent.add e.via
   else:
     parent.add e.parent.identity
-  var obj = newNimNode(nnkObjectTy)
-  obj.add pragma
-  obj.add parent
-  obj.add record
-  result = nnkRefTy.newNimNode
-  result.add obj
+  result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
 proc makeType*(e: var Env): Option[NimNode] =
   ## turn an env into a named object typedef `foo = object ...`
   if e.isDirty:
-    var typedef = newNimNode(nnkTypeDef)
     e.id = genSym(nskType, "env")
-    typedef.add e.id
-    typedef.add newEmptyNode()
-    typedef.add e.objectType
-    result = some(typedef)
+    result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType).some
     assert not e.isDirty
 
 proc storeTypeSection*(e: var Env; into: var NimNode) =

@@ -5,12 +5,6 @@ import std/strutils
 import std/sequtils
 import std/algorithm
 
-##[
-## To transform a CPC program into CPS-convertible form, the CPC
-## translator needs to ensure that every call to a cps function is either
-## in tail position or followed by a tail call to another cps function.
-]##
-
 const
   cpsDebug {.booldefine.} = false
   strict = true        ## only cps operations are strictly cps operations
@@ -522,6 +516,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       discard "nil return; no remaining goto for " & $n.kind
 
 macro cps*(n: untyped): untyped =
+  ## rewrite the target procedure in Continuation-Passing Style
   when defined(nimdoc): return n
   if n.params[0].isEmpty:
     error "provide a continuation return type"
@@ -548,7 +543,6 @@ when false:
 macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
-  when defined(nimdoc): return n
   expectKind(n, nnkProcDef)
   result = newStmtList()
 
@@ -556,19 +550,21 @@ macro cpsMagic*(n: untyped): untyped =
   var m = copyNimTree n
   let msg = $n.name & "() is only valid in {.cps.} context"
   m.params[0] = newEmptyNode()
+  m.body = newStmtList(n.body[0])
   when false:
     m.addPragma newColonExpr(ident"error", msg.newLit)
-    m.body = nnkDiscardStmt.newNimNode(n).add newEmptyNode()
+    m.body.add nnkDiscardStmt.newNimNode(n).add newEmptyNode()
   elif true:
-    m.body = nnkPragma.newNimNode(n).add newColonExpr(ident"warning",
-                                                      msg.newLit)
+    m.body.add nnkPragma.newNimNode(n).add newColonExpr(ident"warning",
+                                                        msg.newLit)
   else:
-    m.body = nnkCall.newNimNode(n).newTree(ident"error", msg.newLit)
+    m.body.add nnkCall.newNimNode(n).newTree(ident"error", msg.newLit)
   result.add m
 
-  # manipulate the primitive to take its return type as a first arg
-  n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
-  result.add n
+  when not defined(nimdoc):
+    # manipulate the primitive to take its return type as a first arg
+    n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
+    result.add n
 
 when not strict:
   proc isCpsProc(n: NimNode): bool =
