@@ -1,5 +1,4 @@
 import std/sets
-import std/options
 import std/sequtils
 import std/hashes
 import std/tables
@@ -39,6 +38,7 @@ type
     flags: set[Flag]
     goto: seq[NimNode]        # identifiers of future gotos
     breaks: seq[NimNode]      # identifiers of future breaks
+    store: NimNode            # where to put typedefs
 
 func insideCps*(e: Env): bool = len(e.goto) > 0 or len(e.breaks) > 0
 
@@ -91,6 +91,8 @@ proc inherits*(e: Env): NimNode =
 proc isDirty*(e: Env): bool =
   assert not e.isNil
   result = e.id.isNil or e.id.isEmpty
+  # a dirty parent yields a dirty child
+  result = result or (not e.parent.isNil and e.parent.isDirty)
 
 proc identity*(e: Env): NimNode =
   assert not e.isNil
@@ -108,41 +110,54 @@ proc root*(e: Env): NimNode =
     r = r.parent
   result = r.inherits
 
-proc newEnv*(via: NimNode): Env =
+proc newEnv*(store: var NimNode; via: NimNode): Env =
   assert not via.isNil
   assert not via.isEmpty
-  result = Env(via: via, id: via)
+  result = Env(store: store, via: via, id: via)
 
 proc children(e: Env): seq[Pair] =
   if not e.isNil:
     result = toSeq pairs(e.child)
     result.add children(e.parent)
 
+proc seen(e: Env; size = 4): HashSet[string] =
+  ## a hashset of identifiers defined in the env or its parent
+  if e.isNil:
+    result = initHashSet[string](size)
+  elif not e.parent.isNil:
+    result = e.parent.seen(len(e))
+  if not e.isNil:
+    for key in keys(e.child):
+      result.incl key.strVal
+
 iterator pairs(e: Env): Pair =
-  var seen = initHashSet[string](len(e))
   for key, val in pairs(e.child):
-    seen.incl key.strVal
     yield (key: key, val: val)
   for pair in children(e.parent):
-    if not seen.containsOrIncl(pair[0].strVal):
-      yield pair
+    yield pair
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
   for name, section in pairs(e):
-    for value in items(section):
-      if value[1].isEmpty:
+    for defs in items(section):
+      if defs[1].isEmpty:
         error "give " & $name & " a type: " & repr(section)
       else:
         # name is an ident or symbol
-        n.add newIdentDefs(ident($name), value[1])
+        n.add newIdentDefs(ident($name), defs[1])
 
 template cpsLift*() {.pragma.}
+
+proc contains*(e: Env; key: NimNode): bool =
+  assert key.kind in {nnkSym, nnkIdent}
+  result = key.strVal in e.seen
 
 proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
   ## set [ident|sym] = let/var section
   assert key.kind in {nnkSym, nnkIdent}
   assert val.kind in {nnkVarSection, nnkLetSection}
+  assert key notin e.parent
+  assert key notin e.child
   e.child[key] = val
   setDirty e
 
@@ -193,63 +208,55 @@ proc objectType(e: Env): NimNode =
     parent.add e.parent.identity
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
-proc makeType*(e: var Env): Option[NimNode] =
+proc makeType*(e: var Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-  if e.isDirty:
-    e.id = genSym(nskType, "env")
-    result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType).some
-    assert not e.isDirty
-
-proc storeTypeSection*(e: var Env; into: var NimNode) =
-  ## turn an env into a complete typedef in a type section
-  let made = e.makeType
-  if made.isSome:
-    into.add newCommentStmtNode"stored the env into typesection here"
-    var ts = newNimNode(nnkTypeSection)
-    ts.add get(made)
-    into.add ts
+  e.id = genSym(nskType, "env")
+  result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
   assert not e.isDirty
 
-proc newEnv*(into: var NimNode; parent: var Env): Env =
-  ## a new env from the given parent; add a typedef for the
-  ## parent into `into` if necessary
-  assert not into.isNil
+proc storeType*(e: var Env) =
+  ## turn an env into a complete typedef in a type section
+  assert not e.isNil
+  if e.isDirty:
+    if not e.parent.isNil:
+      e.parent.storeType
+    e.store.add nnkTypeSection.newTree e.makeType
+  assert not e.isDirty
+
+proc identity*(e: var Env): NimNode =
+  assert not e.isNil
+  e.storeType
+  result = e.id
+
+proc newEnv*(parent: var Env): Env =
+  ## a new env from the given parent
   assert not parent.isNil
-  if into.kind == nnkStmtList:
-    if parent.isDirty:
-      parent.storeTypeSection(into)
-    result = newEnv(parent.id)
-    result.parent = parent
-  else:
-    # just pass the parent when we aren't prepared to record env changes
-    result = parent
+  # we'll want to optimize this block out, ultimately,
+  # so that we don't need to dump types that aren't used
+  block:
+    parent.storeType
+    result = newEnv(parent.store, parent.id)
+  result.parent = parent
+  result.store = parent.store
 
 iterator localAssignments*(e: Env; locals: NimNode): Pair {.deprecated.} =
   for name, section in pairs(e):
     yield (key: name, val: newAssignment(newDotExpr(locals, name), name))
 
 iterator localRetrievals*(e: Env; locals: NimNode): Pair =
+  ## read locals out of an env
   let locals = newCall(e.identity, locals)
   for name, value in pairs(e):
     let section = newNimNode(value.kind)
-    # value[0][1] is the (only) identdefs of the section; [1] is type
+    # value[0] is the (only) identdefs of the section; [0][1] is type
     section.add newIdentDefs(name, value[0][1], newDotExpr(locals, name))
     yield (key: name, val: section)
 
-proc defineLocals*(into: var NimNode; e: var Env; goto: NimNode): NimNode =
-  e.storeTypeSection(into)
-  assert not e.isDirty
-  var obj = nnkObjConstr.newNimNode
-  obj.add e.identity
-  obj.add newColonExpr(ident"fn", goto)
+proc defineLocals*(e: var Env; goto: NimNode): NimNode =
+  e.storeType
+  result = nnkObjConstr.newTree(e.identity, newColonExpr(ident"fn", goto))
   for name, section in pairs(e):
-    obj.add newColonExpr(name, name)
-  result = obj
-  when false:
-    result = gensym(nskLet, "locals")
-    var vs = nnkLetSection.newNimNode
-    vs.add newIdentDefs(result, newEmptyNode(), obj)
-    into.add vs
+    result.add newColonExpr(name, name)
 
 template withGoto*(n: NimNode; body: untyped): untyped {.dirty.} =
   ## run a body with a longer goto stack

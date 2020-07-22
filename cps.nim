@@ -105,7 +105,7 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   assert p.isCpsCall
   # install locals as the 1st argument
   result = newStmtList()
-  let locals = result.defineLocals(e, returnTo(e.nextGoto))
+  let locals = e.defineLocals(returnTo(e.nextGoto))
   p.insert(1, e.maybeConvertToRoot(locals))
   result.add nnkReturnStmt.newNimNode(n).add p
 
@@ -123,7 +123,7 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
     # return a statement list including the setup for the locals
     # and the return statement casting those locals to the root type
     result = newStmtList()
-    let locals = result.defineLocals(e, n)
+    let locals = e.defineLocals(n)
     ret.add e.maybeConvertToRoot(locals)
     result.add ret
 
@@ -327,6 +327,7 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     var locals = genSym(nskParam, "locals")
     for name, asgn in localRetrievals(env, locals):
       body.insert(0, asgn)
+    body.insert(0, doc "installing locals for env " & $env.identity)
     result.doc "creating a new proc: " & name.repr
     # add the declaration
     when false: # this should work, but it provokes ICE...
@@ -406,7 +407,11 @@ proc saften(penv: var Env; input: NimNode): NimNode =
   result = copyNimNode input
 
   # the accumulated environment
-  var env = result.newEnv(penv)
+  var env =
+    if input.kind == nnkStmtList:
+      newEnv(penv)
+    else:
+      penv
 
   let n = stripComments input
   for i, nc in pairs(n):
@@ -517,11 +522,12 @@ macro cps*(n: untyped): untyped =
   when defined(nimdoc): return n
   if n.params[0].isEmpty:
     error "provide a continuation return type"
-  var env = newEnv(n.params[0])
+  var types = newStmtList()
+  var env = newEnv(types, n.params[0])
   for defs in n.params[1..^1]:
     env.add defs
   n.body = env.saften(n.body)
-  result = lambdaLift(newStmtList(), n)
+  result = lambdaLift(types, n)
   when cpsDebug:
     debugEcho "=== .cps. ==="
     debugEcho repr(result)
