@@ -20,6 +20,11 @@ These continuations...
 - ...may be moved between threads to parallelize execution
 
 ## Usage
+
+A simple `selectors`-based event queue is provided, which includes some `cps`
+primitives to enable asynchronous operations. You can replace this with your
+own implementation if you choose.
+
 ```nim
 import std/times
 

@@ -15,7 +15,6 @@ when NimMajor < 1 or NimMinor < 3:
   {.fatal: "requires nim-1.3".}
 
 import cps/environment
-import cps/eventqueue
 
 type
   Primitive = enum    ## operations on which all others are based
@@ -569,15 +568,3 @@ when not strict:
     ## `true` if the node is a routine with our .cps. pragma
     let liftee = bindSym"cps"
     result = n.kind in RoutineNodes and liftee in toSeq(n.pragma)
-
-proc cps_yield*(): Cont {.cpsMagic.} =
-  ## yield to pending continuations in the dispatcher before continuing
-  addYield(c)
-
-proc cps_sleep*(ms: int): Cont {.cpsMagic.} =
-  ## sleep for `ms` milliseconds before continuing
-  addTimer(c, ms)
-
-proc cps_done*(): Cont {.cpsMagic.} =
-  ## discard the current continuation
-  discard

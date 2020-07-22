@@ -6,6 +6,8 @@ import std/tables
 import std/times
 import std/deques
 
+import cps
+
 const
   cpsDebug {.booldefine.} = false
 
@@ -246,3 +248,15 @@ proc run*(interval: Duration = DurationZero) =
   eq.state = Running
   while eq.state == Running:
     poll()
+
+proc cps_yield*(): Cont {.cpsMagic.} =
+  ## yield to pending continuations in the dispatcher before continuing
+  addYield(c)
+
+proc cps_sleep*(ms: int): Cont {.cpsMagic.} =
+  ## sleep for `ms` milliseconds before continuing
+  addTimer(c, ms)
+
+proc cps_done*(): Cont {.cpsMagic.} =
+  ## discard the current continuation
+  discard
