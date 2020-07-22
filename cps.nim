@@ -530,8 +530,9 @@ macro cps*(n: untyped): untyped =
     env.add defs
   n.body = env.saften(n.body)
   result = lambdaLift(newStmtList(), n)
-  echo "=== .cps. ==="
-  echo repr(result)
+  when cpsDebug:
+    debugEcho "=== .cps. ==="
+    debugEcho repr(result)
 
 when false:
   macro cps*(c: typed; n: typed): untyped =
