@@ -3,27 +3,54 @@
 This project provides a macro `cps` which you can apply to a procedure to
 rewrite it to use continuations for control flow.
 
+All runtime functionality is implemented in a dispatcher which you can replace
+to completely change the type and behavior of your continuations.
+
 For a description of the origins of this concept, see the included papers
 and https://github.com/zevv/nimcsp.
-
-_Windows is not supported yet; feel free to submit a pull request!_
 
 ## Why
 
 These continuations...
 
-- ...compose efficient and idiomatic asynchronous code
-- ...are over a thousand times lighter than threads
-- ...compose beautifully with Nim's ARC memory management
-- ...may be based upon your own custom `ref object`
-- ...may be dispatched using your own custom dispatcher
-- ...may be moved between threads to parallelize execution
+- compose efficient and idiomatic asynchronous code
+- are over a thousand times lighter than threads
+- are leak-free under Nim's ARC memory management
+- may be based upon your own custom `ref object`
+- may be dispatched using your own custom dispatcher
+- may be moved between threads to parallelize execution
+- are faster and lighter than async/await futures
+
+## Work In Progress
+
+The macro itself should be considered alpha quality. It is expected to
+fail frequently, but it is in a state where we can begin to add tests and
+refinement.
+
+The included dispatcher is based upon
+[selectors](https://nim-lang.org/docs/selectors.html), so you can see how the
+features of that module will map quite easily to the following list.
+
+Key primitives and their implementation status, in order of priority:
+
+[x] sleep
+[x] yield
+[x] discard
+[ ] signal
+[ ] wait
+[ ] I/O
+[ ] fork
+[ ] thread
+
+Windows is not supported by the included dispatcher yet due to the lack of
+native timer support in `selectors`, but this is a solved problem; feel free to
+submit a pull request!
 
 ## Usage
 
-A simple `selectors`-based event queue is provided, which includes some `cps`
-primitives to enable asynchronous operations. You can replace this with your
-own implementation if you choose.
+The provided `selectors`-based event queue is imported as `cps/eventqueue`. The
+`cps` macro will use whatever return value you specify to determine the type of
+your continuations.
 
 ```nim
 import std/times
@@ -83,6 +110,13 @@ proc tock(name: string; interval: Duration): Cont =
 
 ## Documentation
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
+
+You can also jump to [the documentation for the included dispatcher](https://disruptek.github.io/cps/cps/eventqueue.html).
+
+## Tests
+
+The tests provide the best examples of usage and are a great starting point for
+your experiments.
 
 ## License
 MIT
