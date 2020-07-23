@@ -53,7 +53,7 @@ The provided `selectors`-based event queue is imported as `cps/eventqueue`. The
 your continuations.
 
 ```nim
-import std/times
+import std/times       # Duration
 
 import cps             # .cps. macro
 import cps/eventqueue  # cps_sleep(), trampoline, run(), Cont
@@ -110,7 +110,6 @@ proc tock(name: string; interval: Duration): Cont =
 
 ## Documentation
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
-
 You can also jump to [the documentation for the included dispatcher](https://disruptek.github.io/cps/cps/eventqueue.html).
 
 ## Tests
