@@ -4,6 +4,8 @@ description = "continuation-passing style"
 license = "MIT"
 requires "nim >= 1.3.5"
 
+requires "https://github.com/narimiran/sorta < 1.0.0"
+
 proc execCmd(cmd: string) =
   echo "execCmd:" & cmd
   exec cmd

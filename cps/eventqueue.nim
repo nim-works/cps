@@ -6,10 +6,16 @@ import std/tables
 import std/times
 import std/deques
 
+import sorta
+
 import cps
+import cps/semaphore
+
+export Semaphore, `==`, `<`, hash, signal, wait, isReady, withReady
 
 const
   cpsDebug {.booldefine.} = false
+  cpsPoolSize {.intdefine.} = 64
 
 type
   Id = distinct int
@@ -23,25 +29,34 @@ type
   Clock = MonoTime
   Fd = distinct int
 
+  WaitingIds = seq[Id]
+  PendingIds = Table[Semaphore, Id]
   EventQueue = object
-    state: State                    ## dispatcher readiness
-    goto: OrderedTable[Id, Cont]    ## where to go from here!
-    lastId: Id                      ## id of last-issued registration
-    selector: Selector[Id]
-    manager: Selector[Clock]
-    timer: Fd
-    wake: SelectEvent
-    yields: Deque[Cont]
+    state: State                  ## dispatcher readiness
+    pending: PendingIds           ## maps pending semaphores to Ids
+    waiting: WaitingIds           ## maps waiting selector Fds to Ids
+    goto: SortedTable[Id, Cont]   ## where to go from here!
+    lastId: Id                    ## id of last-issued registration
+    selector: Selector[Id]        ## watches selectable stuff
+    yields: Deque[Cont]           ## continuations ready to run
+
+    manager: Selector[Clock]      ## monitor polling, wake-ups
+    timer: Fd                     ## file-descriptor of polling timer
+    wake: SelectEvent             ## wake-up event for queue actions
 
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
     when cpsDebug:
       clock: Clock                  ## time of latest poll loop
       delay: Duration               ## polling overhead
+      id: Id                        ## our last registration
+      fd: Fd                        ## our last file-descriptor
 
 const
   invalidId = Id(0)
   invalidFd = Fd(-1)
+  wakeupId = Id(-1)
+  bogusIds = wakeupId .. invalidId
   oneMs = initDuration(milliseconds = 1)
 
 var eq {.threadvar.}: EventQueue
@@ -51,8 +66,20 @@ template now(): Clock = getMonoTime()
 proc `$`(id: Id): string = "{" & system.`$`(id.int) & "}"
 proc `$`(fd: Fd): string = "[" & system.`$`(fd.int) & "]"
 
+proc `<`(a, b: Id): bool {.borrow.}
+proc `<`(a, b: Fd): bool {.borrow.}
 proc `==`(a, b: Id): bool {.borrow.}
 proc `==`(a, b: Fd): bool {.borrow.}
+
+proc `[]=`(w: var WaitingIds; fd: int | Fd; id: Id) =
+  while fd.int > len(w):
+    setLen(w, len(w) * 2)
+  system.`[]=`(w, fd.int, id)
+
+proc pop(w: var WaitingIds; fd: int | Fd): Id =
+  result = w[fd.int]
+  if result != wakeupId:        # don't zap our wakeup id
+    w[fd.int] = invalidId
 
 proc init() {.inline.} =
   ## initialize the event queue to prepare it for requests
@@ -62,19 +89,36 @@ proc init() {.inline.} =
     eq.manager = newSelector[Clock]()
     eq.wake = newSelectEvent()
     eq.selector = newSelector[Id]()
+
+    # make sure we have a decent amount of space for registrations
+    if len(eq.waiting) < cpsPoolSize:
+      eq.waiting = newSeq[Id](cpsPoolSize).WaitingIds
+
     # the manager wakes up when triggered to do so
     registerEvent(eq.manager, eq.wake, now())
+
     # so does the main selector
-    registerEvent(eq.selector, eq.wake, invalidId)
+    registerEvent(eq.selector, eq.wake, wakeupId)
+
+    # XXX: this seems to be the only reasonable wait to get our wakeup fd
+    # we want to get the fd used for the wakeup event
+    trigger eq.wake
+    for ready in eq.selector.select(-1):
+      assert User in ready.events
+      eq.waiting[ready.fd] = wakeupId
+
     eq.lastId = invalidId
     eq.yields = initDeque[Cont]()
     eq.state = Stopped
 
-proc nextId(): Id =
+proc nextId(): Id {.inline.} =
   ## generate a new registration identifier
   init()
   inc eq.lastId
   result = eq.lastId
+
+proc newSemaphore*(): Semaphore =
+  result.init nextId().int
 
 proc wakeUp() =
   case eq.state
@@ -97,11 +141,12 @@ template wakeAfter(body: untyped): untyped =
 
 proc len*(eq: EventQueue): int =
   ## the number of pending continuations
-  result = len(eq.goto) + len(eq.yields)
+  result = len(eq.goto) + len(eq.yields) + len(eq.pending)
 
 proc `[]=`(eq: var EventQueue; id: Id; cont: Cont) =
   ## put a continuation into the queue according to its registration
   assert id != invalidId
+  assert id != wakeupId
   assert not cont.isNil
   assert not cont.fn.isNil
   assert id notin eq.goto
@@ -113,31 +158,6 @@ proc add*(eq: var EventQueue; cont: Cont): Id =
   eq[result] = cont
   when cpsDebug:
     echo "🤞queue ", $result, " now ", len(eq), " items"
-
-proc addTimer*(cont: Cont; interval: Duration) =
-  ## run a continuation after an interval
-  if interval < oneMs:
-    raise newException(ValueError, "intervals < 1ms unsupported")
-  else:
-    wakeAfter:
-      let fd = registerTimer(eq.selector,
-        timeout = interval.inMilliseconds.int,
-        oneshot = true, data = eq.add(cont)).Fd
-      when cpsDebug:
-        echo "⏰timer ", fd
-
-proc addTimer*(cont: Cont; ms: int) =
-  ## run a continuation after some milliseconds have passed
-  let interval = initDuration(milliseconds = ms)
-  addTimer(cont, interval)
-
-proc addTimer*(cont: Cont; seconds: float) =
-  ## run a continuation after some seconds have passed
-  addTimer(cont, (1_000 * seconds).int)
-
-proc addYield*(cont: Cont) =
-  wakeAfter:
-    addLast(eq.yields, cont)
 
 proc stop*() =
   ## tell the dispatcher to stop
@@ -159,6 +179,12 @@ proc stop*() =
     # discard the current selector to dismiss any pending events
     close(eq.selector)
 
+    # discard the contents of the semaphore cache
+    eq.pending = initTable[Semaphore, Id](cpsPoolSize)
+
+    # discard the contents of the continuation cache
+    eq.goto = initSortedTable[Id, Cont]()
+
     # re-initialize the queue
     eq.state = Unready
     init()
@@ -175,18 +201,6 @@ proc poll*() =
   ## see what needs doing and do it
   if eq.state != Running: return
 
-  #[
-
-  what i want here is a way to measure the length of the selector,
-  or to simply confirm that the only remaining "listener" is the
-  wake-up event.
-
-  unfortunately, isEmpty() will always be false in that case, so
-  instead, we measure the number of pending continuations, which
-  should be the same.
-
-  ]#
-
   if len(eq) > 0:
     when cpsDebug:
       let clock = now()
@@ -196,16 +210,21 @@ proc poll*() =
 
     for event in items(ready):
       # get the registration of the pending continuation
-      let id = getData(eq.selector, event.fd)
-      # the id will be invalidId if it's a wake-up event
-      if id != invalidId:
+      let id = eq.waiting.pop(event.fd)
+      # the id will be wakeupId if it's a wake-up event
+      assert id != invalidId
+      if id == wakeupId:
+        discard
+      else:
         # stop listening on this fd
         unregister(eq.selector, event.fd)
         var cont: Cont
-        if pop(eq.goto, id, cont):
+        if take(eq.goto, id, cont):
           when cpsDebug:
             cont.clock = clock
             cont.delay = now() - clock
+            cont.id = id
+            cont.fd = event.fd.Fd
             echo "💈delay ", id, " ", cont.delay
           trampoline cont
         else:
@@ -218,8 +237,6 @@ proc poll*() =
 
     for index in 1 .. len(eq.yields):
       let cont = popFirst eq.yields
-      when cpsDebug:
-        echo "🔻yield #", index
       trampoline cont
 
   elif eq.timer == invalidFd:
@@ -254,18 +271,72 @@ proc run*(interval: Duration = DurationZero) =
   while eq.state == Running:
     poll()
 
-proc cps_yield*(): Cont {.cpsMagic.} =
+proc cpsYield*(): Cont {.cpsMagic.} =
   ## yield to pending continuations in the dispatcher before continuing
-  addYield(c)
+  wakeAfter:
+    addLast(eq.yields, c)
 
-proc cps_sleep*(interval: Duration): Cont {.cpsMagic.} =
+proc cpsSleep*(interval: Duration): Cont {.cpsMagic.} =
   ## sleep for `interval` before continuing
-  addTimer(c, interval)
+  if interval < oneMs:
+    raise newException(ValueError, "intervals < 1ms unsupported")
+  else:
+    wakeAfter:
+      let id = eq.add(c)
+      let fd = registerTimer(eq.selector,
+        timeout = interval.inMilliseconds.int,
+        oneshot = true, data = id)
+      eq.waiting[fd] = id
+      when cpsDebug:
+        echo "⏰timer ", fd.Fd
 
-proc cps_sleep*(ms: int): Cont {.cpsMagic.} =
+proc cpsSleep*(ms: int): Cont {.cpsMagic.} =
   ## sleep for `ms` milliseconds before continuing
-  addTimer(c, ms)
+  let interval = initDuration(milliseconds = ms)
+  cpsSleep(c, interval)
 
-proc cps_done*(): Cont {.cpsMagic.} =
-  ## discard the current continuation
+proc cpsSleep*(secs: float): Cont {.cpsMagic.} =
+  ## sleep for `secs` seconds before continuing
+  cpsSleep(c, (1_000 * secs).int)
+
+proc cpsDiscard*(): Cont {.cpsMagic.} =
+  ## discard the current continuation.
   discard
+
+template signalImpl(s: Semaphore; body: untyped): untyped =
+  var trigger = false
+  var id = invalidId
+  try:
+    if take(eq.pending, s, id):
+      var c: Cont
+      if take(eq.goto, id, c):
+        addLast(eq.yields, c)
+        trigger = true
+    else:
+      body
+  finally:
+    if trigger:
+      wakeUp()
+
+proc cpsSignal*(s: var Semaphore): Cont {.cpsMagic.} =
+  ## signal the given semaphore, causing the first waiting continuation
+  ## to be queued for execution in the dispatcher; control remains in
+  ## the calling procedure
+  result = c
+  signal s
+  withReady s:
+    init()
+    signalImpl s:
+      discard
+
+proc cpsSignalAll*(s: var Semaphore): Cont {.cpsMagic.} =
+  ## signal the given semaphore, causing all waiting continuations
+  ## to be queued for execution in the dispatcher; control remains in
+  ## the calling procedure
+  result = c
+  signal s
+  if s.isReady:
+    init()
+    while true:
+      signalImpl s:
+        break
