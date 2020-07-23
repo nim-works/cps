@@ -33,14 +33,14 @@ features of that module will map quite easily to the following list.
 
 Key primitives and their implementation status, in order of priority:
 
-[x] sleep
-[x] yield
-[x] discard
-[ ] signal
-[ ] wait
-[ ] I/O
-[ ] fork
-[ ] thread
+- [x] sleep
+- [x] yield
+- [x] discard
+- [ ] signal
+- [ ] wait
+- [ ] I/O
+- [ ] fork
+- [ ] thread
 
 Windows is not supported by the included dispatcher yet due to the lack of
 native timer support in `selectors`, but this is a solved problem; feel free to
