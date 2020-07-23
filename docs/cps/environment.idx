@@ -14,14 +14,16 @@ inherits	cps/environment.html#inherits,Env	environment: inherits(e: Env): NimNod
 isDirty	cps/environment.html#isDirty,Env	environment: isDirty(e: Env): bool	
 identity	cps/environment.html#identity,Env	environment: identity(e: Env): NimNode	
 root	cps/environment.html#root,Env	environment: root(e: Env): NimNode	
-newEnv	cps/environment.html#newEnv,NimNode	environment: newEnv(via: NimNode): Env	
+newEnv	cps/environment.html#newEnv,NimNode,NimNode	environment: newEnv(store: var NimNode; via: NimNode): Env	
 cpsLift	cps/environment.html#cpsLift.t	environment: cpsLift()	
+contains	cps/environment.html#contains,Env,NimNode	environment: contains(e: Env; key: NimNode): bool	
 `[]=`	cps/environment.html#[]=,Env,NimNode,NimNode	environment: `[]=`(e: var Env; key: NimNode; val: NimNode)	
 add	cps/environment.html#add,Env,NimNode	environment: add(e: var Env; n: NimNode)	
-makeType	cps/environment.html#makeType,Env	environment: makeType(e: var Env): Option[NimNode]	
-storeTypeSection	cps/environment.html#storeTypeSection,Env,NimNode	environment: storeTypeSection(e: var Env; into: var NimNode)	
-newEnv	cps/environment.html#newEnv,NimNode,Env	environment: newEnv(into: var NimNode; parent: var Env): Env	
+makeType	cps/environment.html#makeType,Env	environment: makeType(e: var Env): NimNode	
+storeType	cps/environment.html#storeType,Env	environment: storeType(e: var Env)	
+identity	cps/environment.html#identity,Env_2	environment: identity(e: var Env): NimNode	
+newEnv	cps/environment.html#newEnv,Env	environment: newEnv(parent: var Env): Env	
 localAssignments	cps/environment.html#localAssignments.i,Env,NimNode	environment: localAssignments(e: Env; locals: NimNode): Pair	
 localRetrievals	cps/environment.html#localRetrievals.i,Env,NimNode	environment: localRetrievals(e: Env; locals: NimNode): Pair	
-defineLocals	cps/environment.html#defineLocals,NimNode,Env,NimNode	environment: defineLocals(into: var NimNode; e: var Env; goto: NimNode): NimNode	
+defineLocals	cps/environment.html#defineLocals,Env,NimNode	environment: defineLocals(e: var Env; goto: NimNode): NimNode	
 withGoto	cps/environment.html#withGoto.t,NimNode,untyped	environment: withGoto(n: NimNode; body: untyped): untyped	

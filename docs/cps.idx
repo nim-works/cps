@@ -1,5 +1,2 @@
 cps	cps.html#cps.m,untyped	cps: cps(n: untyped): untyped	
 cpsMagic	cps.html#cpsMagic.m,untyped	cps: cpsMagic(n: untyped): untyped	
-cps_yield	cps.html#cps_yield	cps: cps_yield()	
-cps_sleep	cps.html#cps_sleep,int	cps: cps_sleep(ms: int)	
-cps_done	cps.html#cps_done	cps: cps_done()	

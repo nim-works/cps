@@ -98,13 +98,13 @@ function main() {
 <li><a class="reference external"
           data-doc-search-tag="eventqueue: Cont" href="cps/eventqueue.html#Cont">eventqueue: Cont</a></li>
           </ul></dd>
+<dt><a name="contains" href="#contains"><span>contains:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="environment: contains(e: Env; key: NimNode): bool" href="cps/environment.html#contains%2CEnv%2CNimNode">environment: contains(e: Env; key: NimNode): bool</a></li>
+          </ul></dd>
 <dt><a name="cps" href="#cps"><span>cps:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
           data-doc-search-tag="cps: cps(n: untyped): untyped" href="cps.html#cps.m%2Cuntyped">cps: cps(n: untyped): untyped</a></li>
-          </ul></dd>
-<dt><a name="cps_done" href="#cps_done"><span>cps_done:</span></a></dt><dd><ul class="simple">
-<li><a class="reference external"
-          data-doc-search-tag="cps: cps_done()" href="cps.html#cps_done">cps: cps_done()</a></li>
           </ul></dd>
 <dt><a name="cpsLift" href="#cpsLift"><span>cpsLift:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -114,17 +114,9 @@ function main() {
 <li><a class="reference external"
           data-doc-search-tag="cps: cpsMagic(n: untyped): untyped" href="cps.html#cpsMagic.m%2Cuntyped">cps: cpsMagic(n: untyped): untyped</a></li>
           </ul></dd>
-<dt><a name="cps_sleep" href="#cps_sleep"><span>cps_sleep:</span></a></dt><dd><ul class="simple">
-<li><a class="reference external"
-          data-doc-search-tag="cps: cps_sleep(ms: int)" href="cps.html#cps_sleep%2Cint">cps: cps_sleep(ms: int)</a></li>
-          </ul></dd>
-<dt><a name="cps_yield" href="#cps_yield"><span>cps_yield:</span></a></dt><dd><ul class="simple">
-<li><a class="reference external"
-          data-doc-search-tag="cps: cps_yield()" href="cps.html#cps_yield">cps: cps_yield()</a></li>
-          </ul></dd>
 <dt><a name="defineLocals" href="#defineLocals"><span>defineLocals:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="environment: defineLocals(into: var NimNode; e: var Env; goto: NimNode): NimNode" href="cps/environment.html#defineLocals%2CNimNode%2CEnv%2CNimNode">environment: defineLocals(into: var NimNode; e: var Env; goto: NimNode): NimNode</a></li>
+          data-doc-search-tag="environment: defineLocals(e: var Env; goto: NimNode): NimNode" href="cps/environment.html#defineLocals%2CEnv%2CNimNode">environment: defineLocals(e: var Env; goto: NimNode): NimNode</a></li>
           </ul></dd>
 <dt><a name="Env" href="#Env"><span>Env:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -137,6 +129,8 @@ function main() {
 <dt><a name="identity" href="#identity"><span>identity:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
           data-doc-search-tag="environment: identity(e: Env): NimNode" href="cps/environment.html#identity%2CEnv">environment: identity(e: Env): NimNode</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="environment: identity(e: var Env): NimNode" href="cps/environment.html#identity%2CEnv_2">environment: identity(e: var Env): NimNode</a></li>
           </ul></dd>
 <dt><a name="inherits" href="#inherits"><span>inherits:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -172,13 +166,13 @@ function main() {
           </ul></dd>
 <dt><a name="makeType" href="#makeType"><span>makeType:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="environment: makeType(e: var Env): Option[NimNode]" href="cps/environment.html#makeType%2CEnv">environment: makeType(e: var Env): Option[NimNode]</a></li>
+          data-doc-search-tag="environment: makeType(e: var Env): NimNode" href="cps/environment.html#makeType%2CEnv">environment: makeType(e: var Env): NimNode</a></li>
           </ul></dd>
 <dt><a name="newEnv" href="#newEnv"><span>newEnv:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="environment: newEnv(via: NimNode): Env" href="cps/environment.html#newEnv%2CNimNode">environment: newEnv(via: NimNode): Env</a></li>
+          data-doc-search-tag="environment: newEnv(parent: var Env): Env" href="cps/environment.html#newEnv%2CEnv">environment: newEnv(parent: var Env): Env</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="environment: newEnv(into: var NimNode; parent: var Env): Env" href="cps/environment.html#newEnv%2CNimNode%2CEnv">environment: newEnv(into: var NimNode; parent: var Env): Env</a></li>
+          data-doc-search-tag="environment: newEnv(store: var NimNode; via: NimNode): Env" href="cps/environment.html#newEnv%2CNimNode%2CNimNode">environment: newEnv(store: var NimNode; via: NimNode): Env</a></li>
           </ul></dd>
 <dt><a name="nextBreak" href="#nextBreak"><span>nextBreak:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -212,9 +206,9 @@ function main() {
 <li><a class="reference external"
           data-doc-search-tag="eventqueue: stop()" href="cps/eventqueue.html#stop">eventqueue: stop()</a></li>
           </ul></dd>
-<dt><a name="storeTypeSection" href="#storeTypeSection"><span>storeTypeSection:</span></a></dt><dd><ul class="simple">
+<dt><a name="storeType" href="#storeType"><span>storeType:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="environment: storeTypeSection(e: var Env; into: var NimNode)" href="cps/environment.html#storeTypeSection%2CEnv%2CNimNode">environment: storeTypeSection(e: var Env; into: var NimNode)</a></li>
+          data-doc-search-tag="environment: storeType(e: var Env)" href="cps/environment.html#storeType%2CEnv">environment: storeType(e: var Env)</a></li>
           </ul></dd>
 <dt><a name="trampoline" href="#trampoline"><span>trampoline:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -229,7 +223,7 @@ function main() {
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-22 02:27:24 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-23 16:19:57 UTC</small>
       </div>
     </div>
   </div>

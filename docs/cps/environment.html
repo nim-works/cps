@@ -102,7 +102,8 @@ function main() {
   child: Table[NimNode, NimNode]
   flags: set[Flag]
   goto: seq[NimNode]
-  breaks: seq[NimNode]"><wbr />Env<span class="attachedType"></span></a></li>
+  breaks: seq[NimNode]
+  store: NimNode"><wbr />Env<span class="attachedType"></span></a></li>
 
   </ul>
 </li>
@@ -131,20 +132,24 @@ function main() {
     title="identity(e: Env): NimNode"><wbr />identity<span class="attachedType">Env</span></a></li>
   <li><a class="reference" href="#root%2CEnv"
     title="root(e: Env): NimNode"><wbr />root<span class="attachedType">Env</span></a></li>
-  <li><a class="reference" href="#newEnv%2CNimNode"
-    title="newEnv(via: NimNode): Env"><wbr />new<wbr />Env<span class="attachedType">Env</span></a></li>
+  <li><a class="reference" href="#newEnv%2CNimNode%2CNimNode"
+    title="newEnv(store: var NimNode; via: NimNode): Env"><wbr />new<wbr />Env<span class="attachedType">Env</span></a></li>
+  <li><a class="reference" href="#contains%2CEnv%2CNimNode"
+    title="contains(e: Env; key: NimNode): bool"><wbr />contains<span class="attachedType">Env</span></a></li>
   <li><a class="reference" href="#%5B%5D%3D%2CEnv%2CNimNode%2CNimNode"
     title="`[]=`(e: var Env; key: NimNode; val: NimNode)"><wbr />`[]=`<span class="attachedType">Env</span></a></li>
   <li><a class="reference" href="#add%2CEnv%2CNimNode"
     title="add(e: var Env; n: NimNode)"><wbr />add<span class="attachedType">Env</span></a></li>
   <li><a class="reference" href="#makeType%2CEnv"
-    title="makeType(e: var Env): Option[NimNode]"><wbr />make<wbr />Type<span class="attachedType">Env</span></a></li>
-  <li><a class="reference" href="#storeTypeSection%2CEnv%2CNimNode"
-    title="storeTypeSection(e: var Env; into: var NimNode)"><wbr />store<wbr />Type<wbr />Section<span class="attachedType">Env</span></a></li>
-  <li><a class="reference" href="#newEnv%2CNimNode%2CEnv"
-    title="newEnv(into: var NimNode; parent: var Env): Env"><wbr />new<wbr />Env<span class="attachedType">Env</span></a></li>
-  <li><a class="reference" href="#defineLocals%2CNimNode%2CEnv%2CNimNode"
-    title="defineLocals(into: var NimNode; e: var Env; goto: NimNode): NimNode"><wbr />define<wbr />Locals<span class="attachedType">Env</span></a></li>
+    title="makeType(e: var Env): NimNode"><wbr />make<wbr />Type<span class="attachedType">Env</span></a></li>
+  <li><a class="reference" href="#storeType%2CEnv"
+    title="storeType(e: var Env)"><wbr />store<wbr />Type<span class="attachedType">Env</span></a></li>
+  <li><a class="reference" href="#identity%2CEnv_2"
+    title="identity(e: var Env): NimNode"><wbr />identity<span class="attachedType">Env</span></a></li>
+  <li><a class="reference" href="#newEnv%2CEnv"
+    title="newEnv(parent: var Env): Env"><wbr />new<wbr />Env<span class="attachedType">Env</span></a></li>
+  <li><a class="reference" href="#defineLocals%2CEnv%2CNimNode"
+    title="defineLocals(e: var Env; goto: NimNode): NimNode"><wbr />define<wbr />Locals<span class="attachedType">Env</span></a></li>
 
   </ul>
 </li>
@@ -202,6 +207,7 @@ function main() {
   <span class="Identifier">flags</span><span class="Other">:</span> <span class="Identifier">set</span><span class="Other">[</span><span class="Identifier">Flag</span><span class="Other">]</span>
   <span class="Identifier">goto</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">NimNode</span><span class="Other">]</span>
   <span class="Identifier">breaks</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">NimNode</span><span class="Other">]</span>
+  <span class="Identifier">store</span><span class="Other">:</span> <span class="Identifier">NimNode</span>
 </pre></dt>
 <dd>
 
@@ -290,8 +296,15 @@ function main() {
 
 
 </dd>
-<a id="newEnv,NimNode"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#newEnv%2CNimNode"><span class="Identifier">newEnv</span></a><span class="Other">(</span><span class="Identifier">via</span><span class="Other">:</span> <span class="Identifier">NimNode</span><span class="Other">)</span><span class="Other">:</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="newEnv,NimNode,NimNode"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#newEnv%2CNimNode%2CNimNode"><span class="Identifier">newEnv</span></a><span class="Other">(</span><span class="Identifier">store</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">NimNode</span><span class="Other">;</span> <span class="Identifier">via</span><span class="Other">:</span> <span class="Identifier">NimNode</span><span class="Other">)</span><span class="Other">:</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="contains,Env,NimNode"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#contains%2CEnv%2CNimNode"><span class="Identifier">contains</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">;</span> <span class="Identifier">key</span><span class="Other">:</span> <span class="Identifier">NimNode</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 
@@ -313,31 +326,36 @@ add a let/var section or proc param to the env
 
 </dd>
 <a id="makeType,Env"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#makeType%2CEnv"><span class="Identifier">makeType</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">NimNode</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#makeType%2CEnv"><span class="Identifier">makeType</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">NimNode</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 turn an env into a named object typedef <tt class="docutils literal"><span class="pre">foo = object ...</span></tt>
 
 </dd>
-<a id="storeTypeSection,Env,NimNode"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#storeTypeSection%2CEnv%2CNimNode"><span class="Identifier">storeTypeSection</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">;</span> <span class="Identifier">into</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">NimNode</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span>
-    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="storeType,Env"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#storeType%2CEnv"><span class="Identifier">storeType</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 turn an env into a complete typedef in a type section
 
 </dd>
-<a id="newEnv,NimNode,Env"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#newEnv%2CNimNode%2CEnv"><span class="Identifier">newEnv</span></a><span class="Other">(</span><span class="Identifier">into</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">NimNode</span><span class="Other">;</span> <span class="Identifier">parent</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">)</span><span class="Other">:</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span>
-    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="identity,Env_2"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#identity%2CEnv_2"><span class="Identifier">identity</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">NimNode</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-a new env from the given parent; add a typedef for the parent into <tt class="docutils literal"><span class="pre">into</span></tt> if necessary
+
 
 </dd>
-<a id="defineLocals,NimNode,Env,NimNode"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#defineLocals%2CNimNode%2CEnv%2CNimNode"><span class="Identifier">defineLocals</span></a><span class="Other">(</span><span class="Identifier">into</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">NimNode</span><span class="Other">;</span> <span class="Identifier">e</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">;</span> <span class="Identifier">goto</span><span class="Other">:</span> <span class="Identifier">NimNode</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">NimNode</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
-    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="newEnv,Env"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#newEnv%2CEnv"><span class="Identifier">newEnv</span></a><span class="Other">(</span><span class="Identifier">parent</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">)</span><span class="Other">:</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+a new env from the given parent
+
+</dd>
+<a id="defineLocals,Env,NimNode"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#defineLocals%2CEnv%2CNimNode"><span class="Identifier">defineLocals</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">;</span> <span class="Identifier">goto</span><span class="Other">:</span> <span class="Identifier">NimNode</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">NimNode</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span>
+    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 
@@ -396,7 +414,7 @@ a new env from the given parent; add a typedef for the parent into <tt class="do
 <dt><pre><span class="Keyword">iterator</span> <a href="#localRetrievals.i%2CEnv%2CNimNode"><span class="Identifier">localRetrievals</span></a><span class="Other">(</span><span class="Identifier">e</span><span class="Other">:</span> <a href="environment.html#Env"><span class="Identifier">Env</span></a><span class="Other">;</span> <span class="Identifier">locals</span><span class="Other">:</span> <span class="Identifier">NimNode</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Pair</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-
+read locals out of an env
 
 </dd>
 
@@ -428,7 +446,7 @@ run a body with a longer goto stack
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-22 02:27:24 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-23 16:19:57 UTC</small>
       </div>
     </div>
   </div>
