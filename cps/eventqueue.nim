@@ -152,8 +152,11 @@ proc stop*() =
       eq.timer = invalidFd
     close(eq.manager)
 
-    # discard the current selector to dismiss any pending events
+    # shutdown the wake-up trigger
     eq.selector.unregister eq.wake
+    close(eq.wake)
+
+    # discard the current selector to dismiss any pending events
     close(eq.selector)
 
     # re-initialize the queue
