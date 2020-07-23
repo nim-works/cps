@@ -75,8 +75,6 @@ proc loop_16451121(locals_16451228: Cont): Cont =
     inc count
     return cps_sleep env_16451209(fn: after_16451243, count: count, name: name,
                                 interval: interval).Cont, interval
-    return env_16451209(fn: after_16451243, count: count, name: name,
-                       interval: interval).Cont
 
 proc tock(name: string; interval: Duration): Cont =
   var count: int = 0
