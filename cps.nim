@@ -41,9 +41,9 @@ proc filter(n: NimNode; f: NodeFilter): NimNode =
 
 proc isCpsCall(n: NimNode): bool =
   # cps foo()
-  return n.kind == nnkCommand and 
-         n[0].eqIdent("cps") and
-         n[1].kind == nnkCall
+  result = n.kind == nnkCommand and
+           n[0].eqIdent("cps") and
+           n[1].kind in {nnkCall, nnkCommand}
 
 proc maybeConvertToRoot(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
