@@ -126,26 +126,28 @@ function main() {
     title="poll()"><wbr />poll<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#run%2CDuration"
     title="run(interval: Duration = DurationZero)"><wbr />run<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsYield"
-    title="cpsYield()"><wbr />cps<wbr />Yield<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsSleep%2CDuration"
-    title="cpsSleep(interval: Duration)"><wbr />cps<wbr />Sleep<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsSleep%2Cint"
-    title="cpsSleep(ms: int)"><wbr />cps<wbr />Sleep<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsSleep%2Cfloat"
-    title="cpsSleep(secs: float)"><wbr />cps<wbr />Sleep<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsDiscard"
-    title="cpsDiscard()"><wbr />cps<wbr />Discard<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsSignal%2CSemaphore"
-    title="cpsSignal(s: var Semaphore)"><wbr />cps<wbr />Signal<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsSignalAll%2CSemaphore"
-    title="cpsSignalAll(s: var Semaphore)"><wbr />cps<wbr />Signal<wbr />All<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsWait%2CSemaphore"
-    title="cpsWait(s: var Semaphore)"><wbr />cps<wbr />Wait<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsFork"
-    title="cpsFork()"><wbr />cps<wbr />Fork<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#cpsSpawn%2CCont"
-    title="cpsSpawn(c: Cont)"><wbr />cps<wbr />Spawn<span class="attachedType">Cont</span></a></li>
+  <li><a class="reference" href="#jield"
+    title="jield()"><wbr />jield<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#sleep%2CDuration"
+    title="sleep(interval: Duration)"><wbr />sleep<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#sleep%2Cint"
+    title="sleep(ms: int)"><wbr />sleep<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#sleep%2Cfloat"
+    title="sleep(secs: float)"><wbr />sleep<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#discart"
+    title="discart()"><wbr />discart<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#signal%2CSemaphore"
+    title="signal(s: var Semaphore)"><wbr />signal<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#signalAll%2CSemaphore"
+    title="signalAll(s: var Semaphore)"><wbr />signal<wbr />All<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#wait%2CSemaphore"
+    title="wait(s: var Semaphore)"><wbr />wait<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#fork"
+    title="fork()"><wbr />fork<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#spawn%2CCont"
+    title="spawn(c: Cont)"><wbr />spawn<span class="attachedType">Cont</span></a></li>
+  <li><a class="reference" href="#io%2C%2Cset%5BEvent%5D"
+    title="io(file: int | SocketHandle; events: set[Event])"><wbr />io<span class="attachedType"></span></a></li>
 
   </ul>
 </li>
@@ -234,74 +236,81 @@ See what continuations need running and run them.
 The dispatcher runs with a maximal polling interval; an <tt class="docutils literal"><span class="pre">interval</span></tt> of <tt class="docutils literal"><span class="pre">DurationZero</span></tt> causes the dispatcher to return when the queue is empty.
 
 </dd>
-<a id="cpsYield"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsYield"><span class="Identifier">cpsYield</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="jield"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#jield"><span class="Identifier">jield</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Yield to pending continuations in the dispatcher before continuing.
 
 </dd>
-<a id="cpsSleep,Duration"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsSleep%2CDuration"><span class="Identifier">cpsSleep</span></a><span class="Other">(</span><span class="Identifier">interval</span><span class="Other">:</span> <span class="Identifier">Duration</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="sleep,Duration"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#sleep%2CDuration"><span class="Identifier">sleep</span></a><span class="Other">(</span><span class="Identifier">interval</span><span class="Other">:</span> <span class="Identifier">Duration</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Sleep for <tt class="docutils literal"><span class="pre">interval</span></tt> before continuing.
 
 </dd>
-<a id="cpsSleep,int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsSleep%2Cint"><span class="Identifier">cpsSleep</span></a><span class="Other">(</span><span class="Identifier">ms</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="sleep,int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#sleep%2Cint"><span class="Identifier">sleep</span></a><span class="Other">(</span><span class="Identifier">ms</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Sleep for <tt class="docutils literal"><span class="pre">ms</span></tt> milliseconds before continuing.
 
 </dd>
-<a id="cpsSleep,float"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsSleep%2Cfloat"><span class="Identifier">cpsSleep</span></a><span class="Other">(</span><span class="Identifier">secs</span><span class="Other">:</span> <span class="Identifier">float</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="sleep,float"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#sleep%2Cfloat"><span class="Identifier">sleep</span></a><span class="Other">(</span><span class="Identifier">secs</span><span class="Other">:</span> <span class="Identifier">float</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Sleep for <tt class="docutils literal"><span class="pre">secs</span></tt> seconds before continuing.
 
 </dd>
-<a id="cpsDiscard"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsDiscard"><span class="Identifier">cpsDiscard</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="discart"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#discart"><span class="Identifier">discart</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Discard the current continuation.
 
 </dd>
-<a id="cpsSignal,Semaphore"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsSignal%2CSemaphore"><span class="Identifier">cpsSignal</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="signal,Semaphore"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#signal%2CSemaphore"><span class="Identifier">signal</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">KeyError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">TimeEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Signal the given Semaphore <tt class="docutils literal"><span class="pre">s</span></tt>, causing the first waiting continuation to be queued for execution in the dispatcher; control remains in the calling procedure.
 
 </dd>
-<a id="cpsSignalAll,Semaphore"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsSignalAll%2CSemaphore"><span class="Identifier">cpsSignalAll</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="signalAll,Semaphore"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#signalAll%2CSemaphore"><span class="Identifier">signalAll</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">KeyError</span><span class="Other">,</span> <span class="Identifier">KeyError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">TimeEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Signal the given Semaphore <tt class="docutils literal"><span class="pre">s</span></tt>, causing all waiting continuations to be queued for execution in the dispatcher; control remains in the calling procedure.
 
 </dd>
-<a id="cpsWait,Semaphore"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsWait%2CSemaphore"><span class="Identifier">cpsWait</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="wait,Semaphore"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#wait%2CSemaphore"><span class="Identifier">wait</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Queue the current continuation pending readiness of the given Semaphore <tt class="docutils literal"><span class="pre">s</span></tt>.
 
 </dd>
-<a id="cpsFork"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsFork"><span class="Identifier">cpsFork</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="fork"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#fork"><span class="Identifier">fork</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Duplicate the current continuation.
 
 </dd>
-<a id="cpsSpawn,Cont"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#cpsSpawn%2CCont"><span class="Identifier">cpsSpawn</span></a><span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">TimeEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="spawn,Cont"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#spawn%2CCont"><span class="Identifier">spawn</span></a><span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">TimeEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Queue the supplied continuation <tt class="docutils literal"><span class="pre">c</span></tt>; control remains in the calling procedure.
+
+</dd>
+<a id="io,,set[Event]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#io%2C%2Cset%5BEvent%5D"><span class="Identifier">io</span></a><span class="Other">(</span><span class="Identifier">file</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Operator">|</span> <span class="Identifier">SocketHandle</span><span class="Other">;</span> <span class="Identifier">events</span><span class="Other">:</span> <span class="Identifier">set</span><span class="Other">[</span><span class="Identifier">Event</span><span class="Other">]</span><span class="Other">)</span></pre></dt>
+<dd>
+
+Continue upon any of <tt class="docutils literal"><span class="pre">events</span></tt> on the given file-descriptor or SocketHandle.
 
 </dd>
 
@@ -309,7 +318,7 @@ Queue the supplied continuation <tt class="docutils literal"><span class="pre">c
 <div class="section" id="19">
 <h1><a class="toc-backref" href="#19">Exports</a></h1>
 <dl class="item">
-<a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a>, <a href="semaphore.html#=="><span class="Identifier">==</span></a>, <a href="semaphore.html#&lt;"><span class="Identifier">&lt;</span></a>, <a href="semaphore.html#hash"><span class="Identifier">hash</span></a>, <a href="semaphore.html#signal"><span class="Identifier">signal</span></a>, <a href="semaphore.html#wait"><span class="Identifier">wait</span></a>, <a href="semaphore.html#isReady"><span class="Identifier">isReady</span></a>, <a href="semaphore.html#withReady"><span class="Identifier">withReady</span></a>
+<a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a>, <a href="semaphore.html#=="><span class="Identifier">==</span></a>, <a href="semaphore.html#&lt;"><span class="Identifier">&lt;</span></a>, <a href="semaphore.html#hash"><span class="Identifier">hash</span></a>, <a href="semaphore.html#wait"><span class="Identifier">wait</span></a>, <a href="semaphore.html#isReady"><span class="Identifier">isReady</span></a>, <a href="semaphore.html#withReady"><span class="Identifier">withReady</span></a>
 </dl></div>
 
   </div>
@@ -319,7 +328,7 @@ Queue the supplied continuation <tt class="docutils literal"><span class="pre">c
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-24 02:42:03 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-24 23:42:48 UTC</small>
       </div>
     </div>
   </div>

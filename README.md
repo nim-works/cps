@@ -56,7 +56,7 @@ your continuations.
 import std/times       # Duration
 
 import cps             # .cps. macro
-import cps/eventqueue  # cps_sleep(), trampoline, run(), Cont
+import cps/eventqueue  # sleep(), trampoline, run(), Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
 proc tock(name: string; interval: Duration): Cont {.cps.} =
@@ -64,7 +64,7 @@ proc tock(name: string; interval: Duration): Cont {.cps.} =
   while true:
     inc count
     # this primitive sends the continuation to the dispatcher
-    cps_sleep interval
+    cps sleep(interval)
     # this is executed from the dispatcher
     echo name, " ", count
 
@@ -100,7 +100,7 @@ proc loop_16451121(locals_16451228: Cont): Cont =
   var count: int = env_16451209(locals_16451228).count
   if true:
     inc count
-    return cps_sleep env_16451209(fn: after_16451243, count: count, name: name,
+    return sleep env_16451209(fn: after_16451243, count: count, name: name,
                                 interval: interval).Cont, interval
 
 proc tock(name: string; interval: Duration): Cont =

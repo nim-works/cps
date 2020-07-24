@@ -98,6 +98,19 @@ function main() {
   </ul>
 </li>
 <li>
+  <a class="reference reference-toplevel" href="#7" id="57">Types</a>
+  <ul class="simple simple-toc-section">
+      <li><a class="reference" href="#Continuation"
+    title="Continuation = concept c
+    c.fn is ContinuationProc[Continuation]
+    c is ref object
+    c of RootObj"><wbr />Continuation<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#ContinuationProc"
+    title="ContinuationProc[T] = proc (c: T): T {.nimcall.}"><wbr />Continuation<wbr />Proc<span class="attachedType"></span></a></li>
+
+  </ul>
+</li>
+<li>
   <a class="reference reference-toplevel" href="#17" id="67">Macros</a>
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#cps.m%2Cuntyped"
@@ -119,6 +132,28 @@ function main() {
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
 <a class="reference external" href="environment.html">environment</a>
+</dl></div>
+<div class="section" id="7">
+<h1><a class="toc-backref" href="#7">Types</a></h1>
+<dl class="item">
+<a id="Continuation"></a>
+<dt><pre><a href="cps.html#Continuation"><span class="Identifier">Continuation</span></a> <span class="Other">=</span> <span class="Keyword">concept</span> <span class="Identifier">c</span>
+    <span class="Identifier">c</span><span class="Other">.</span><span class="Identifier">fn</span> <span class="Identifier">is</span> <a href="cps.html#ContinuationProc"><span class="Identifier">ContinuationProc</span></a><span class="Other">[</span><a href="cps.html#Continuation"><span class="Identifier">Continuation</span></a><span class="Other">]</span>
+    <span class="Identifier">c</span> <span class="Identifier">is</span> <span class="Keyword">ref</span> <span class="Keyword">object</span>
+    <span class="Identifier">c</span> <span class="Identifier">of</span> <span class="Identifier">RootObj</span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="ContinuationProc"></a>
+<dt><pre><a href="cps.html#ContinuationProc"><span class="Identifier">ContinuationProc</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">proc</span> <span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">T</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">nimcall</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+
 </dl></div>
 <div class="section" id="17">
 <h1><a class="toc-backref" href="#17">Macros</a></h1>
@@ -147,7 +182,7 @@ upgrade cps primitives to generate errors out of context and take continuations 
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-24 02:42:02 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-24 23:42:47 UTC</small>
       </div>
     </div>
   </div>
