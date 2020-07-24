@@ -11,7 +11,7 @@ const
   comments = cpsDebug  ## embed comments within the transformation
   #lifting = true       ## whether to lift generated symbols to top-level
 
-when NimMajor < 1 or NimMinor < 3:
+when (NimMajor, NimMinor) < (1, 3):
   {.fatal: "requires nim-1.3".}
 
 import cps/environment
