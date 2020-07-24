@@ -391,7 +391,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
   for i, nc in pairs(n):
     # if the child is a cps block (not a call), then push a tailcall
     # onto the stack during the saftening of the child
-    if isCpsCall(nc):
+    if nc.isCpsCall:
       withGoto env.splitAt(n, "after", i):
         result.add env.tailCall(nc, returnTo(env.nextGoto))
         result.doc "post-cps call; time to bail"
