@@ -11,7 +11,7 @@ import sorta
 import cps
 import cps/semaphore
 
-export Semaphore, `==`, `<`, hash, signal, wait, isReady, withReady
+export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash, semaphore.wait, isReady, withReady
 export Event
 
 const
@@ -349,22 +349,20 @@ template signalImpl(s: Semaphore; body: untyped): untyped =
     if trigger:
       wakeUp()
 
-proc signal*(s: var Semaphore): Cont {.cpsMagic.} =
+proc signal*(s: var Semaphore) =
   ## Signal the given Semaphore `s`, causing the first waiting continuation
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
-  result = c
   signal s
   withReady s:
     init()
     signalImpl s:
       discard
 
-proc signalAll*(s: var Semaphore): Cont {.cpsMagic.} =
+proc signalAll*(s: var Semaphore) =
   ## Signal the given Semaphore `s`, causing all waiting continuations
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
-  result = c
   signal s
   if s.isReady:
     init()
