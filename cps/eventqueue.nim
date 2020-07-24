@@ -100,7 +100,7 @@ proc init() {.inline.} =
     # so does the main selector
     registerEvent(eq.selector, eq.wake, wakeupId)
 
-    # XXX: this seems to be the only reasonable wait to get our wakeup fd
+    # XXX: this seems to be the only reasonable way to get our wakeup fd
     # we want to get the fd used for the wakeup event
     trigger eq.wake
     for ready in eq.selector.select(-1):
