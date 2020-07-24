@@ -5,11 +5,11 @@ var sem = newSemaphore()
 var success = false
 
 proc tick(ms: int): Cont {.cps.} =
-  cpsSleep ms
-  cpsSignal(sem)
+  cps sleep(ms)
+  cps signal(sem)
 
 proc tock(): Cont {.cps.} =
-  cpsWait sem
+  cps wait(sem)
   success = true
 
 trampoline tick(10)

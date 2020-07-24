@@ -23,18 +23,6 @@ type
 
   ContinuationProc[T] = proc(c: T): T {.nimcall.}
 
-  Primitive = enum    ## operations on which all others are based
-    Spawn
-    Signal
-    SignalAll
-    Yield
-    Sleep
-    Wait
-    Io
-    Attach
-    Detach
-    Fork
-
   NodeFilter = proc(n: NimNode): NimNode
 
 const
@@ -42,18 +30,6 @@ const
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
-when strict:
-  # currently, we only run Spawn from anywhere
-  const
-    cpsContext = {Signal .. high(Primitive)}
-    cpsAnywhere = {Spawn}
-else:
-  # i think we may want to also run Signals from anywhere
-  const
-    cpsContext = {Yield .. high(Primitive)}
-    cpsAnywhere = {Spawn .. SignalAll}
-assert cpsContext + cpsAnywhere == {Primitive.low .. Primitive.high}
-assert cpsContext * cpsAnywhere == {}
 
 proc filter(n: NimNode; f: NodeFilter): NimNode =
   result = f(n)
@@ -62,24 +38,11 @@ proc filter(n: NimNode; f: NodeFilter): NimNode =
     for kid in items(n):
       result.add filter(kid, f)
 
-func makeIdent(op: Primitive): NimNode =
-  ident("cps_" & $op)
-
-proc makeIdents(): seq[NimNode] {.compileTime.} =
-  for op in items(Primitive):
-    result.add makeIdent(op)
-let cpsIdents {.compileTime.} = makeIdents()
-
-proc isCpsIdent(n: NimNode): bool =
-  ## it's a cps identifier
-  result = n.kind in {nnkIdent, nnkSym} and anyIt(cpsIdents, eqIdent(n, it))
-
 proc isCpsCall(n: NimNode): bool =
-  ## `true` if `n` is a call to a cps routine
-  result = n.kind in {nnkCall, nnkCommand} and n[0].isCpsIdent
-  when not strict:
-    result = result or n.kind in RoutineNodes and n.isLiftable
-    result = result or n.isCpsProc
+  # cps foo()
+  return n.kind == nnkCommand and 
+         n[0].eqIdent("cps") and
+         n[1].kind == nnkCall
 
 proc maybeConvertToRoot(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -112,8 +75,8 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   # install locals as the 1st argument
   result = newStmtList()
   let locals = e.defineLocals(returnTo(e.nextGoto))
-  p.insert(1, e.maybeConvertToRoot(locals))
-  result.add nnkReturnStmt.newNimNode(n).add p
+  p[1].insert(1, e.maybeConvertToRoot(locals))
+  result.add nnkReturnStmt.newNimNode(n).add p[1]
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`

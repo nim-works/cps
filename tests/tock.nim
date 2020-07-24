@@ -7,7 +7,7 @@ proc tock(name: string; ms: int): Cont {.cps.} =
   while count > 0:
     dec count
     # this primitive sends the continuation to the dispatcher
-    cps_sleep ms
+    cps sleep(ms)
     # this is executed from the dispatcher
     echo name, " ", count
 

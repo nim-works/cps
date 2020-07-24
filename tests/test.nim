@@ -19,14 +19,14 @@ suite "cps":
 
   test "yield":
     proc foo(): Cont {.cps.} =
-      cps_yield()
+      cps jield()
     trampoline foo()
 
   test "sleep":
     proc foo(): Cont {.cps.} =
       var i: int = 0
       while i < 3:
-        cps_sleep(i + 1)
+        cps sleep(i + 1)
         adder(i)
       cup = i
       check cup == 3

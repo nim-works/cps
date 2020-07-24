@@ -302,12 +302,12 @@ proc run*(interval: Duration = DurationZero) =
   while eq.state == Running:
     poll()
 
-proc cpsYield*(): Cont {.cpsMagic.} =
+proc jield*(): Cont {.cpsMagic.} =
   ## Yield to pending continuations in the dispatcher before continuing.
   wakeAfter:
     addLast(eq.yields, c)
 
-proc cpsSleep*(interval: Duration): Cont {.cpsMagic.} =
+proc sleep*(interval: Duration): Cont {.cpsMagic.} =
   ## Sleep for `interval` before continuing.
   if interval < oneMs:
     raise newException(ValueError, "intervals < 1ms unsupported")
@@ -321,16 +321,16 @@ proc cpsSleep*(interval: Duration): Cont {.cpsMagic.} =
       when cpsDebug:
         echo "⏰timer ", fd.Fd
 
-proc cpsSleep*(ms: int): Cont {.cpsMagic.} =
+proc sleep*(ms: int): Cont {.cpsMagic.} =
   ## Sleep for `ms` milliseconds before continuing.
   let interval = initDuration(milliseconds = ms)
-  cpsSleep(c, interval)
+  sleep(c, interval)
 
-proc cpsSleep*(secs: float): Cont {.cpsMagic.} =
+proc sleep*(secs: float): Cont {.cpsMagic.} =
   ## Sleep for `secs` seconds before continuing.
-  cpsSleep(c, (1_000 * secs).int)
+  sleep(c, (1_000 * secs).int)
 
-proc cpsDiscard*(): Cont {.cpsMagic.} =
+proc discart*(): Cont {.cpsMagic.} =
   ## Discard the current continuation.
   discard
 
@@ -349,7 +349,7 @@ template signalImpl(s: Semaphore; body: untyped): untyped =
     if trigger:
       wakeUp()
 
-proc cpsSignal*(s: var Semaphore): Cont {.cpsMagic.} =
+proc signal*(s: var Semaphore): Cont {.cpsMagic.} =
   ## Signal the given Semaphore `s`, causing the first waiting continuation
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
@@ -360,7 +360,7 @@ proc cpsSignal*(s: var Semaphore): Cont {.cpsMagic.} =
     signalImpl s:
       discard
 
-proc cpsSignalAll*(s: var Semaphore): Cont {.cpsMagic.} =
+proc signalAll*(s: var Semaphore): Cont {.cpsMagic.} =
   ## Signal the given Semaphore `s`, causing all waiting continuations
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
@@ -372,7 +372,7 @@ proc cpsSignalAll*(s: var Semaphore): Cont {.cpsMagic.} =
       signalImpl s:
         break
 
-proc cpsWait*(s: var Semaphore): Cont {.cpsMagic.} =
+proc wait*(s: var Semaphore): Cont {.cpsMagic.} =
   ## Queue the current continuation pending readiness of the given
   ## Semaphore `s`.
   let id = nextId()
@@ -383,19 +383,19 @@ proc cpsWait*(s: var Semaphore): Cont {.cpsMagic.} =
     eq[s] = id
     eq[id] = c
 
-proc cpsFork*(): Cont {.cpsMagic.} =
+proc fork*(): Cont {.cpsMagic.} =
   ## Duplicate the current continuation.
   result = c
   wakeAfter:
     addLast(eq.yields, clone(c))
 
-proc cpsSpawn*(c: Cont) =
+proc spawn*(c: Cont) =
   ## Queue the supplied continuation `c`; control remains in the calling
   ## procedure.
   wakeAfter:
     addLast(eq.yields, c)
 
-proc cpsIo*(file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
+proc io*(file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
   ## Continue upon any of `events` on the given file-descriptor or
   ## SocketHandle.
   if len(events) == 0:

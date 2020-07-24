@@ -12,16 +12,16 @@ var count = start
 proc higher(ms: int): Cont {.cps.} =
   while count < big and count > tiny:
     inc count
-    cps_sleep ms
-    cps_yield()
-    cps_yield()
-    cps_yield()
+    cps sleep(ms)
+    cps jield()
+    cps jield()
+    cps jield()
 
 proc lower(ms: int): Cont {.cps.} =
   while count < big and count > tiny:
     dec count
-    cps_sleep ms
-    cps_yield()
+    cps sleep(ms)
+    cps jield()
 
 trampoline higher(1)
 trampoline lower(1)
