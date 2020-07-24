@@ -207,7 +207,8 @@ proc hasLiftableChild(n: NimNode): bool =
   result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
 
 proc isCpsBlock(n: NimNode): bool =
-  ## `true` if the block `n` contains a cps call
+  ## `true` if the block `n` contains a cps call anywhere at all;
+  ## this is used to figure out if a block needs tailcall handling...
   case n.kind
   of nnkProcDef, nnkElse, nnkElifBranch:
     result = isCpsBlock(n.last)
@@ -220,7 +221,9 @@ proc isCpsBlock(n: NimNode): bool =
         break
   of nnkStmtList:
     for i, nc in pairs(n):
-      result = (i != n.len-1 and nc.isCpsCall) or nc.isCpsBlock
+      # it's a CPS block if ANY call exists inside
+      #result = (i != n.len-1 and nc.isCpsCall) or nc.isCpsBlock
+      result = nc.isCpsCall or nc.isCpsBlock
       if result:
         break
   else:
