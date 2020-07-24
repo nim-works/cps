@@ -328,7 +328,7 @@ template signalImpl(s: Semaphore; body: untyped): untyped =
       wakeUp()
 
 proc cpsSignal*(s: var Semaphore): Cont {.cpsMagic.} =
-  ## Signal the given semaphore, causing the first waiting continuation
+  ## Signal the given Semaphore `s`, causing the first waiting continuation
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
   result = c
@@ -339,7 +339,7 @@ proc cpsSignal*(s: var Semaphore): Cont {.cpsMagic.} =
       discard
 
 proc cpsSignalAll*(s: var Semaphore): Cont {.cpsMagic.} =
-  ## Signal the given semaphore, causing all waiting continuations
+  ## Signal the given Semaphore `s`, causing all waiting continuations
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
   result = c
