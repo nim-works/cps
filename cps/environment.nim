@@ -49,7 +49,7 @@ func next(ns: seq[NimNode]): NimNode =
   else:
     ns[^1]
 
-template nextOf(x: untyped): typed =
+template nextOf(x: untyped) =
   var e = e
   while not e.isNil:
     result = next(e.`x`)
