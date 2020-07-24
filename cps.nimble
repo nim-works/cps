@@ -30,3 +30,4 @@ task test, "run tests for travis":
 task mkdoc, "generate the docs":
   exec "nim doc --path:. --outdir=docs cps.nim"
   exec "nim doc --path:. --outdir=docs/cps cps/eventqueue.nim"
+  exec "nim doc --path:. --outdir=docs/cps cps/semaphore.nim"
