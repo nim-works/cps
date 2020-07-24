@@ -4,10 +4,10 @@ import cps/eventqueue
 var r: int
 
 proc adder(): Cont {.cps.} =
-  cpsFork()
+  cps fork()
   inc r
 
-cpsSpawn adder()
+spawn adder()
 run()
 if r != 2:
   raise newException(Defect, "uh oh")
