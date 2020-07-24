@@ -8,6 +8,8 @@ type
     cond: Cond
     count: int
 
+proc id*(s: Semaphore): int = s.id
+
 proc hash*(s: Semaphore): Hash =
   result = s.id.Hash
 

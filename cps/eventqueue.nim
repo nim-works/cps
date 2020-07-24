@@ -144,6 +144,14 @@ proc len*(eq: EventQueue): int =
   ## The number of pending continuations.
   result = len(eq.goto) + len(eq.yields) + len(eq.pending)
 
+proc `[]=`(eq: var EventQueue; s: var Semaphore; id: Id) =
+  ## put a semaphore into the queue with its registration
+  assert id != invalidId
+  assert id != wakeupId
+  assert not s.isReady
+  assert s.id.Id != invalidId
+  eq.pending[s] = id
+
 proc `[]=`(eq: var EventQueue; id: Id; cont: Cont) =
   ## put a continuation into the queue according to its registration
   assert id != invalidId
@@ -320,9 +328,9 @@ template signalImpl(s: Semaphore; body: untyped): untyped =
       wakeUp()
 
 proc cpsSignal*(s: var Semaphore): Cont {.cpsMagic.} =
-  ## signal the given semaphore, causing the first waiting continuation
+  ## Signal the given semaphore, causing the first waiting continuation
   ## to be queued for execution in the dispatcher; control remains in
-  ## the calling procedure
+  ## the calling procedure.
   result = c
   signal s
   withReady s:
@@ -331,9 +339,9 @@ proc cpsSignal*(s: var Semaphore): Cont {.cpsMagic.} =
       discard
 
 proc cpsSignalAll*(s: var Semaphore): Cont {.cpsMagic.} =
-  ## signal the given semaphore, causing all waiting continuations
+  ## Signal the given semaphore, causing all waiting continuations
   ## to be queued for execution in the dispatcher; control remains in
-  ## the calling procedure
+  ## the calling procedure.
   result = c
   signal s
   if s.isReady:
@@ -341,3 +349,14 @@ proc cpsSignalAll*(s: var Semaphore): Cont {.cpsMagic.} =
     while true:
       signalImpl s:
         break
+
+proc cpsWait*(s: var Semaphore): Cont {.cpsMagic.} =
+  ## Queue the current continuation pending readiness of the given
+  ## Semaphore `s`.
+  let id = nextId()
+  if s.isReady:
+    addLast(eq.yields, c)
+    wakeUp()
+  else:
+    eq[s] = id
+    eq[id] = c

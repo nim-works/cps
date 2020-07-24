@@ -1,4 +1,4 @@
-version = "0.0.4"
+version = "0.0.5"
 author = "disruptek"
 description = "continuation-passing style"
 license = "MIT"
@@ -25,3 +25,4 @@ task test, "run tests for travis":
   execTest("tests/test.nim")
   execTest("tests/tock.nim")
   execTest("tests/tyield.nim")
+  execTest("tests/tsignal.nim")

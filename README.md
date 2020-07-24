@@ -36,8 +36,8 @@ Key primitives and their implementation status, in order of priority:
 - [x] sleep
 - [x] yield
 - [x] discard
-- [ ] signal
-- [ ] wait
+- [x] signal
+- [x] wait
 - [ ] I/O
 - [ ] fork
 - [ ] thread
