@@ -17,6 +17,12 @@ when NimMajor < 1 or NimMinor < 3:
 import cps/environment
 
 type
+  Continuation = concept c
+    c.fn is ContinuationProc[Continuation]
+    c is ref object of RootObj
+
+  ContinuationProc[T] = proc(c: T): T {.nimcall.}
+
   Primitive = enum    ## operations on which all others are based
     Spawn
     Signal
