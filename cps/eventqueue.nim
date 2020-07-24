@@ -64,13 +64,14 @@ var eq {.threadvar.}: EventQueue
 
 template now(): Clock = getMonoTime()
 
-proc `$`(id: Id): string = "{" & system.`$`(id.int) & "}"
-proc `$`(fd: Fd): string = "[" & system.`$`(fd.int) & "]"
+proc `$`(id: Id): string {.used.} = "{" & system.`$`(id.int) & "}"
+proc `$`(fd: Fd): string {.used.} = "[" & system.`$`(fd.int) & "]"
+proc `$`(c: Cont): string {.used.} = "&" & $cast[uint](c)
 
-proc `<`(a, b: Id): bool {.borrow.}
-proc `<`(a, b: Fd): bool {.borrow.}
-proc `==`(a, b: Id): bool {.borrow.}
-proc `==`(a, b: Fd): bool {.borrow.}
+proc `<`(a, b: Id): bool {.borrow, used.}
+proc `<`(a, b: Fd): bool {.borrow, used.}
+proc `==`(a, b: Id): bool {.borrow, used.}
+proc `==`(a, b: Fd): bool {.borrow, used.}
 
 proc put(w: var WaitingIds; fd: int | Fd; id: Id) =
   while fd.int > len(w):
