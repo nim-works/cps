@@ -142,6 +142,10 @@ function main() {
     title="cpsSignalAll(s: var Semaphore)"><wbr />cps<wbr />Signal<wbr />All<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#cpsWait%2CSemaphore"
     title="cpsWait(s: var Semaphore)"><wbr />cps<wbr />Wait<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#cpsFork"
+    title="cpsFork()"><wbr />cps<wbr />Fork<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#cpsSpawn%2CCont"
+    title="cpsSpawn(c: Cont)"><wbr />cps<wbr />Spawn<span class="attachedType">Cont</span></a></li>
 
   </ul>
 </li>
@@ -269,14 +273,14 @@ Discard the current continuation.
 <dt><pre><span class="Keyword">proc</span> <a href="#cpsSignal%2CSemaphore"><span class="Identifier">cpsSignal</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Signal the given semaphore, causing the first waiting continuation to be queued for execution in the dispatcher; control remains in the calling procedure.
+Signal the given Semaphore <tt class="docutils literal"><span class="pre">s</span></tt>, causing the first waiting continuation to be queued for execution in the dispatcher; control remains in the calling procedure.
 
 </dd>
 <a id="cpsSignalAll,Semaphore"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#cpsSignalAll%2CSemaphore"><span class="Identifier">cpsSignalAll</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Signal the given semaphore, causing all waiting continuations to be queued for execution in the dispatcher; control remains in the calling procedure.
+Signal the given Semaphore <tt class="docutils literal"><span class="pre">s</span></tt>, causing all waiting continuations to be queued for execution in the dispatcher; control remains in the calling procedure.
 
 </dd>
 <a id="cpsWait,Semaphore"></a>
@@ -284,6 +288,20 @@ Signal the given semaphore, causing all waiting continuations to be queued for e
 <dd>
 
 Queue the current continuation pending readiness of the given Semaphore <tt class="docutils literal"><span class="pre">s</span></tt>.
+
+</dd>
+<a id="cpsFork"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#cpsFork"><span class="Identifier">cpsFork</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Duplicate the current continuation.
+
+</dd>
+<a id="cpsSpawn,Cont"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#cpsSpawn%2CCont"><span class="Identifier">cpsSpawn</span></a><span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">TimeEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Queue the supplied continuation <tt class="docutils literal"><span class="pre">c</span></tt>; control remains in the calling procedure.
 
 </dd>
 
@@ -301,7 +319,7 @@ Queue the current continuation pending readiness of the given Semaphore <tt clas
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-24 01:25:17 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-24 02:42:03 UTC</small>
       </div>
     </div>
   </div>

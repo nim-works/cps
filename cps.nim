@@ -27,6 +27,7 @@ type
     Io
     Attach
     Detach
+    Fork
 
   NodeFilter = proc(n: NimNode): NimNode
 

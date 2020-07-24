@@ -39,7 +39,7 @@ Key primitives and their implementation status, in order of priority:
 - [x] signal
 - [x] wait
 - [ ] I/O
-- [ ] fork
+- [x] fork
 - [ ] thread
 
 Windows is not supported by the included dispatcher yet due to the lack of
