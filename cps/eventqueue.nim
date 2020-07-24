@@ -90,7 +90,7 @@ proc get(w: var WaitingIds; fd: int | Fd): Id =
       dec eq.waiters
     w[fd.int] = invalidId
 
-method clone[T](c: T): T =
+method clone[T: Continuation](c: T): T {.base.} =
   ## copy the continuation for the purposes of, eg. fork
   result = new T
   result[] = c[]

@@ -17,11 +17,12 @@ when (NimMajor, NimMinor) < (1, 3):
 import cps/environment
 
 type
-  Continuation = concept c
+  Continuation* = concept c
     c.fn is ContinuationProc[Continuation]
-    c is ref object of RootObj
+    c is ref object
+    c of RootObj
 
-  ContinuationProc[T] = proc(c: T): T {.nimcall.}
+  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
   NodeFilter = proc(n: NimNode): NimNode
 
