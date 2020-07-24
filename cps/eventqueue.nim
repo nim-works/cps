@@ -14,8 +14,8 @@ import cps/semaphore
 export Semaphore, `==`, `<`, hash, signal, wait, isReady, withReady
 
 const
-  cpsDebug {.booldefine.} = false
-  cpsPoolSize {.intdefine.} = 64
+  cpsDebug {.booldefine.} = false    ## produce gratuitous output
+  cpsPoolSize {.intdefine.} = 64     ## expected pending continuations
 
 type
   Id = distinct int
@@ -118,6 +118,7 @@ proc nextId(): Id {.inline.} =
   result = eq.lastId
 
 proc newSemaphore*(): Semaphore =
+  ## Create a new Semaphore.
   result.init nextId().int
 
 proc wakeUp() =
@@ -140,7 +141,7 @@ template wakeAfter(body: untyped): untyped =
     wakeUp()
 
 proc len*(eq: EventQueue): int =
-  ## the number of pending continuations
+  ## The number of pending continuations.
   result = len(eq.goto) + len(eq.yields) + len(eq.pending)
 
 proc `[]=`(eq: var EventQueue; id: Id; cont: Cont) =
@@ -152,15 +153,15 @@ proc `[]=`(eq: var EventQueue; id: Id; cont: Cont) =
   assert id notin eq.goto
   eq.goto[id] = cont
 
-proc add*(eq: var EventQueue; cont: Cont): Id =
-  ## add a continuation to the queue; returns a registration
+proc add(eq: var EventQueue; cont: Cont): Id =
+  ## Add a continuation to the queue; returns a registration.
   result = nextId()
   eq[result] = cont
   when cpsDebug:
     echo "🤞queue ", $result, " now ", len(eq), " items"
 
 proc stop*() =
-  ## tell the dispatcher to stop
+  ## Tell the dispatcher to stop, discarding all pending continuations.
   if eq.state == Running:
     eq.state = Stopping
 
@@ -190,7 +191,7 @@ proc stop*() =
     init()
 
 proc trampoline*(c: Cont) =
-  ## run the supplied continuation until it is complete
+  ## Run the supplied continuation until it is complete.
   var c = c
   while not c.isNil and not c.fn.isNil:
     when cpsDebug:
@@ -198,7 +199,7 @@ proc trampoline*(c: Cont) =
     c = c.fn(c)
 
 proc poll*() =
-  ## see what needs doing and do it
+  ## See what continuations need running and run them.
   if eq.state != Running: return
 
   if len(eq) > 0:
@@ -253,7 +254,7 @@ proc poll*() =
         raiseOSError(ready.errorCode, "cps eventqueue error")
 
 proc run*(interval: Duration = DurationZero) =
-  ## the dispatcher runs with a maximal polling interval; an interval of
+  ## The dispatcher runs with a maximal polling interval; an `interval` of
   ## `DurationZero` causes the dispatcher to return when the queue is empty.
 
   # make sure the eventqueue is ready to run
@@ -272,12 +273,12 @@ proc run*(interval: Duration = DurationZero) =
     poll()
 
 proc cpsYield*(): Cont {.cpsMagic.} =
-  ## yield to pending continuations in the dispatcher before continuing
+  ## Yield to pending continuations in the dispatcher before continuing.
   wakeAfter:
     addLast(eq.yields, c)
 
 proc cpsSleep*(interval: Duration): Cont {.cpsMagic.} =
-  ## sleep for `interval` before continuing
+  ## Sleep for `interval` before continuing.
   if interval < oneMs:
     raise newException(ValueError, "intervals < 1ms unsupported")
   else:
@@ -291,16 +292,16 @@ proc cpsSleep*(interval: Duration): Cont {.cpsMagic.} =
         echo "⏰timer ", fd.Fd
 
 proc cpsSleep*(ms: int): Cont {.cpsMagic.} =
-  ## sleep for `ms` milliseconds before continuing
+  ## Sleep for `ms` milliseconds before continuing.
   let interval = initDuration(milliseconds = ms)
   cpsSleep(c, interval)
 
 proc cpsSleep*(secs: float): Cont {.cpsMagic.} =
-  ## sleep for `secs` seconds before continuing
+  ## Sleep for `secs` seconds before continuing.
   cpsSleep(c, (1_000 * secs).int)
 
 proc cpsDiscard*(): Cont {.cpsMagic.} =
-  ## discard the current continuation.
+  ## Discard the current continuation.
   discard
 
 template signalImpl(s: Semaphore; body: untyped): untyped =
