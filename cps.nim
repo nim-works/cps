@@ -430,7 +430,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       env.addBreak bp
       try:
         result.add env.saften(nc)
-        if i < n.len-1:
+        if i < n.len-1 or env.insideCps:
           result.doc "add tail call for block-break proc"
           result.add env.callTail(env.nextBreak)
           return
