@@ -427,6 +427,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
     of nnkBlockStmt:
       let bp = env.splitAt(n, "brake", i)
       env.addBreak bp
+      env.addGoto bp
       try:
         result.add env.saften(nc)
         if i < n.len-1 or env.insideCps:
@@ -435,6 +436,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
           return
       finally:
         discard env.popBreak
+        discard env.popGoto
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
