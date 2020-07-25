@@ -242,6 +242,7 @@ proc poll*() =
     for event in items(ready):
       # get the registration of the pending continuation
       let id = eq.waiting.get(event.fd)
+      assert getData(eq.selector, event.fd) == id
       # the id will be wakeupId if it's a wake-up event
       assert id != invalidId
       if id == wakeupId:
@@ -404,6 +405,6 @@ proc io*(file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
     wakeAfter:
       let id = eq.add(c)
       registerHandle(eq.selector, file, events = events, data = id)
-      eq.waiting.put(file, id)
+      eq.waiting.put(file.int, id)
       when cpsDebug:
         echo "📂file ", $Fd(file)
