@@ -9,168 +9,186 @@ type
     fn*: proc(c: C): C {.nimcall.}
 
 
-var count = 0
+# Trampoline with count safeguard
 
-proc addOne(): C {.cpsMagic.} = 
-  inc count
-  return c
-
+var jumps = 0
 
 proc run(c: C) =
+  jumps = 0
   var c = c
-  var i = 0
   while c != nil and c.fn != nil:
     c = c.fn(c)
-    inc i
-    doAssert i < 1000, "Too many iterations on trampoline, looping?"
+    inc jumps
+    doAssert jumps < 1000, "Too many iterations on trampoline, looping?"
+
+# Helper templates.
+
+# This checks if the trampoline jumped the right number of times
+
+template expJumps(expect: int, body: untyped) =
+  body
+  doAssert jumps == expect, "Trampoline jumped " & $jumps & " times, expected " & $expect
+
+# is a primitive that keeps track of how often it is called, verify with
+# `expPrims` macro
+
+var prims = 0
+
+proc prim(): C {.cpsMagic.} = 
+  inc prims
+  return c
+
+template expPrims(expect: int, body: untyped) =
+  prims = 0
+  body
+  doAssert prims == expect, "prim was called " & $prims & " times, expected " & $expect
 
 
-# Shortcut for creating a cps function and running it, and verify
-# if the number of calls to addOne matches
-template countPrims(expect: int, body: untyped) =
-  count = 0
-  proc t(): C {.cps} =
-    body
+# Wrapper for defining a cps function and sending it to the trampoline
+
+template runCps(body: untyped) =
+  proc t(): C {.cps.} = body
   run t()
-  doAssert count == expect
 
-# Disabled test, needs to be fixed
-template countPrimsSkip(expect: int, body: untyped) =
-  skip()
 
 
 suite "cps":
   
   test "nocall":
-    countPrims 0:
-      discard
+    expPrims 0:
+      expJumps 0:
+        runCps:
+          discard
   
   test "onecall":
-    countPrims 1:
-      cps addOne()
+    expPrims 1:
+      expJumps 0:
+        runCps:
+          cps prim()
 
   test "twocall":
-    countPrims 2:
-      cps addOne()
-      cps addOne()
+    expPrims 2:
+      expJumps 1:
+        runCps:
+          cps prim()
+          cps prim()
 
   test "if true":
-    countPrims 3:
-      var a: int
-      cps addOne()
-      if true:
-        cps addOne()
-      cps addOne()
+    expPrims 3:
+      expJumps 2:
+        runCps:
+          var a: int
+          cps prim()
+          if true:
+            cps prim()
+          cps prim()
   
   test "if false":
-    countPrims 2:
-      var a: int
-      cps addOne()
-      if false:
-        cps addOne()
-      cps addOne()
+    expPrims 2:
+      expJumps 2:
+        runCps:
+          var a: int
+          cps prim()
+          if false:
+            cps prim()
+          cps prim()
  
   test "if true if false":
-    countPrims 3:
-      cps addOne()
-      if true:
-        cps addOne()
-      if false:
-        cps addOne()
-      cps addOne()
+    expPrims 3:
+      expJumps 3:
+        runCps:
+          cps prim()
+          if true:
+            cps prim()
+          if false:
+            cps prim()
+          cps prim()
 
   test "nested if 1":
-    countPrims 4:
-      var a: int
-      cps addOne()
-      if true:
-        cps addOne()
-        if true:
-          cps addOne()
-      cps addOne()
+    expPrims 4:
+      expJumps 3:
+        runCps:
+          var a: int
+          cps prim()
+          if true:
+            cps prim()
+            if true:
+              cps prim()
+          cps prim()
   
   test "nested if 2":
-    countPrims 3:
-      var a: int
-      cps addOne()
-      if true:
-        cps addOne()
-        if false:
-          cps addOne()
-      cps addOne()
+    expPrims 3:
+      expJumps 3:
+        runCps:
+          var a: int
+          cps prim()
+          if true:
+            cps prim()
+            if false:
+              cps prim()
+          cps prim()
   
   test "nested if 3":
-    countPrims 2:
-      var a: int
-      cps addOne()
-      if false:
-        cps addOne()
-        if true:
-          cps addOne()
-      cps addOne()
+    expPrims 2:
+      expJumps 2:
+        runCps:
+          var a: int
+          cps prim()
+          if false:
+            cps prim()
+            if true:
+              cps prim()
+          cps prim()
 
   test "block1":
-    countPrims 3:
-      cps addOne()
-      block:
-        cps addOne()
-      cps addOne()
-      echo "Done"
+    expPrims 3:
+      runCps:
+        cps prim()
+        block:
+          cps prim()
+        cps prim()
+        echo "Done"
        
   test "while1":
-    countPrims 5:
-      cps addOne()
-      var a: int = 0
-      while a < 3:
-        cps addOne()
-        inc a
-      cps addOne()
+    expPrims 5:
+      expJumps 10:
+        runCps:
+          cps prim()
+          var a: int = 0
+          while a < 3:
+            cps prim()
+            inc a
+          cps prim()
   
   test "break1":
-    countPrims 3:
-      cps addOne()
-      while true:
-        cps addOne()
-        break
-        cps addOne()
-      cps addOne()
+    expPrims 3:
+      expJumps 4:
+        runCps:
+          cps prim()
+          while true:
+            cps prim()
+            break
+            cps prim()
+          cps prim()
      
   test "nested while":
-    countPrims 100:
-      var i: int
-      var j: int
-      while i < 10:
-        inc i
-        while j < 10:
-          inc j
+    skip()
+    #expPrims 100:
+    #  runCps:
+    #    var i: int
+    #    var j: int
+    #    while i < 10:
+    #      inc i
+    #      while j < 10:
+    #        inc j
   
-#  test "break1":
-#    countPrims:
-#      var a: int
-#      cps addOne()
-#      block:
-#        break
-#        cps addOne()
-#      doAssert a == 1
-#      done = true
-#
-#  test "break2":
-#    countPrimsSkip:
-#      var a: int
-#      cps addOne()
-#      block:
-#        cps addOne()
-#        break
-#        cps addOne()
-#      doAssert a == 2
-#  
-#  test "stuff1":
-#    countPrimsSkip:
-#      var a: int
-#      cps addOne()
-#      var b: int
-#      while true:
-#        cps addOne()
-#      doAssert a == 3
-#  
+
+
+
+
+
+
+
+
+
 #
