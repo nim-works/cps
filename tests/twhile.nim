@@ -21,4 +21,4 @@ suite "cps":
         check x < i
       cup = i
       check cup == 2
-    trampoline foo()
+    discard foo()

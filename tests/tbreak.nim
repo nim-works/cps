@@ -5,11 +5,13 @@ var r = 0
 proc test(): Cont {.cps.} =
   r = 1
   while true:
-    cps jield()
+    #cps jield()
     if true:
       break
-    r = 2
+    inc r
+    if r > 2:
+      quit(1)
     return
-spawn test()
-run()
-assert r == 1
+  quit(2)
+discard test()
+assert r == 2

@@ -24,7 +24,7 @@ proc test2(): Cont {.cps.} =
       break
     quit(1)
   inc r
-trampoline test()
+trampoline test2()
 if r != 3:
   echo "r was ", r
   quit(1)
