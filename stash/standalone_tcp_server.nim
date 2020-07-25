@@ -62,6 +62,9 @@ proc sockRecv(fd: SocketHandle): string =
     result.setlen(0)
 
 
+template cps(t: untyped): untyped =
+  discard
+
 # CPS client hander
 
 proc doClient(fdc: SocketHandle): Cont {.cps.} =
