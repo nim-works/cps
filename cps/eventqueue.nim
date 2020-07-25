@@ -354,7 +354,7 @@ proc signal*(s: var Semaphore) =
   ## Signal the given Semaphore `s`, causing the first waiting continuation
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
-  signal s
+  semaphore.signal s
   withReady s:
     init()
     signalImpl s:
@@ -364,7 +364,7 @@ proc signalAll*(s: var Semaphore) =
   ## Signal the given Semaphore `s`, causing all waiting continuations
   ## to be queued for execution in the dispatcher; control remains in
   ## the calling procedure.
-  signal s
+  semaphore.signal s
   if s.isReady:
     init()
     while true:
