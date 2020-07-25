@@ -113,23 +113,24 @@ suite "cps":
         cps addOne()
       cps addOne()
        
-#  test "variable juggling":
-#    countPrims:
-#      var a: int
-#      cps addOne()
-#      var b: int = a
-#      cps addOne(b)
-#      doAssert a == 1
-#      doAssert b == 2
-#     
-#  test "while1":
-#    countPrims:
-#      var a: int
-#      cps addOne()
-#      while false:
-#        cps addOne()
-#      doAssert a == 1
-#     
+  test "while1":
+    countPrims 5:
+      cps addOne()
+      var a: int = 0
+      while a < 3:
+        cps addOne()
+        inc a
+      cps addOne()
+  
+  test "break1":
+    countPrims 3:
+      cps addOne()
+      while true:
+        cps addOne()
+        break
+        cps addOne()
+      cps addOne()
+     
 #  test "while2":
 #    countPrims:
 #      var a: int
