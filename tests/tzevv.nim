@@ -147,7 +147,6 @@ suite "cps":
         block:
           cps prim()
         cps prim()
-        echo "Done"
        
   test "while1":
     expPrims 5:
