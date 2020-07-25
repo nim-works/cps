@@ -439,9 +439,9 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
-      if i < n.len-1 or env.insideCps:
-        let bp = env.splitAt(n, "brake", i)
-        env.addBreak bp
+      let brakeEngaged = i < n.len-1 or env.insideCps
+      if brakeEngaged:
+        env.addBreak env.splitAt(n, "brake", i)
       # the goto is added here so that it won't appear in the break proc
       env.addGoto w
       try:
@@ -450,12 +450,12 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         result.add env.makeTail(w, loop)
         loop.add newIfStmt((nc[0], newStmtList(env.saften(nc[1]))))
         discard env.popGoto # the loop rewind was added to the body
-        if i < n.len-1 or env.insideCps:
+        if brakeEngaged:
           loop.doc "add tail call for break proc"
           loop.add env.callTail(env.nextBreak)
           return
       finally:
-        if i < n.len-1 or env.insideCps:
+        if brakeEngaged:
           discard env.popBreak
 
     of nnkIfStmt:
