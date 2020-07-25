@@ -438,10 +438,11 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
-      env.addGoto w
       if i < n.len-1 or env.insideCps:
         let bp = env.splitAt(n, "brake", i)
         env.addBreak bp
+      # the goto is added here so that it won't appear in the break proc
+      env.addGoto w
       try:
         var loop = newStmtList()
         result.doc "add tail call for while loop with body " & $nc[1].kind
