@@ -13,10 +13,10 @@ when true:
       if r > 2:
         quit(1)
       return
-    quit(2)
-  discard test()
+  trampoline test()
   assert r == 1
 
+when true:
   proc test2(): Cont {.cps.} =
     r = 1
     while true:
@@ -27,8 +27,8 @@ when true:
       if r > 2:
         quit(1)
       return
-    quit(2)
-  trampoline test2()
+  spawn test2()
+  run()
   assert r == 1
 
 when true:
@@ -39,9 +39,10 @@ when true:
       if true:
         inc r
         if r > 2:
-          quit(1)
+          quit(6)
         else:
           break
+    inc r
   spawn test3()
   run()
   assert r == 3
