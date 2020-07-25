@@ -402,7 +402,7 @@ proc io*(file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
   else:
     wakeAfter:
       let id = eq.add(c)
-      let fd = registerHandle(eq.selector, file, events = events, data = id)
-      eq.waiting.put(fd, id)
+      registerHandle(eq.selector, file, events = events, data = id)
+      eq.waiting.put(file, id)
       when cpsDebug:
-        echo "📂file ", fd.Fd
+        echo "📂file ", $Fd(file)
