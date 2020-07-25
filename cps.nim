@@ -501,6 +501,11 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 macro cps*(n: untyped): untyped =
   ## rewrite the target procedure in Continuation-Passing Style
   when defined(nimdoc): return n
+
+  # enhanced spam
+  when cpsDebug:
+    var orig = copyNimTree(n)
+
   assert n.kind in RoutineNodes
   if n.params[0].isEmpty:
     error "provide a continuation return type"
@@ -522,7 +527,9 @@ macro cps*(n: untyped): untyped =
 
   # spamming the developers
   when cpsDebug:
-    debugEcho "=== .cps. on " & $n.name & " ==="
+    debugEcho "=== .cps. on " & $n.name & "(original)  ==="
+    debugEcho repr(orig)
+    debugEcho "=== .cps. on " & $n.name & "(transform) ==="
     debugEcho repr(result)
 
 when false:
