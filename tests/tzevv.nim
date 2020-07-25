@@ -115,6 +115,7 @@ suite "cps":
       block:
         cps addOne()
       cps addOne()
+      echo "Done"
        
   test "while1":
     countPrims 5:
@@ -134,26 +135,15 @@ suite "cps":
         cps addOne()
       cps addOne()
      
-#  test "while2":
-#    countPrims:
-#      var a: int
-#      cps addOne()
-#      var b: int
-#      while b < 2:
-#        cps addOne()
-#        inc b
-#      doAssert a == 3
-#  
-#  test "while2":
-#    countPrims:
-#      var a: int
-#      cps addOne()
-#      var b: int
-#      while b < 2:
-#        cps addOne()
-#        inc b
-#      doAssert a == 3
-#  
+  test "nested while":
+    countPrims 100:
+      var i: int
+      var j: int
+      while i < 10:
+        inc i
+        while j < 10:
+          inc j
+  
 #  test "break1":
 #    countPrims:
 #      var a: int
