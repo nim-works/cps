@@ -422,8 +422,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         result.doc "simple break statement"
         result.add env.tailCall(returnTo(env.nextBreak))
       else:
-        result.doc "no break statements to pop"
-        assert false, "wut"
+        assert false, "no break statements to pop"
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, "brake", i)
