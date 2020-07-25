@@ -426,7 +426,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         assert false, "wut"
 
     of nnkBlockStmt:
-      let bp = env.splitAt(n, "break", i)
+      let bp = env.splitAt(n, "brake", i)
       env.addBreak bp
       try:
         result.add env.saften(nc)
