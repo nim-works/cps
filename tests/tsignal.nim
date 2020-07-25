@@ -6,7 +6,7 @@ var success = false
 
 proc tick(ms: int): Cont {.cps.} =
   cps sleep(ms)
-  cps signal(sem)
+  signal(sem)
 
 proc tock(): Cont {.cps.} =
   cps wait(sem)
