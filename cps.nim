@@ -396,7 +396,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
     # if the child is a cps block (not a call), then push a tailcall
     # onto the stack during the saftening of the child
     if nc.isCpsCall:
-      withGoto env.splitAt(n, "after", i):
+      withGoto nc.kind, env.splitAt(n, "after", i):
         result.add env.tailCall(nc, returnTo(env.nextGoto))
         result.doc "post-cps call; time to bail"
         return
@@ -404,7 +404,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 
     if i < n.len-1:
       if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
-        withGoto env.splitAt(n, "exit", i):
+        withGoto nc.kind, env.splitAt(n, "exit", i):
           result.add env.saften(nc)
           result.doc "add the exit proc definition"
           # we've completed the split, so we're done here
@@ -426,8 +426,8 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, "brake", i)
-      env.addBreak bp
-      withGoto bp:
+      env.addBreak nc.kind, bp
+      withGoto nc.kind, bp:
         try:
           result.add env.saften(nc)
           if i < n.len-1 or env.insideCps:
@@ -441,9 +441,9 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       let w = genSym(nskProc, "loop")
       let brakeEngaged = true
       if brakeEngaged:
-        env.addBreak env.splitAt(n, "brake", i)
+        env.addBreak nc.kind, env.splitAt(n, "brake", i)
       # the goto is added here so that it won't appear in the break proc
-      env.addGoto w
+      env.addGoto nc.kind, w
       try:
         var loop = newStmtList()
         result.doc "add tail call for while loop with body " & $nc[1].kind
@@ -462,7 +462,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       # if any `if` clause is a cps block, then every clause must be
       # if we've pushed any goto or breaks, then we're already in cps
       if nc.isCpsBlock:
-        withGoto env.splitAt(n, "maybe", i):
+        withGoto nc.kind, env.splitAt(n, "maybe", i):
           result.doc "add if body"
           result.add env.saften(nc)
           # the split is complete

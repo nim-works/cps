@@ -27,6 +27,11 @@ type
     key: NimNode
     val: NimNode
 
+  Future = tuple
+    kind: NimNodeKind        # the source node kind we're coming from
+    node: NimNode            # the identifier/proc we're going to
+  Futures = seq[Future]
+
   Flag = enum
     Mutable
 
@@ -36,34 +41,60 @@ type
     parent: Env
     child: Table[NimNode, NimNode]
     flags: set[Flag]
-    goto: seq[NimNode]        # identifiers of future gotos
-    breaks: seq[NimNode]      # identifiers of future breaks
+    goto: Futures             # identifiers of future gotos
+    breaks: Futures           # identifiers of future breaks
     store: NimNode            # where to put typedefs
 
 func insideCps*(e: Env): bool = len(e.goto) > 0 or len(e.breaks) > 0
 
-func next(ns: seq[NimNode]): NimNode =
+proc next(ns: Futures): Future =
   ## read the next call off the stack
   if len(ns) == 0:
-    newNilLit()
+    (kind: nnkNilLit, node: newNilLit())
   else:
     ns[^1]
 
-template nextOf(x: untyped) =
-  var e = e
+proc last(ns: Futures): Future =
+  ## query the last loop in the stack
+  result = (kind: nnkNilLit, node: newNilLit())
+  for i in countDown(ns.high, ns.low):
+    if ns[i].kind in {nnkWhileStmt, nnkForStmt}:
+      result = ns[i]
+      break
+
+template searchScope(env: Env; x: untyped;
+                     p: proc(ns: Futures): Future): Future =
+  var e = env
+  var r = (kind: nnkNilLit, node: newNilLit())
   while not e.isNil:
-    result = next(e.`x`)
-    if result.kind == nnkNilLit:
+    r = p(e.`x`)
+    if r.kind == nnkNilLit:
       e = e.parent
     else:
       break
+  r
 
-func nextGoto*(e: Env): NimNode = nextOf(goto)
-func nextBreak*(e: Env): NimNode = nextOf(breaks)
-proc addGoto*(e: var Env; n: NimNode) = e.goto.add n
-proc addBreak*(e: var Env; n: NimNode) = e.breaks.add n
-proc popGoto*(e: var Env): NimNode = pop e.goto
-proc popBreak*(e: var Env): NimNode = pop e.breaks
+func lastGotoLoop*(e: Env): Future = searchScope(e, goto, last)
+func lastBreakLoop*(e: Env): Future = searchScope(e, breaks, last)
+
+func nextGoto*(e: Env): NimNode = searchScope(e, goto, next).node
+func nextBreak*(e: Env): NimNode = searchScope(e, breaks, next).node
+
+proc addGoto*(e: var Env; k: NimNodeKind; n: NimNode) = e.goto.add (k, n)
+proc addBreak*(e: var Env; k: NimNodeKind; n: NimNode) = e.breaks.add (k, n)
+
+proc popGoto*(e: var Env): NimNode = pop(e.goto).node
+proc popBreak*(e: var Env): NimNode = pop(e.breaks).node
+
+proc insideFor*(e: Env): bool = lastBreakLoop(e).kind == nnkForStmt
+proc insideWhile*(e: Env): bool = lastBreakLoop(e).kind == nnkWhileStmt
+
+proc topOfWhile*(e: Env): NimNode =
+  ## fetch the goto target in order to `continue` inside `while:`
+  assert e.insideWhile, "i thought i was in a while loop"
+  let future = lastGotoLoop(e)
+  assert future.kind == nnkWhileStmt, "goto doesn't match break"
+  result = future.node
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
@@ -259,13 +290,13 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   for name, section in pairs(e):
     result.add newColonExpr(name, name)
 
-template withGoto*(n: NimNode; body: untyped): untyped {.dirty.} =
+template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.} =
   ## run a body with a longer goto stack
   if len(stripComments n) > 0:
-    env.goto.add n
+    env.goto.add (kind: f, node: n)
     try:
       body
     finally:
-      result.add env.goto.pop
+      result.add pop(env.goto).node
   else:
     body
