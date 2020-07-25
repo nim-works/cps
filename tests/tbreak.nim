@@ -1,18 +1,15 @@
 import cps
 import cps/eventqueue
 
-type
-
-  Cont = ref object of RootObj
-    fn*: proc(c: Cont): Cont {.nimcall.}
-
 var r = 0
 proc test(): Cont {.cps.} =
+  r = 1
   while true:
-    #cps sleep()
+    cps jield()
     if true:
       break
-    r = 1
+    r = 2
     return
+spawn test()
 run()
-assert r == 0
+assert r == 1
