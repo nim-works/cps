@@ -146,29 +146,29 @@ suite "cps":
         cps prim()
       cps prim()
 
-  test "something1":
+  test "defer":
     expPrims 3: runCps:
-      var timeout = false
-      while not timeout:
+      cps prim()
+      defer:
+        cps prim()
+      cps prim()
+    
+  test "nested while":
+    expPrims 100: runCps:
+      var i: int
+      var j: int
+      while i < 10:
+        inc i
+        while j < 10:
+          inc j
+  
+  test "paper example 1":
+    # Continuation-Passing C 5.4.1 example
+    expPrims 3: runCps:
+      var t: bool = false
+      while not t:
         cps prim()
         break
-        cpc prim()
-      cps_prim()
+        cps prim()
+      cps prim()
 
-
-#  test "defer":
-#    expPrims 3: runCps:
-#      cps prim()
-#      defer:
-#        cps prim()
-#      cps prim()
-#    
-#  test "nested while":
-#    expPrims 100: runCps:
-#      var i: int
-#      var j: int
-#      while i < 10:
-#        inc i
-#        while j < 10:
-#          inc j
-#  
