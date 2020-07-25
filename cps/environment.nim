@@ -157,7 +157,7 @@ proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
   ## set [ident|sym] = let/var section
   assert key.kind in {nnkSym, nnkIdent}
   assert val.kind in {nnkVarSection, nnkLetSection}
-  assert key notin e.parent
+  assert key notin e.parent, "Variable '" & val.repr & "' shadowed, not yet supported in CPS"
   assert key notin e.child
   e.child[key] = val
   setDirty e
