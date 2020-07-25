@@ -18,8 +18,11 @@ proc addOne(): C {.cpsMagic.} =
 
 proc run(c: C) =
   var c = c
+  var i = 0
   while c != nil and c.fn != nil:
     c = c.fn(c)
+    inc i
+    doAssert i < 1000, "Too many iterations on trampoline, looping?"
 
 
 # Shortcut for creating a cps function and running it, and verify
