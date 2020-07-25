@@ -169,17 +169,24 @@ suite "cps":
             break
             cps prim()
           cps prim()
+
+  test "defer":
+    expPrims 3:
+      expJumps 2:
+        cps prim()
+        defer:
+          cps prim()
+        cps prim()
      
   test "nested while":
-    skip()
-    #expPrims 100:
-    #  runCps:
-    #    var i: int
-    #    var j: int
-    #    while i < 10:
-    #      inc i
-    #      while j < 10:
-    #        inc j
+    expPrims 100:
+      runCps:
+        var i: int
+        var j: int
+        while i < 10:
+          inc i
+          while j < 10:
+            inc j
   
 
 
