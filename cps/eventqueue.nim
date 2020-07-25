@@ -336,6 +336,7 @@ proc discart*(): Cont {.cpsMagic.} =
   discard
 
 template signalImpl(s: Semaphore; body: untyped): untyped =
+  ## run the body when when semaphore is NOT found in the queue
   var trigger = false
   var id = invalidId
   try:
