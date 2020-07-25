@@ -461,7 +461,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       # if any `if` clause is a cps block, then every clause must be
       # if we've pushed any goto or breaks, then we're already in cps
       if nc.isCpsBlock:
-        withGoto env.splitAt(n, "if", i):
+        withGoto env.splitAt(n, "maybe", i):
           result.doc "add if body"
           result.add env.saften(nc)
           # the split is complete
