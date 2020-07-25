@@ -504,12 +504,23 @@ macro cps*(n: untyped): untyped =
   assert n.kind in RoutineNodes
   if n.params[0].isEmpty:
     error "provide a continuation return type"
+
+  # establish a new environment with the supplied continuation type;
+  # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
   var env = newEnv(types, n.params[0])
+
+  # adding the proc params to the environment
   for defs in n.params[1..^1]:
     env.add defs
+
+  # ensaftening the proc's body
   n.body = env.saften(n.body)
+
+  # lifting the generated proc bodies
   result = lambdaLift(types, n)
+
+  # spamming the developers
   when cpsDebug:
     debugEcho "=== .cps. on " & $n.name & " ==="
     debugEcho repr(result)
