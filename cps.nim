@@ -243,7 +243,7 @@ when false:
 proc cmpKind(a, b: NimNode): int =
   if a.kind == b.kind:
     if a.kind == nnkProcDef:
-      result = cmp(a.body.kind, b.body.kind)
+      result = cmp(a.body.len, b.body.len)  # work around decl bug
     else:
       result = 0
   elif a.kind == nnkProcDef:
