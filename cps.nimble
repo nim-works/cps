@@ -27,6 +27,7 @@ task test, "run tests for travis":
   #execTest("tests/tyield.nim")
   execTest("tests/tsignal.nim")
   execTest("tests/tfork.nim")
+  execTest("tests/tbreak.nim")
 
 task mkdoc, "generate the docs":
   exec "nim doc --path:. --outdir=docs cps.nim"
