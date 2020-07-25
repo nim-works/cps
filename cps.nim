@@ -439,7 +439,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
-      let brakeEngaged = i < n.len-1 or env.insideCps
+      let brakeEngaged = true
       if brakeEngaged:
         env.addBreak env.splitAt(n, "brake", i)
       # the goto is added here so that it won't appear in the break proc
