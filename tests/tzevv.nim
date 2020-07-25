@@ -146,19 +146,29 @@ suite "cps":
         cps prim()
       cps prim()
 
-  test "defer":
+  test "something1":
     expPrims 3: runCps:
-      cps prim()
-      defer:
+      var timeout = false
+      while not timeout:
         cps prim()
-      cps prim()
-    
-  test "nested while":
-    expPrims 100: runCps:
-      var i: int
-      var j: int
-      while i < 10:
-        inc i
-        while j < 10:
-          inc j
-  
+        break
+        cpc prim()
+      cps_prim()
+
+
+#  test "defer":
+#    expPrims 3: runCps:
+#      cps prim()
+#      defer:
+#        cps prim()
+#      cps prim()
+#    
+#  test "nested while":
+#    expPrims 100: runCps:
+#      var i: int
+#      var j: int
+#      while i < 10:
+#        inc i
+#        while j < 10:
+#          inc j
+#  
