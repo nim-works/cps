@@ -31,3 +31,19 @@ suite "cps":
       cup = i
       check cup == 3
     trampoline foo()
+
+  test "https://github.com/disruptek/cps/issues/16":
+    proc foo(): Cont {.cps.} =
+      var i, j, k: int = 0
+      j = 5
+      var p: int
+      var q: int = 0
+      var r: int = j
+      cps jield()
+      inc i
+      inc j
+      inc k
+      inc p
+      inc q
+      inc r
+    trampoline foo()

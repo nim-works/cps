@@ -196,17 +196,20 @@ proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
 proc addSection(e: var Env; n: NimNode) =
   ## add a let/var section to the env
   assert n.kind in {nnkVarSection, nnkLetSection}
-  assert len(n) == 1, "pass 1-item sections"
-  var (name, n, ts) = (n[0][0], n[0], n)
-  if len(n) == 2:
-    # ident: type
-    n.add newEmptyNode()
-  # ident: type = default
-  e[name] = ts
+  for i in 0 ..< len(n):
+    var def = n[i]
+    if len(def) == 2:
+      # ident: type
+      def.add newEmptyNode()
+    for name in def[0 ..< len(def)-2]:  # ie. omit type and default
+      e[name] = newTree(n.kind,
+                        # ident: type = default
+                        newIdentDefs(name, def[^2], def[^1]))
 
 proc letOrVar(n: NimNode): NimNode =
   ## used on params to turn them into let/var sections
   assert n.kind == nnkIdentDefs
+  # FIXME: support `a, b, c: int = 5` syntax
   case n[1].kind
   of nnkEmpty:
     error "i need a type: " & repr(n)
