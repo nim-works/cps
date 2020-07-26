@@ -136,6 +136,8 @@ function main() {
     title="sleep(secs: float)"><wbr />sleep<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#discart"
     title="discart()"><wbr />discart<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#noop"
+    title="noop()"><wbr />noop<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#signal%2CSemaphore"
     title="signal(s: var Semaphore)"><wbr />signal<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#signalAll%2CSemaphore"
@@ -271,6 +273,13 @@ Sleep for <tt class="docutils literal"><span class="pre">secs</span></tt> second
 Discard the current continuation.
 
 </dd>
+<a id="noop"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#noop"><span class="Identifier">noop</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+A primitive that merely sheds scope.
+
+</dd>
 <a id="signal,Semaphore"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#signal%2CSemaphore"><span class="Identifier">signal</span></a><span class="Other">(</span><span class="Identifier">s</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="semaphore.html#Semaphore"><span class="Identifier">Semaphore</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">KeyError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">TimeEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
@@ -328,7 +337,7 @@ Continue upon any of <tt class="docutils literal"><span class="pre">events</span
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-25 23:59:40 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-26 00:49:50 UTC</small>
       </div>
     </div>
   </div>
