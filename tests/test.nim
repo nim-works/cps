@@ -57,3 +57,13 @@ suite "cps":
       inc q
       inc r
     trampoline foo()
+
+when false:
+  test "https://github.com/disruptek/cps/issues/15":
+    proc foo(): Cont {.cps.} =
+      var (i, j, k) = (1, 2, 3)
+      cps noop()
+      check i == 1
+      check j == 2
+      check k == 3
+    trampoline foo()

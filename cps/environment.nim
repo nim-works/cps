@@ -198,13 +198,26 @@ proc addSection(e: var Env; n: NimNode) =
   assert n.kind in {nnkVarSection, nnkLetSection}
   for i in 0 ..< len(n):
     var def = n[i]
-    if len(def) == 2:
-      # ident: type
-      def.add newEmptyNode()
-    for name in def[0 ..< len(def)-2]:  # ie. omit type and default
-      e[name] = newTree(n.kind,
-                        # ident: type = default
-                        newIdentDefs(name, def[^2], def[^1]))
+    case def.kind
+    of nnkIdentDefs:
+      if len(def) == 2:
+        # ident: type
+        def.add newEmptyNode()
+      for name in def[0 ..< len(def)-2]:  # ie. omit type and default
+        e[name] = newTree(n.kind,
+                          # ident: type = default
+                          newIdentDefs(name, def[^2], def[^1]))
+    #[
+    of nnkVarTuple:
+      assert def.last.kind == nnkPar, "expected parenthesis: " & repr(def)
+      let par = def.last
+      for i in 0 ..< len(par):
+        let name = def[i]
+        e[name] = newTree(n.kind,
+                          newIdentDefs(name, getTypeInst(par[i]), par[i]))
+    ]#
+    else:
+      error $def.kind & " is unsupported by cps: \n" & treeRepr(def)
 
 proc letOrVar(n: NimNode): NimNode =
   ## used on params to turn them into let/var sections

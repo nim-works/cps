@@ -550,8 +550,6 @@ macro cps*(n: untyped): untyped =
 
   # spamming the developers
   when cpsDebug:
-    debugEcho "=== .cps. on " & $n.name & "(original)  ==="
-    debugEcho repr(orig)
     debugEcho "=== .cps. on " & $n.name & "(transform) ==="
     debugEcho repr(result)
 
