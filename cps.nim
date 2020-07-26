@@ -65,7 +65,7 @@ func returnTo(n: NimNode): NimNode {.deprecated.} =
   case n.kind
   of nnkIdent, nnkSym, nnkNilLit:
     result = n
-  of nnkCall, nnkObjConstr, nnkExprColonExpr:
+  of nnkCall, nnkObjConstr, nnkExprColonExpr, nnkCast:
     result = returnTo(n[1])
   else:
     result = returnTo(n[0])
