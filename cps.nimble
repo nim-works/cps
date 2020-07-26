@@ -30,6 +30,7 @@ task test, "run tests for travis":
   execTest("tests/tbreak.nim")
   execTest("tests/tblock.nim")
   execTest("tests/tfor.nim")
+  execTest("tests/tzevv.nim")
 
 task mkdoc, "generate the docs":
   exec "nim doc --path:. --outdir=docs cps.nim"
