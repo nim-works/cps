@@ -22,6 +22,9 @@ the environment gets unpacked in procs; this could even be swapped
 
 ]#
 
+const
+  cpsCast {.booldefine.} = true
+
 type
   Pair = tuple
     key: NimNode
@@ -140,6 +143,25 @@ proc root*(e: Env): NimNode =
   while not r.parent.isNil:
     r = r.parent
   result = r.inherits
+
+proc castToRoot*(e: Env; n: NimNode): NimNode =
+  when cpsCast:
+    newTree(nnkCast, e.root, n)
+  else:
+    newDotExpr(n, e.root)
+
+proc castToChild*(e: Env; n: NimNode): NimNode =
+  when cpsCast:
+    newTree(nnkCast, e.identity, n)
+  else:
+    newCall(e.identity, n)
+
+proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
+  ## add an Obj(foo: bar).Other conversion if necessary
+  if not eqIdent(locals[0], e.root):
+    e.castToRoot(locals)
+  else:
+    locals
 
 proc newEnv*(store: var NimNode; via: NimNode): Env =
   assert not via.isNil
@@ -293,7 +315,7 @@ iterator localAssignments*(e: Env; locals: NimNode): Pair {.deprecated.} =
 
 iterator localRetrievals*(e: Env; locals: NimNode): Pair =
   ## read locals out of an env
-  let locals = newCall(e.identity, locals)
+  let locals = e.castToChild(locals)
   for name, value in pairs(e):
     let section = newNimNode(value.kind)
     # value[0] is the (only) identdefs of the section; [0][1] is type

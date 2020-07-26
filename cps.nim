@@ -45,13 +45,6 @@ proc isCpsCall(n: NimNode): bool =
            n[0].eqIdent("cps") and
            n[1].kind in {nnkCall, nnkCommand}
 
-proc maybeConvertToRoot(e: Env; locals: NimNode): NimNode =
-  ## add an Obj(foo: bar).Other conversion if necessary
-  if not eqIdent(locals[0], e.root):
-    newTree(nnkCast, e.root, locals)
-  else:
-    locals
-
 func stripComments(n: NimNode): NimNode =
   ## remove doc statements because that was a stupid idea
   result = copyNimNode n
