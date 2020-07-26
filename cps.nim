@@ -27,7 +27,7 @@ type
   NodeFilter = proc(n: NimNode): NimNode
 
 const
-  unexiter = {nnkWhileStmt, nnkBreakStmt}
+  unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
@@ -417,12 +417,30 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       # include the section normally (for now)
       result.add nc
 
-    of nnkBreakStmt:
-      if env.nextBreak.kind != nnkNilLit:
-        result.doc "simple break statement"
-        result.add env.tailCall(returnTo(env.nextBreak))
+    of nnkForStmt:
+      let bp = env.splitAt(n, "brake", i)
+      env.addBreak nc.kind, bp
+      nc[^1] = env.saften(nc[^1])
+      result.add nc
+
+    of nnkContinueStmt:
+      if env.insideFor:
+        # if we are inside a for loop, just continue
+        result.add nc
       else:
-        assert false, "no break statements to pop"
+        # else, goto the top of the loop
+        result.add env.tailCall returnTo(env.topOfWhile)
+
+    of nnkBreakStmt:
+      # FIXME: does not support named break yet
+      if env.insideFor:
+        result.add nc
+      else:
+        if env.nextBreak.kind != nnkNilLit:
+          result.doc "simple break statement"
+          result.add env.tailCall(returnTo(env.nextBreak))
+        else:
+          assert false, "no break statements to pop"
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, "brake", i)
@@ -490,14 +508,16 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         return
 
   if result.kind == nnkStmtList and n.kind in returner:
-    let duh = stripComments result
-    if len(duh) > 0 and isReturnCall(duh.last):
-      result.doc "omit return call from " & $n.kind
-    elif env.nextGoto.kind != nnkNilLit:
-      result.doc "adding return call to " & $n.kind
-      result.add env.tailCall returnTo(env.nextGoto)
-    else:
-      discard "nil return; no remaining goto for " & $n.kind
+    # let a for loop, uh, loop
+    if not env.insideFor:
+      let duh = stripComments result
+      if len(duh) > 0 and isReturnCall(duh.last):
+        result.doc "omit return call from " & $n.kind
+      elif env.nextGoto.kind != nnkNilLit:
+        result.doc "adding return call to " & $n.kind
+        result.add env.tailCall returnTo(env.nextGoto)
+      else:
+        discard "nil return; no remaining goto for " & $n.kind
 
 macro cps*(n: untyped): untyped =
   ## rewrite the target procedure in Continuation-Passing Style

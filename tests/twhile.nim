@@ -22,3 +22,16 @@ suite "cps":
       cup = i
       check cup == 2
     trampoline foo()
+
+  test "continue":
+    proc foo(): Cont {.cps.} =
+      var i: int = 0
+      while i < 2:
+        let x: int = i
+        adder(i)
+        if x == 0:
+          continue
+        assert x > 0
+      cup = i
+      check cup == 2
+    trampoline foo()
