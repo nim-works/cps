@@ -278,7 +278,7 @@ proc objectType(e: Env): NimNode =
     parent.add e.parent.identity
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
-var c {.compiletime} : int 
+var c {.compiletime.}: int
 proc makeType*(e: var Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
   e.id = genSym(nskType, "env" & $c)
