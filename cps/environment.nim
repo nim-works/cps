@@ -278,9 +278,11 @@ proc objectType(e: Env): NimNode =
     parent.add e.parent.identity
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
+var c {.compiletime} : int 
 proc makeType*(e: var Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-  e.id = genSym(nskType, "env")
+  e.id = genSym(nskType, "env" & $c)
+  inc c
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
   assert not e.isDirty
 
