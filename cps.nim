@@ -523,9 +523,11 @@ macro cps*(n: untyped): untyped =
   ## rewrite the target procedure in Continuation-Passing Style
   when defined(nimdoc): return n
 
-  # enhanced spam
+  # enhanced spam before it all goes to shit
   when cpsDebug:
     var orig = copyNimTree(n)
+    debugEcho "=== .cps. on " & $n.name & "(original)  ==="
+    debugEcho repr(orig)
 
   assert n.kind in RoutineNodes
   if n.params[0].isEmpty:
