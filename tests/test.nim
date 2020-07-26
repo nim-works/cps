@@ -22,6 +22,16 @@ suite "cps":
       cps jield()
     trampoline foo()
 
+  test "noop":
+    var j = 2
+    proc foo(): Cont {.cps.} =
+      var i: int = 3
+      j = 4
+      cps noop()
+      check i == 3
+    trampoline foo()
+    check j == 4
+
   test "sleep":
     proc foo(): Cont {.cps.} =
       var i: int = 0

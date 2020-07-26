@@ -336,6 +336,10 @@ proc discart*(): Cont {.cpsMagic.} =
   ## Discard the current continuation.
   discard
 
+proc noop*(): Cont {.cpsMagic.} =
+  ## A primitive that merely sheds scope.
+  result = c
+
 template signalImpl(s: Semaphore; body: untyped): untyped =
   ## run the body when when semaphore is NOT found in the queue
   var trigger = false
