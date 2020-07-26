@@ -39,7 +39,7 @@ let epfd = epoll_create(1)
 # Will be revived later by the main loop when the fd gets ready
 
 proc io(c: Cont, fd: SocketHandle, event: int): Cont =
-  var epv = EpollEvent(events: EPOLLIN)
+  var epv = EpollEvent(events: event.uint32)
   epv.data.u64 = fd.uint
   discard epoll_ctl(epfd, EPOLL_CTL_ADD, fd.cint, epv.addr)
   evq.readers[fd] = c
@@ -72,18 +72,35 @@ proc sockRecv(fd: SocketHandle): string =
   else:
     result.setlen(0)
 
+proc sockSend(fd: SocketHandle, s: string) =
+  let n = posix.send(fd, s[0].unsafeAddr, s.len, 0)
+  assert(n == s.len)
+
+
+const response = """
+HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: 14
+Connection: keep-alive
+
+Hello, there!
+"""
+
 
 # CPS client hander
+
+var n = 0
 
 proc doClient(fdc: SocketHandle): Cont {.cps.} =
 
   while true:
     cps io(fdc, POLLIN)
     let s: string = sockRecv(fdc)
-    if s.len > 0:
-      echo "recv> ", s
-    else:
+    if s.len == 0:
       return
+    cps io(fdc, POLLOUT)
+    sockSend(fdc, response)
+    inc n
 
 
 # CPS server handler
