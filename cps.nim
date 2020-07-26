@@ -48,7 +48,7 @@ proc isCpsCall(n: NimNode): bool =
 proc maybeConvertToRoot(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
   if not eqIdent(locals[0], e.root):
-    newDotExpr(locals, e.root)
+    newTree(nnkCast, e.root, locals)
   else:
     locals
 
