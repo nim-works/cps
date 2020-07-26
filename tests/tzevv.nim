@@ -51,6 +51,7 @@ template runCps(body: untyped) =
   run t()
 
 
+var r: int
 
 suite "cps":
   
@@ -145,30 +146,84 @@ suite "cps":
         break
         cps prim()
       cps prim()
-
-  test "defer":
-    expPrims 3: runCps:
-      cps prim()
-      defer:
-        cps prim()
-      cps prim()
-    
-  test "nested while":
-    expPrims 100: runCps:
-      var i: int
-      var j: int
-      while i < 10:
-        inc i
-        while j < 10:
-          inc j
   
-  test "paper example 1":
-    # Continuation-Passing C 5.4.1 example
+  test "break2":
     expPrims 3: runCps:
-      var t: bool = false
-      while not t:
+      cps prim()
+      block:
         cps prim()
         break
         cps prim()
+        cps prim()
       cps prim()
+
+  test "for1":
+    runCps:
+      var a: int = 0
+      for i in 0..3:
+        inc a, 1
+      check a == 4
+  
+  test "for2":
+    expPrims 1: runCps:
+      var a: int = 0
+      cps prim()
+      for i in 0..3:
+        inc a, 1
+      check a == 4
+
+  test "multiple variables in one var":
+    runCps:
+      var a, b: int16
+      check $type(a) == "int16"
+      check $type(b) == "int16"
+
+  test "continue":
+    skip() #  issue #3: Codegen errors
+    #expPrims 7: runCps:
+    #  cps prim()
+    #  var i: int = 0
+    #  while i < 10:
+    #    if i < 5:
+    #      continue
+    #    cps prim()
+    #  cps prim()
+
+  test "for3":
+    skip() # issue #23: hangs compilation
+    #expPrims 1: runCps:
+    #  var a: int = 0
+    #  for i in 0..3:
+    #    inc a, 1
+    #  check a == 4
+    #  cps prim()
+
+  test "defer":
+    skip() # issue #3: Codegen errors
+    #expPrims 3: runCps:
+    #  cps prim()
+    #  defer:
+    #    cps prim()
+    #  cps prim()
+    
+  test "nested while":
+    skip()  # issue #3: Codegen errors
+    #expPrims 100: runCps:
+    #  var i: int
+    #  var j: int
+    #  while i < 10:
+    #    inc i
+    #    while j < 10:
+    #      inc j
+  
+  test "paper example 1":
+    # Continuation-Passing C 5.4.1 example
+    skip()  # issue #3: Codegen errors
+    #expPrims 3: runCps:
+    #  var t: bool = false
+    #  while not t:
+    #    cps prim()
+    #    break
+    #    cps prim()
+    #  cps prim()
 

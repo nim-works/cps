@@ -54,6 +54,8 @@ proc sockBind(port: int): SocketHandle =
   sas.sin_family = AF_INET.uint16
   sas.sin_port = htons(port.uint16)
   sas.sin_addr.s_addr = INADDR_ANY
+  var yes: int = 1
+  doAssert setsockopt(result, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen) != -1
   doAssert bindSocket(result, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
   doAssert listen(result, SOMAXCONN) != -1
 
