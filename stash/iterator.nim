@@ -6,7 +6,7 @@ type Iterator = ref object of RootObj
   val: Option[int]
 
 
-proc resume(c: var Iterator): Option[int] =
+proc produce(c: var Iterator): Option[int] =
   while c != nil and c.fn != nil and c.val.isNone:
     c = c.fn(c)
   if c != nil and c.val.isSome:
@@ -33,9 +33,9 @@ proc counter(lo: int, hi: int): Iterator {.cps.} =
 # Resume the iterator a bunch of times
 
 var a = counter(3, 7)
-echo "resumed ", a.resume()
-echo "resumed ", a.resume()
-echo "resumed ", a.resume()
-echo "resumed ", a.resume()
-echo "resumed ", a.resume()
-echo "resumed ", a.resume()
+echo "produced ", a.produce()
+echo "produced ", a.produce()
+echo "produced ", a.produce()
+echo "produced ", a.produce()
+echo "produced ", a.produce()
+echo "produced ", a.produce()
