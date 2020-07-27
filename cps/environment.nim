@@ -197,16 +197,17 @@ proc castToRoot(e: Env; n: NimNode): NimNode =
   when cpsCast:
     result = newTree(nnkCast, e.root, n)
   else:
-    result = newDotExpr(n, e.root)
+    result = newTree(nnkCall, e.root, n)
   when cpsTrace:
     result = e.addTrace(result)
 
 proc castToChild(e: Env; n: NimNode): NimNode =
   when cpsTrace:
     var n = e.addTrace(n)
-  result = newNimNode(when cpsCast: nnkCast else: nnkCall, n)
-  result.add e.identity
-  result.add n
+  when cpsCast:
+    result = newTree(nnkCast, e.identity, n)
+  else:
+    result = newTree(nnkCall, e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
