@@ -130,7 +130,6 @@ proc namedBreak*(e: Env; n: NimNode): NimNode =
       for i in countDown(ns.high, ns.low):
         if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].name, n[0]):
           result = ns[i]
-          echo "FOUND ", repr(result.name)
           break
     result = searchScope(e, breaks, match).node
 
