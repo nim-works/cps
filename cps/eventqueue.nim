@@ -284,7 +284,7 @@ when cpsTrace:
     if len(stack) == 0:
       writeLine(stderr, "no stack recorded")
     else:
-      writeLine(stderr, "noroutine stack:")
+      writeLine(stderr, "noroutine stack: (most recent call last)")
       when cpsDebug:
         var prior = stack[0].c.clock
       for i, frame in pairs(stack):
