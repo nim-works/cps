@@ -405,6 +405,7 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   result = nnkObjConstr.newTree(e.identity, newColonExpr(ident"fn", goto))
   for name, section in pairs(e):
     result.add newColonExpr(name, name)
+  # setting the label here allows us to use it in trace composition
   e.label = goto
 
 template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.} =
