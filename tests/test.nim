@@ -12,19 +12,19 @@ suite "cps":
     var cup: int
 
   test "simple":
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       cup = 1
     trampoline foo()
     check cup == 1
 
   test "yield":
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       cps jield()
     trampoline foo()
 
   test "noop":
     var j = 2
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       var i: int = 3
       j = 4
       cps noop()
@@ -33,7 +33,7 @@ suite "cps":
     check j == 4
 
   test "sleep":
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       var i: int = 0
       while i < 3:
         cps sleep(i + 1)
@@ -43,7 +43,7 @@ suite "cps":
     trampoline foo()
 
   test "https://github.com/disruptek/cps/issues/16":
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       var i, j, k: int = 0
       j = 5
       var p: int
@@ -60,7 +60,7 @@ suite "cps":
 
 when false:
   test "https://github.com/disruptek/cps/issues/15":
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       var (i, j, k) = (1, 2, 3)
       cps noop()
       check i == 1

@@ -4,7 +4,7 @@ import cps/eventqueue
 var r = 0
 
 when true:
-  proc test(): Cont {.cps.} =
+  proc test() {.cps:Cont.} =
     r = 1
     while true:
       if true:
@@ -17,7 +17,7 @@ when true:
   assert r == 1, "r was " & $r
 
 when true:
-  proc test2(): Cont {.cps.} =
+  proc test2() {.cps:Cont.} =
     r = 1
     while true:
       cps jield()
@@ -32,7 +32,7 @@ when true:
   assert r == 1, "r was " & $r
 
 when true:
-  proc test3(): Cont {.cps.} =
+  proc test3() {.cps:Cont.} =
     r = 1
     while true:
       cps noop()
@@ -47,7 +47,7 @@ when true:
   assert r == 3, "r was " & $r
 
 when true:
-  proc test4(): Cont {.cps.} =
+  proc test4() {.cps:Cont.} =
     r = 1
     block found:
       while true:

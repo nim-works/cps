@@ -1,7 +1,7 @@
 import cps
 import cps/eventqueue
 
-proc b(x: int): Cont {.cps.} =
+proc b(x: int) {.cps:Cont.} =
   cps noop()
   doAssert x > 0
   cps noop()
@@ -25,7 +25,7 @@ proc b(x: int): Cont {.cps.} =
   cps noop()
   doAssert y == 7
 
-proc a(x: int): Cont {.cps.} =
+proc a(x: int) {.cps:Cont.} =
   cps noop()
   doAssert x > 0
   cps noop()

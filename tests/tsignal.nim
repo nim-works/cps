@@ -4,11 +4,11 @@ import cps/eventqueue
 var sem = newSemaphore()
 var success = false
 
-proc tick(ms: int): Cont {.cps.} =
+proc tick(ms: int) {.cps:Cont.} =
   cps sleep(ms)
   signal(sem)
 
-proc tock(): Cont {.cps.} =
+proc tock() {.cps:Cont.} =
   cps wait(sem)
   success = true
 

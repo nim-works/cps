@@ -2,7 +2,7 @@ import cps
 import cps/eventqueue
 
 var r = 0
-proc test(): Cont {.cps.} =
+proc test() {.cps:Cont.} =
   r = 1
   block:
     if true:
@@ -15,7 +15,7 @@ if r != 3:
   echo "r was ", r
   quit(1)
 
-proc test2(): Cont {.cps.} =
+proc test2() {.cps:Cont.} =
   r = 1
   block:
     if true:

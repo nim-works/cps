@@ -9,7 +9,7 @@ const
   big = start * 2
 var count = start
 
-proc higher(ms: int): Cont {.cps.} =
+proc higher(ms: int) {.cps:Cont.} =
   while count < big and count > tiny:
     inc count
     cps sleep(ms)
@@ -17,7 +17,7 @@ proc higher(ms: int): Cont {.cps.} =
     cps jield()
     cps jield()
 
-proc lower(ms: int): Cont {.cps.} =
+proc lower(ms: int) {.cps:Cont.} =
   while count < big and count > tiny:
     dec count
     cps sleep(ms)

@@ -91,7 +91,7 @@ Hello, there!
 
 var n = 0
 
-proc doClient(fdc: SocketHandle): Cont {.cps.} =
+proc doClient(fdc: SocketHandle) {.cps:Cont} =
 
   while true:
     cps io(fdc, POLLIN)
@@ -105,7 +105,7 @@ proc doClient(fdc: SocketHandle): Cont {.cps.} =
 
 # CPS server handler
 
-proc doServer(port: int): Cont {.cps.} =
+proc doServer(port: int) {.cps:Cont} =
   let fds: SocketHandle = sockBind(port)
   while true:
     cps io(fds, POLLIN)

@@ -1,7 +1,7 @@
 import cps
 import cps/eventqueue
 
-proc b(x: int): Cont {.cps.} =
+proc b(x: int) {.cps:Cont.} =
   doAssert x > 0
   let x: int = 3
   doAssert x == 3
@@ -15,7 +15,7 @@ proc b(x: int): Cont {.cps.} =
   doAssert x == 3
   doAssert y == 7
 
-proc a(x: int): Cont {.cps.} =
+proc a(x: int) {.cps:Cont.} =
   doAssert x > 0
   doAssert x > 0
   doAssert x == 1

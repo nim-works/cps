@@ -4,7 +4,7 @@ import cps/eventqueue
 var r = 0
 
 when true:
-  proc test(): Cont {.cps.} =
+  proc test() {.cps:Cont.} =
     r = 1
     while true:
       for i in 0 .. 3:

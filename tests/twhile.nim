@@ -12,7 +12,7 @@ suite "cps":
     var cup: int
 
   test "while":
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       var i: int = 0
       while i < 2:
         let x: int = i
@@ -24,7 +24,7 @@ suite "cps":
     trampoline foo()
 
   test "continue":
-    proc foo(): Cont {.cps.} =
+    proc foo() {.cps:Cont.} =
       var i: int = 0
       while i < 2:
         let x: int = i

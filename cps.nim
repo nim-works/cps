@@ -482,7 +482,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
-macro cps*(n: untyped): untyped =
+macro cps*(T: untyped, n: untyped): untyped =
   ## rewrite the target procedure in Continuation-Passing Style
   when defined(nimdoc): return n
 
@@ -495,14 +495,17 @@ macro cps*(n: untyped): untyped =
     else:
       debugEcho repr(orig)
 
+  echo n.treerepr
   assert n.kind in RoutineNodes
-  if n.params[0].isEmpty:
-    error "provide a continuation return type"
+  if not n.params[0].isEmpty:
+    error "No return type allowed for now"
+
+  n.params[0] = T
 
   # establish a new environment with the supplied continuation type;
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
-  var env = newEnv(types, n.params[0])
+  var env = newEnv(types, T)
 
   # adding the proc params to the environment
   for defs in n.params[1..^1]:

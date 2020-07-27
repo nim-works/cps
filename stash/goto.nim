@@ -24,7 +24,7 @@ proc goto(c: Tc, id: string): Tc =
 
 # A  little function with gotos
 
-proc foo(): Tc {.cps.} =
+proc foo() {.cps:Tc.} =
   echo "one"
   cps label("here")
   echo "two"

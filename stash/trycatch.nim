@@ -29,7 +29,7 @@ proc throw(c: Tc, m: string): Tc =
 
 # This is a cps func that will throw an error
 
-proc deeper(): Tc {.cps.} =
+proc deeper() {.cps:Tc.} =
   echo "throwing"
   cps throw("Boom")
   echo "you will never see this"
@@ -38,7 +38,7 @@ proc deeper(): Tc {.cps.} =
 # 'main' cps function, sets up try/cach and calls another
 # function that will throw
 
-proc foo(): Tc {.cps.} =
+proc foo() {.cps:Tc.} =
   
   cps start()
 

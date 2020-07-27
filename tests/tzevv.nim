@@ -47,7 +47,7 @@ template expPrims(expect: int, body: untyped) =
 # Wrapper for defining a cps function and sending it to the trampoline
 
 template runCps(body: untyped) =
-  proc t(): C {.cps.} = body
+  proc t() {.cps:C.} = body
   run t()
 
 

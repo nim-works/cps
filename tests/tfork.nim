@@ -3,7 +3,7 @@ import cps/eventqueue
 
 var r: int
 
-proc adder(): Cont {.cps.} =
+proc adder() {.cps:Cont.} =
   cps fork()
   inc r
 
