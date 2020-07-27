@@ -1,25 +1,24 @@
 
-import cps
+import cps, options
 
 type Iterator = ref object of RootObj
   fn*: proc(c: Iterator): Iterator {.nimcall.}
-  haveVal: bool
-  val: int
+  val: Option[int]
 
 
-proc resume(c: var Iterator): (int, bool) =
-  while c != nil and c.fn != nil and not c.haveVal:
+proc resume(c: var Iterator): Option[int] =
+  while c != nil and c.fn != nil and c.val.isNone:
     c = c.fn(c)
-  if c != nil and c.haveVal:
-    c.haveVal = false
-    return (c.val, true)
+  if c != nil and c.val.isSome:
+    let val = c.val
+    c.val = none(int)
+    return val
   else:
-    return (0, false)
+    return none(int)
 
 
 proc jield(c: Iterator, val: int): Iterator =
-  c.val = val
-  c.haveVal = true
+  c.val = some(val)
   return c
 
 
