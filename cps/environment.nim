@@ -4,28 +4,22 @@ import std/hashes
 import std/tables
 import std/macros
 
-#[
-
-the idea here is that we can make a type hierarchy like
-  grandparent
-     -> parent
-         -> child
-
-and then later
-  -> parent becomes a grandparent either by conversion or birth
-  -> child becomes a parent by birth
-  -> parent can beget new sibling to child
-
-we accumulate var/let statements
-generate a type for passing around which holds the environment
-the environment gets unpacked in procs; this could even be swapped
-
-]#
+{.experimental: "dynamicBindSym".}
 
 const
   cpsCast {.booldefine.} = false
+  cpsDebug {.booldefine.} = false
+  cpsTrace {.booldefine.} = false
+  comments* = cpsDebug  ## embed comments within the transformation
 
 type
+  Continuation* = concept c
+    c.fn is ContinuationProc[Continuation]
+    c is ref object
+    c of RootObj
+
+  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+
   Pair = tuple
     key: NimNode
     val: NimNode
@@ -47,6 +41,20 @@ type
     goto: Futures             # identifiers of future gotos
     breaks: Futures           # identifiers of future breaks
     store: NimNode            # where to put typedefs
+    label: NimNode            # the last tailcall (goto)
+
+func doc*(s: string): NimNode =
+  ## generate a doc statement for debugging
+  when comments:
+    newCommentStmtNode(s)
+  else:
+    newEmptyNode()
+
+proc doc*(n: var NimNode; s: string) =
+  ## add a doc statement to the ast for debugging
+  when comments:
+    if n.kind == nnkStmtList:
+      n.add doc(s)
 
 func insideCps*(e: Env): bool = len(e.goto) > 0 or len(e.breaks) > 0
 
@@ -144,17 +152,39 @@ proc root*(e: Env): NimNode =
     r = r.parent
   result = r.inherits
 
-proc castToRoot*(e: Env; n: NimNode): NimNode =
-  when cpsCast:
-    newTree(nnkCast, e.root, n)
-  else:
-    newDotExpr(n, e.root)
+proc init[T](c: T; l: LineInfo): T =
+  warning "provide an init proc for cpsTrace"
 
-proc castToChild*(e: Env; n: NimNode): NimNode =
+proc addTrace(e: Env; n: NimNode): NimNode =
+  if n.isNil or n.kind == nnkNilLit: return
+  # XXX: this doesn't work, sadly
+  #discard bindSym("init" & $e.root, rule = brForceOpen)
+  let info = lineInfoObj(n)
+  var identity =
+    if e.label.isNil or e.label.kind == nnkNilLit:
+      "nil"
+    else:
+      repr(e.label)
+  identity.add "(" & repr(e.identity) & ")"
+  result = newCall(ident("init"), n, identity.newLit,
+                   info.filename.newLit,
+                   info.line.newLit,
+                   info.column.newLit)
+
+proc castToRoot(e: Env; n: NimNode): NimNode =
   when cpsCast:
-    newTree(nnkCast, e.identity, n)
+    result = newTree(nnkCast, e.root, n)
   else:
-    newCall(e.identity, n)
+    result = newDotExpr(n, e.root)
+  when cpsTrace:
+    result = e.addTrace(result)
+
+proc castToChild(e: Env; n: NimNode): NimNode =
+  when cpsTrace:
+    var n = e.addTrace(n)
+  result = newNimNode(when cpsCast: nnkCast else: nnkCall, n)
+  result.add e.identity
+  result.add n
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -269,11 +299,11 @@ proc add*(e: var Env; n: NimNode) =
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
   var pragma = nnkPragma.newTree bindSym"cpsLift"
-  var record = nnkRecList.newNimNode
+  var record = nnkRecList.newNimNode(e.identity)
   populateType(e, record)
-  var parent = nnkOfInherit.newNimNode
+  var parent = nnkOfInherit.newNimNode(e.root)
   if e.parent.isNil:
-    parent.add e.via
+    parent.add e.inherits
   else:
     parent.add e.parent.identity
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
@@ -319,7 +349,7 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
   ## read locals out of an env
   let locals = e.castToChild(locals)
   for name, value in pairs(e):
-    let section = newNimNode(value.kind)
+    let section = newNimNode(value.kind, locals)
     # value[0] is the (only) identdefs of the section; [0][1] is type
     section.add newIdentDefs(name, value[0][1], newDotExpr(locals, name))
     yield (key: name, val: section)
@@ -329,6 +359,7 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   result = nnkObjConstr.newTree(e.identity, newColonExpr(ident"fn", goto))
   for name, section in pairs(e):
     result.add newColonExpr(name, name)
+  e.label = goto
 
 template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.} =
   ## run a body with a longer goto stack
@@ -340,3 +371,4 @@ template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.}
       result.add pop(env.goto).node
   else:
     body
+

@@ -1,3 +1,5 @@
+import std/strutils
+import std/macros
 import std/os
 import std/selectors
 import std/monotimes
@@ -17,6 +19,8 @@ export Event
 const
   cpsDebug {.booldefine.} = false    ## produce gratuitous output
   cpsPoolSize {.intdefine.} = 64     ## expected pending continuations
+  cpsTrace {.booldefine.} = false    ## store "stack" traces
+  cpsTraceSize {.intdefine.} = 1000  ## limit the traceback
 
 type
   State = enum
@@ -46,6 +50,11 @@ type
     timer: Fd                     ## file-descriptor of polling timer
     wake: SelectEvent             ## wake-up event for queue actions
 
+  Frame = object
+    c: Cont
+    e: ref Exception
+  Stack = Deque[Frame]
+
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
     when cpsDebug:
@@ -53,6 +62,11 @@ type
       delay: Duration               ## polling overhead
       id: Id                        ## our last registration
       fd: Fd                        ## our last file-descriptor
+    when cpsTrace:
+      filename: string
+      line: int
+      column: int
+      identity: string
 
 const
   wakeupId = Id(-1)
@@ -66,7 +80,13 @@ template now(): Clock = getMonoTime()
 
 proc `$`(id: Id): string {.used.} = "{" & system.`$`(id.int) & "}"
 proc `$`(fd: Fd): string {.used.} = "[" & system.`$`(fd.int) & "]"
-proc `$`(c: Cont): string {.used.} = "&" & $cast[uint](c)
+proc `$`(c: Cont): string {.used.} =
+  when cpsTrace:
+    # quality poor!
+    #"$1($2) $3" % [ c.filename, $c.line, c.identity ]
+    c.identity
+  else:
+    "&" & $cast[uint](c)
 
 proc `<`(a, b: Id): bool {.borrow, used.}
 proc `<`(a, b: Fd): bool {.borrow, used.}
@@ -221,13 +241,84 @@ proc stop*() =
     eq.state = Unready
     init()
 
+proc init*(c: Cont): Cont =
+  result = c
+
+when cpsTrace:
+  import std/strformat
+
+  proc init*(c: Cont; identity: static[string];
+             file: static[string]; row, col: static[int]): Cont =
+    result = init(c)
+    result.identity = identity
+    result.filename = file
+    result.line = row
+    result.column = col
+
+  proc addFrame(stack: var Stack; c: Cont) =
+    stack.addLast Frame(c: c)
+    while len(stack) > cpsTraceSize:
+      popFirst(stack)
+
+  proc formatDuration*(d: Duration): string =
+    ## format a duration to a nice string
+    let
+      n = d.inNanoseconds
+      ss = (n div 1_000_000_000) mod 1_000
+      ms = (n div 1_000_000) mod 1_000
+      us = (n div 1_000) mod 1_000
+      ns = (n div 1) mod 1_000
+    try:
+      result = fmt"{ss:>3}s {ms:>3}ms {us:>3}μs {ns:>3}ns"
+    except:
+      result = [$ss, $ms, $us, $ns].join(" ")
+
+  proc `$`(f: Frame): string =
+    result = $f.c
+    when cpsDebug:
+      let (i, took) = ("", formatDuration(f.c.delay))
+      result.add "\n"
+      result.add took.align(20) & " delay"
+
+  proc writeStackTrace*(stack: Stack) =
+    if len(stack) == 0:
+      writeLine(stderr, "no stack recorded")
+    else:
+      writeLine(stderr, "noroutine stack:")
+      when cpsDebug:
+        var prior = stack[0].c.clock
+      for i, frame in pairs(stack):
+        when cpsDebug:
+          let took = formatDuration(frame.c.clock - prior)
+          prior = frame.c.clock
+          writeLine(stderr, $frame)
+          writeLine(stderr, took.align(20) & " total")
+        else:
+          writeLine(stderr, $frame)
+
+else:
+  proc writeStackTrace*(): Cont {.cpsMagic.} =
+    when declaredInScope(result):
+      result = c
+    warning "--define:cpsTrace:on to output traces"
+
 proc trampoline*(c: Cont) =
   ## Run the supplied continuation until it is complete.
   var c = c
+  when cpsTrace:
+    var stack = initDeque[Frame](cpsTraceSize)
   while not c.isNil and not c.fn.isNil:
     when cpsDebug:
-      echo "🎪tramp ", cast[uint](c.fn), " at ", c.clock
-    c = c.fn(c)
+      echo "🎪tramp ", c, " at ", c.clock
+    try:
+      c = c.fn(c)
+      when cpsTrace:
+        if not c.isNil:
+          addFrame(stack, c)
+    except Exception as e:
+      when cpsTrace:
+        writeStackTrace(stack)
+      raise
 
 proc poll*() =
   ## See what continuations need running and run them.

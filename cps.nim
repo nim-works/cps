@@ -8,29 +8,20 @@ import std/algorithm
 const
   cpsDebug {.booldefine.} = false
   strict = true        ## only cps operations are strictly cps operations
-  comments = cpsDebug  ## embed comments within the transformation
-  #lifting = true       ## whether to lift generated symbols to top-level
 
 when (NimMajor, NimMinor) < (1, 3):
   {.fatal: "requires nim-1.3".}
 
 import cps/environment
+export Continuation, ContinuationProc
 
 type
-  Continuation* = concept c
-    c.fn is ContinuationProc[Continuation]
-    c is ref object
-    c of RootObj
-
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
-
   NodeFilter = proc(n: NimNode): NimNode
 
 const
   unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
-
 
 proc filter(n: NimNode; f: NodeFilter): NimNode =
   result = f(n)
@@ -89,19 +80,6 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
     let locals = e.defineLocals(n)
     ret.add e.maybeConvertToRoot(locals)
     result.add ret
-
-func doc(s: string): NimNode =
-  ## generate a doc statement for debugging
-  when comments:
-    newCommentStmtNode(s)
-  else:
-    newEmptyNode()
-
-proc doc(n: var NimNode; s: string) =
-  ## add a doc statement to the ast for debugging
-  when comments:
-    if n.kind == nnkStmtList:
-      n.add doc(s)
 
 func isReturnCall(n: NimNode): bool =
   ## true if the node looks like a tail call
@@ -194,7 +172,7 @@ proc stripPragma(n: NimNode; s: static[string]): NimNode =
 
 proc isLiftable(n: NimNode): bool =
   ## is this a node we should float to top-level?
-  result = n.hasPragma "cpsLift"
+  result = n.kind in {nnkProcDef, nnkTypeDef} and n.hasPragma "cpsLift"
 
 proc hasLiftableChild(n: NimNode): bool =
   result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
