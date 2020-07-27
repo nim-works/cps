@@ -113,6 +113,7 @@ proc tock(name: string; interval: Duration): Cont =
 - use `--define:cpsDebug` to get extra debugging output
 - use `--define:cpsTrace` to get continuation tracing from the trampoline
 - use `--define:cpsCast` to `cast` continuations (versus type conversion)
+- use `--define:cpsTree` to dump AST via `treeRepr` in `cpsDebug` mode
 
 ## Documentation
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.

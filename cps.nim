@@ -499,7 +499,10 @@ macro cps*(n: untyped): untyped =
   when cpsDebug:
     var orig = copyNimTree(n)
     debugEcho "=== .cps. on " & $n.name & "(original)  ==="
-    debugEcho repr(orig)
+    when defined(cpsTree):
+      debugEcho treeRepr(orig)
+    else:
+      debugEcho repr(orig)
 
   assert n.kind in RoutineNodes
   if n.params[0].isEmpty:
@@ -523,7 +526,10 @@ macro cps*(n: untyped): untyped =
   # spamming the developers
   when cpsDebug:
     debugEcho "=== .cps. on " & $n.name & "(transform) ==="
-    debugEcho repr(result)
+    when defined(cpsTree):
+      debugEcho treeRepr(result)
+    else:
+      debugEcho repr(result)
 
 when false:
   macro cps*(c: typed; n: typed): untyped =
