@@ -27,6 +27,7 @@ type
   Future = tuple
     kind: NimNodeKind        # the source node kind we're coming from
     node: NimNode            # the identifier/proc we're going to
+    name: NimNode            # named blocks populate this for named breaks
   Futures = seq[Future]
 
   Flag = enum
@@ -61,13 +62,13 @@ func insideCps*(e: Env): bool = len(e.goto) > 0 or len(e.breaks) > 0
 proc next(ns: Futures): Future =
   ## read the next call off the stack
   if len(ns) == 0:
-    (kind: nnkNilLit, node: newNilLit())
+    (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
   else:
     ns[^1]
 
 proc last(ns: Futures): Future =
   ## query the last loop in the stack
-  result = (kind: nnkNilLit, node: newNilLit())
+  result = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
   for i in countDown(ns.high, ns.low):
     if ns[i].kind in {nnkWhileStmt, nnkForStmt}:
       result = ns[i]
@@ -76,7 +77,7 @@ proc last(ns: Futures): Future =
 template searchScope(env: Env; x: untyped;
                      p: proc(ns: Futures): Future): Future =
   var e = env
-  var r = (kind: nnkNilLit, node: newNilLit())
+  var r = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
   while not e.isNil:
     r = p(e.`x`)
     if r.kind == nnkNilLit:
@@ -91,8 +92,18 @@ func lastBreakLoop*(e: Env): Future = searchScope(e, breaks, last)
 func nextGoto*(e: Env): NimNode = searchScope(e, goto, next).node
 func nextBreak*(e: Env): NimNode = searchScope(e, breaks, next).node
 
-proc addGoto*(e: var Env; k: NimNodeKind; n: NimNode) = e.goto.add (k, n)
-proc addBreak*(e: var Env; k: NimNodeKind; n: NimNode) = e.breaks.add (k, n)
+proc breakName(n: NimNode): NimNode =
+  result =
+    if n.kind in {nnkBlockStmt} and len(n) > 1:
+      n[0]
+    else:
+      newEmptyNode()
+
+proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
+  e.goto.add (k.kind, n, newEmptyNode())
+
+proc addBreak*(e: var Env; k: NimNode; n: NimNode) =
+  e.breaks.add (k.kind, n, k.breakName)
 
 proc popGoto*(e: var Env): NimNode = pop(e.goto).node
 proc popBreak*(e: var Env): NimNode = pop(e.breaks).node
@@ -106,6 +117,22 @@ proc topOfWhile*(e: Env): NimNode =
   let future = lastGotoLoop(e)
   assert future.kind == nnkWhileStmt, "goto doesn't match break"
   result = future.node
+
+proc namedBreak*(e: Env; n: NimNode): NimNode =
+  ## fetch the goto target in order to `break foo`
+  assert n.kind == nnkBreakStmt
+  if len(n) == 0:
+    result = e.nextBreak
+  else:
+    proc match(ns: Futures): Future =
+      ## find the loop matching the requested named break
+      result = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
+      for i in countDown(ns.high, ns.low):
+        if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].name, n[0]):
+          result = ns[i]
+          echo "FOUND ", repr(result.name)
+          break
+    result = searchScope(e, breaks, match).node
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
@@ -364,7 +391,7 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
 template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.} =
   ## run a body with a longer goto stack
   if len(stripComments n) > 0:
-    env.goto.add (kind: f, node: n)
+    env.goto.add (kind: f, node: n, name: newEmptyNode())
     try:
       body
     finally:

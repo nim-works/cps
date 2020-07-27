@@ -14,6 +14,8 @@ when true:
           break
         r = r + i
       inc r
+      if r == 5:
+        break
     inc r
   trampoline test()
   assert r == 6, "r is " & $r

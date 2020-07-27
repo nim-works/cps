@@ -14,7 +14,7 @@ when true:
         quit(1)
       return
   trampoline test()
-  assert r == 1
+  assert r == 1, "r was " & $r
 
 when true:
   proc test2(): Cont {.cps.} =
@@ -29,13 +29,13 @@ when true:
       return
   spawn test2()
   run()
-  assert r == 1
+  assert r == 1, "r was " & $r
 
 when true:
   proc test3(): Cont {.cps.} =
     r = 1
     while true:
-      cps jield()
+      cps noop()
       if true:
         inc r
         if r > 2:
@@ -43,6 +43,20 @@ when true:
         else:
           break
     inc r
-  spawn test3()
-  run()
-  assert r == 3
+  trampoline test3()
+  assert r == 3, "r was " & $r
+
+when true:
+  proc test4(): Cont {.cps.} =
+    r = 1
+    block found:
+      while true:
+        cps noop()
+        if r > 2:
+          break found
+        cps noop()
+        inc r
+      quit(1)
+    r = r * -1
+  trampoline test4()
+  assert r == -3, "r was " & $r

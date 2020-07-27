@@ -390,7 +390,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
 
     of nnkForStmt:
       let bp = env.splitAt(n, "brake", i)
-      env.addBreak nc.kind, bp
+      env.addBreak nc, bp
       nc[^1] = env.saften(nc[^1])
       result.add nc
       discard env.popBreak
@@ -404,19 +404,21 @@ proc saften(penv: var Env; input: NimNode): NimNode =
         result.add env.tailCall returnTo(env.topOfWhile)
 
     of nnkBreakStmt:
-      # FIXME: does not support named break yet
-      if env.insideFor:
+      if env.insideFor and (len(nc) == 0 or nc[0].isEmpty):
+        # unnamed break inside for loop
         result.add nc
+      elif env.nextBreak.kind == nnkNilLit:
+        assert false, "no break statements to pop"
+      elif (len(nc) == 0 or nc[0].isEmpty):
+        result.doc "simple break statement"
+        result.add env.tailCall(returnTo(env.nextBreak))
       else:
-        if env.nextBreak.kind != nnkNilLit:
-          result.doc "simple break statement"
-          result.add env.tailCall(returnTo(env.nextBreak))
-        else:
-          assert false, "no break statements to pop"
+        result.doc "named break statement to " & repr(nc[0])
+        result.add env.tailCall(returnTo(env.namedBreak(nc)))
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, "brake", i)
-      env.addBreak nc.kind, bp
+      env.addBreak nc, bp
       withGoto nc.kind, bp:
         try:
           result.add env.saften(nc)
@@ -431,9 +433,9 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       let w = genSym(nskProc, "loop")
       let brakeEngaged = true
       if brakeEngaged:
-        env.addBreak nc.kind, env.splitAt(n, "brake", i)
+        env.addBreak nc, env.splitAt(n, "brake", i)
       # the goto is added here so that it won't appear in the break proc
-      env.addGoto nc.kind, w
+      env.addGoto nc, w
       try:
         var loop = newStmtList()
         result.doc "add tail call for while loop with body " & $nc[1].kind
