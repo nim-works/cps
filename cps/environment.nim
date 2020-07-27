@@ -30,19 +30,15 @@ type
     name: NimNode            # named blocks populate this for named breaks
   Futures = seq[Future]
 
-  Flag = enum
-    Mutable
-
   Env* = ref object
-    id: NimNode
-    via: NimNode
-    parent: Env
-    child: Table[NimNode, NimNode]
-    flags: set[Flag]
-    goto: Futures             # identifiers of future gotos
-    breaks: Futures           # identifiers of future breaks
-    store: NimNode            # where to put typedefs
-    label: NimNode            # the last tailcall (goto)
+    id: NimNode                     # the identifier of our continuation type
+    via: NimNode                    # the type we inherit from
+    parent: Env                     # the parent environment (scope)
+    child: Table[NimNode, NimNode]  # locals and their typedefs
+    goto: Futures                   # identifiers of future gotos
+    breaks: Futures                 # identifiers of future breaks
+    store: NimNode                  # where to put typedefs
+    label: NimNode                  # the last tailcall (goto)
 
 func doc*(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -229,10 +225,17 @@ proc children(e: Env): seq[Pair] =
     result = toSeq pairs(e.child)
     result.add children(e.parent)
 
+proc seenHere(e: Env; size = 4): HashSet[string] =
+  ## a hashset of identifiers defined in the env
+  assert not e.isNil
+  result = initHashSet[string](sets.rightSize(len(e.child)))
+  for key in keys(e.child):
+    result.incl key.strVal
+
 proc seen(e: Env; size = 4): HashSet[string] =
   ## a hashset of identifiers defined in the env or its parent
   if e.isNil or e.parent.isNil:
-    result = initHashSet[string](size)
+    result = initHashSet[string](sets.rightSize(size))
   else:
     result = e.parent.seen(len(e))
   if not e.isNil:
@@ -240,10 +243,14 @@ proc seen(e: Env; size = 4): HashSet[string] =
       result.incl key.strVal
 
 iterator pairs(e: Env): Pair =
-  for key, val in pairs(e.child):
-    yield (key: key, val: val)
-  for pair in children(e.parent):
-    yield pair
+  assert not e.isNil
+  var seen = initHashSet[string](sets.rightSize(len(e.child)))
+  var p = e
+  while not p.isNil:
+    for key, val in pairs(e.child):
+      if not seen.containsOrIncl key.strVal:
+        yield (key: key, val: val)
+    p = p.parent
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
@@ -266,7 +273,6 @@ proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
   ## set [ident|sym] = let/var section
   assert key.kind in {nnkSym, nnkIdent}
   assert val.kind in {nnkVarSection, nnkLetSection}
-  assert key notin e.parent, "Variable '" & val.repr & "' shadowed, not yet supported in CPS"
   assert key notin e.child
   e.child[key] = val
   setDirty e
@@ -327,18 +333,32 @@ proc objectType(e: Env): NimNode =
   var pragma = nnkPragma.newTree bindSym"cpsLift"
   var record = nnkRecList.newNimNode(e.identity)
   populateType(e, record)
-  var parent = nnkOfInherit.newNimNode(e.root)
-  if e.parent.isNil:
-    parent.add e.inherits
-  else:
-    parent.add e.parent.identity
+  var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
+
+proc performReparent(e: var Env) =
+  assert not e.isNil
+  var here = seenHere(e)
+  var p = e.parent
+  while not p.isNil:
+    var there = seen(p)
+    if card(here * there) == 0:
+      assert not p.isDirty
+      e.via = p.id
+      break
+    elif p.parent.isNil:
+      e.via = p.via
+    p = p.parent
 
 var c {.compiletime.}: int
 proc makeType*(e: var Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
   e.id = genSym(nskType, "env" & $c)
   inc c
+
+  # determine if a symbol clash necessitates pointing to a new parent
+  performReparent(e)
+
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
   assert not e.isDirty
 

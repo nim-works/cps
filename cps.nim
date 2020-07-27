@@ -172,7 +172,7 @@ proc stripPragma(n: NimNode; s: static[string]): NimNode =
 
 proc isLiftable(n: NimNode): bool =
   ## is this a node we should float to top-level?
-  result = n.kind in {nnkProcDef, nnkTypeDef} and n.hasPragma "cpsLift"
+  result = n.kind in {nnkProcDef, nnkTypeSection} and n.hasPragma "cpsLift"
 
 proc hasLiftableChild(n: NimNode): bool =
   result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
@@ -199,17 +199,6 @@ proc isCpsBlock(n: NimNode): bool =
         break
   else:
     discard
-
-when false:
-  proc foldTailCalls(n: NimNode): NimNode =
-    ## this may optimize a `proc foo() = return bar()` to `return bar()`
-    result = n
-    assert result.kind == nnkProcDef, "not a proc"
-    if not asSimpleReturnCall(n, result):
-      if isReturnCall(n.last):
-        result = newStmtList()
-        result.doc "optimized proc into tail call"
-        result.add n.last
 
 proc cmpKind(a, b: NimNode): int =
   if a.kind == b.kind:
@@ -267,12 +256,12 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     result.doc "adding the proc verbatim"
     result.add n
   else:
-    var body = newStmtList(n)
+    var body = newStmtList(newBlockStmt(n))
     var locals = genSym(nskParam, "locals")
     for name, asgn in localRetrievals(env, locals):
       body.insert(0, asgn)
-    body.insert(0, doc "installing locals for env " & $env.identity)
-    result.doc "creating a new proc: " & name.repr
+    body.insert(0, doc "installing locals for " & $env.identity)
+    #result.doc "creating a new proc: " & name.repr
     # add the declaration
     when false: # this should work, but it provokes ICE...
       result.add newProc(name = name, pragmas = pragmas, body = newEmptyNode(),
@@ -338,15 +327,15 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
   ## a label prefix and an index at which to split
   let label = genSym(nskProc, name)
   var body = newStmtList()
-  body.doc "split as " & label.repr & " at index " & $i
+  #body.doc "split as " & label.repr & " at index " & $i
   result = newStmtList()
   if i < n.len-1:
     body.add n[i+1 ..< n.len]
     body = env.saften(body)
-    result.doc "split at: " & name
+    #result.doc "split at: " & name
     result.add env.makeTail(label, body)
   else:
-    result.doc "split at: " & name & " - no body left"
+    #result.doc "split at: " & name & " - no body left"
     if returnTo(env.nextGoto).kind == nnkNilLit:
       warning "nil goto at end of split"
     result.add env.callTail returnTo(env.nextGoto)
@@ -369,7 +358,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
     if nc.isCpsCall:
       withGoto nc.kind, env.splitAt(n, "after", i):
         result.add env.tailCall(nc, returnTo(env.nextGoto))
-        result.doc "post-cps call; time to bail"
+        #result.doc "post-cps call; time to bail"
         return
       assert false, "unexpected"
 
