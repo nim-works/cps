@@ -1,6 +1,6 @@
 
 #
-# Silly goto in CPS
+# This is an example implementation for a basic CPS-based iterator.
 #
 
 import cps, tables
