@@ -247,7 +247,7 @@ iterator pairs(e: Env): Pair =
   var seen = initHashSet[string](sets.rightSize(len(e.child)))
   var p = e
   while not p.isNil:
-    for key, val in pairs(e.child):
+    for key, val in pairs(p.child):
       if not seen.containsOrIncl key.strVal:
         yield (key: key, val: val)
     p = p.parent
