@@ -108,6 +108,11 @@ proc tock(name: string; interval: Duration): Cont =
   return env_16451209(fn: loop_16451121, count: count, name: name, interval: interval).Cont
 ```
 
+## Hacking
+
+- use `--define:cpsDebug` to get extra debugging output
+- use `--define:cpsTrace` to get continuation tracing from the trampoline
+
 ## Documentation
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
 You can also jump to [the documentation for the included dispatcher](https://disruptek.github.io/cps/cps/eventqueue.html).
