@@ -393,6 +393,7 @@ proc saften(penv: var Env; input: NimNode): NimNode =
       env.addBreak nc.kind, bp
       nc[^1] = env.saften(nc[^1])
       result.add nc
+      discard env.popBreak
 
     of nnkContinueStmt:
       if env.insideFor:
