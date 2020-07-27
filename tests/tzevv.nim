@@ -190,13 +190,12 @@ suite "cps":
     #  cps prim()
 
   test "for3":
-    skip() # issue #23: hangs compilation
-    #expPrims 1: runCps:
-    #  var a: int = 0
-    #  for i in 0..3:
-    #    inc a, 1
-    #  check a == 4
-    #  cps prim()
+    expPrims 1: runCps:
+      var a: int = 0
+      for i in 0..3:
+        inc a, 1
+      check a == 4
+      cps prim()
 
   test "defer":
     skip() # issue #3: Codegen errors
