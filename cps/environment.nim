@@ -42,7 +42,6 @@ type
     breaks: Futures                 # identifiers of future breaks
     store: NimNode                  # where to put typedefs, a stmtlist
     label: NimNode                  # the last tailcall (goto)
-    ideal: NimNode                  # the best parent for alloc purposes
     seen: HashSet[string]           # count/measure idents/syms by string
 
     # special symbols for cps machinery
