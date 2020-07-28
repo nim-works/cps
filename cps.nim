@@ -540,6 +540,8 @@ macro cps*(T: untyped, n: untyped): untyped =
       ##
       # otherwise, just use a gensym'd "cps"
       env = newEnv(genSym(nskParam, "cps"), types, n.params[0])
+    else:
+      env = newEnv(ident"continuation", types, n.params[0])
     when false:
       ##
       ## we don't do this anymore,
