@@ -256,12 +256,10 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     result.doc "adding the proc verbatim"
     result.add n
   else:
-    var body = newStmtList(newBlockStmt(n))
+    # the locals value is, nominally, a proc param
     var locals = genSym(nskParam, "locals")
-    echo env.repr
-    for name, asgn in localRetrievals(env, locals):
-      body.insert(0, asgn)
-    body.insert(0, doc "installing locals for " & $env.identity)
+    var body = env.wrapProcBody(locals, n)
+
     #result.doc "creating a new proc: " & name.repr
     # add the declaration
     when false: # this should work, but it provokes ICE...
@@ -513,6 +511,9 @@ macro cps*(T: untyped, n: untyped): untyped =
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)
+
+  # forcing a write of the current accumulating type
+  env = env.storeType(force = on)
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)

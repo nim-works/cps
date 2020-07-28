@@ -42,6 +42,30 @@ suite "cps":
       check cup == 3
     trampoline foo()
 
+  test "https://github.com/disruptek/cps/issues/22":
+    proc foo(a, b, c: int = 3): Cont {.cps.} =
+      var a: int = 5
+      cps noop()
+      var b: int = b + a
+      cps noop()
+      check:
+        a == 5
+        b == 7
+        c == 3
+    trampoline foo(1, 2)
+
+    proc foo2(a, b, c: var int): Cont {.cps.} =
+      a = 5
+      cps noop()
+      b = b + a
+      cps noop()
+      check:
+        a == 5
+        b == 7
+        c == 3
+    var (x, y, z) = (1, 2, 3)
+    trampoline foo2(x, y, z)
+
   test "https://github.com/disruptek/cps/issues/16":
     proc foo() {.cps:Cont.} =
       var i, j, k: int = 0

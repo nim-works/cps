@@ -17,10 +17,10 @@ export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash, semaphore.wait,
 export Event
 
 const
-  cpsDebug {.booldefine.} = false    ## produce gratuitous output
-  cpsPoolSize {.intdefine.} = 64     ## expected pending continuations
-  cpsTrace {.booldefine.} = false    ## store "stack" traces
-  cpsTraceSize {.intdefine.} = 1000  ## limit the traceback
+  cpsDebug {.booldefine, used.} = false    ## produce gratuitous output
+  cpsPoolSize {.intdefine, used.} = 64     ## expected pending continuations
+  cpsTrace {.booldefine, used.} = false    ## store "stack" traces
+  cpsTraceSize {.intdefine, used.} = 1000  ## limit the traceback
 
 type
   State = enum
@@ -50,11 +50,6 @@ type
     timer: Fd                     ## file-descriptor of polling timer
     wake: SelectEvent             ## wake-up event for queue actions
 
-  Frame = object
-    c: Cont
-    e: ref Exception
-  Stack = Deque[Frame]
-
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
     when cpsDebug:
@@ -67,6 +62,13 @@ type
       line: int
       column: int
       identity: string
+
+when cpsTrace:
+  type
+    Frame = object
+      c: Cont
+      e: ref Exception
+    Stack = Deque[Frame]
 
 const
   wakeupId = Id(-1)
@@ -315,7 +317,7 @@ proc trampoline*(c: Cont) =
       when cpsTrace:
         if not c.isNil:
           addFrame(stack, c)
-    except Exception as e:
+    except Exception:
       when cpsTrace:
         writeStackTrace(stack)
       raise
