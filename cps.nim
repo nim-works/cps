@@ -336,7 +336,7 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
     into.doc "add an unoptimized tail call"
     into.add env.callTail(n)
 
-proc saften(penv: var Env; input: NimNode): NimNode
+proc saften(parent: var Env; input: NimNode): NimNode
 
 proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
   ## split a statement list to create a tail call given
@@ -356,16 +356,16 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
       warning "nil goto at end of split"
     result.add env.callTail returnTo(env.nextGoto)
 
-proc saften(penv: var Env; input: NimNode): NimNode =
+proc saften(parent: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
   result = copyNimNode input
 
   # the accumulated environment
   var env =
     if input.kind == nnkStmtList:
-      newEnv(penv)
+      newEnv(parent)
     else:
-      penv
+      parent
 
   let n = stripComments input
   for i, nc in pairs(n):
