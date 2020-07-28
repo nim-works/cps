@@ -424,6 +424,8 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode) =
       n.add newEmptyNode()
     # iterate over the identifier names (a, b, c)
     for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
+      # the workaround that zevv demanded repeatedly
+      inc c
       # create a new identifier for the object field
       var field =
         # symbols (probably gensym'd?) flow through...  think ex, rs
