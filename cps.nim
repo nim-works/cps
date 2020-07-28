@@ -526,11 +526,11 @@ macro cps*(T: untyped, n: untyped): untyped =
   if len(n.params) > 1 and eqIdent(n.params[0], n.params[1][1]):
     # if the return type matches that of the first argument, we'll assume
     # the user wants that argument name to reflect the continuation
-    env = newEnv(n.params[1][0], types, T)
+    env = newEnv(n.params[1][0], types, n.params[0])
 
   else:
-    # otherwise, just use "c"
-    env = newEnv(ident"c", types, T)
+    # otherwise, just use a gensym'd "c"
+    env = newEnv(genSym(nskParam, "c"), types, n.params[0])
 
     # and insert it into the proc's params automatically
     n.params.insert(1, env.firstDef)
