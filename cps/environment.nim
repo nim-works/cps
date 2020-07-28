@@ -11,6 +11,7 @@ const
   cpsDebug {.booldefine.} = false
   cpsTrace {.booldefine.} = false
   cpsExcept {.booldefine.} = false
+  cpsFn {.booldefine.} = false
   comments* = cpsDebug  ## embed comments within the transformation
 
 type
@@ -178,17 +179,29 @@ proc inherits*(e: Env): NimNode =
   assert not e.via.isEmpty
   result = if e.parent.isNil: e.via else: e.parent.id
 
-proc isDirty*(e: Env): bool =
-  ## the type hasn't been written since an add occurred
-  assert not e.isNil
-  result = if e.parent.isNil: len(e) > 0 else: e.id != e.parent.id
-  # a dirty parent yields a dirty child
-  result = result or (not e.parent.isNil and e.parent.isDirty)
-
 proc identity*(e: Env): NimNode =
   assert not e.isNil
   #assert not e.isDirty
   result = e.id
+
+proc isWritten(e: Env): bool =
+  ## why say in three lines what you can say in six?
+  block found:
+    for section in items(e.store):
+      for def in items(section):
+        result = repr(def[0]) == repr(e.identity)
+        if result:
+          break found
+
+proc isDirty*(e: Env): bool =
+  ## the type hasn't been written since an add occurred
+  when false:
+    assert not e.isNil
+    result = if e.parent.isNil: len(e) > 0 else: e.id != e.parent.id
+    # a dirty parent yields a dirty child
+    result = result or (not e.parent.isNil and e.parent.isDirty)
+  else:
+    result = not e.isWritten
 
 proc setDirty(e: var Env) =
   when false:
@@ -247,7 +260,10 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
 var c {.compiletime.}: int
 proc init(e: var Env) =
   if e.fn.isNil:
-    e.fn = genSym(nskField, "fn" & $c)
+    when cpsFn:
+      e.fn = genSym(nskField, "fn" & $c)
+    else:
+      e.fn = ident"fn"
   if e.ex.isNil:
     e.ex = genSym(nskField, "ex" & $c)
   if e.rs.isNil:
@@ -348,10 +364,25 @@ proc newEnv*(parent: var Env; copy = off): Env =
   else:
     result = parent
 
+proc makeFnType(e: Env): NimNode =
+  # ensure that the continuation type is not nillable
+  var continuation = e.firstDef
+  continuation[^1] = newEmptyNode()
+  result = newTree(nnkProcTy,
+                   newTree(nnkFormalParams,
+                           e.via, continuation), newEmptyNode())
+
+proc makeFnGetter(e: Env): NimNode =
+  result = newProc(ident"fn",
+                   params = [e.makeFnType, newIdentDefs(ident"c",
+                                                        e.identity)],
+                   pragmas = nnkPragma.newTree bindSym"cpsLift",
+                   body = newDotExpr(ident"c", e.fn))
+
 proc storeType*(e: var Env; force = off): Env =
   ## turn an env into a complete typedef in a type section
   assert not e.isNil
-  if force or e.isDirty:
+  if e.isDirty:
     if not e.parent.isNil:
       assert not e.parent.isDirty
       # must store the parent for inheritance ordering reasons;
@@ -359,6 +390,8 @@ proc storeType*(e: var Env; force = off): Env =
       e.via = e.parent.id
       e.parent = e.parent.storeType
     e.store.add nnkTypeSection.newTree e.makeType
+    when cpsFn:
+      e.store.add e.makeFnGetter
     # clearly, if we ever write again, we want it to be a new type
     result = newEnv(e)
     e = result
@@ -393,7 +426,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode) =
     for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
       # create a new identifier for the object field
       var field =
-        # symbols (probably gensym'd?) flow through...  think ex, fn
+        # symbols (probably gensym'd?) flow through...  think ex, rs
         if name.kind == nnkSym:
           name
         else:
@@ -446,12 +479,8 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   assert not via.isEmpty
   result = Env(c: c, store: store, via: via, id: via)
   init result
-  result.add newIdentDefs(result.fn,
-                          newTree(nnkProcTy,
-                                  newTree(nnkFormalParams,
-                                    via,
-                                    result.firstDef()),
-                                  newEmptyNode()))
+  when cpsFn:
+    result.add newIdentDefs(result.fn, makeFnType(result))
   when cpsExcept:
     result.add newIdentDefs(result.ex,
                             nnkRefTy.newTree(ident"CatchableError"))
