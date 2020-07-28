@@ -396,7 +396,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode) =
         if name.kind == nnkSym:
           name
         else:
-          genSym(nskField, name.strVal)
+          genSym(nskField, name.strVal & $c)
       e = e.set(field, newTree(kind,     # ident: <no var> type = default
                                newIdentDefs(name, stripVar(n[^2]), n[^1])))
   #[
