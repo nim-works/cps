@@ -568,11 +568,11 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
         .add nnkDiscardStmt.newNimNode(n)
         .add newEmptyNode()
   else:
-    var wrap = newBlockStmt(n)
+    var wrap = n
 
   # we'll use a statement list as the body
   result = newStmtList(wrap)
-  # to that list, we will add the local variables in scope
+  # to that list, we will insert the local variables in scope
   for name, asgn in localRetrievals(e, locals):
     result.insert(0, asgn)
   result.insert(0, doc "installing locals for " & $e.identity)
