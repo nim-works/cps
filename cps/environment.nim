@@ -354,7 +354,7 @@ proc makeType*(e: var Env): NimNode =
   #assert not e.isDirty
 
 proc first*(e: Env): NimNode = e.c
-proc firstDef*(e: Env): NimNode = newIdentDefs(e.c, e.via, newNilLit())
+proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newNilLit())
 
 proc newEnv*(parent: var Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -545,7 +545,7 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # setup the continuation for a tail call to a possibly new environment
   var ctor = newContinuation(e, goto)
 
-  if e.c.isNil or e.c.isEmpty:
+  if e.first.isNil or e.first.isEmpty:
     # we don't have a local continuation; just use the ctor we built
     result = ctor
   else:
@@ -554,20 +554,25 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
       doc"re-use the local continuation by setting the fn",
       newAssignment(newDotExpr(e.first, e.fn), goto),
       e.first)
+    # this when statement returns an e.identity one way or another
     result = nnkWhenStmt.newNimNode
     result.add nnkElifBranch.newTree(
-      # first, make sure the continuation is declared in scope
+      # FIXME: [broke] first, make sure the continuation is declared in scope
       newCall(ident"declaredInScope", e.first),
-      # compare e.c to e.identity; if the types are the same, then we can
-      # reuse the existing type and not create a new object.
+      # compare e.first to e.identity; if the types are the same, then we
+      # can reuse the existing type and not create a new object.
       newTree(nnkWhenStmt,
-              newTree(nnkElifBranch, infix(e.c, "is", e.identity), reuse),
+              newTree(nnkElifBranch, infix(e.first, "is", e.identity), reuse),
               newTree(nnkElse, ctor)))
     # else, use the ctor we just built
     result.add nnkElse.newTree(ctor)
 
   # setting the label here allows us to use it in trace composition
   e.label = goto
+  # we store the type whenever we define locals, because the next code that
+  # executes may need to cut a new type.  to put this another way, a later
+  # scope may add a name that clashes with a future ancestor of ours that is
+  # only a peer of the later scope...
   e = e.storeType
 
 template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.} =
