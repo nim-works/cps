@@ -548,6 +548,8 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
   # return a proc body that defines the locals in a scope above the
   # original body; this lets the lower scope shadow existing locals or
   # proc parameters.
+  #
+  # except that we don't use multiple scopes anymore.  we just use templates.
 
   when cpsExcept:
     var wrap = nnkTryStmt.newNimNode(n)
