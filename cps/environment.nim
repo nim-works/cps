@@ -3,6 +3,7 @@ import std/sequtils
 import std/hashes
 import std/tables
 import std/macros
+import std/algorithm
 
 {.experimental: "dynamicBindSym".}
 
@@ -273,17 +274,27 @@ proc init(e: var Env) =
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
     result = toSeq pairs(e.locals)
+    # least-recently-defined comes first
+    reverse result
+    # add any inherited types from the parent
     result.add allPairs(e.parent)
 
 iterator pairs(e: Env): Pair =
   assert not e.isNil
   var seen = initHashSet[string](len(e.locals))
-  var p = e
-  while not p.isNil:
-    for key, val in pairs(p.locals):
-      if not seen.containsOrIncl key.strVal:
-        yield (key: key, val: val)
-    p = p.parent
+  when true:
+    for pair in e.allPairs:
+      if not seen.containsOrIncl pair.key.strVal:
+        yield pair
+
+  else:
+    # no beuno because it proceeds in reverse order
+    var p = e
+    while not p.isNil:
+      for key, val in pairs(p.locals):
+        if not seen.containsOrIncl key.strVal:
+          yield (key: key, val: val)
+      p = p.parent
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
@@ -478,6 +489,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   ## the initial version of the environment
   assert not via.isNil
   assert not via.isEmpty
+  var c = if c.isNil or c.isEmpty: ident"continuation" else: c
   result = Env(c: c, store: store, via: via, id: via)
   init result
   when cpsFn:
@@ -518,9 +530,9 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
                                  newDotExpr(locals, field))
         yield (key: name, val: section)
 
-proc defineLocals*(e: var Env; goto: NimNode): NimNode =
-  result = nnkObjConstr.newTree(e.identity,
-                                newColonExpr(e.fn, goto))
+proc newContinuation(e: Env; goto: NimNode): NimNode =
+  ## else, perform the following alloc...
+  result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
   for field, section in pairs(e):
     if repr(field) notin [repr(e.fn), repr(e.ex)]:
       # the name from identdefs is not gensym'd (usually!)
@@ -528,6 +540,31 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
 
       # specify the gensym'd field name and the local name
       result.add newColonExpr(field, name)
+
+proc defineLocals*(e: var Env; goto: NimNode): NimNode =
+  # setup the continuation for a tail call to a possibly new environment
+  var ctor = newContinuation(e, goto)
+
+  if e.c.isNil or e.c.isEmpty:
+    # we don't have a local continuation; just use the ctor we built
+    result = ctor
+  else:
+    # when we can reuse the continuation, we'll merely set the fn pointer
+    var reuse = newStmtList(
+      doc"re-use the local continuation by setting the fn",
+      newAssignment(newDotExpr(e.first, e.fn), goto),
+      e.first)
+    result = nnkWhenStmt.newNimNode
+    result.add nnkElifBranch.newTree(
+      # first, make sure the continuation is declared in scope
+      newCall(ident"declaredInScope", e.first),
+      # compare e.c to e.identity; if the types are the same, then we can
+      # reuse the existing type and not create a new object.
+      newTree(nnkWhenStmt,
+              newTree(nnkElifBranch, infix(e.c, "is", e.identity), reuse),
+              newTree(nnkElse, ctor)))
+    # else, use the ctor we just built
+    result.add nnkElse.newTree(ctor)
 
   # setting the label here allows us to use it in trace composition
   e.label = goto
