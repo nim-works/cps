@@ -19,7 +19,7 @@ suite "cps":
 
   test "yield":
     proc foo() {.cps:Cont.} =
-      cps jield()
+      yield jield()
     trampoline foo()
 
   test "noop":
