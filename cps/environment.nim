@@ -43,6 +43,8 @@ type
     ideal: NimNode                  # the best parent for alloc purposes
     seen: HashSet[string]           # count/measure idents/syms by string
 
+    # special symbols for cps machinery
+    c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
@@ -323,7 +325,10 @@ proc makeType*(e: var Env): NimNode =
 
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
   #assert not e.isDirty
-  #
+
+proc first*(e: Env): NimNode = e.c
+proc firstDef*(e: Env): NimNode = newIdentDefs(e.c, e.via, newNilLit())
+
 proc newEnv*(parent: var Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
   ## or on-demand in the back-end (with copy = on)
@@ -333,6 +338,7 @@ proc newEnv*(parent: var Env; copy = off): Env =
                  via: parent.identity,
                  seen: parent.seen,
                  locals: parent.locals,
+                 c: parent.c,
                  ex: parent.ex,
                  rs: parent.rs,
                  fn: parent.fn,
@@ -433,13 +439,18 @@ proc add*(e: var Env; n: NimNode) =
   finally:
     e.setDirty
 
-proc newEnv*(store: var NimNode; via: NimNode): Env =
+proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   ## the initial version of the environment
   assert not via.isNil
   assert not via.isEmpty
-  result = Env(store: store, via: via, id: via)
+  result = Env(c: c, store: store, via: via, id: via)
   init result
-  result.add newIdentDefs(result.fn, via)
+  result.add newIdentDefs(result.fn,
+                          newTree(nnkProcTy,
+                                  newTree(nnkFormalParams,
+                                    via,
+                                    result.firstDef()),
+                                  newEmptyNode()))
   result.add newIdentDefs(result.ex,
                           nnkRefTy.newTree(ident"CatchableError"))
 
