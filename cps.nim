@@ -258,6 +258,7 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   else:
     var body = newStmtList(newBlockStmt(n))
     var locals = genSym(nskParam, "locals")
+    echo env.repr
     for name, asgn in localRetrievals(env, locals):
       body.insert(0, asgn)
     body.insert(0, doc "installing locals for " & $env.identity)
@@ -495,7 +496,6 @@ macro cps*(T: untyped, n: untyped): untyped =
     else:
       debugEcho repr(orig)
 
-  echo n.treerepr
   assert n.kind in RoutineNodes
   if not n.params[0].isEmpty:
     error "No return type allowed for now"

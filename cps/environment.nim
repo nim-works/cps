@@ -396,10 +396,8 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
   ## read locals out of an env
   let locals = e.castToChild(locals)
   for name, value in pairs(e):
-    let section = newNimNode(value.kind, locals)
-    # value[0] is the (only) identdefs of the section; [0][1] is type
-    section.add newIdentDefs(name, value[0][1], newDotExpr(locals, name))
-    yield (key: name, val: section)
+    let tmp = nnkTemplateDef.newTree(name, newEmptyNode(), newEmptyNode(), newEmptyNode(), newEmptyNode(), newEmptyNode(), newDotExpr(locals, name))
+    yield (key: name, val: tmp)
 
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   e.storeType
