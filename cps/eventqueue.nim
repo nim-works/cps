@@ -67,7 +67,7 @@ when cpsTrace:
   type
     Frame = object
       c: Cont
-      e: ref Exception
+      e: ref CatchableError
     Stack = Deque[Frame]
 
 const
@@ -317,7 +317,7 @@ proc trampoline*(c: Cont) =
       when cpsTrace:
         if not c.isNil:
           addFrame(stack, c)
-    except Exception:
+    except CatchableError:
       when cpsTrace:
         writeStackTrace(stack)
       raise
