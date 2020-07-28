@@ -43,7 +43,7 @@ suite "cps":
     trampoline foo()
 
   test "https://github.com/disruptek/cps/issues/22":
-    proc foo(a, b, c: int = 3): Cont {.cps.} =
+    proc foo(a, b, c: int = 3) {.cps: Cont.} =
       var a: int = 5
       cps noop()
       var b: int = b + a
@@ -54,7 +54,7 @@ suite "cps":
         c == 3
     trampoline foo(1, 2)
 
-    proc foo2(a, b, c: var int): Cont {.cps.} =
+    proc foo2(a, b, c: var int) {.cps: Cont.} =
       a = 5
       cps noop()
       b = b + a
@@ -67,7 +67,7 @@ suite "cps":
     trampoline foo2(x, y, z)
 
   test "https://github.com/disruptek/cps/issues/16":
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i, j, k: int = 0
       j = 5
       var p: int
@@ -84,7 +84,7 @@ suite "cps":
 
 when false:
   test "https://github.com/disruptek/cps/issues/15":
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var (i, j, k) = (1, 2, 3)
       cps noop()
       check i == 1
