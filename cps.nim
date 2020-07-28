@@ -533,11 +533,17 @@ macro cps*(T: untyped, n: untyped): untyped =
     inc first
 
   else:
-    # otherwise, just use a gensym'd "cps"
-    env = newEnv(genSym(nskParam, "cps"), types, n.params[0])
     when false:
       ##
-      ## we don't do this -- so that you can foo() from outside cps context
+      ## we don't do this anymore,
+      ## -- so that we don't get an `environment misses` error
+      ##
+      # otherwise, just use a gensym'd "cps"
+      env = newEnv(genSym(nskParam, "cps"), types, n.params[0])
+    when false:
+      ##
+      ## we don't do this anymore,
+      ## -- so that you can foo() from outside cps context
       ##
 
       # and insert it into the proc's params automatically
