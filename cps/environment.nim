@@ -288,7 +288,11 @@ proc contains*(e: Env; key: NimNode): bool =
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
-  var pragma = nnkPragma.newTree bindSym"cpsLift"
+  when false:
+    # i'm tried of looking at these gratuitous pragmas
+    var pragma = nnkPragma.newTree bindSym"cpsLift"
+  else:
+    var pragma = newEmptyNode()
   var record = nnkRecList.newNimNode(e.identity)
   populateType(e, record)
   var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
