@@ -523,15 +523,18 @@ macro cps*(T: untyped, n: untyped): untyped =
   var types = newStmtList()
   var env: Env
 
+  # creating the env with the continuation type,
+  # and adding proc parameters to the env
+  var first = 1 # index of first param to add to locals
   if len(n.params) > 1 and eqIdent(n.params[0], n.params[1][1]):
     # if the return type matches that of the first argument, we'll assume
     # the user wants that argument name to reflect the continuation
     env = newEnv(n.params[1][0], types, n.params[0])
+    inc first
 
   else:
     # otherwise, just use a gensym'd "cps"
     env = newEnv(genSym(nskParam, "cps"), types, n.params[0])
-
     when false:
       ##
       ## we don't do this -- so that you can foo() from outside cps context
@@ -539,9 +542,10 @@ macro cps*(T: untyped, n: untyped): untyped =
 
       # and insert it into the proc's params automatically
       n.params.insert(1, env.firstDef)
+      inc first
 
   # adding the remaining proc params to the environment
-  for defs in n.params[2 .. ^1]:
+  for defs in n.params[first .. ^1]:
     env.add defs
 
   # ensaftening the proc's body

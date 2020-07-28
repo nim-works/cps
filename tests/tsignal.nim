@@ -12,7 +12,7 @@ proc signalWaiter() {.cps: Cont.} =
   yield wait(sem)
   success = true
 
-trampoline signalSleeper(nil.Cont, 10)
+trampoline signalSleeper(10)
 trampoline signalWaiter()
 
 run()
