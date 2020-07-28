@@ -10,6 +10,7 @@ const
   cpsCast {.booldefine.} = false
   cpsDebug {.booldefine.} = false
   cpsTrace {.booldefine.} = false
+  cpsExcept {.booldefine.} = false
   comments* = cpsDebug  ## embed comments within the transformation
 
 type
@@ -451,8 +452,9 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
                                     via,
                                     result.firstDef()),
                                   newEmptyNode()))
-  result.add newIdentDefs(result.ex,
-                          nnkRefTy.newTree(ident"CatchableError"))
+  when cpsExcept:
+    result.add newIdentDefs(result.ex,
+                            nnkRefTy.newTree(ident"CatchableError"))
 
 proc identity*(e: var Env): NimNode =
   assert not e.isNil
@@ -513,28 +515,33 @@ template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.}
     body
 
 proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
-  # wrap gives us a scope above which to install our env; that lets
-  # the scope inside the `try:` shadow existing locals.
-  var wrap = nnkTryStmt.newNimNode(n)
+  # return a proc body that defines the locals in a scope above the
+  # original body; this lets the lower scope shadow existing locals or
+  # proc parameters.
 
-  # add the body to the try/finally
-  wrap.add n
-  wrap.add newTree(nnkExceptBranch, ident"CatchableError")
-      .add newTree(nnkStmtList,
-                   doc"we probably want to do this in the finally below",
-                   # stash the current exception
-                   newAssignment(newDotExpr(ident"result", e.ex),
-                                 newCall(ident"getCurrentException")),
-                   # raise (re-raise) the exception
-                   nnkRaiseStmt.newNimNode(n).add newEmptyNode())
+  when cpsExcept:
+    var wrap = nnkTryStmt.newNimNode(n)
 
-  # add a finally clause that merely issues an empty discard
-  # XXX: we'll hook cpsTrace here...
-  wrap.add nnkFinally.newNimNode(n)
-      .add nnkDiscardStmt.newNimNode(n)
-      .add newEmptyNode()
+    # add the body to the try/finally
+    wrap.add n
+    wrap.add newTree(nnkExceptBranch, ident"CatchableError")
+        .add newTree(nnkStmtList,
+                     doc"we probably want to do this in the finally below",
+                     # stash the current exception
+                     newAssignment(newDotExpr(ident"result", e.ex),
+                                   newCall(ident"getCurrentException")),
+                     # raise (re-raise) the exception
+                     nnkRaiseStmt.newNimNode(n).add newEmptyNode())
 
-  # we'll use a statement list as the body, around the try/finally
+    # add a finally clause that merely issues an empty discard
+    # XXX: we'll hook cpsTrace here...
+    wrap.add nnkFinally.newNimNode(n)
+        .add nnkDiscardStmt.newNimNode(n)
+        .add newEmptyNode()
+  else:
+    var wrap = newBlockStmt(n)
+
+  # we'll use a statement list as the body
   result = newStmtList(wrap)
   # to that list, we will add the local variables in scope
   for name, asgn in localRetrievals(e, locals):
