@@ -45,6 +45,7 @@ type
 
     fn: NimNode                     # the sym we use for the goto target
     ex: NimNode                     # the sym we use for stored exception
+    rs: NimNode                     # the sym we use for "yielded" result
 
 func doc*(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -246,6 +247,8 @@ proc init(e: var Env) =
     e.fn = genSym(nskField, "fn" & $c)
   if e.ex.isNil:
     e.ex = genSym(nskField, "ex" & $c)
+  if e.rs.isNil:
+    e.rs = genSym(nskField, "rs" & $c)
   e.id = genSym(nskType, "env" & $c)
   inc c
 
@@ -327,6 +330,7 @@ proc newEnv*(parent: var Env; copy = off): Env =
                  seen: parent.seen,
                  locals: parent.locals,
                  ex: parent.ex,
+                 rs: parent.rs,
                  fn: parent.fn,
                  parent: parent)
     init result
@@ -502,8 +506,9 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
   wrap.add n
   wrap.add newTree(nnkExceptBranch, ident"CatchableError")
       .add newTree(nnkStmtList,
+                   doc"we probably want to do this in the finally below",
                    # stash the current exception
-                   newAssignment(newDotExpr(locals, e.ex),
+                   newAssignment(newDotExpr(ident"result", e.ex),
                                  newCall(ident"getCurrentException")),
                    # raise (re-raise) the exception
                    nnkRaiseStmt.newNimNode(n).add newEmptyNode())
