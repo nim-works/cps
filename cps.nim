@@ -19,6 +19,7 @@ type
   NodeFilter = proc(n: NimNode): NimNode
 
 const
+  callish = {nnkCall, nnkCommand}
   unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
@@ -32,9 +33,14 @@ proc filter(n: NimNode; f: NodeFilter): NimNode =
 
 proc isCpsCall(n: NimNode): bool =
   # cps foo()
-  result = n.kind == nnkCommand and
-           n[0].eqIdent("cps") and
-           n[1].kind in {nnkCall, nnkCommand}
+  if len(n) > 0:
+    case n.kind
+    of callish:
+      result = n[0].eqIdent("cps") and n[1].kind in callish
+    of nnkYieldStmt:
+      result = n[0].kind in callish
+    else:
+      result = false
 
 func stripComments(n: NimNode): NimNode =
   ## remove doc statements because that was a stupid idea
@@ -56,12 +62,22 @@ func returnTo(n: NimNode): NimNode {.deprecated.} =
 
 proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
-  assert p.isCpsCall
   # install locals as the 1st argument
   result = newStmtList()
   let locals = e.defineLocals(returnTo(e.nextGoto))
-  p[1].insert(1, e.maybeConvertToRoot(locals))
-  result.add nnkReturnStmt.newNimNode(n).add p[1]
+  var call: NimNode
+  case p.kind
+  of nnkCommand:
+    # cps foo()
+    call = p[1]
+  of nnkYieldStmt:
+    # yield foo()
+    call = p[0]
+  else:
+    assert p.isCpsCall, "does not appear to be a cps call"
+    raise newException(Defect, "unexpected cps call type: " & $p.kind)
+  call.insert(1, e.maybeConvertToRoot(locals))
+  result.add nnkReturnStmt.newNimNode(n).add call
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
