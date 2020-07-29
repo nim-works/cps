@@ -268,12 +268,8 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
 
     #result.doc "creating a new proc: " & name.repr
     # add the declaration
-    when false: # this should work, but it provokes ICE...
-      result.add newProc(name = name, pragmas = pragmas, body = newEmptyNode(),
-                         params = [env.root, newIdentDefs(locals, env.root)])
-    else:
-      result.add newProc(name = name, pragmas = pragmas,
-                         params = [env.root, newIdentDefs(locals, env.root)])
+    result.add newProc(name = name, pragmas = pragmas, body = newEmptyNode(),
+                       params = [env.root, newIdentDefs(locals, env.root)])
     # add the implementation
     result.add newProc(name = name, pragmas = pragmas, body = body,
                        params = [env.root, newIdentDefs(locals, env.root)])
