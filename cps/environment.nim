@@ -3,13 +3,19 @@ import std/sequtils
 import std/hashes
 import std/tables
 import std/macros
+import std/algorithm
 
 {.experimental: "dynamicBindSym".}
+
+import cps/futures
+export isEmpty, returnTo, newFuture, Future
 
 const
   cpsCast {.booldefine.} = false
   cpsDebug {.booldefine.} = false
   cpsTrace {.booldefine.} = false
+  cpsExcept {.booldefine.} = false
+  cpsFn {.booldefine.} = false
   comments* = cpsDebug  ## embed comments within the transformation
 
 type
@@ -24,21 +30,25 @@ type
     key: NimNode
     val: NimNode
 
-  Future = tuple
-    kind: NimNodeKind        # the source node kind we're coming from
-    node: NimNode            # the identifier/proc we're going to
-    name: NimNode            # named blocks populate this for named breaks
-  Futures = seq[Future]
+  # the idents|symbols and the typedefs they refer to in order of discovery
+  LocalCache = OrderedTable[NimNode, NimNode]
 
   Env* = ref object
     id: NimNode                     # the identifier of our continuation type
-    via: NimNode                    # the type we inherit from
+    via: NimNode                    # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
-    child: Table[NimNode, NimNode]  # locals and their typedefs
-    goto: Futures                   # identifiers of future gotos
+    locals: LocalCache              # locals and their typedefs|generics
+    gotos: Futures                  # identifiers of future gotos
     breaks: Futures                 # identifiers of future breaks
-    store: NimNode                  # where to put typedefs
+    store: NimNode                  # where to put typedefs, a stmtlist
     label: NimNode                  # the last tailcall (goto)
+    seen: HashSet[string]           # count/measure idents/syms by string
+
+    # special symbols for cps machinery
+    c: NimNode                      # the sym we use for the continuation
+    fn: NimNode                     # the sym we use for the goto target
+    ex: NimNode                     # the sym we use for stored exception
+    rs: NimNode                     # the sym we use for "yielded" result
 
 func doc*(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -53,27 +63,12 @@ proc doc*(n: var NimNode; s: string) =
     if n.kind == nnkStmtList:
       n.add doc(s)
 
-func insideCps*(e: Env): bool = len(e.goto) > 0 or len(e.breaks) > 0
-
-proc next(ns: Futures): Future =
-  ## read the next call off the stack
-  if len(ns) == 0:
-    (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
-  else:
-    ns[^1]
-
-proc last(ns: Futures): Future =
-  ## query the last loop in the stack
-  result = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
-  for i in countDown(ns.high, ns.low):
-    if ns[i].kind in {nnkWhileStmt, nnkForStmt}:
-      result = ns[i]
-      break
+func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
 template searchScope(env: Env; x: untyped;
                      p: proc(ns: Futures): Future): Future =
   var e = env
-  var r = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
+  var r = newFuture()
   while not e.isNil:
     r = p(e.`x`)
     if r.kind == nnkNilLit:
@@ -82,39 +77,52 @@ template searchScope(env: Env; x: untyped;
       break
   r
 
-func lastGotoLoop*(e: Env): Future = searchScope(e, goto, last)
+func lastGotoLoop*(e: Env): Future = searchScope(e, gotos, last)
 func lastBreakLoop*(e: Env): Future = searchScope(e, breaks, last)
 
-func nextGoto*(e: Env): NimNode = searchScope(e, goto, next).node
-func nextBreak*(e: Env): NimNode = searchScope(e, breaks, next).node
-
-proc breakName(n: NimNode): NimNode =
-  result =
-    if n.kind in {nnkBlockStmt} and len(n) > 1:
-      n[0]
-    else:
-      newEmptyNode()
+func nextGoto*(e: Env): Future = searchScope(e, gotos, next)
+func nextBreak*(e: Env): Future = searchScope(e, breaks, next)
 
 proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
-  e.goto.add (k.kind, n, newEmptyNode())
+  ## add to a stack of gotos, which are normal exits from control flow.
+  ##
+  ## think of things like `return` and `if: discard` and the end of a
+  ## while loop
+  e.gotos.add(k, n)
 
-proc addBreak*(e: var Env; k: NimNode; n: NimNode) =
-  e.breaks.add (k.kind, n, k.breakName)
+proc addBreak*(e: var Env; future: Future) =
+  ## it's nice when we can do this simply
+  e.breaks.add future
 
-proc popGoto*(e: var Env): NimNode = pop(e.goto).node
-proc popBreak*(e: var Env): NimNode = pop(e.breaks).node
+proc addBreak*(e: var Env; k: NimNode; n: NimNode) {.deprecated.} =
+  ## these are breaks, which are like gotos but also not.
+  ##
+  ## we need to keep track of them separately for hysterical reasons.
+  e.breaks.add(k, n)
 
-proc insideFor*(e: Env): bool = lastBreakLoop(e).kind == nnkForStmt
-proc insideWhile*(e: Env): bool = lastBreakLoop(e).kind == nnkWhileStmt
+proc popGoto*(e: var Env): NimNode =
+  ## pop a goto proc off the stack; return its node
+  pop(e.gotos).node
 
-proc topOfWhile*(e: Env): NimNode =
+proc popBreak*(e: var Env): NimNode =
+  ## same thing, but for breaks
+  pop(e.breaks).node
+
+proc insideFor*(e: Env): bool =
+  ## does what it says on the tin, and does it well, i might add
+  lastBreakLoop(e).kind == nnkForStmt
+
+proc insideWhile*(e: Env): bool =
+  ## actually, this is the better one.
+  lastBreakLoop(e).kind == nnkWhileStmt
+
+proc topOfWhile*(e: Env): Future =
   ## fetch the goto target in order to `continue` inside `while:`
   assert e.insideWhile, "i thought i was in a while loop"
-  let future = lastGotoLoop(e)
-  assert future.kind == nnkWhileStmt, "goto doesn't match break"
-  result = future.node
+  result = lastGotoLoop(e)
+  assert result.kind == nnkWhileStmt, "goto doesn't match break"
 
-proc namedBreak*(e: Env; n: NimNode): NimNode =
+proc namedBreak*(e: Env; n: NimNode): Future =
   ## fetch the goto target in order to `break foo`
   assert n.kind == nnkBreakStmt
   if len(n) == 0:
@@ -122,16 +130,12 @@ proc namedBreak*(e: Env; n: NimNode): NimNode =
   else:
     proc match(ns: Futures): Future =
       ## find the loop matching the requested named break
-      result = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
+      result = newFuture()
       for i in countDown(ns.high, ns.low):
-        if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].name, n[0]):
+        if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].label, n[0]):
           result = ns[i]
           break
-    result = searchScope(e, breaks, match).node
-
-func isEmpty*(n: NimNode): bool =
-  ## `true` if the node `n` is Empty
-  result = not n.isNil and n.kind == nnkEmpty
+    result = searchScope(e, breaks, match)
 
 proc hash*(n: NimNode): Hash =
   var h: Hash = 0
@@ -140,8 +144,7 @@ proc hash*(n: NimNode): Hash =
 
 proc len*(e: Env): int =
   if not e.isNil:
-    result = len(e.child)
-    result.inc len(e.parent)
+    result = len(e.locals)
 
 proc isEmpty*(e: Env): bool =
   result = len(e) == 0
@@ -150,23 +153,37 @@ proc inherits*(e: Env): NimNode =
   assert not e.isNil
   assert not e.via.isNil
   assert not e.via.isEmpty
-  result = e.via
-
-proc isDirty*(e: Env): bool =
-  assert not e.isNil
-  result = e.id.isNil or e.id.isEmpty
-  # a dirty parent yields a dirty child
-  result = result or (not e.parent.isNil and e.parent.isDirty)
+  result = if e.parent.isNil: e.via else: e.parent.id
 
 proc identity*(e: Env): NimNode =
   assert not e.isNil
-  assert not e.isDirty
+  #assert not e.isDirty
   result = e.id
 
+proc isWritten(e: Env): bool =
+  ## why say in three lines what you can say in six?
+  block found:
+    for section in items(e.store):
+      for def in items(section):
+        result = repr(def[0]) == repr(e.identity)
+        if result:
+          break found
+
+proc isDirty*(e: Env): bool =
+  ## the type hasn't been written since an add occurred
+  when false:
+    assert not e.isNil
+    result = if e.parent.isNil: len(e) > 0 else: e.id != e.parent.id
+    # a dirty parent yields a dirty child
+    result = result or (not e.parent.isNil and e.parent.isDirty)
+  else:
+    result = not e.isWritten
+
 proc setDirty(e: var Env) =
-  assert not e.isNil
-  e.id = newEmptyNode()
-  assert e.isDirty
+  when false:
+    assert not e.isNil
+    e.id = newEmptyNode()
+    assert e.isDirty
 
 proc root*(e: Env): NimNode =
   var r = e
@@ -174,7 +191,7 @@ proc root*(e: Env): NimNode =
     r = r.parent
   result = r.inherits
 
-proc init[T](c: T; l: LineInfo): T =
+proc init[T](c: T; l: LineInfo): T {.used.} =
   warning "provide an init proc for cpsTrace"
 
 proc addTrace(e: Env; n: NimNode): NimNode =
@@ -216,206 +233,367 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   else:
     locals
 
-proc newEnv*(store: var NimNode; via: NimNode): Env =
-  assert not via.isNil
-  assert not via.isEmpty
-  result = Env(store: store, via: via, id: via)
+var c {.compiletime.}: int
+proc init(e: var Env) =
+  if e.fn.isNil:
+    when cpsFn:
+      e.fn = genSym(nskField, "fn" & $c)
+    else:
+      e.fn = ident"fn"
+  if e.ex.isNil:
+    e.ex = genSym(nskField, "ex" & $c)
+  if e.rs.isNil:
+    e.rs = genSym(nskField, "rs" & $c)
+  e.id = genSym(nskType, "env" & $c)
+  inc c
 
-proc children(e: Env): seq[Pair] =
+proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
-    result = toSeq pairs(e.child)
-    result.add children(e.parent)
-
-proc seenHere(e: Env; size = 4): HashSet[string] =
-  ## a hashset of identifiers defined in the env
-  assert not e.isNil
-  result = initHashSet[string](sets.rightSize(len(e.child)))
-  for key in keys(e.child):
-    result.incl key.strVal
-
-proc seen(e: Env; size = 4): HashSet[string] =
-  ## a hashset of identifiers defined in the env or its parent
-  if e.isNil or e.parent.isNil:
-    result = initHashSet[string](sets.rightSize(size))
-  else:
-    result = e.parent.seen(len(e))
-  if not e.isNil:
-    for key in keys(e.child):
-      result.incl key.strVal
+    result = toSeq pairs(e.locals)
+    # least-recently-defined comes first
+    reverse result
+    # add any inherited types from the parent
+    result.add allPairs(e.parent)
 
 iterator pairs(e: Env): Pair =
   assert not e.isNil
-  var seen = initHashSet[string](sets.rightSize(len(e.child)))
-  var p = e
-  while not p.isNil:
-    for key, val in pairs(p.child):
-      if not seen.containsOrIncl key.strVal:
-        yield (key: key, val: val)
-    p = p.parent
+  var seen = initHashSet[string](len(e.locals))
+  when true:
+    for pair in e.allPairs:
+      if not seen.containsOrIncl pair.key.strVal:
+        yield pair
+
+  else:
+    # no beuno because it proceeds in reverse order
+    var p = e
+    while not p.isNil:
+      for key, val in pairs(p.locals):
+        if not seen.containsOrIncl key.strVal:
+          yield (key: key, val: val)
+      p = p.parent
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
-  for name, section in pairs(e.child):
+  for name, section in pairs(e.locals):
     for defs in items(section):
       if defs[1].isEmpty:
         error "give " & $name & " a type: " & repr(section)
       else:
         # name is an ident or symbol
-        n.add newIdentDefs(ident($name), defs[1])
+        n.add newIdentDefs(name, defs[1])
 
 template cpsLift*() {.pragma.}
 
 proc contains*(e: Env; key: NimNode): bool =
+  ## you're giving us a symbol|ident and we're telling you if we have it
+  ## recorded with that name.
   assert not key.isNil
   assert key.kind in {nnkSym, nnkIdent}
   result = key.strVal in e.seen
 
-proc `[]=`*(e: var Env; key: NimNode; val: NimNode) =
-  ## set [ident|sym] = let/var section
-  assert key.kind in {nnkSym, nnkIdent}
-  assert val.kind in {nnkVarSection, nnkLetSection}
-  assert key notin e.child
-  e.child[key] = val
-  setDirty e
-
-proc addSection(e: var Env; n: NimNode) =
-  ## add a let/var section to the env
-  assert n.kind in {nnkVarSection, nnkLetSection}
-  for i in 0 ..< len(n):
-    var def = n[i]
-    case def.kind
-    of nnkIdentDefs:
-      if len(def) == 2:
-        # ident: type
-        def.add newEmptyNode()
-      for name in def[0 ..< len(def)-2]:  # ie. omit type and default
-        e[name] = newTree(n.kind,
-                          # ident: type = default
-                          newIdentDefs(name, def[^2], def[^1]))
-    #[
-    of nnkVarTuple:
-      assert def.last.kind == nnkPar, "expected parenthesis: " & repr(def)
-      let par = def.last
-      for i in 0 ..< len(par):
-        let name = def[i]
-        e[name] = newTree(n.kind,
-                          newIdentDefs(name, getTypeInst(par[i]), par[i]))
-    ]#
-    else:
-      error $def.kind & " is unsupported by cps: \n" & treeRepr(def)
-
-proc letOrVar(n: NimNode): NimNode =
-  ## used on params to turn them into let/var sections
-  assert n.kind == nnkIdentDefs
-  # FIXME: support `a, b, c: int = 5` syntax
-  case n[1].kind
-  of nnkEmpty:
-    error "i need a type: " & repr(n)
-  of nnkVarTy:
-    result = nnkVarSection.newTree newIdentDefs(n[0], n[1][0])
-  else:
-    result = nnkLetSection.newTree newIdentDefs(n[0], n[1])
-  if len(result.last) < len(n):
-    result.last.add n.last
-
-proc add*(e: var Env; n: NimNode) =
-  ## add a let/var section or proc param to the env
-  case n.kind
-  of nnkVarSection, nnkLetSection:
-    for defs in items(n):
-      e.addSection newTree(n.kind, defs)
-  of nnkIdentDefs:
-    e.addSection letOrVar(n)
-  else:
-    assert false, "unrecognized input node " & repr(n)
-
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
-  var pragma = nnkPragma.newTree bindSym"cpsLift"
+  when false:
+    # i'm tried of looking at these gratuitous pragmas
+    var pragma = nnkPragma.newTree bindSym"cpsLift"
+  else:
+    var pragma = newEmptyNode()
   var record = nnkRecList.newNimNode(e.identity)
   populateType(e, record)
   var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
-proc performReparent(e: var Env) =
-  assert not e.isNil
-  var here = seenHere(e)
-  var p = e.parent
-  while not p.isNil:
-    var there = seen(p)
-    if card(here * there) == 0:
-      assert not p.isDirty
-      e.via = p.id
-      break
-    elif p.parent.isNil:
-      e.via = p.via
-    p = p.parent
+proc `==`(a, b: Env): bool = a.seen == b.seen
+proc `<`(a, b: Env): bool = a.seen < b.seen
+proc `*`(a, b: Env): HashSet[string] = a.seen * b.seen
 
-var c {.compiletime.}: int
+proc reparent(e: var Env; p: Env) =
+  ## set all nodes to have a parent at least as large as p
+  if not e.isNil:
+    if e < p:
+      # p is a superset of us; suggest it to our parents
+      reparent(e.parent, p)
+      if e.parent < p:
+        # and then set it as our parent if it's better
+        e.parent = p
+    else:
+      # offer ourselves to our parent instead
+      reparent(e.parent, e)
+
 proc makeType*(e: var Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-  e.id = genSym(nskType, "env" & $c)
-  inc c
 
   # determine if a symbol clash necessitates pointing to a new parent
-  performReparent(e)
+  #performReparent(e)
 
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
-  assert not e.isDirty
+  #assert not e.isDirty
 
-proc storeType*(e: var Env) =
+proc first*(e: Env): NimNode = e.c
+proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newNilLit())
+
+proc newEnv*(parent: var Env; copy = off): Env =
+  ## this is called as part of the recursion in the front-end,
+  ## or on-demand in the back-end (with copy = on)
+  assert not parent.isNil
+  if copy:
+    result = Env(store: parent.store,
+                 via: parent.identity,
+                 seen: parent.seen,
+                 locals: parent.locals,
+                 c: parent.c,
+                 ex: parent.ex,
+                 rs: parent.rs,
+                 fn: parent.fn,
+                 parent: parent)
+    init result
+  else:
+    result = parent
+
+proc makeFnType(e: Env): NimNode =
+  # ensure that the continuation type is not nillable
+  var continuation = e.firstDef
+  continuation[^1] = newEmptyNode()
+  result = newTree(nnkProcTy,
+                   newTree(nnkFormalParams,
+                           e.via, continuation), newEmptyNode())
+
+proc makeFnGetter(e: Env): NimNode =
+  result = newProc(ident"fn",
+                   params = [e.makeFnType, newIdentDefs(ident"c",
+                                                        e.identity)],
+                   pragmas = nnkPragma.newTree bindSym"cpsLift",
+                   body = newDotExpr(ident"c", e.fn))
+
+proc storeType*(e: var Env; force = off): Env =
   ## turn an env into a complete typedef in a type section
   assert not e.isNil
   if e.isDirty:
     if not e.parent.isNil:
-      e.parent.storeType
+      assert not e.parent.isDirty
+      # must store the parent for inheritance ordering reasons;
+      # also, we don't want it to be changed under our feet.
+      e.via = e.parent.id
+      e.parent = e.parent.storeType
     e.store.add nnkTypeSection.newTree e.makeType
-  assert not e.isDirty
+    when cpsFn:
+      e.store.add e.makeFnGetter
+    # clearly, if we ever write again, we want it to be a new type
+    result = newEnv(e)
+    e = result
+  else:
+    result = e
+    assert not e.isDirty
+
+proc set(e: var Env; key: NimNode; val: NimNode): Env =
+  ## set [ident|sym] = let/var section
+  assert key.kind in {nnkSym, nnkIdent}
+  assert val.kind in {nnkVarSection, nnkLetSection}
+  if key in e.locals:
+    result = e.storeType
+  else:
+    result = e
+  result.locals[key] = val
+  result.seen.incl key.strVal
+  setDirty result
+
+proc stripVar(n: NimNode): NimNode =
+  ## pull the type out of a VarTy
+  result = if n.kind == nnkVarTy: n[0] else: n
+
+proc addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode) =
+  ## add `a, b, c: type = default` to the env
+  case n.kind
+  of nnkIdentDefs:
+    if len(n) == 2:
+      # ident: type; we'll add a default for numbering reasons
+      n.add newEmptyNode()
+    # iterate over the identifier names (a, b, c)
+    for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
+      # the workaround that zevv demanded repeatedly
+      inc c
+      # create a new identifier for the object field
+      var field =
+        # symbols (probably gensym'd?) flow through...  think ex, rs
+        if name.kind == nnkSym:
+          name
+        else:
+          genSym(nskField, name.strVal & $c)
+      e = e.set(field, newTree(kind,     # ident: <no var> type = default
+                               newIdentDefs(name, stripVar(n[^2]), n[^1])))
+  #[
+  of nnkVarTuple:
+    assert n.last.kind == nnkPar, "expected parenthesis: " & repr(n)
+    let par = n.last
+    for i in 0 ..< len(par):
+      let name = n[i]
+      e[name] = newTree(n.kind,
+                        newIdentDefs(name, getTypeInst(par[i]), par[i]))
+  ]#
+  else:
+    error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
+
+proc letOrVar(n: NimNode): NimNodeKind =
+  ## choose between let or var for proc parameters
+  assert n.kind == nnkIdentDefs
+  if len(n) == 2:
+    # ident: type; we'll add a default for numbering reasons
+    n.add newEmptyNode()
+  case n[^2].kind
+  of nnkEmpty:
+    error "i need a type: " & repr(n)
+  of nnkVarTy:
+    result = nnkVarSection
+  else:
+    result = nnkLetSection
+
+proc add*(e: var Env; n: NimNode) =
+  ## add a let/var section or proc param to the env
+  try:
+    case n.kind
+    of nnkVarSection, nnkLetSection:
+      for defs in items(n):
+        e.addIdentDef(n.kind, defs)
+    of nnkIdentDefs:
+      e.addIdentDef(letOrVar(n), n)
+    else:
+      raise newException(Defect, "unrecognized input node " & repr(n))
+  finally:
+    e.setDirty
+
+proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
+  ## the initial version of the environment
+  assert not via.isNil
+  assert not via.isEmpty
+  var c = if c.isNil or c.isEmpty: ident"continuation" else: c
+  result = Env(c: c, store: store, via: via, id: via)
+  init result
+  when cpsFn:
+    result.add newIdentDefs(result.fn, makeFnType(result))
+  when cpsExcept:
+    result.add newIdentDefs(result.ex,
+                            nnkRefTy.newTree(ident"CatchableError"))
 
 proc identity*(e: var Env): NimNode =
   assert not e.isNil
-  e.storeType
+  assert not e.id.isNil
+  assert not e.id.isEmpty
   result = e.id
-
-proc newEnv*(parent: var Env): Env =
-  ## a new env from the given parent
-  assert not parent.isNil
-  # we'll want to optimize this block out, ultimately,
-  # so that we don't need to dump types that aren't used
-  block:
-    parent.storeType
-    result = newEnv(parent.store, parent.id)
-  result.parent = parent
-  result.store = parent.store
-
-iterator localAssignments*(e: Env; locals: NimNode): Pair {.deprecated.} =
-  for name, section in pairs(e):
-    yield (key: name, val: newAssignment(newDotExpr(locals, name), name))
 
 iterator localRetrievals*(e: Env; locals: NimNode): Pair =
   ## read locals out of an env
   let locals = e.castToChild(locals)
-  for name, value in pairs(e):
-    let tmp = nnkTemplateDef.newTree(name, newEmptyNode(), newEmptyNode(), newEmptyNode(), 
-                                     newEmptyNode(), newEmptyNode(), newDotExpr(locals, name))
-    yield (key: name, val: tmp)
+  for field, value in pairs(e):
+    # we skip special fields here
+    if repr(field) notin [repr(e.fn), repr(e.ex)]:
+      # remake the section; we use locals here only for line info
+      let section = newNimNode(value.kind, locals)
+      # the name of this local is the first field of the only val
+      assert len(value) == 1
+
+      # recreate the name to cast a field symbol into a local value
+      let name = ident(repr(value[0][0]))
+
+      when true:
+        let tmpl = nnkTemplateDef.newTree(name, newEmptyNode(),
+                                          newEmptyNode(), newEmptyNode(),
+                                          newEmptyNode(), newEmptyNode(),
+                                          newDotExpr(locals, field))
+        yield (key: name, val: tmpl)
+      else:
+        section.add newIdentDefs(name, value[0][1],
+                                 # basically, `name: int = locals.field`
+                                 newDotExpr(locals, field))
+        yield (key: name, val: section)
+
+proc newContinuation(e: Env; goto: NimNode): NimNode =
+  ## else, perform the following alloc...
+  result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
+  for field, section in pairs(e):
+    if repr(field) notin [repr(e.fn), repr(e.ex)]:
+      # the name from identdefs is not gensym'd (usually!)
+      let name = section.last[0]
+
+      # specify the gensym'd field name and the local name
+      result.add newColonExpr(field, name)
 
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
-  e.storeType
-  result = nnkObjConstr.newTree(e.identity, newColonExpr(ident"fn", goto))
-  for name, section in pairs(e):
-    result.add newColonExpr(name, name)
+  # setup the continuation for a tail call to a possibly new environment
+  var ctor = newContinuation(e, goto)
+
+  if e.first.isNil or e.first.isEmpty:
+    # we don't have a local continuation; just use the ctor we built
+    result = ctor
+  else:
+    # when we can reuse the continuation, we'll merely set the fn pointer
+    var reuse = newStmtList(
+      doc"re-use the local continuation by setting the fn",
+      newAssignment(newDotExpr(e.first, e.fn), goto),
+      e.first)
+    # this when statement returns an e.identity one way or another
+    result = nnkWhenStmt.newNimNode
+    result.add nnkElifBranch.newTree(
+      newCall(ident"declaredInScope", e.first),
+      # compare e.first to e.identity; if the types are the same, then we
+      # can reuse the existing type and not create a new object.
+      newTree(nnkWhenStmt,
+              newTree(nnkElifBranch, infix(e.first, "is", e.identity), reuse),
+              newTree(nnkElse, ctor))
+    )
+    # else, use the ctor we just built
+    result.add nnkElse.newTree(ctor)
+
   # setting the label here allows us to use it in trace composition
   e.label = goto
+  # we store the type whenever we define locals, because the next code that
+  # executes may need to cut a new type.  to put this another way, a later
+  # scope may add a name that clashes with a future ancestor of ours that is
+  # only a peer of the later scope...
+  e = e.storeType
 
-template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.} =
-  ## run a body with a longer goto stack
-  if len(stripComments n) > 0:
-    env.goto.add (kind: f, node: n, name: newEmptyNode())
+template withGoto*(f: Future; body: untyped): untyped {.dirty.} =
+  ## run a body with a longer gotos stack
+  if len(stripComments f.node) > 0:
+    env.gotos.add(f)
     try:
       body
     finally:
-      result.add pop(env.goto).node
+      result.add pop(env.gotos).node
   else:
     body
 
+proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
+  # return a proc body that defines the locals in a scope above the
+  # original body; this lets the lower scope shadow existing locals or
+  # proc parameters.
+  #
+  # except that we don't use multiple scopes anymore.  we just use templates.
+
+  when cpsExcept:
+    var wrap = nnkTryStmt.newNimNode(n)
+
+    # add the body to the try/finally
+    wrap.add n
+    wrap.add newTree(nnkExceptBranch, ident"CatchableError")
+        .add newTree(nnkStmtList,
+                     doc"we probably want to do this in the finally below",
+                     # stash the current exception
+                     newAssignment(newDotExpr(ident"result", e.ex),
+                                   newCall(ident"getCurrentException")),
+                     # raise (re-raise) the exception
+                     nnkRaiseStmt.newNimNode(n).add newEmptyNode())
+
+    # add a finally clause that merely issues an empty discard
+    # XXX: we'll hook cpsTrace here...
+    wrap.add nnkFinally.newNimNode(n)
+        .add nnkDiscardStmt.newNimNode(n)
+        .add newEmptyNode()
+  else:
+    var wrap = n
+
+  # we'll use a statement list as the body
+  result = newStmtList(wrap)
+  # to that list, we will insert the local variables in scope
+  for name, asgn in localRetrievals(e, locals):
+    result.insert(0, asgn)
+  result.insert(0, doc "installing locals for " & $e.identity)

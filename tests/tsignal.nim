@@ -4,15 +4,18 @@ import cps/eventqueue
 var sem = newSemaphore()
 var success = false
 
-proc tick(ms: int) {.cps:Cont.} =
-  cps sleep(ms)
+proc signalSleeper(ms: int) {.cps: Cont.} =
+  yield sleep(ms)
   signal(sem)
 
-proc tock() {.cps:Cont.} =
-  cps wait(sem)
+proc signalWaiter() {.cps: Cont.} =
+  yield wait(sem)
   success = true
 
-trampoline tick(10)
-trampoline tock()
+trampoline signalSleeper(10)
+trampoline signalWaiter()
 
 run()
+
+if not success:
+  quit(1)

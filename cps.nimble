@@ -25,13 +25,13 @@ proc execTest(test: string) =
     execCmd "nim cpp -d:danger --gc:arc -r " & test
 
 task test, "run tests for travis":
-  execTest("tests/test.nim")
-  execTest("tests/tock.nim")
-  #execTest("tests/tyield.nim")
+  execTest("tests/tblock.nim")
   execTest("tests/tsignal.nim")
+  execTest("tests/tock.nim")
+  execTest("tests/test.nim")
+  #execTest("tests/tyield.nim")
   execTest("tests/tfork.nim")
   execTest("tests/tbreak.nim")
-  execTest("tests/tblock.nim")
   execTest("tests/tfor.nim")
   execTest("tests/tzevv.nim")
 

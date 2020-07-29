@@ -19,7 +19,7 @@ suite "cps":
 
   test "yield":
     proc foo() {.cps:Cont.} =
-      cps jield()
+      yield jield()
     trampoline foo()
 
   test "noop":
@@ -42,8 +42,32 @@ suite "cps":
       check cup == 3
     trampoline foo()
 
+  test "https://github.com/disruptek/cps/issues/22":
+    proc foo(a, b, c: int = 3) {.cps: Cont.} =
+      var a: int = 5
+      cps noop()
+      var b: int = b + a
+      cps noop()
+      check:
+        a == 5
+        b == 7
+        c == 3
+    trampoline foo(1, 2)
+
+    proc foo2(a, b, c: var int) {.cps: Cont.} =
+      a = 5
+      cps noop()
+      b = b + a
+      cps noop()
+      check:
+        a == 5
+        b == 7
+        c == 3
+    var (x, y, z) = (1, 2, 3)
+    trampoline foo2(x, y, z)
+
   test "https://github.com/disruptek/cps/issues/16":
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i, j, k: int = 0
       j = 5
       var p: int
@@ -60,7 +84,7 @@ suite "cps":
 
 when false:
   test "https://github.com/disruptek/cps/issues/15":
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var (i, j, k) = (1, 2, 3)
       cps noop()
       check i == 1
