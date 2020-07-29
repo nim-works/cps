@@ -59,12 +59,12 @@ import cps             # .cps. macro
 import cps/eventqueue  # sleep(), trampoline, run(), Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
-proc tock(name: string; interval: Duration): Cont {.cps.} =
+proc tock(name: string; interval: Duration) {.cps: Cont.} =
   var count: int = 0
   while true:
     inc count
     # this primitive sends the continuation to the dispatcher
-    cps sleep(interval)
+    yield sleep(interval)
     # this is executed from the dispatcher
     echo name, " ", count
 

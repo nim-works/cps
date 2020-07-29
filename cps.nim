@@ -49,17 +49,6 @@ func stripComments(n: NimNode): NimNode =
     if child.kind != nnkCommentStmt:
       result.add stripComments(child)
 
-func returnTo(n: NimNode): NimNode {.deprecated.} =
-  ## given a goto, find the ident/sym it's pointing to
-  let n = stripComments n
-  case n.kind
-  of nnkIdent, nnkSym, nnkNilLit:
-    result = n
-  of nnkCall, nnkObjConstr, nnkExprColonExpr, nnkCast:
-    result = returnTo(n[1])
-  else:
-    result = returnTo(n[0])
-
 proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
@@ -298,19 +287,18 @@ proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     # create a tail call with the given body
     result = env.makeTail(name, n)
 
-proc callTail(env: var Env; n: NimNode): NimNode =
+proc callTail(env: var Env; future: Future): NimNode =
   ## given a node, either turn it into a
   ## `return call(); proc call() = ...`
   ## or optimize it into a `return subcall()`
+  var n = future.node
   case n.kind
   of nnkProcDef:
     # if you already put it in a proc, we should just use it
     result = n
-  of nnkNilLit:
-    # if it's nil, let the tailCall() issue the return normally
-    result = env.tailCall(n)
-  of nnkIdent, nnkSym:
-    # if it's an identifier, we'll just issue a call of it
+    warning "weirdo"
+  of nnkIdent, nnkSym, nnkNilLit:
+    # it's an identifier, symbol, or nil; just issue a call of it
     result = env.tailCall(n)
   of nnkStmtList:
     # maybe we can optimize it out
@@ -323,7 +311,8 @@ proc callTail(env: var Env; n: NimNode): NimNode =
       result = env.returnTail(genSym(nskProc, "tail"), n)
   else:
     # wrap whatever it is and recurse on it
-    result = env.callTail(newStmtList(n))
+    result = env.callTail newFuture(newStmtList(n))
+    warning "another weirdo"
 
 proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
   ## experimental optimization
@@ -334,27 +323,27 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
     env.optimizeSimpleReturn(into, simple)
   else:
     into.doc "add an unoptimized tail call"
-    into.add env.callTail(n)
+    into.add env.callTail(newFuture(n))
 
 proc saften(parent: var Env; input: NimNode): NimNode
 
-proc splitAt(env: var Env; n: NimNode; name: string; i: int): NimNode =
+proc splitAt(env: var Env; n: NimNode; name: string; i: int): Future =
   ## split a statement list to create a tail call given
   ## a label prefix and an index at which to split
-  let label = genSym(nskProc, name)
+  result = newFuture(n[i].kind, newStmtList())
+  result.name = genSym(nskProc, name)
   var body = newStmtList()
   #body.doc "split as " & label.repr & " at index " & $i
-  result = newStmtList()
   if i < n.len-1:
     body.add n[i+1 ..< n.len]
     body = env.saften(body)
     #result.doc "split at: " & name
-    result.add env.makeTail(label, body)
+    result.node.add env.makeTail(result.name, body)
   else:
     #result.doc "split at: " & name & " - no body left"
     if returnTo(env.nextGoto).kind == nnkNilLit:
       warning "nil goto at end of split"
-    result.add env.callTail returnTo(env.nextGoto)
+    result.node.add env.callTail env.nextGoto
 
 proc saften(parent: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -372,7 +361,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
     # if the child is a cps block (not a call), then push a tailcall
     # onto the stack during the saftening of the child
     if nc.isCpsCall:
-      withGoto nc.kind, env.splitAt(n, "after", i):
+      withGoto env.splitAt(n, "after", i):
         result.add env.tailCall(nc, returnTo(env.nextGoto))
         #result.doc "post-cps call; time to bail"
         return
@@ -380,7 +369,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
     if i < n.len-1:
       if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
-        withGoto nc.kind, env.splitAt(n, "exit", i):
+        withGoto env.splitAt(n, "exit", i):
           result.add env.saften(nc)
           result.doc "add the exit proc definition"
           # we've completed the split, so we're done here
@@ -394,8 +383,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       result.add nc
 
     of nnkForStmt:
-      let bp = env.splitAt(n, "brake", i)
-      env.addBreak nc, bp
+      env.addBreak env.splitAt(n, "brake", i)
       nc[^1] = env.saften(nc[^1])
       result.add nc
       discard env.popBreak
@@ -423,8 +411,8 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, "brake", i)
-      env.addBreak nc, bp
-      withGoto nc.kind, bp:
+      env.addBreak bp
+      withGoto bp:
         try:
           result.add env.saften(nc)
           if i < n.len-1 or env.insideCps:
@@ -438,7 +426,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       let w = genSym(nskProc, "loop")
       let brakeEngaged = true
       if brakeEngaged:
-        env.addBreak nc, env.splitAt(n, "brake", i)
+        env.addBreak env.splitAt(n, "brake", i)
       # the goto is added here so that it won't appear in the break proc
       env.addGoto nc, w
       try:
@@ -459,7 +447,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       # if any `if` clause is a cps block, then every clause must be
       # if we've pushed any goto or breaks, then we're already in cps
       if nc.isCpsBlock:
-        withGoto nc.kind, env.splitAt(n, "maybe", i):
+        withGoto env.splitAt(n, "maybe", i):
           result.doc "add if body"
           result.add env.saften(nc)
           # the split is complete
@@ -482,7 +470,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       # and it's a cps call,
       if nc.isCpsCall or nc.isCpsBlock:
         let x = env.splitAt(n, "tail", i)
-        env.optimizeSimpleReturn(result, x)
+        env.optimizeSimpleReturn(result, x.node)
         # the split is complete
         return
 

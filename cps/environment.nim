@@ -7,6 +7,9 @@ import std/algorithm
 
 {.experimental: "dynamicBindSym".}
 
+import cps/futures
+export isEmpty, returnTo, newFuture, Future
+
 const
   cpsCast {.booldefine.} = false
   cpsDebug {.booldefine.} = false
@@ -27,13 +30,9 @@ type
     key: NimNode
     val: NimNode
 
-  Future = tuple
-    kind: NimNodeKind        # the source node kind we're coming from
-    node: NimNode            # the identifier/proc we're going to
-    name: NimNode            # named blocks populate this for named breaks
-  Futures = seq[Future]
+  # the idents|symbols and the typedefs they refer to in order of discovery
+  LocalCache = OrderedTable[NimNode, NimNode]
 
-  LocalCache = OrderedTable[NimNode, NimNode] # symbols to types
   Env* = ref object
     id: NimNode                     # the identifier of our continuation type
     via: NimNode                    # the identifier of the type we inherit
@@ -66,25 +65,10 @@ proc doc*(n: var NimNode; s: string) =
 
 func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
-proc next(ns: Futures): Future =
-  ## read the next call off the stack
-  if len(ns) == 0:
-    (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
-  else:
-    ns[^1]
-
-proc last(ns: Futures): Future =
-  ## query the last loop in the stack
-  result = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
-  for i in countDown(ns.high, ns.low):
-    if ns[i].kind in {nnkWhileStmt, nnkForStmt}:
-      result = ns[i]
-      break
-
 template searchScope(env: Env; x: untyped;
                      p: proc(ns: Futures): Future): Future =
   var e = env
-  var r = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
+  var r = newFuture()
   while not e.isNil:
     r = p(e.`x`)
     if r.kind == nnkNilLit:
@@ -96,28 +80,25 @@ template searchScope(env: Env; x: untyped;
 func lastGotoLoop*(e: Env): Future = searchScope(e, gotos, last)
 func lastBreakLoop*(e: Env): Future = searchScope(e, breaks, last)
 
-func nextGoto*(e: Env): NimNode = searchScope(e, gotos, next).node
-func nextBreak*(e: Env): NimNode = searchScope(e, breaks, next).node
-
-proc breakName(n: NimNode): NimNode =
-  result =
-    if n.kind in {nnkBlockStmt} and len(n) > 1:
-      n[0]
-    else:
-      newEmptyNode()
+func nextGoto*(e: Env): Future = searchScope(e, gotos, next)
+func nextBreak*(e: Env): Future = searchScope(e, breaks, next)
 
 proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
   ## add to a stack of gotos, which are normal exits from control flow.
   ##
   ## think of things like `return` and `if: discard` and the end of a
   ## while loop
-  e.gotos.add (k.kind, n, newEmptyNode())
+  e.gotos.add(k, n)
 
-proc addBreak*(e: var Env; k: NimNode; n: NimNode) =
+proc addBreak*(e: var Env; future: Future) =
+  ## it's nice when we can do this simply
+  e.breaks.add future
+
+proc addBreak*(e: var Env; k: NimNode; n: NimNode) {.deprecated.} =
   ## these are breaks, which are like gotos but also not.
   ##
   ## we need to keep track of them separately for hysterical reasons.
-  e.breaks.add (k.kind, n, k.breakName)
+  e.breaks.add(k, n)
 
 proc popGoto*(e: var Env): NimNode =
   ## pop a goto proc off the stack; return its node
@@ -135,14 +116,13 @@ proc insideWhile*(e: Env): bool =
   ## actually, this is the better one.
   lastBreakLoop(e).kind == nnkWhileStmt
 
-proc topOfWhile*(e: Env): NimNode =
+proc topOfWhile*(e: Env): Future =
   ## fetch the goto target in order to `continue` inside `while:`
   assert e.insideWhile, "i thought i was in a while loop"
-  let future = lastGotoLoop(e)
-  assert future.kind == nnkWhileStmt, "goto doesn't match break"
-  result = future.node
+  result = lastGotoLoop(e)
+  assert result.kind == nnkWhileStmt, "goto doesn't match break"
 
-proc namedBreak*(e: Env; n: NimNode): NimNode =
+proc namedBreak*(e: Env; n: NimNode): Future =
   ## fetch the goto target in order to `break foo`
   assert n.kind == nnkBreakStmt
   if len(n) == 0:
@@ -150,16 +130,12 @@ proc namedBreak*(e: Env; n: NimNode): NimNode =
   else:
     proc match(ns: Futures): Future =
       ## find the loop matching the requested named break
-      result = (kind: nnkNilLit, node: newNilLit(), name: newEmptyNode())
+      result = newFuture()
       for i in countDown(ns.high, ns.low):
-        if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].name, n[0]):
+        if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].label, n[0]):
           result = ns[i]
           break
-    result = searchScope(e, breaks, match).node
-
-func isEmpty*(n: NimNode): bool =
-  ## `true` if the node `n` is Empty
-  result = not n.isNil and n.kind == nnkEmpty
+    result = searchScope(e, breaks, match)
 
 proc hash*(n: NimNode): Hash =
   var h: Hash = 0
@@ -417,9 +393,9 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
     result = e.storeType
   else:
     result = e
-  e.locals[key] = val
-  e.seen.incl repr(key) # repr the key to get the genSym'd string
-  setDirty e
+  result.locals[key] = val
+  result.seen.incl key.strVal
+  setDirty result
 
 proc stripVar(n: NimNode): NimNode =
   ## pull the type out of a VarTy
@@ -557,13 +533,13 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
     # this when statement returns an e.identity one way or another
     result = nnkWhenStmt.newNimNode
     result.add nnkElifBranch.newTree(
-      # FIXME: [broke] first, make sure the continuation is declared in scope
       newCall(ident"declaredInScope", e.first),
       # compare e.first to e.identity; if the types are the same, then we
       # can reuse the existing type and not create a new object.
       newTree(nnkWhenStmt,
               newTree(nnkElifBranch, infix(e.first, "is", e.identity), reuse),
-              newTree(nnkElse, ctor)))
+              newTree(nnkElse, ctor))
+    )
     # else, use the ctor we just built
     result.add nnkElse.newTree(ctor)
 
@@ -575,10 +551,10 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # only a peer of the later scope...
   e = e.storeType
 
-template withGoto*(f: NimNodeKind; n: NimNode; body: untyped): untyped {.dirty.} =
+template withGoto*(f: Future; body: untyped): untyped {.dirty.} =
   ## run a body with a longer gotos stack
-  if len(stripComments n) > 0:
-    env.gotos.add (kind: f, node: n, name: newEmptyNode())
+  if len(stripComments f.node) > 0:
+    env.gotos.add(f)
     try:
       body
     finally:
