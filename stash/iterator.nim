@@ -12,7 +12,6 @@ type Iterator = ref object of RootObj
   fn*: proc(c: Iterator): Iterator {.nimcall.}
   val: Option[int]
 
-
 # The `produce` proc is called to pump the iterator. It will trampoline the
 # continuation until a value is available in `val`.
 
