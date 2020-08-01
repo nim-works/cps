@@ -6,7 +6,6 @@ import std/sequtils
 import std/algorithm
 
 const
-  disruptek = true
   cpsDebug {.booldefine.} = false
   strict = true        ## only cps operations are strictly cps operations
 
@@ -285,7 +284,7 @@ proc callTail(env: var Env; scope: Scope): NimNode =
   ## `return call(); proc call() = ...`
   ## or optimize it into a `return subcall()`
   if scope.isNil:
-    error "bug"
+    error "nil scope"
   var n = scope.node
   case n.kind
   of nnkProcDef:
@@ -305,7 +304,7 @@ proc callTail(env: var Env; scope: Scope): NimNode =
     else:
       result = env.returnTail(genSym(nskProc, "tail"), n)
   of nnkEmpty:
-    error "bug"
+    error "empty node in call tail"
   else:
     # wrap whatever it is and recurse on it
     result = env.callTail newScope(newStmtList(n))
@@ -324,50 +323,27 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
 
 proc saften(parent: var Env; input: NimNode): NimNode
 
-when disruptek:
-  proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
-    ## split a statement list to create a tail call given
-    ## a label prefix and an index at which to split
+proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
+  ## split a statement list to create a tail call given
+  ## a label prefix and an index at which to split
 
-    if i < n.len-1:
-      # if a tail remains after this crap
-      # select lines from `i` to `n[^1]`
-      var body = newStmtList().add n[i+1 ..< n.len]
+  if i < n.len-1:
+    # if a tail remains after this crap
+    # select lines from `i` to `n[^1]`
+    var body = newStmtList().add n[i+1 ..< n.len]
 
-      # ensure the proc body is rewritten
-      body = env.saften(body)
+    # ensure the proc body is rewritten
+    body = env.saften(body)
 
-      var name = genSym(nskProc, name)
-      # we'll return a scope holding the tail call to the proc
-      result = newScope(n[i], name, env.makeTail(name, body))
-      result.goto = env.nextGoto
-      result.brake = env.nextBreak
-    else:
-      # there's nothing left to do in this scope; we're
-      # going to just return the next goto
-      result = env.nextGoto
-else:
-  proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
-    ## split a statement list to create a tail call given
-    ## a label prefix and an index at which to split
-
-    if i < n.len-1:
-      # if a tail remains after this crap
-      # select lines from `i` to `n[^1]`
-      var body = newStmtList().add n[i+1 ..< n.len]
-
-      # ensure the proc body is rewritten
-      body = env.saften(body)
-
-      var name = genSym(nskProc, name)
-      # we'll return a scope holding the tail call to the proc
-      result = newScope(n[i], name, env.makeTail(name, body))
-      result.goto = env.nextGoto
-      result.brake = env.nextBreak
-    else:
-      # there's nothing left to do in this scope; we're
-      # going to just return the next goto
-      result = env.nextGoto
+    var name = genSym(nskProc, name)
+    # we'll return a scope holding the tail call to the proc
+    result = newScope(n[i], name, env.makeTail(name, body))
+    result.goto = env.nextGoto
+    result.brake = env.nextBreak
+  else:
+    # there's nothing left to do in this scope; we're
+    # going to just return the next goto
+    result = env.nextGoto
 
 proc saften(parent: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -384,16 +360,11 @@ proc saften(parent: var Env; input: NimNode): NimNode =
   for i, nc in pairs(n):
     # if it's a cps call,
     if nc.isCpsCall:
-      echo treeRepr(nc)
-      when disruptek:
-        # replace the call with a tailcall
-        n[i] = env.splitAt(n, "after", i).node
-      else:
-        withGoto env.splitAt(n, "after", i):
-          result.add env.tailCall(nc, returnTo(env.nextGoto))
-          #result.doc "post-cps call; time to bail"
-          return
-        assert false, "unexpected"
+      withGoto env.splitAt(n, "after", i):
+        result.add env.tailCall(nc, returnTo(env.nextGoto))
+        #result.doc "post-cps call; time to bail"
+        return
+      assert false, "unexpected"
       # done!
       return
 
