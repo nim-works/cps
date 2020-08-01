@@ -32,7 +32,7 @@ proc kind*(scope: Scope): NimNodeKind =
     result = scope.kind
 
 func isEmpty*(scope: Scope): bool =
-  ## `true` if the scope `scope` is Empty
+  ## `true` if the scope `scope` is Empty or Nil
   result = scope.isNil or scope.node.isEmpty or scope.kind == nnkEmpty
 
 proc `$`*(scope: Scope): string =
