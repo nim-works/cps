@@ -6,12 +6,14 @@ import std/sequtils
 import std/algorithm
 
 const
+  disruptek = true
   cpsDebug {.booldefine.} = false
   strict = true        ## only cps operations are strictly cps operations
 
 when (NimMajor, NimMinor) < (1, 3):
   {.fatal: "requires nim-1.3".}
 
+import cps/scopes
 import cps/environment
 export Continuation, ContinuationProc
 
@@ -19,7 +21,8 @@ type
   NodeFilter = proc(n: NimNode): NimNode
 
 const
-  callish = {nnkCall, nnkCommand}
+  callish = {nnkCall, nnkCommand}           ## all cps call nodes
+  cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
   unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
@@ -37,7 +40,7 @@ proc isCpsCall(n: NimNode): bool =
     case n.kind
     of callish:
       result = n[0].eqIdent("cps") and n[1].kind in callish
-    of nnkYieldStmt:
+    of cpsish:
       result = n[0].kind in callish
     else:
       result = false
@@ -56,10 +59,10 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   let locals = e.defineLocals(returnTo(e.nextGoto))
   var call: NimNode
   case p.kind
-  of nnkCommand:
+  of callish:
     # cps foo()
     call = p[1]
-  of nnkYieldStmt:
+  of cpsish:
     # yield foo()
     call = p[0]
   else:
@@ -97,14 +100,8 @@ func isReturnCall(n: NimNode): bool =
         result = true
   # `return foo(); proc foo() = ...`
   of nnkStmtList:
-    # FIXME: this is stupid and does misbehave
-    result = case n.len
-    of 1:
-      n[0].isReturnCall
-    of 2:
-      n[0].isReturnCall and n[1].kind == nnkProcDef and n[1].name == n[0][0][0]
-    else:
-      false
+    if len(n) > 0:
+      result = n.last.isReturnCall
   else:
     discard
 
@@ -283,11 +280,13 @@ proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     # create a tail call with the given body
     result = env.makeTail(name, n)
 
-proc callTail(env: var Env; future: Future): NimNode =
+proc callTail(env: var Env; scope: Scope): NimNode =
   ## given a node, either turn it into a
   ## `return call(); proc call() = ...`
   ## or optimize it into a `return subcall()`
-  var n = future.node
+  if scope.isNil:
+    error "bug"
+  var n = scope.node
   case n.kind
   of nnkProcDef:
     # if you already put it in a proc, we should just use it
@@ -305,9 +304,11 @@ proc callTail(env: var Env; future: Future): NimNode =
       result = newStmtList([doc"verbatim tail call", n])
     else:
       result = env.returnTail(genSym(nskProc, "tail"), n)
+  of nnkEmpty:
+    error "bug"
   else:
     # wrap whatever it is and recurse on it
-    result = env.callTail newFuture(newStmtList(n))
+    result = env.callTail newScope(newStmtList(n))
     warning "another weirdo"
 
 proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
@@ -319,27 +320,54 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
     env.optimizeSimpleReturn(into, simple)
   else:
     into.doc "add an unoptimized tail call"
-    into.add env.callTail(newFuture(n))
+    into.add env.callTail(newScope(n))
 
 proc saften(parent: var Env; input: NimNode): NimNode
 
-proc splitAt(env: var Env; n: NimNode; name: string; i: int): Future =
-  ## split a statement list to create a tail call given
-  ## a label prefix and an index at which to split
-  result = newFuture(n[i].kind, newStmtList())
-  result.name = genSym(nskProc, name)
-  var body = newStmtList()
-  #body.doc "split as " & label.repr & " at index " & $i
-  if i < n.len-1:
-    body.add n[i+1 ..< n.len]
-    body = env.saften(body)
-    #result.doc "split at: " & name
-    result.node.add env.makeTail(result.name, body)
-  else:
-    #result.doc "split at: " & name & " - no body left"
-    if returnTo(env.nextGoto).kind == nnkNilLit:
-      warning "nil goto at end of split"
-    result.node.add env.callTail env.nextGoto
+when disruptek:
+  proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
+    ## split a statement list to create a tail call given
+    ## a label prefix and an index at which to split
+
+    if i < n.len-1:
+      # if a tail remains after this crap
+      # select lines from `i` to `n[^1]`
+      var body = newStmtList().add n[i+1 ..< n.len]
+
+      # ensure the proc body is rewritten
+      body = env.saften(body)
+
+      var name = genSym(nskProc, name)
+      # we'll return a scope holding the tail call to the proc
+      result = newScope(n[i], name, env.makeTail(name, body))
+      result.goto = env.nextGoto
+      result.brake = env.nextBreak
+    else:
+      # there's nothing left to do in this scope; we're
+      # going to just return the next goto
+      result = env.nextGoto
+else:
+  proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
+    ## split a statement list to create a tail call given
+    ## a label prefix and an index at which to split
+
+    if i < n.len-1:
+      # if a tail remains after this crap
+      # select lines from `i` to `n[^1]`
+      var body = newStmtList().add n[i+1 ..< n.len]
+
+      # ensure the proc body is rewritten
+      body = env.saften(body)
+
+      var name = genSym(nskProc, name)
+      # we'll return a scope holding the tail call to the proc
+      result = newScope(n[i], name, env.makeTail(name, body))
+      result.goto = env.nextGoto
+      result.brake = env.nextBreak
+    else:
+      # there's nothing left to do in this scope; we're
+      # going to just return the next goto
+      result = env.nextGoto
 
 proc saften(parent: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -354,16 +382,24 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
   let n = stripComments input
   for i, nc in pairs(n):
-    # if the child is a cps block (not a call), then push a tailcall
-    # onto the stack during the saftening of the child
+    # if it's a cps call,
     if nc.isCpsCall:
-      withGoto env.splitAt(n, "after", i):
-        result.add env.tailCall(nc, returnTo(env.nextGoto))
-        #result.doc "post-cps call; time to bail"
-        return
-      assert false, "unexpected"
+      echo treeRepr(nc)
+      when disruptek:
+        # replace the call with a tailcall
+        n[i] = env.splitAt(n, "after", i).node
+      else:
+        withGoto env.splitAt(n, "after", i):
+          result.add env.tailCall(nc, returnTo(env.nextGoto))
+          #result.doc "post-cps call; time to bail"
+          return
+        assert false, "unexpected"
+      # done!
+      return
 
     if i < n.len-1:
+      # if the child is a cps block (not a call), then push a tailcall
+      # onto the stack during the saftening of the child
       if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
         withGoto env.splitAt(n, "exit", i):
           result.add env.saften(nc)

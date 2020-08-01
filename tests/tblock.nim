@@ -3,6 +3,7 @@ import cps/eventqueue
 
 var r = 0
 proc test1() {.cps:Cont.} =
+  echo "test1"
   r = 1
   echo "pre block"
   block:
@@ -11,9 +12,8 @@ proc test1() {.cps:Cont.} =
       echo "in if"
       inc r
       break
-    echo "post if"
+    echo "shoulda breaked, dummy"
     quit(1)
-    echo "leaving block"
   echo "tail"
   inc r
 trampoline test1()
@@ -22,12 +22,14 @@ if r != 3:
   quit(1)
 
 proc test2() {.cps:Cont.} =
+  echo "test2"
   r = 1
   block:
     if true:
       yield noop()
       inc r
       break
+    echo "shoulda breaked, dummy"
     quit(1)
   inc r
 trampoline test2()

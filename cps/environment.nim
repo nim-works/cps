@@ -7,8 +7,7 @@ import std/algorithm
 
 {.experimental: "dynamicBindSym".}
 
-import cps/futures
-export isEmpty, returnTo, newFuture, Future
+import cps/scopes
 
 const
   cpsCast {.booldefine.} = false
@@ -38,11 +37,13 @@ type
     via: NimNode                    # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
     locals: LocalCache              # locals and their typedefs|generics
-    gotos: Futures                  # identifiers of future gotos
-    breaks: Futures                 # identifiers of future breaks
+    gotos: Scopes                   # identifiers of scope gotos
+    breaks: Scopes                  # identifiers of scope breaks
     store: NimNode                  # where to put typedefs, a stmtlist
-    label: NimNode                  # the last tailcall (goto)
+    camefrom: Scope                 # the last tailcall (goto)
     seen: HashSet[string]           # count/measure idents/syms by string
+
+    scope: Scope                    # current scope
 
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
@@ -66,9 +67,9 @@ proc doc*(n: var NimNode; s: string) =
 func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
 template searchScope(env: Env; x: untyped;
-                     p: proc(ns: Futures): Future): Future =
+                     p: proc(ns: Scopes): Scope): Scope =
   var e = env
-  var r = newFuture()
+  var r = newScope()
   while not e.isNil:
     r = p(e.`x`)
     if r.kind == nnkNilLit:
@@ -77,11 +78,11 @@ template searchScope(env: Env; x: untyped;
       break
   r
 
-func lastGotoLoop*(e: Env): Future = searchScope(e, gotos, last)
-func lastBreakLoop*(e: Env): Future = searchScope(e, breaks, last)
+func lastGotoLoop*(e: Env): Scope = searchScope(e, gotos, last)
+func lastBreakLoop*(e: Env): Scope = searchScope(e, breaks, last)
 
-func nextGoto*(e: Env): Future = searchScope(e, gotos, next)
-func nextBreak*(e: Env): Future = searchScope(e, breaks, next)
+func nextGoto*(e: Env): Scope = searchScope(e, gotos, next)
+func nextBreak*(e: Env): Scope = searchScope(e, breaks, next)
 
 proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
   ## add to a stack of gotos, which are normal exits from control flow.
@@ -90,9 +91,9 @@ proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
   ## while loop
   e.gotos.add(k, n)
 
-proc addBreak*(e: var Env; future: Future) =
+proc addBreak*(e: var Env; scope: Scope) =
   ## it's nice when we can do this simply
-  e.breaks.add future
+  e.breaks.add scope
 
 proc addBreak*(e: var Env; k: NimNode; n: NimNode) {.deprecated.} =
   ## these are breaks, which are like gotos but also not.
@@ -116,21 +117,21 @@ proc insideWhile*(e: Env): bool =
   ## actually, this is the better one.
   lastBreakLoop(e).kind == nnkWhileStmt
 
-proc topOfWhile*(e: Env): Future =
+proc topOfWhile*(e: Env): Scope =
   ## fetch the goto target in order to `continue` inside `while:`
   assert e.insideWhile, "i thought i was in a while loop"
   result = lastGotoLoop(e)
   assert result.kind == nnkWhileStmt, "goto doesn't match break"
 
-proc namedBreak*(e: Env; n: NimNode): Future =
+proc namedBreak*(e: Env; n: NimNode): Scope =
   ## fetch the goto target in order to `break foo`
   assert n.kind == nnkBreakStmt
   if len(n) == 0:
     result = e.nextBreak
   else:
-    proc match(ns: Futures): Future =
+    proc match(ns: Scopes): Scope =
       ## find the loop matching the requested named break
-      result = newFuture()
+      result = newScope()
       for i in countDown(ns.high, ns.low):
         if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].label, n[0]):
           result = ns[i]
@@ -200,10 +201,10 @@ proc addTrace(e: Env; n: NimNode): NimNode =
   #discard bindSym("init" & $e.root, rule = brForceOpen)
   let info = lineInfoObj(n)
   var identity =
-    if e.label.isNil or e.label.kind == nnkNilLit:
+    if e.camefrom.isNil or e.camefrom.isEmpty:
       "nil"
     else:
-      repr(e.label)
+      repr(e.camefrom.returnTo)
   identity.add "(" & repr(e.identity) & ")"
   result = newCall(ident("init"), n, identity.newLit,
                    info.filename.newLit,
@@ -337,6 +338,9 @@ proc newEnv*(parent: var Env; copy = off): Env =
   ## or on-demand in the back-end (with copy = on)
   assert not parent.isNil
   if copy:
+    var scope = newScope()
+    scope.goto = parent.scope
+    scope.brake = parent.scope
     result = Env(store: parent.store,
                  via: parent.identity,
                  seen: parent.seen,
@@ -345,6 +349,7 @@ proc newEnv*(parent: var Env; copy = off): Env =
                  ex: parent.ex,
                  rs: parent.rs,
                  fn: parent.fn,
+                 scope: scope,
                  parent: parent)
     init result
   else:
@@ -467,6 +472,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   assert not via.isEmpty
   var c = if c.isNil or c.isEmpty: ident"continuation" else: c
   result = Env(c: c, store: store, via: via, id: via)
+  result.scope = newScope()
   init result
   when cpsFn:
     result.add newIdentDefs(result.fn, makeFnType(result))
@@ -543,15 +549,17 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
     # else, use the ctor we just built
     result.add nnkElse.newTree(ctor)
 
-  # setting the label here allows us to use it in trace composition
-  e.label = goto
+  # record the last-rendered scope for use in trace composition
+  e.camefrom = newScope(result.kind, result)   # data for completeness
+  e.camefrom.name = goto                        # this is our purpose!
+
   # we store the type whenever we define locals, because the next code that
   # executes may need to cut a new type.  to put this another way, a later
-  # scope may add a name that clashes with a future ancestor of ours that is
+  # scope may add a name that clashes with a scope ancestor of ours that is
   # only a peer of the later scope...
   e = e.storeType
 
-template withGoto*(f: Future; body: untyped): untyped {.dirty.} =
+template withGoto*(f: Scope; body: untyped): untyped {.dirty.} =
   ## run a body with a longer gotos stack
   if len(stripComments f.node) > 0:
     env.gotos.add(f)
