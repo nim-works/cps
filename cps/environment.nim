@@ -539,12 +539,21 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
     # this when statement returns an e.identity one way or another
     result = nnkWhenStmt.newNimNode
     result.add nnkElifBranch.newTree(
-      newCall(ident"declaredInScope", e.first),
-      # compare e.first to e.identity; if the types are the same, then we
-      # can reuse the existing type and not create a new object.
-      newTree(nnkWhenStmt,
-              newTree(nnkElifBranch, infix(e.first, "is", e.identity), reuse),
-              newTree(nnkElse, ctor))
+      newCall(ident"compiles", e.first),
+
+      when true:
+        # FIXME: we currently cheat.
+        reuse
+      else:
+        # compare e.first to e.identity; if the types are the same, then we
+        # can reuse the existing type and not create a new object.
+        newStmtList(
+          newTree(nnkCommand, ident"echo",
+            newTree(nnkCall, ident"typeof", ident"continuation")),
+          newTree(nnkWhenStmt,
+                  newTree(nnkElifBranch, infix(e.first, "is", e.identity), reuse),
+                  newTree(nnkElse, ctor)),
+        )
     )
     # else, use the ctor we just built
     result.add nnkElse.newTree(ctor)

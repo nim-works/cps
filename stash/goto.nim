@@ -6,20 +6,23 @@
 import cps, tables
 
 
-type Tc = ref object of RootObj
-  fn*: proc(c: Tc): Tc {.nimcall.}
+type
+  TcFn = proc(c: Tc): Tc {.nimcall.}
 
-var labels: Table[string, Tc]
+  Tc = ref object of RootObj
+    fn: TcFn
+    labels: Table[string, TcFn]
 
 
 # Define the CPS magic 'label' and 'goto' procs
 
 proc label(c: Tc, id: string): Tc =
-  labels[id] = c
+  c.labels[id] = c.fn
   return c
 
 proc goto(c: Tc, id: string): Tc =
-  return labels[id]
+  c.fn = c.labels[id]
+  result = c
 
 
 # A  little function with gotos
