@@ -19,6 +19,8 @@ These continuations...
 - may be based upon your own custom `ref object`
 - may be dispatched using your own custom dispatcher
 - may be moved between threads to parallelize execution
+- require no `{.gcsafe.}` for global/local accesses
+- are as fast as Nim's native closure iterators
 - are faster and lighter than async/await futures
 
 ## Work In Progress
