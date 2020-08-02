@@ -26,6 +26,10 @@ const
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
+proc numberedLines(s: string): string =
+  for n, line in pairs(splitLines(s, keepEol = true)):
+    result.add "$1  $2" % [ align($n, 3), line ]
+
 proc filter(n: NimNode; f: NodeFilter): NimNode =
   result = f(n)
   if result.isNil:
@@ -500,7 +504,7 @@ macro cps*(T: untyped, n: untyped): untyped =
     when defined(cpsTree):
       debugEcho treeRepr(orig)
     else:
-      debugEcho repr(orig)
+      debugEcho repr(orig).numberedLines
 
   assert n.kind in RoutineNodes
 
@@ -571,7 +575,7 @@ macro cps*(T: untyped, n: untyped): untyped =
     when defined(cpsTree):
       debugEcho treeRepr(result)
     else:
-      debugEcho repr(result)
+      debugEcho repr(result).numberedLines
 
 when false:
   macro cps*(c: typed; n: typed): untyped =
