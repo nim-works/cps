@@ -20,6 +20,9 @@ export Continuation, ContinuationProc
 type
   NodeFilter = proc(n: NimNode): NimNode
 
+template installLocal*(id, env, field) =
+  template id(): untyped = (env(continuation).field)
+
 const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes
   cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
