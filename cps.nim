@@ -17,9 +17,6 @@ import cps/scopes
 import cps/environment
 export Continuation, ContinuationProc
 
-template installLocal*(id, env, field) =
-  template id(): untyped = (env(continuation).field)
-
 type
   NodeFilter = proc(n: NimNode): NimNode
 
