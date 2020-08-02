@@ -51,6 +51,9 @@ type
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
 
+proc `$`(p: Pair): string =
+  result = p[0].repr & ": " & p[1].repr
+
 func doc*(s: string): NimNode =
   ## generate a doc statement for debugging
   when comments:
