@@ -531,7 +531,7 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
       assert len(value) == 1
 
       # recreate the name to cast a field symbol into a local value
-      let name = ident(repr(value[0][0]))
+      let name = definedName(value)
 
       when true:
         when defined(release):
