@@ -259,22 +259,18 @@ proc allPairs(e: Env): seq[Pair] =
     # add any inherited types from the parent
     result.add allPairs(e.parent)
 
+proc definedName(n: NimNode): NimNode =
+  ## create an identifier from an typesection/identDef as cached;
+  ## this is a copy and it is repr'd to ensure gensym compat...
+  result = ident(repr(n[0][0]))
+
 iterator pairs(e: Env): Pair =
   assert not e.isNil
   var seen = initHashSet[string](sets.rightSize(len(e)))
-  when true:
-    for pair in e.allPairs:
-      if not seen.containsOrIncl pair.key.strVal:
-        yield pair
-
-  else:
-    # no beuno because it proceeds in reverse order
-    var p = e
-    while not p.isNil:
-      for key, val in pairs(p.locals):
-        if not seen.containsOrIncl key.strVal:
-          yield (key: key, val: val)
-      p = p.parent
+  for pair in e.allPairs:
+    # make sure we're actually measuring gensyms for collision
+    if not seen.containsOrIncl definedName(pair.val).strVal:
+      yield pair
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
@@ -477,11 +473,6 @@ proc identity*(e: var Env): NimNode =
   assert not e.id.isNil
   assert not e.id.isEmpty
   result = e.id
-
-proc definedName(n: NimNode): NimNode =
-  ## create an identifier from an typesection/identDef as cached;
-  ## this is a copy and it is repr'd to ensure gensym compat...
-  result = ident(repr(n[0][0]))
 
 proc rootTemplate*(e: Env): NimNode =
   ## the template used to rename `result` in .cps. procs
