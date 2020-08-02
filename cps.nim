@@ -543,13 +543,21 @@ macro cps*(T: untyped, n: untyped): untyped =
       n.params.insert(1, env.firstDef)
       inc first
 
+  # XXX: this will fail if requires-init
+  # first we'll create our result
+  var preamble = newStmtList()
+  preamble.add newAssignment(ident"result",
+                             env.newContinuation(env.first, newNilLit()))
+  # template `continuation` as `result`
+  preamble.add env.rootTemplate
+
   # adding the remaining proc params to the environment
   for defs in n.params[first .. ^1]:
     for name, list in env.localSection(defs):
       discard
 
-  # ensaftening the proc's body
-  n.body = env.saften(n.body)
+  # ensaftening the proc's body and combining it with the preamble
+  n.body = newStmtList(preamble, env.saften(n.body))
 
   # forcing a write of the current accumulating type
   env = env.storeType(force = on)

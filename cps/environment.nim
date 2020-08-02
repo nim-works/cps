@@ -480,6 +480,13 @@ proc definedName(n: NimNode): NimNode =
   ## this is a copy and it is repr'd to ensure gensym compat...
   result = ident(repr(n[0][0]))
 
+proc rootTemplate*(e: Env): NimNode =
+  ## the template used to rename `result` in .cps. procs
+  result = nnkTemplateDef.newTree(e.first, newEmptyNode(),
+                                  newEmptyNode(), newEmptyNode(),
+                                  newEmptyNode(), newEmptyNode(),
+                                  ident"result")
+
 proc makeTemplate(e: Env; name: NimNode; field: NimNode): NimNode =
   let locals = e.castToChild(e.first)
   result = nnkTemplateDef.newTree(name, newEmptyNode(),
@@ -540,7 +547,7 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
                                  newDotExpr(locals, field))
         yield (key: name, val: section)
 
-proc newContinuation(e: Env; goto: NimNode): NimNode =
+proc newContinuation*(e: Env; via: NimNode; goto: NimNode): NimNode =
   ## else, perform the following alloc...
   result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
   for field, section in pairs(e):
@@ -553,7 +560,7 @@ proc newContinuation(e: Env; goto: NimNode): NimNode =
 
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # setup the continuation for a tail call to a possibly new environment
-  var ctor = newContinuation(e, goto)
+  var ctor = e.newContinuation(e.identity, goto)
 
   if e.first.isNil or e.first.isEmpty:
     # we don't have a local continuation; just use the ctor we built
