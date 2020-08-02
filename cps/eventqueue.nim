@@ -17,6 +17,7 @@ export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash, semaphore.wait,
 export Event
 
 const
+  cpsMutant {.booldefine, used.} = true    ## mutate continuations
   cpsDebug {.booldefine, used.} = false    ## produce gratuitous output
   cpsPoolSize {.intdefine, used.} = 64     ## expected pending continuations
   cpsTrace {.booldefine, used.} = false    ## store "stack" traces
@@ -51,7 +52,10 @@ type
     wake: SelectEvent             ## wake-up event for queue actions
 
   Cont* = ref object of RootObj
-    fn*: proc(c: Cont): Cont {.nimcall.}
+    when cpsMutant:
+      fn*: proc(c: var Cont) {.nimcall.}
+    else:
+      fn*: proc(c: Cont): Cont {.nimcall.}
     when cpsDebug:
       clock: Clock                  ## time of latest poll loop
       delay: Duration               ## polling overhead
@@ -313,7 +317,10 @@ proc trampoline*(c: Cont) =
     when cpsDebug:
       echo "🎪tramp ", c, " at ", c.clock
     try:
-      c = c.fn(c)
+      when cpsMutant:
+        c.fn(c)
+      else:
+        c = c.fn(c)
       when cpsTrace:
         if not c.isNil:
           addFrame(stack, c)
@@ -485,7 +492,10 @@ proc fork*(): Cont {.cpsMagic.} =
   ## Duplicate the current continuation.
   result = c
   wakeAfter:
-    addLast(eq.yields, clone(c))
+    when cpsMutant:
+      warning "fork() unimplemented for mutants"
+    else:
+      addLast(eq.yields, clone(c))
 
 proc spawn*(c: Cont) =
   ## Queue the supplied continuation `c`; control remains in the calling

@@ -6,6 +6,7 @@ import std/sequtils
 import std/algorithm
 
 const
+  cpsMutant {.booldefine.} = true
   cpsDebug {.booldefine.} = false
   strict = true        ## only cps operations are strictly cps operations
 
@@ -72,7 +73,11 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
     assert p.isCpsCall, "does not appear to be a cps call"
     raise newException(Defect, "unexpected cps call type: " & $p.kind)
   call.insert(1, e.maybeConvertToRoot(locals))
-  result.add nnkReturnStmt.newNimNode(n).add call
+  when cpsMutant:
+    result.add newAssignment(e.first, call)
+    result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
+  else:
+    result.add nnkReturnStmt.newNimNode(n).add call
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
@@ -82,14 +87,23 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
     if insideCps(e):
       result = tailCall(e, returnTo(e.nextGoto))
     else:
-      ret.add n
-      result = ret
+      when cpsMutant:
+        ret.add newEmptyNode()
+        result.add n
+        result.add ret
+      else:
+        ret.add n
+        result = ret
   else:
     # return a statement list including the setup for the locals
     # and the return statement casting those locals to the root type
     result = newStmtList()
     let locals = e.defineLocals(n)
-    ret.add e.maybeConvertToRoot(locals)
+    when cpsMutant:
+      ret.add newEmptyNode()
+      result.add newAssignment(e.first, e.maybeConvertToRoot(locals))
+    else:
+      ret.add e.maybeConvertToRoot(locals)
     result.add ret
 
 func isReturnCall(n: NimNode): bool =
@@ -266,19 +280,40 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     var locals = env.first
     var body = env.wrapProcBody(locals, n)
 
-    #result.doc "creating a new proc: " & name.repr
-    # add the declaration
-    result.add newProc(name = name, pragmas = pragmas, body = newEmptyNode(),
-                       params = [env.root, newIdentDefs(locals, env.root)])
-    # add the implementation
-    result.add newProc(name = name, pragmas = pragmas, body = body,
-                       params = [env.root, newIdentDefs(locals, env.root)])
+    when cpsMutant:
+      #result.doc "creating a new proc: " & name.repr
+      # add the declaration
+      result.add newProc(name = name, pragmas = pragmas,
+                         body = newEmptyNode(),
+                         params = [newEmptyNode(),
+                                   newIdentDefs(locals,
+                                                newTree(nnkVarTy,
+                                                        env.root))])
+      # add the implementation
+      result.add newProc(name = name, pragmas = pragmas, body = body,
+                         params = [newEmptyNode(),
+                                   newIdentDefs(locals,
+                                                newTree(nnkVarTy,
+                                                        env.root))])
+    else:
+      # add the declaration
+      result.add newProc(name = name, pragmas = pragmas,
+                         body = newEmptyNode(),
+                         params = [env.root, newIdentDefs(locals,
+                                                          env.root)])
+      # add the implementation
+      result.add newProc(name = name, pragmas = pragmas, body = body,
+                         params = [env.root, newIdentDefs(locals,
+                                                          env.root)])
 
 proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## either create and return a tail call proc, or return nil
   if len(n) == 0:
     # no code to run means we just `return Cont()`
-    result = nnkReturnStmt.newNimNode(n).add newCall(env.root)
+    when cpsMutant:
+      result = nnkReturnStmt.newNimNode(n).add newEmptyNode()
+    else:
+      result = nnkReturnStmt.newNimNode(n).add newCall(env.root)
   else:
     # create a tail call with the given body
     result = env.makeTail(name, n)
@@ -536,7 +571,10 @@ macro cps*(T: untyped, n: untyped): untyped =
       # otherwise, just use a gensym'd "cps"
       env = newEnv(genSym(nskParam, "cps"), types, n.params[0])
     else:
-      env = newEnv(ident"continuation", types, n.params[0])
+      when cpsMutant:
+        env = newEnv(ident"result", types, n.params[0])
+      else:
+        env = newEnv(ident"continuation", types, n.params[0])
     when false:
       ##
       ## we don't do this anymore,
@@ -558,7 +596,8 @@ macro cps*(T: untyped, n: untyped): untyped =
   # now we can insert our `result =`, which includes the proc params
   preamble.insert(0, env.rootResult(ident"result"))
   # template continuation = result; insert it after the `result =`
-  preamble.insert(1, env.rootTemplate)
+  when not cpsMutant:
+    preamble.insert(1, env.rootTemplate)
 
   # ensaftening the proc's body and combining it with the preamble
   n.body = newStmtList(preamble, env.saften(n.body))
