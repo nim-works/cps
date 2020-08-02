@@ -342,7 +342,7 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
     result.brake = env.nextBreak
   else:
     # there's nothing left to do in this scope; we're
-    # going to just return the next goto
+    # going to just return the next goto (this might be empty)
     result = env.nextGoto
 
 proc saften(parent: var Env; input: NimNode): NimNode =
@@ -386,10 +386,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       result.add nc
 
     of nnkForStmt:
-      env.addBreak env.splitAt(n, "brake", i)
-      nc[^1] = env.saften(nc[^1])
-      result.add nc
-      discard env.popBreak
+      withBreak env.splitAt(n, "brake", i):
+        nc[^1] = env.saften(nc[^1])
+        result.add nc
 
     of nnkContinueStmt:
       if env.insideFor:
@@ -423,13 +422,15 @@ proc saften(parent: var Env; input: NimNode): NimNode =
             result.add env.callTail(env.nextBreak)
             return
         finally:
-          discard env.popBreak
+          if not bp.isEmpty:
+            discard env.popBreak
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
-      let brakeEngaged = true
+      let bp = env.splitAt(n, "brake", i)
+      let brakeEngaged = not bp.isEmpty
       if brakeEngaged:
-        env.addBreak env.splitAt(n, "brake", i)
+        env.addBreak bp
       # the goto is added here so that it won't appear in the break proc
       env.addGoto nc, w
       try:

@@ -579,6 +579,17 @@ template withGoto*(f: Scope; body: untyped): untyped {.dirty.} =
   else:
     body
 
+template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
+  ## run a body with a longer breaks stack
+  if len(stripComments s.node) > 0:
+    env.breaks.add(s)
+    try:
+      body
+    finally:
+      result.add pop(env.breaks).node
+  else:
+    body
+
 proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
   # return a proc body that defines the locals in a scope above the
   # original body; this lets the lower scope shadow existing locals or
