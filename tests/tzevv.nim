@@ -1,3 +1,5 @@
+const
+  skippy = true
 
 import std/unittest
 import cps
@@ -130,15 +132,17 @@ suite "cps":
       cps prim()
        
   test "while1":
-    skip() #[
-    expPrims 5: runCps:
-      cps prim()
-      var a: int = 0
-      while a < 3:
+    when skippy:
+      skip() #  undeclared field
+      skip()
+    else:
+      expPrims 5: runCps:
         cps prim()
-        inc a
-      cps prim()
-      ]#
+        var a: int = 0
+        while a < 3:
+          cps prim()
+          inc a
+        cps prim()
   
   test "break1":
     expPrims 3: runCps:
@@ -181,16 +185,17 @@ suite "cps":
       check $type(b) == "int16"
 
   test "continue":
-    skip() #[  'undeclared field
-    expPrims 7: runCps:
-      cps prim()
-      var i: int = 0
-      while i < 10:
-        if i < 5:
-          continue
+    when skippy:
+      skip() #  undeclared field
+    else:
+      expPrims 7: runCps:
         cps prim()
-      cps prim()
-      ]#
+        var i: int = 0
+        while i < 10:
+          if i < 5:
+            continue
+          cps prim()
+        cps prim()
 
   test "for3":
     expPrims 1: runCps:
@@ -217,12 +222,13 @@ suite "cps":
           inc j
   
   test "paper example 1":
-    skip()  # issue #3: Codegen errors
-    expPrims 3: runCps:
-      var t: bool = false
-      while not t:
+    when skippy:
+      skip()  # issue #3: Codegen errors
+    else:
+      expPrims 3: runCps:
+        var t: bool = false
+        while not t:
+          cps prim()
+          break
+          cps prim()
         cps prim()
-        break
-        cps prim()
-      cps prim()
-
