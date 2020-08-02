@@ -501,7 +501,7 @@ iterator addAssignment(e: var Env; kind: NimNodeKind;
     let name = definedName(value)
     var list = newStmtList()
     list.add e.makeTemplate(name, field)
-    if not value.last.isEmpty:
+    if len(value) > 2 and not value.last.isEmpty:
       list.add newAssignment(name, defs.last)
     yield (key: name, val: list)
 
@@ -558,6 +558,9 @@ proc newContinuation*(e: Env; via: NimNode; goto: NimNode): NimNode =
       # specify the gensym'd field name and the local name
       result.add newColonExpr(field, name)
 
+proc rootResult*(e: Env; name: NimNode): NimNode =
+  result = newAssignment(name, e.newContinuation(e.first, newNilLit()))
+
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # setup the continuation for a tail call to a possibly new environment
   var ctor = e.newContinuation(e.identity, goto)
@@ -571,15 +574,14 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
       doc"re-use the local continuation by setting the fn",
       newAssignment(newDotExpr(e.first, e.fn), goto),
       e.first)
-    # this when statement returns an e.identity one way or another
-    result = nnkWhenStmt.newNimNode
-    result.add nnkElifBranch.newTree(
-      newCall(ident"compiles", e.first),
-
-      when true:
-        # FIXME: we currently cheat.
-        reuse
-      else:
+    when true:
+      # FIXME: we currently cheat.
+      result = reuse
+    else:
+      # this when statement returns an e.identity one way or another
+      result = nnkWhenStmt.newNimNode
+      result.add nnkElifBranch.newTree(
+        newCall(ident"compiles", e.first),
         # compare e.first to e.identity; if the types are the same, then we
         # can reuse the existing type and not create a new object.
         newStmtList(
@@ -589,9 +591,9 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
                   newTree(nnkElifBranch, infix(e.first, "is", e.identity), reuse),
                   newTree(nnkElse, ctor)),
         )
-    )
-    # else, use the ctor we just built
-    result.add nnkElse.newTree(ctor)
+      )
+      # else, use the ctor we just built
+      result.add nnkElse.newTree(ctor)
 
   # record the last-rendered scope for use in trace composition
   e.camefrom = newScope(result.kind, result)   # data for completeness
