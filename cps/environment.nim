@@ -251,7 +251,7 @@ proc init(e: var Env) =
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
     result = toSeq pairs(e.locals)
-    # least-recently-defined comes first
+    # most-recently-defined comes first
     reverse result
     # add any inherited types from the parent
     result.add allPairs(e.parent)
