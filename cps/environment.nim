@@ -258,7 +258,7 @@ proc allPairs(e: Env): seq[Pair] =
 
 iterator pairs(e: Env): Pair =
   assert not e.isNil
-  var seen = initHashSet[string](len(e.locals))
+  var seen = initHashSet[string](sets.rightSize(len(e)))
   when true:
     for pair in e.allPairs:
       if not seen.containsOrIncl pair.key.strVal:
@@ -406,8 +406,9 @@ proc stripVar(n: NimNode): NimNode =
   ## pull the type out of a VarTy
   result = if n.kind == nnkVarTy: n[0] else: n
 
-proc addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode) =
-  ## add `a, b, c: type = default` to the env
+iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
+  ## add `a, b, c: type = default` to the env;
+  ## yields pairs of field, value as added
   case n.kind
   of nnkIdentDefs:
     if len(n) == 2:
@@ -424,8 +425,10 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode) =
           name
         else:
           genSym(nskField, name.strVal & $c)
-      e = e.set(field, newTree(kind,     # ident: <no var> type = default
-                               newIdentDefs(name, stripVar(n[^2]), n[^1])))
+      var value = newTree(kind,     # ident: <no var> type = default
+                          newIdentDefs(name, stripVar(n[^2]), n[^1]))
+      e = e.set(field, value)
+      yield (key: field, val: value)
   #[
   of nnkVarTuple:
     assert n.last.kind == nnkPar, "expected parenthesis: " & repr(n)
@@ -452,20 +455,6 @@ proc letOrVar(n: NimNode): NimNodeKind =
   else:
     result = nnkLetSection
 
-proc add*(e: var Env; n: NimNode) =
-  ## add a let/var section or proc param to the env
-  try:
-    case n.kind
-    of nnkVarSection, nnkLetSection:
-      for defs in items(n):
-        e.addIdentDef(n.kind, defs)
-    of nnkIdentDefs:
-      e.addIdentDef(letOrVar(n), n)
-    else:
-      raise newException(Defect, "unrecognized input node " & repr(n))
-  finally:
-    e.setDirty
-
 proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   ## the initial version of the environment
   assert not via.isNil
@@ -486,6 +475,49 @@ proc identity*(e: var Env): NimNode =
   assert not e.id.isEmpty
   result = e.id
 
+proc definedName(n: NimNode): NimNode =
+  ## create an identifier from an typesection/identDef as cached;
+  ## this is a copy and it is repr'd to ensure gensym compat...
+  result = ident(repr(n[0][0]))
+
+proc makeTemplate(e: Env; name: NimNode; field: NimNode): NimNode =
+  let locals = e.castToChild(e.first)
+  result = nnkTemplateDef.newTree(name, newEmptyNode(),
+                                  newEmptyNode(), newEmptyNode(),
+                                  newEmptyNode(), newEmptyNode(),
+                                  newDotExpr(locals, field))
+
+iterator addAssignment(e: var Env; kind: NimNodeKind;
+                       defs: NimNode): Pair =
+  ## compose template and assignment during addition of identDefs to env
+  for field, value in e.addIdentDef(kind, defs):
+    let name = definedName(value)
+    var list = newStmtList()
+    list.add e.makeTemplate(name, field)
+    if not value.last.isEmpty:
+      list.add newAssignment(name, defs.last)
+    yield (key: name, val: list)
+
+iterator localSection*(e: var Env; n: NimNode): Pair =
+  ## consume a var|let section and yield name, node pairs
+  ## representing assignments to local scope; these are
+  ## templates in the current incarnation...
+
+  ## add a let/var section or proc param to the env
+  try:
+    case n.kind
+    of nnkVarSection, nnkLetSection:
+      for defs in items(n):
+        for pair in e.addAssignment(n.kind, defs):
+          yield pair
+    of nnkIdentDefs:
+      for pair in e.addAssignment(letOrVar(n), n):
+        yield pair
+    else:
+      raise newException(Defect, "unrecognized input node " & repr(n))
+  finally:
+    e.setDirty
+
 iterator localRetrievals*(e: Env; locals: NimNode): Pair =
   ## read locals out of an env
   let locals = e.castToChild(locals)
@@ -501,11 +533,7 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
       let name = ident(repr(value[0][0]))
 
       when true:
-        let tmpl = nnkTemplateDef.newTree(name, newEmptyNode(),
-                                          newEmptyNode(), newEmptyNode(),
-                                          newEmptyNode(), newEmptyNode(),
-                                          newDotExpr(locals, field))
-        yield (key: name, val: tmpl)
+        yield (key: name, val: e.makeTemplate(name, field))
       else:
         section.add newIdentDefs(name, value[0][1],
                                  # basically, `name: int = locals.field`

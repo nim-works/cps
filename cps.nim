@@ -381,9 +381,8 @@ proc saften(parent: var Env; input: NimNode): NimNode =
     case nc.kind
     of nnkVarSection, nnkLetSection:
       # add definitions into the environment
-      env.add nc
-      # include the section normally (for now)
-      result.add nc
+      for name, list in env.localSection(nc):
+        result.add list
 
     of nnkForStmt:
       withBreak env.splitAt(n, "brake", i):
@@ -546,7 +545,8 @@ macro cps*(T: untyped, n: untyped): untyped =
 
   # adding the remaining proc params to the environment
   for defs in n.params[first .. ^1]:
-    env.add defs
+    for name, list in env.localSection(defs):
+      discard
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)
