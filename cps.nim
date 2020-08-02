@@ -30,9 +30,15 @@ const
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
-proc numberedLines(s: string): string =
-  for n, line in pairs(splitLines(s, keepEol = true)):
-    result.add "$1  $2" % [ align($n, 3), line ]
+when cpsDebug:
+  proc numberedLines(s: string): string =
+    for n, line in pairs(splitLines(s, keepEol = true)):
+      result.add "$1  $2" % [ align($n, 3), line ]
+
+  proc snippet(n: NimNode; name: string): string =
+    result &= "----8<---- " & name & "\t" & "vvv"
+    result &= "\n" & n.repr.numberedLines & "\n"
+    result &= "----8<---- " & name & "\t" & "^^^"
 
 proc filter(n: NimNode; f: NodeFilter): NimNode =
   result = f(n)
@@ -390,6 +396,9 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
 proc saften(parent: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
   result = copyNimNode input
+
+  when cpsDebug:
+    echo input.snippet "saften"
 
   # the accumulated environment
   var env =
