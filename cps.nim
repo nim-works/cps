@@ -69,7 +69,7 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
   result = newStmtList()
-  let locals = e.defineLocals(returnTo(e.nextGoto))
+  let locals = e.defineLocals(n)  # goto supplied identifier, not nextGoto!
   var call: NimNode
   case p.kind
   of callish:
