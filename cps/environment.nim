@@ -526,9 +526,9 @@ proc initialization(e: Env; kind: NimNodeKind;
 iterator addAssignment(e: var Env; kind: NimNodeKind;
                        defs: NimNode): Pair =
   ## compose template and assignment during addition of identDefs to env
+  assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
   let section =
-    case kind
-    of nnkVarSection, nnkLetSection:
+    if kind in {nnkVarSection, nnkLetSection}:
       kind
     else:
       letOrVar(defs)
