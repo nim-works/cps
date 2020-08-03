@@ -1,7 +1,9 @@
 const
   skippy {.booldefine.} = false
 
+import std/macros
 import std/unittest
+
 import cps
 
 
@@ -207,17 +209,15 @@ suite "cps":
       cps prim()
 
   test "nested while":
-    when skippy:
-      skip()
-    else:
-      expPrims 100: runCps:
-        var i: int
-        var j: int
-        while i < 10:
-          inc i
-          while j < 10:
-            inc j
-            cps prim()
+    expPrims 100: runCps:
+      var i: int
+      var j: int
+      while i < 10:
+        inc i
+        j = 0
+        while j < 10:
+          inc j
+          cps prim()
 
   test "paper example 1":
     expPrims 2: runCps:
