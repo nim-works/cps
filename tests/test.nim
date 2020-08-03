@@ -23,14 +23,14 @@ suite "cps":
     trampoline foo()
 
   test "noop":
-    var j = 2
-    proc foo() {.cps:Cont.} =
+    var noopJ = 2
+    proc foo66() {.cps:Cont.} =
       var i: int = 3
-      j = 4
+      noopJ = 4
       cps noop()
       check i == 3
-    trampoline foo()
-    check j == 4
+    trampoline foo66()
+    check noopJ == 4
 
   test "sleep":
     proc foo() {.cps:Cont.} =
@@ -54,6 +54,7 @@ suite "cps":
         c == 3
     trampoline foo(1, 2)
 
+  test "https://github.com/disruptek/cps/issues/22 (2nd)":
     proc foo2(a, b, c: var int) {.cps: Cont.} =
       a = 5
       cps noop()
