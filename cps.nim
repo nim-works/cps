@@ -93,7 +93,8 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
   assert not isCpsCall(n)
   var ret = nnkReturnStmt.newNimNode(n)
   if n.kind == nnkNilLit:
-    if insideCps(e):
+    # we don't want to "fall back" to goto here
+    if false and insideCps(e):
       result = tailCall(e, returnTo(e.nextGoto))
     else:
       when cpsMutant:
@@ -332,7 +333,7 @@ proc callTail(env: var Env; scope: Scope): NimNode =
   ## `return call(); proc call() = ...`
   ## or optimize it into a `return subcall()`
   if scope.isNil:
-    error "nil scope"
+    return nnkReturnStmt.newTree newNilLit()
   var n = scope.node
   case n.kind
   of nnkProcDef:
@@ -456,8 +457,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       if env.insideFor and (len(nc) == 0 or nc[0].isEmpty):
         # unnamed break inside for loop
         result.add nc
-      elif env.nextBreak.kind == nnkNilLit:
+      elif env.nextBreak.isNil:
         assert false, "no break statements to pop"
+        result.add env.tailCall(returnTo(env.nextBreak))
       elif (len(nc) == 0 or nc[0].isEmpty):
         result.doc "simple break statement"
         result.add env.tailCall(returnTo(env.nextBreak))
@@ -482,7 +484,8 @@ proc saften(parent: var Env; input: NimNode): NimNode =
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
       let bp = env.splitAt(n, "brake", i)
-      let brakeEngaged = not bp.isEmpty
+      # we have to assume a break may exist
+      let brakeEngaged = true
       if brakeEngaged:
         env.addBreak bp
       # the goto is added here so that it won't appear in the break proc

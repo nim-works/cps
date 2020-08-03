@@ -633,8 +633,7 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
       result.add nnkElse.newTree(ctor)
 
   # record the last-rendered scope for use in trace composition
-  e.camefrom = newScope(result.kind, result)   # data for completeness
-  e.camefrom.name = goto                        # this is our purpose!
+  e.camefrom = newScope(result, goto, result)
 
   # we store the type whenever we define locals, because the next code that
   # executes may need to cut a new type.  to put this another way, a later

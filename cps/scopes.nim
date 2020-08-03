@@ -36,19 +36,20 @@ func isEmpty*(scope: Scope): bool =
   result = scope.isNil or scope.node.isEmpty or scope.kind == nnkEmpty
 
 proc `$`*(scope: Scope): string =
-  if scope.isEmpty:
-    result = "scope(empty)"
-  elif scope.isNil:
+  if scope.isNil:
     result = "scope(nil)"
+  elif scope.isEmpty:
+    result = "scope(empty)"
   else:
-    result = "scope(kind: $1, name: $2, node: $3)" % [
-      $scope.kind, repr(scope.name), lispRepr(scope.node) ]
+    result = "scope(kind: $1, name: $2, label: $4, node: $3)" % [
+      $scope.kind, repr(scope.name),
+      lispRepr(scope.node), repr(scope.label) ]
 
 proc newScope*(parent: Scope = nil): Scope =
   ## sentinel value for searches, etc.
   result = Scope(kind: nnkNilLit, parent: newNilLit(),
-                  label: newEmptyNode(), node: newEmptyNode(),
-                  name: newEmptyNode())
+                 label: newEmptyNode(), node: newEmptyNode(),
+                 name: newEmptyNode())
   if not parent.isNil:
     result.goto = parent.goto
     result.brake = parent.brake
@@ -83,6 +84,9 @@ proc returnTo*(scope: Scope): NimNode =
     case scope.node.kind
     of nnkIdent, nnkSym, nnkNilLit:
       result = scope.node
+    of nnkEmpty:
+      # an empty scope is essentially used for `return nil`
+      result = newNilLit()
     of nnkProcDef:
       result = scope.node.name
       warning "missing name for scope " & $scope
@@ -91,6 +95,7 @@ proc returnTo*(scope: Scope): NimNode =
       warning "missing name for scope " & $scope
     else:
       echo scope
+      echo scope.kind, "  ", scope.node.kind, "  ", scope.node.repr
       raise newException(Defect, "unable to guess goto identifier")
   else:
     result = scope.name
@@ -103,19 +108,15 @@ proc newScope*(n: NimNode; parent: Scope = nil): Scope =
   result.label = n.breakName
 
 proc newScope*(parent: NimNode; name: NimNode; n: NimNode): Scope =
-  result = newScope(n)
+  ## avoid returnTo() and form our chosen name
+  result = newScope(nil.Scope)
   result.kind = parent.kind
   result.name = name
-
-proc newScope*(kind: NimNodeKind; n: NimNode): Scope {.deprecated.} =
-  result = newScope(n)
-  result.kind = kind
+  result.node = n
+  result.parent = parent
+  result.label = parent.breakName
 
 proc add*(ns: var Scopes; k: NimNode; n: NimNode) =
-  var scope = newScope(k.kind, n)
-  case n.kind
-  of nnkIdent, nnkSym:
-    scope.name = n
-  else:
-    assert false
+  assert n.kind in {nnkIdent, nnkSym}
+  var scope = newScope(k, n, n)
   ns.add scope
