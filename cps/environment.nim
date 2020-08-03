@@ -276,7 +276,7 @@ proc definedName(n: NimNode): NimNode =
 
 iterator pairs(e: Env): Pair =
   assert not e.isNil
-  var seen = initHashSet[string](sets.rightSize(len(e)))
+  var seen = initHashSet[string]()
   for pair in e.allPairs:
     # make sure we're actually measuring gensyms for collision
     if not seen.containsOrIncl definedName(pair.val).strVal:
