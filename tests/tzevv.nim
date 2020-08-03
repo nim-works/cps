@@ -188,10 +188,11 @@ suite "cps":
     when skippy:
       skip() #  undeclared field
     else:
-      expPrims 7: runCps:
+      expPrims 8: runCps:
         cps prim()
         var i: int = 0
         while i < 10:
+          inc i
           if i < 5:
             continue
           cps prim()
