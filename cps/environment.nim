@@ -573,16 +573,11 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
       let name = definedName(value)
 
       when true:
-        when true:
-          # value.kind ensures that these will only be let|var sections
-          yield (key: name, val: e.initialization(value.kind, field, value))
+        when defined(release):
+          yield (key: name, val: e.makeTemplate(name, field))
         else:
-          when defined(release):
-            yield (key: name, val: e.makeTemplate(name, field))
-          else:
-            yield (key: name, val: nnkStmtList.newTree(
-              nnkCall.newTree( newIdentNode("installLocal"),
-                name, e.identity, field)))
+          yield (key: name, val: nnkCall.newTree(ident"installLocal", name,
+                                                 e.identity, field))
       else:
         section.add newIdentDefs(name, value[0][1],
                                  # basically, `name: int = locals.field`
