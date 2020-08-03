@@ -53,7 +53,8 @@ type
     rs: NimNode                     # the sym we use for "yielded" result
 
 when cpsDebug:
-  template twice*(body: untyped) =
+  template twice*(body: untyped): untyped =
+    ## an exercise in futility, apparently
     block twice:
       once:
         break twice
