@@ -6,7 +6,7 @@ import cps
 
 
 type
-  
+
   C = ref object of RootObj
     fn*: proc(c: C): C {.nimcall.}
 
@@ -36,7 +36,7 @@ template expJumps(expect: int, body: untyped) =
 
 var prims = 0
 
-proc prim(): C {.cpsMagic.} = 
+proc prim(): C {.cpsMagic.} =
   inc prims
   return c
 
@@ -56,11 +56,11 @@ template runCps(body: untyped) =
 var r: int
 
 suite "cps":
-  
+
   test "nocall":
     expPrims 0: runCps:
       discard
-  
+
   test "onecall":
     expPrims 1: runCps:
       cps prim()
@@ -77,7 +77,7 @@ suite "cps":
       if true:
         cps prim()
       cps prim()
-  
+
   test "if false":
     expPrims 2: runCps:
       var a: int
@@ -85,7 +85,7 @@ suite "cps":
       if false:
         cps prim()
       cps prim()
- 
+
   test "if true if false":
     expPrims 3: runCps:
       cps prim()
@@ -104,7 +104,7 @@ suite "cps":
         if true:
           cps prim()
       cps prim()
-  
+
   test "nested if 2":
     expPrims 3: runCps:
       var a: int
@@ -114,7 +114,7 @@ suite "cps":
         if false:
           cps prim()
       cps prim()
-  
+
   test "nested if 3":
     expPrims 2: runCps:
       cps prim()
@@ -130,20 +130,16 @@ suite "cps":
       block:
         cps prim()
       cps prim()
-       
+
   test "while1":
-    when skippy:
-      skip() #  undeclared field
-      skip()
-    else:
-      expPrims 5: runCps:
+    expPrims 5: runCps:
+      cps prim()
+      var a: int = 0
+      while a < 3:
         cps prim()
-        var a: int = 0
-        while a < 3:
-          cps prim()
-          inc a
-        cps prim()
-  
+        inc a
+      cps prim()
+
   test "break1":
     expPrims 3: runCps:
       cps prim()
@@ -152,7 +148,7 @@ suite "cps":
         break
         cps prim()
       cps prim()
-  
+
   test "break2":
     expPrims 3: runCps:
       cps prim()
@@ -169,7 +165,7 @@ suite "cps":
       for i in 0..3:
         inc a, 1
       check a == 4
-  
+
   test "for2":
     expPrims 1: runCps:
       var a: int = 0
@@ -185,18 +181,15 @@ suite "cps":
       check $type(b) == "int16"
 
   test "continue":
-    when skippy:
-      skip() #  undeclared field
-    else:
-      expPrims 8: runCps:
+    expPrims 8: runCps:
+      cps prim()
+      var i: int = 0
+      while i < 10:
+        inc i
+        if i < 5:
+          continue
         cps prim()
-        var i: int = 0
-        while i < 10:
-          inc i
-          if i < 5:
-            continue
-          cps prim()
-        cps prim()
+      cps prim()
 
   test "for3":
     expPrims 1: runCps:
@@ -212,24 +205,25 @@ suite "cps":
       defer:
         cps prim()
       cps prim()
-    
+
   test "nested while":
-    expPrims 100: runCps:
-      var i: int
-      var j: int
-      while i < 10:
-        inc i
-        while j < 10:
-          inc j
-  
-  test "paper example 1":
     when skippy:
-      skip()  # issue #3: Codegen errors
+      skip()
     else:
-      expPrims 3: runCps:
-        var t: bool = false
-        while not t:
-          cps prim()
-          break
-          cps prim()
+      expPrims 100: runCps:
+        var i: int
+        var j: int
+        while i < 10:
+          inc i
+          while j < 10:
+            inc j
+            cps prim()
+
+  test "paper example 1":
+    expPrims 2: runCps:
+      var t: bool = false
+      while not t:
         cps prim()
+        break
+        cps prim()
+      cps prim()
