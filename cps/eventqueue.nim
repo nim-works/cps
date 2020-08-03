@@ -17,7 +17,7 @@ export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash, semaphore.wait,
 export Event
 
 const
-  cpsMutant {.booldefine, used.} = true    ## mutate continuations
+  cpsMutant {.booldefine, used.} = false    ## mutate continuations
   cpsDebug {.booldefine, used.} = false    ## produce gratuitous output
   cpsPoolSize {.intdefine, used.} = 64     ## expected pending continuations
   cpsTrace {.booldefine, used.} = false    ## store "stack" traces

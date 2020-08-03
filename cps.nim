@@ -6,8 +6,8 @@ import std/sequtils
 import std/algorithm
 
 const
-  cpsMutant {.booldefine.} = true
-  cpsDebug {.booldefine.} = false
+  cpsMutant {.booldefine, used.} = false    ## mutate continuations
+  cpsDebug {.booldefine, used.} = false
   strict = true        ## only cps operations are strictly cps operations
 
 when (NimMajor, NimMinor) < (1, 3):
@@ -397,7 +397,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
   result = copyNimNode input
 
-  when cpsDebug:
+  when cpsDebug and false:
     echo input.snippet "saften"
 
   # the accumulated environment

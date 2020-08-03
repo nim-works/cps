@@ -10,6 +10,7 @@ import std/algorithm
 import cps/scopes
 
 const
+  cpsZevv {.booldefine.} = true   ## increment gensyms
   cpsCast {.booldefine.} = false
   cpsDebug {.booldefine.} = false
   cpsTrace {.booldefine.} = false
@@ -51,8 +52,15 @@ type
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
 
-proc `$`(p: Pair): string =
-  result = p[0].repr & ": " & p[1].repr
+when cpsDebug:
+  template twice*(body: untyped) =
+    block twice:
+      once:
+        break twice
+      body
+
+  proc `$`(p: Pair): string =
+    result = p[0].repr & ": " & p[1].repr
 
 func doc*(s: string): NimNode =
   ## generate a doc statement for debugging
@@ -423,7 +431,10 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
         if name.kind == nnkSym:
           name
         else:
-          genSym(nskField, name.strVal & $c)
+          when cpsZevv:
+            genSym(nskField, name.strVal & $c)
+          else:
+            genSym(nskField, name.strVal)
       var value = newTree(kind,     # ident: <no var> type = default
                           newIdentDefs(name, stripVar(n[^2]), n[^1]))
       e = e.set(field, value)
@@ -506,6 +517,8 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
 
   ## add a let/var section or proc param to the env
   try:
+    when cpsDebug:
+      echo "local section ", $n.kind, "\n", repr(n)
     case n.kind
     of nnkVarSection, nnkLetSection:
       for defs in items(n):
@@ -656,7 +669,7 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
     var wrap = n
 
   # we'll use a statement list as the body
-  result = newStmtList(wrap)
+  result = newStmtList(doc("done locals for " & $e.identity), wrap)
   # to that list, we will insert the local variables in scope
   for name, asgn in localRetrievals(e, locals):
     result.insert(0, asgn)
