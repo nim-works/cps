@@ -411,11 +411,13 @@ proc saften(parent: var Env; input: NimNode): NimNode =
   for i, nc in pairs(n):
     # if it's a cps call,
     if nc.isCpsCall:
-      withGoto env.splitAt(n, "after", i):
-        result.add env.tailCall(nc, returnTo(env.nextGoto))
-        #result.doc "post-cps call; time to bail"
-        return
-      assert false, "unexpected"
+      # we want to make sure that a pop inside the after body doesn't
+      # return to after itself, so we don't add it to the goto list...
+      let after = env.splitAt(n, "after", i)
+      result.add env.tailCall(nc, returnTo(after))
+      # include the definition for the after proc
+      result.add after.node
+      result.doc "post-cps call; time to bail"
       # done!
       return
 
