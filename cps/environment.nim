@@ -271,6 +271,7 @@ proc allPairs(e: Env): seq[Pair] =
 proc definedName(n: NimNode): NimNode =
   ## create an identifier from an typesection/identDef as cached;
   ## this is a copy and it is repr'd to ensure gensym compat...
+  assert n.kind in {nnkVarSection, nnkLetSection}, "use this on env[key]"
   result = ident(repr(n[0][0]))
 
 iterator pairs(e: Env): Pair =
@@ -391,9 +392,13 @@ proc storeType*(e: var Env; force = off): Env =
     e.store.add nnkTypeSection.newTree e.makeType
     when cpsFn:
       e.store.add e.makeFnGetter
+    when cpsDebug:
+      echo "storing type ", $e.identity
     # clearly, if we ever write again, we want it to be a new type
     result = newEnv(e)
     e = result
+    when cpsDebug:
+      echo "next type ", $e.identity
   else:
     result = e
     assert not e.isDirty
@@ -500,16 +505,36 @@ proc makeTemplate(e: Env; name: NimNode; field: NimNode): NimNode =
                                   newEmptyNode(), newEmptyNode(),
                                   newDotExpr(locals, field))
 
+proc initialization(e: Env; kind: NimNodeKind;
+                    field: NimNode; value: NimNode): NimNode =
+  ## produce the `x = 34` appropriate given the field and identDefs
+  assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
+
+  # the defined name is composed from the let|var section
+  let name = definedName(value)
+
+  # start with the template, and then maybe add an initialization
+  result = newStmtList(e.makeTemplate(name, field))
+
+  # don't attempt to redefine proc params!
+  if kind in {nnkVarSection, nnkLetSection}:
+    # search first|only typedefs in a var/let section
+    let defs = value[0]
+    if len(defs) > 2 and not defs.last.isEmpty:
+      result.add newAssignment(name, defs.last)
+
 iterator addAssignment(e: var Env; kind: NimNodeKind;
                        defs: NimNode): Pair =
   ## compose template and assignment during addition of identDefs to env
-  for field, value in e.addIdentDef(kind, defs):
+  let section =
+    case kind
+    of nnkVarSection, nnkLetSection:
+      kind
+    else:
+      letOrVar(defs)
+  for field, value in e.addIdentDef(section, defs):
     let name = definedName(value)
-    var list = newStmtList()
-    list.add e.makeTemplate(name, field)
-    if len(value) > 2 and not value.last.isEmpty:
-      list.add newAssignment(name, defs.last)
-    yield (key: name, val: list)
+    yield (key: name, val: e.initialization(kind, field, value))
 
 iterator localSection*(e: var Env; n: NimNode): Pair =
   ## consume a var|let section and yield name, node pairs
@@ -526,7 +551,7 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
         for pair in e.addAssignment(n.kind, defs):
           yield pair
     of nnkIdentDefs:
-      for pair in e.addAssignment(letOrVar(n), n):
+      for pair in e.addAssignment(n.kind, n):
         yield pair
     else:
       raise newException(Defect, "unrecognized input node " & repr(n))
@@ -548,12 +573,16 @@ iterator localRetrievals*(e: Env; locals: NimNode): Pair =
       let name = definedName(value)
 
       when true:
-        when defined(release):
-          yield (key: name, val: e.makeTemplate(name, field))
+        when true:
+          # value.kind ensures that these will only be let|var sections
+          yield (key: name, val: e.initialization(value.kind, field, value))
         else:
-          yield (key: name, val: nnkStmtList.newTree(
-            nnkCall.newTree( newIdentNode("installLocal"),
-              name, e.identity, field)))
+          when defined(release):
+            yield (key: name, val: e.makeTemplate(name, field))
+          else:
+            yield (key: name, val: nnkStmtList.newTree(
+              nnkCall.newTree( newIdentNode("installLocal"),
+                name, e.identity, field)))
       else:
         section.add newIdentDefs(name, value[0][1],
                                  # basically, `name: int = locals.field`
