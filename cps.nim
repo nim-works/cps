@@ -416,7 +416,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       let after = env.splitAt(n, "after", i)
       result.add env.tailCall(nc, returnTo(after))
       # include the definition for the after proc
-      result.add after.node
+      if after.node.kind != nnkSym:
+        # XXX: hack
+        result.add after.node
       result.doc "post-cps call; time to bail"
       # done!
       return
