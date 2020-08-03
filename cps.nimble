@@ -12,7 +12,7 @@ proc execCmd(cmd: string) =
 
 proc execTest(test: string) =
   if getEnv("TRAVIS_COMPILER", "unlikely") == "unlikely":
-    execCmd "nim c             --gc:arc -r " & test
+    execCmd "nim c             --gc:refc -r " & test
   else:
     execCmd "nim c              -r " & test
     execCmd "nim c   -d:release -r " & test

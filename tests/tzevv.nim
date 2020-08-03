@@ -1,5 +1,5 @@
 const
-  skippy = true
+  skippy {.booldefine.} = false
 
 import std/unittest
 import cps
