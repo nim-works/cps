@@ -558,7 +558,7 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
   finally:
     e.setDirty
 
-iterator localRetrievals*(e: Env; locals: NimNode): Pair =
+iterator localRetrievals(e: Env; locals: NimNode): Pair =
   ## read locals out of an env
   let locals = e.castToChild(locals)
   for field, value in pairs(e):
@@ -694,7 +694,7 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
 
   # we'll use a statement list as the body
   result = newStmtList(doc("done locals for " & $e.identity), wrap)
-  # to that list, we will insert the local variables in scope
+  # into that list, we will insert the local variables in scope
   for name, asgn in localRetrievals(e, locals):
     result.insert(0, asgn)
   result.insert(0, doc "installing locals for " & $e.identity)
