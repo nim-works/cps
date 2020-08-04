@@ -46,10 +46,15 @@ suite "cps":
     skip()
     when false:
       proc foo(a, b, c: int = 3) {.cps: Cont.} =
+        ## a=1, b=2, c=3
         var a: int = 5
+        ## a=5, b=2, c=3
         cps noop()
+        ## a=5, b=2, c=3
         var b: int = b + a
+        ## a=5, b=7, c=3
         cps noop()
+        ## a=5, b=7, c=3
         check:
           a == 5
           b == 7
