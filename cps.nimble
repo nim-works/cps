@@ -29,11 +29,12 @@ task test, "run tests for travis":
   execTest("tests/tbreak.nim")
   execTest("tests/tsignal.nim")
   execTest("tests/tock.nim")
-  #execTest("tests/tyield.nim")
+  execTest("tests/tsimple.nim")
   #execTest("tests/tfork.nim")
   execTest("tests/tfor.nim")
   execTest("tests/tzevv.nim")
   execTest("tests/test.nim")
+  execTest("tests/tyield.nim")
 
 task mkdoc, "generate the docs":
   exec "nim doc --path:. --outdir=docs cps.nim"
