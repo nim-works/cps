@@ -10,7 +10,7 @@ suite "break":
   test "1":
     proc test() =
       r = 1
-      check r != 1
+      check r == 1
       while true:
         if true:
           break

@@ -458,7 +458,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         # unnamed break inside for loop
         result.add nc
       elif env.nextBreak.isNil:
-        assert false, "no break statements to pop"
+        #assert false, "no break statements to pop"
         result.add env.tailCall(returnTo(env.nextBreak))
       elif (len(nc) == 0 or nc[0].isEmpty):
         result.doc "simple break statement"
