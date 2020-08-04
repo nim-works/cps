@@ -1,15 +1,15 @@
-import std/unittest
-
 import cps
 import cps/eventqueue
 
-proc adder(x: var int) =
-  inc x
 
+#import testes
+#testes:
+import std/unittest
 suite "cps":
+  proc adder(x: var int) =
+    inc x
 
-  setup:
-    var cup: int
+  var cup: int
 
   test "simple":
     proc foo() {.cps:Cont.} =

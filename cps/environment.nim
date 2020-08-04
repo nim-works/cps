@@ -170,7 +170,6 @@ proc inherits*(e: Env): NimNode =
 
 proc identity*(e: Env): NimNode =
   assert not e.isNil
-  #assert not e.isDirty
   result = e.id
 
 proc isWritten(e: Env): bool =
@@ -190,7 +189,7 @@ proc isDirty*(e: Env): bool =
     # a dirty parent yields a dirty child
     result = result or (not e.parent.isNil and e.parent.isDirty)
   else:
-    result = not e.isWritten
+    result = not(e.isWritten) or (not(e.parent.isNil) and e.parent.isDirty)
 
 proc setDirty(e: var Env) =
   when false:
@@ -248,6 +247,7 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
 
 var c {.compiletime.}: int
 proc init(e: var Env) =
+  e.seen = initHashSet[string]()
   if e.fn.isNil:
     when cpsFn:
       e.fn = genSym(nskField, "fn" & $c)
@@ -323,9 +323,10 @@ proc reparent(e: var Env; p: Env) =
     if e < p:
       # p is a superset of us; suggest it to our parents
       reparent(e.parent, p)
-      if e.parent < p:
-        # and then set it as our parent if it's better
-        e.parent = p
+      if not e.parent.isNil:
+        if e.parent < p:
+          # and then set it as our parent if it's better
+          e.parent = p
     else:
       # offer ourselves to our parent instead
       reparent(e.parent, e)
@@ -337,7 +338,6 @@ proc makeType*(e: var Env): NimNode =
   #performReparent(e)
 
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
-  #assert not e.isDirty
 
 proc first*(e: Env): NimNode = e.c
 proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newNilLit())
@@ -353,11 +353,13 @@ proc newEnv*(parent: var Env; copy = off): Env =
     result = Env(store: parent.store,
                  via: parent.identity,
                  seen: parent.seen,
-                 locals: parent.locals,
+                 locals: initOrderedTable[NimNode, NimNode](),
                  c: parent.c,
                  ex: parent.ex,
                  rs: parent.rs,
                  fn: parent.fn,
+                 gotos: parent.gotos,
+                 breaks: parent.breaks,
                  scope: scope,
                  parent: parent)
     init result
@@ -383,11 +385,13 @@ proc storeType*(e: var Env; force = off): Env =
   ## turn an env into a complete typedef in a type section
   assert not e.isNil
   if e.isDirty:
+    if force:
+      reparent(e, e)
     if not e.parent.isNil:
       assert not e.parent.isDirty
       # must store the parent for inheritance ordering reasons;
       # also, we don't want it to be changed under our feet.
-      e.via = e.parent.id
+      assert e.via == e.parent.id
       e.parent = e.parent.storeType
     e.store.add nnkTypeSection.newTree e.makeType
     when cpsFn:
@@ -395,7 +399,7 @@ proc storeType*(e: var Env; force = off): Env =
     when cpsDebug:
       echo "storing type ", $e.identity
     # clearly, if we ever write again, we want it to be a new type
-    result = newEnv(e)
+    result = newEnv(e, copy = on)
     e = result
     when cpsDebug:
       echo "next type ", $e.identity
@@ -477,6 +481,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   assert not via.isEmpty
   var c = if c.isNil or c.isEmpty: ident"continuation" else: c
   result = Env(c: c, store: store, via: via, id: via)
+  result.seen = initHashSet[string]()
   result.scope = newScope()
   init result
   when cpsFn:
@@ -599,6 +604,17 @@ proc rootResult*(e: Env; name: NimNode): NimNode =
   result = newAssignment(name, e.newContinuation(e.first, newNilLit()))
 
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
+  # we store the type whenever we define locals, because the next code that
+  # executes may need to cut a new type.  to put this another way, a later
+  # scope may add a name that clashes with a scope ancestor of ours that is
+  # only a peer of the later scope...
+
+  when false:
+    # actually, we don't store it here because it might not be necessary;
+    # but if we were to store it, which we aren't, we'd want to do it up
+    # here (but we're not) because this may precede a read from a cps proc.
+    e = e.storeType
+
   # setup the continuation for a tail call to a possibly new environment
   var ctor = e.newContinuation(e.identity, goto)
 
@@ -634,12 +650,6 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
 
   # record the last-rendered scope for use in trace composition
   e.camefrom = newScope(result, goto, result)
-
-  # we store the type whenever we define locals, because the next code that
-  # executes may need to cut a new type.  to put this another way, a later
-  # scope may add a name that clashes with a scope ancestor of ours that is
-  # only a peer of the later scope...
-  e = e.storeType
 
 template withGoto*(f: Scope; body: untyped): untyped {.dirty.} =
   ## run a body with a longer gotos stack

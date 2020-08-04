@@ -621,8 +621,8 @@ macro cps*(T: untyped, n: untyped): untyped =
   # ensaftening the proc's body and combining it with the preamble
   n.body = newStmtList(preamble, env.saften(n.body))
 
-  # forcing a write of the current accumulating type
-  env = env.storeType(force = on)
+  # "encouraging" a write of the current accumulating type
+  env = env.storeType(force = off)
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)
