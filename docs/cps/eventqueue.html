@@ -102,12 +102,23 @@ function main() {
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#Cont"
     title="Cont = ref object of RootObj
-  fn*: proc (c: Cont): Cont {.nimcall.}
+  when cpsMutant:
+      fn*: proc (c: var Cont) {.nimcall.}
+
+  else:
+      fn*: proc (c: Cont): Cont {.nimcall.}
+
   when cpsDebug:
       clock: Clock             ## time of latest poll loop
       delay: Duration          ## polling overhead
       id: Id                   ## our last registration
-      fd: Fd                   ## our last file-descriptor"><wbr />Cont<span class="attachedType"></span></a></li>
+      fd: Fd                   ## our last file-descriptor
+    
+  when cpsTrace:
+      filename: string
+      line: int
+      column: int
+      identity: string"><wbr />Cont<span class="attachedType"></span></a></li>
 
   </ul>
 </li>
@@ -120,6 +131,10 @@ function main() {
     title="len(eq: EventQueue): int"><wbr />len<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#stop"
     title="stop()"><wbr />stop<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#init%2CCont"
+    title="init(c: Cont): Cont"><wbr />init<span class="attachedType">Cont</span></a></li>
+  <li><a class="reference" href="#writeStackTrace"
+    title="writeStackTrace()"><wbr />write<wbr />Stack<wbr />Trace<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#trampoline%2CCont"
     title="trampoline(c: Cont)"><wbr />trampoline<span class="attachedType">Cont</span></a></li>
   <li><a class="reference" href="#poll"
@@ -177,13 +192,24 @@ function main() {
 <dl class="item">
 <a id="Cont"></a>
 <dt><pre><a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a> <span class="Other">=</span> <span class="Keyword">ref</span> <span class="Keyword">object</span> <span class="Keyword">of</span> <span class="Identifier">RootObj</span>
-  <span class="Identifier">fn</span><span class="Operator">*</span><span class="Other">:</span> <span class="Keyword">proc</span> <span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a><span class="Other">)</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">nimcall</span></span><span class="Other">.}</span></span>
+  <span class="Keyword">when</span> <span class="Identifier">cpsMutant</span><span class="Other">:</span>
+      <span class="Identifier">fn</span><span class="Operator">*</span><span class="Other">:</span> <span class="Keyword">proc</span> <span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">Cont</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">nimcall</span></span><span class="Other">.}</span></span>
+
+  <span class="Keyword">else</span><span class="Other">:</span>
+      <span class="Identifier">fn</span><span class="Operator">*</span><span class="Other">:</span> <span class="Keyword">proc</span> <span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a><span class="Other">)</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">nimcall</span></span><span class="Other">.}</span></span>
+
   <span class="Keyword">when</span> <span class="Identifier">cpsDebug</span><span class="Other">:</span>
       <span class="Identifier">clock</span><span class="Other">:</span> <span class="Identifier">Clock</span>             <span class="Comment">## time of latest poll loop</span>
       <span class="Identifier">delay</span><span class="Other">:</span> <span class="Identifier">Duration</span>          <span class="Comment">## polling overhead</span>
       <span class="Identifier">id</span><span class="Other">:</span> <span class="Identifier">Id</span>                   <span class="Comment">## our last registration</span>
       <span class="Identifier">fd</span><span class="Other">:</span> <span class="Identifier">Fd</span>                   <span class="Comment">## our last file-descriptor</span>
     
+  <span class="Keyword">when</span> <span class="Identifier">cpsTrace</span><span class="Other">:</span>
+      <span class="Identifier">filename</span><span class="Other">:</span> <span class="Identifier">string</span>
+      <span class="Identifier">line</span><span class="Other">:</span> <span class="Identifier">int</span>
+      <span class="Identifier">column</span><span class="Other">:</span> <span class="Identifier">int</span>
+      <span class="Identifier">identity</span><span class="Other">:</span> <span class="Identifier">string</span>
+
   </pre></dt>
 <dd>
 
@@ -216,6 +242,20 @@ The number of pending continuations.
 Tell the dispatcher to stop, discarding all pending continuations.
 
 </dd>
+<a id="init,Cont"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#init%2CCont"><span class="Identifier">init</span></a><span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a><span class="Other">)</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
+<a id="writeStackTrace"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#writeStackTrace"><span class="Identifier">writeStackTrace</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+
+
+</dd>
 <a id="trampoline,Cont"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#trampoline%2CCont"><span class="Identifier">trampoline</span></a><span class="Other">(</span><span class="Identifier">c</span><span class="Other">:</span> <a href="eventqueue.html#Cont"><span class="Identifier">Cont</span></a><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
@@ -224,7 +264,7 @@ Run the supplied continuation until it is complete.
 
 </dd>
 <a id="poll"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#poll"><span class="Identifier">poll</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">KeyError</span><span class="Other">,</span> <span class="Identifier">Exception</span><span class="Other">,</span> <span class="Identifier">OSError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">,</span> <span class="Identifier">TimeEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#poll"><span class="Identifier">poll</span></a><span class="Other">(</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">KeyError</span><span class="Other">,</span> <span class="Identifier">Exception</span><span class="Other">,</span> <span class="Identifier">OSError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">TimeEffect</span><span class="Other">,</span> <span class="Identifier">RootEffect</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 See what continuations need running and run them.
@@ -337,7 +377,7 @@ Continue upon any of <tt class="docutils literal"><span class="pre">events</span
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-26 00:49:50 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-04 23:50:41 UTC</small>
       </div>
     </div>
   </div>

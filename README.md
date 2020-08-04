@@ -62,9 +62,9 @@ import cps/eventqueue  # sleep(), trampoline, run(), Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
 proc tock(name: string; interval: Duration) {.cps: Cont.} =
-  var count: int = 0
-  while true:
-    inc count
+  var count: int = 10
+  while count > 0:
+    dec count
     # this primitive sends the continuation to the dispatcher
     yield sleep(interval)
     # this is executed from the dispatcher
@@ -82,32 +82,43 @@ run()
 
 ```nim
 type
-  env_16451076 = ref object of Cont
-    name: string
-    interval: Duration
+  env0_18406164 = ref object of Cont
+    name2_18406181: string
+    ms3_18406189: int
+    count4_18406302: int
 
-  env_16451209 = ref object of env_16451076
-    count: int
-
-proc after_16451243(locals_16451244: Cont): Cont =
-  let interval: Duration = env_16451209(locals_16451244).interval
-  let name: string = env_16451209(locals_16451244).name
-  var count: int = env_16451209(locals_16451244).count
+proc loop_18406303(continuation: Cont): Cont
+proc after_18406343(continuation: Cont): Cont
+proc after_18406343(continuation: Cont): Cont =
+  template name = env0_18406164(continuation).name2_18406181
+  template ms = env0_18406164(continuation).ms3_18406189
+  template count = env0_18406164(continuation).count4_18406302
   echo name, " ", count
-  return env_16451209(fn: loop_16451121, count: count, name: name, interval: interval).Cont
+  return Cont:
+    continuation.fn = loop_18406303
+    continuation
 
-proc loop_16451121(locals_16451228: Cont): Cont =
-  let interval: Duration = env_16451209(locals_16451228).interval
-  let name: string = env_16451209(locals_16451228).name
-  var count: int = env_16451209(locals_16451228).count
-  if true:
-    inc count
-    return sleep env_16451209(fn: after_16451243, count: count, name: name,
-                                interval: interval).Cont, interval
+proc loop_18406303(continuation: Cont): Cont =
+  template name = env0_18406164(continuation).name2_18406181
+  template ms = env0_18406164(continuation).ms3_18406189
+  template count = env0_18406164(continuation).count4_18406302
+  if count > 0:
+    dec count
+    return sleep(Cont:
+      continuation.fn = after_18406343
+      continuation, ms)
+  return nil
 
-proc tock(name: string; interval: Duration): Cont =
-  var count: int = 0
-  return env_16451209(fn: loop_16451121, count: count, name: name, interval: interval).Cont
+proc tock(name: string; ms: int): Cont =
+  result = env0_18406164(fn: nil, ms3_18406189: ms, name2_18406181: name)
+  template continuation = result
+  template name = env0_18406164(continuation).name2_18406181
+  template ms = env0_18406164(continuation).ms3_18406189
+  template count = env0_18406164(continuation).count4_18406302
+  count = 10
+  return Cont:
+    continuation.fn = loop_18406303
+    continuation
 ```
 
 ## Hacking
