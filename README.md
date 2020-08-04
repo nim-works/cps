@@ -20,7 +20,7 @@ These continuations...
 - may be dispatched using your own custom dispatcher
 - may be moved between threads to parallelize execution
 - require no `{.gcsafe.}` for global/local accesses
-- are as fast as Nim's native closure iterators
+- are only 10-15% slower than Nim's native iterators
 - are faster and lighter than async/await futures
 
 ## Work In Progress
