@@ -21,7 +21,10 @@ type
   NodeFilter = proc(n: NimNode): NimNode
 
 template installLocal*(id, env, field) =
-  template id(): untyped = (env(continuation).field)
+  when cpsMutant:
+    template id(): untyped = (env(result).field)
+  else:
+    template id(): untyped = (env(continuation).field)
 
 const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes

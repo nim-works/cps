@@ -27,6 +27,7 @@ suite "cps":
     proc foo66() {.cps:Cont.} =
       var i: int = 3
       noopJ = 4
+      quit(1)
       cps noop()
       check i == 3
     trampoline foo66()
