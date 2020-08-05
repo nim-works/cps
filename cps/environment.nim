@@ -518,8 +518,11 @@ proc initialization(e: Env; kind: NimNodeKind;
   # the defined name is composed from the let|var section
   let name = definedName(value)
 
-  # start with the template, and then maybe add an initialization
-  result = newStmtList(e.makeTemplate(name, field))
+  when defined(release):
+    result = newStmtList(e.makeTemplate(name, field))
+  else:
+    result = newStmtList(nnkCall.newTree(ident"installLocal", name,
+                                         e.identity, field))
 
   # don't attempt to redefine proc params!
   if kind in {nnkVarSection, nnkLetSection}:
