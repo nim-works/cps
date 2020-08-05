@@ -8,7 +8,7 @@ proc tock(name: string; ms: int) {.cps: Cont.} =
     yield sleep(ms)
     echo name, " ", count
 
-trampoline tock("tick", 30)
-trampoline tock("tock", 100)
+trampoline tock("tick", 300)
+trampoline tock("tock", 700)
 
 run()

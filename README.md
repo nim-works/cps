@@ -120,6 +120,9 @@ proc tock(name: string; ms: int): Cont =
     continuation.fn = loop_18406303
     continuation
 ```
+...and when built with `--define:cpsDebug`, outputs something like...
+
+![tick-tock demonstration](docs/demo.svg "tick-tock demonstration")
 
 ## Hacking
 

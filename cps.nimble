@@ -40,3 +40,4 @@ task mkdoc, "generate the docs":
   exec "nim doc --path:. --outdir=docs cps.nim"
   exec "nim doc --path:. --outdir=docs/cps cps/eventqueue.nim"
   exec "nim doc --path:. --outdir=docs/cps cps/semaphore.nim"
+  exec "termtosvg docs/demo.svg --loop-delay=5000 --screen-geometry=80x60 --template=solarized_light --command=\"nim c --gc:refc --define:danger -r -f tests/tock.nim\""
