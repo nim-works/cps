@@ -34,8 +34,9 @@ The included dispatcher is based upon
 features of that module will map quite easily to the following list.
 
 Windows is not supported by the included dispatcher yet due to the lack of
-native timer support in `selectors`, but an ioselectors package for Windows
-is in an advanced stage of development.
+native timer support in `selectors`, but [an ioselectors package that supports
+Windows](https://github.com/xflywind/ioselectors) is in an advanced stage of
+development.
 
 ## Usage
 
