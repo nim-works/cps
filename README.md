@@ -33,20 +33,9 @@ The included dispatcher is based upon
 [selectors](https://nim-lang.org/docs/selectors.html), so you can see how the
 features of that module will map quite easily to the following list.
 
-Key primitives and their implementation status, in order of priority:
-
-- [x] sleep
-- [x] yield
-- [x] discard
-- [x] signal
-- [x] wait
-- [x] I/O
-- [x] fork
-- [ ] thread
-
 Windows is not supported by the included dispatcher yet due to the lack of
-native timer support in `selectors`, but this is a solved problem; feel free to
-submit a pull request!
+native timer support in `selectors`, but an ioselectors package for Windows
+is in an advanced stage of development.
 
 ## Usage
 
@@ -134,6 +123,7 @@ proc tock(name: string; ms: int): Cont =
 - use `--define:cpsMutant` toggle mutating continuations (default: _off_)
 
 ## Documentation
+
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
 You can also jump to [the documentation for the included dispatcher](https://disruptek.github.io/cps/cps/eventqueue.html).
 
@@ -141,6 +131,14 @@ You can also jump to [the documentation for the included dispatcher](https://dis
 
 The tests provide the best examples of usage and are a great starting point for
 your experiments.
+
+Here are some tests that Zevv prepared:
+
+![zevv tests](docs/tzevv.svg "zevv tests")
+
+Here are the simpler tests of AST rewrites:
+
+![tease tests](docs/tease.svg "tease tests")
 
 ## License
 MIT
