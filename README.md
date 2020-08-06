@@ -138,7 +138,7 @@ Here are some tests that Zevv prepared:
 
 Here are the simpler tests of AST rewrites:
 
-![tease tests](docs/tease.svg "tease tests")
+![taste tests](docs/taste.svg "taste tests")
 
 ## License
 MIT

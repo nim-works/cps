@@ -26,7 +26,7 @@ proc execTest(test: string) =
     execCmd "nim cpp -d:danger --gc:arc -r " & test
 
 task test, "run tests for travis":
-  execTest("tests/tease.nim")
+  execTest("tests/taste.nim")
   execTest("tests/tzevv.nim")
 
 task docs, "generate the docs":
@@ -34,8 +34,8 @@ task docs, "generate the docs":
   exec "nim doc --path:. --outdir=docs/cps cps/eventqueue.nim"
   exec "nim doc --path:. --outdir=docs/cps cps/semaphore.nim"
   exec "nim cpp --gc:refc --define:danger -r -f tests/tzevv.nim"
-  exec "nim cpp --gc:refc --define:danger -r -f tests/tease.nim"
+  exec "nim cpp --gc:refc --define:danger -r -f tests/taste.nim"
   exec "nim cpp --gc:refc --define:danger -r --d:cpsDebug -f tests/tock.nim"
   exec "termtosvg docs/demo.svg --loop-delay=5000 --screen-geometry=80x60 --template=window_frame_powershell --command=bin/tock"
   exec "termtosvg docs/tzevv.svg --loop-delay=10000 --screen-geometry=80x25 --template=window_frame_powershell --command=bin/tzevv"
-  exec "termtosvg docs/tease.svg --loop-delay=10000 --screen-geometry=80x60 --template=window_frame_powershell --command=bin/tease"
+  exec "termtosvg docs/taste.svg --loop-delay=10000 --screen-geometry=80x60 --template=window_frame_powershell --command=bin/taste"
