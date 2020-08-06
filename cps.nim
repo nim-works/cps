@@ -20,11 +20,13 @@ export Continuation, ContinuationProc
 type
   NodeFilter = proc(n: NimNode): NimNode
 
-template installLocal*(id, env, field) =
+template installLocal(id, env, field) =
   when cpsMutant:
     template id(): untyped = (env(result).field)
   else:
     template id(): untyped = (env(continuation).field)
+
+when not defined(nimdoc): export installLocal # omit from docs
 
 const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes
