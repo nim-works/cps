@@ -5,6 +5,7 @@ license = "MIT"
 requires "nim >= 1.3.5"
 
 requires "https://github.com/narimiran/sorta < 1.0.0"
+requires "https://github.com/disruptek/testes"
 
 proc execCmd(cmd: string) =
   echo "execCmd:" & cmd
@@ -12,7 +13,7 @@ proc execCmd(cmd: string) =
 
 proc execTest(test: string) =
   if getEnv("TRAVIS_COMPILER", "unlikely") == "unlikely":
-    execCmd "nim c             --gc:refc -r " & test
+    execCmd "nim cpp             --gc:refc -r " & test
   else:
     execCmd "nim c              -r " & test
     execCmd "nim c   -d:release -r " & test
@@ -25,19 +26,13 @@ proc execTest(test: string) =
     execCmd "nim cpp -d:danger --gc:arc -r " & test
 
 task test, "run tests for travis":
-  execTest("tests/tblock.nim")
-  execTest("tests/tbreak.nim")
-  execTest("tests/tsignal.nim")
-  execTest("tests/tock.nim")
-  execTest("tests/tsimple.nim")
-  #execTest("tests/tfork.nim")
-  execTest("tests/tfor.nim")
+  execTest("tests/tease.nim")
   execTest("tests/tzevv.nim")
-  execTest("tests/test.nim")
-  execTest("tests/tyield.nim")
 
-task mkdoc, "generate the docs":
+task docs, "generate the docs":
   exec "nim doc --path:. --outdir=docs cps.nim"
   exec "nim doc --path:. --outdir=docs/cps cps/eventqueue.nim"
   exec "nim doc --path:. --outdir=docs/cps cps/semaphore.nim"
-  exec "termtosvg docs/demo.svg --loop-delay=5000 --screen-geometry=80x60 --template=solarized_light --command=\"nim c --gc:refc --define:danger -r -f tests/tock.nim\""
+  exec "termtosvg docs/demo.svg --loop-delay=5000 --screen-geometry=80x60 --template=window_frame_powershell --command=\"nim c --gc:refc --define:danger -r -f tests/tock.nim\""
+  exec "termtosvg docs/tease.svg --loop-delay=10000 --screen-geometry=80x60 --template=window_frame_powershell --command=\"nim cpp --gc:refc --define:danger -r -f tests/tease.nim\""
+  exec "termtosvg docs/tzevv.svg --loop-delay=10000 --screen-geometry=80x60 --template=window_frame_powershell --command=\"nim c --gc:refc --define:danger -r -f tests/tzevv.nim\""
