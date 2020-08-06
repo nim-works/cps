@@ -112,6 +112,17 @@ testes:
       trampoline foo()
 
   block:
+    ## declaration without type
+    when true:
+      skip("broken until cps macro is typed")
+    else:
+      proc foo() {.cps: Cont.} =
+        var j = 2
+        cps noop()
+        check j == 2
+      trampoline foo()
+
+  block:
     ## simple block with break
     proc test1() {.cps:Cont.} =
       r = 1
