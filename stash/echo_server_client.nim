@@ -1,18 +1,5 @@
 
 
-#
-# Tine stand alone CPS http server. Goal is to get this to absolute minimal
-# system call overhead to get maximum performance serving static HTTP content
-#
-# Todo, in more or less this order:
-#
-# - Get CPS to accept the code flow
-# - Implement basic HTTP protocol for serving a static html page
-# - Only do epoll_ctl when needed, instead of adding/removing for every iteration
-# - Add IO scheduling for send, with proper send buffer handling using writev()
-# - Make multi threaded with a single event queue per thread, using EPOLLEXCLUSIVE
-#
-
 import cps
 import epoll
 import posix
