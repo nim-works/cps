@@ -36,6 +36,6 @@ task docs, "generate the docs":
   exec "nim cpp --gc:refc --define:danger -r -f tests/tzevv.nim"
   exec "nim cpp --gc:refc --define:danger -r -f tests/tease.nim"
   exec "nim cpp --gc:refc --define:danger -r --d:cpsDebug -f tests/tock.nim"
-  exec "termtosvg docs/demo.svg --loop-delay=5000 --screen-geometry=80x60 --template=window_frame_powershell --command=tests/tock"
+  exec "termtosvg docs/demo.svg --loop-delay=5000 --screen-geometry=80x60 --template=window_frame_powershell --command=bin/tock"
   exec "termtosvg docs/tzevv.svg --loop-delay=10000 --screen-geometry=80x40 --template=window_frame_powershell --command=bin/tzevv"
   exec "termtosvg docs/tease.svg --loop-delay=10000 --screen-geometry=80x40 --template=window_frame_powershell --command=bin/tease"
