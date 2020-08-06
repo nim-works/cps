@@ -23,6 +23,7 @@ type
     epfd: cint
     work: Deque[Cont]
     fds: Table[cint, Cont]
+    running: bool
 
   Timer = proc()
 
@@ -34,6 +35,9 @@ type
 proc newEvq(): Evq =
   new result
   result.epfd = epoll_create(1)
+
+proc stop(evq: Evq) =
+  evq.running = false
 
 proc addWork(evq: Evq, cont: Cont) =
   evq.work.addLast cont
@@ -61,6 +65,7 @@ proc sleep(evq: Evq, c: Cont, timeout: int): Cont =
   evq.io(c, fd, POLLIN)
 
 proc run(evq: Evq) =
+  evq.running = true
   while true:
 
     # Pump the queue until empty
@@ -69,6 +74,9 @@ proc run(evq: Evq) =
       let c2 = c.fn(c)
       if c2 != nil:
         evq.addWork c2
+
+    if not evq.running:
+      break
 
     # Wait for all registered file descriptors
     var events: array[8, EpollEvent]
@@ -181,14 +189,16 @@ proc doEchoClient(address: string, port: int, n: int, msg: string) {.cps:Cont.} 
     inc i
 
   discard fd.close()
-  echo "disconnected fd: ", fd.int
+  #echo "disconnected fd: ", fd.int
 
 # Progress reporting
 
 proc doTicker() {.cps:Cont.} =
   while true:
-    echo "tick. clients: ", clients, " echoed ", count, " messages"
     cps evq.sleep(1000)
+    echo "tick. clients: ", clients, " echoed ", count, " messages"
+    if clients == 0:
+      evq.stop()
 
 
 # Spawn workers
@@ -199,7 +209,7 @@ evq.addWork doEchoServer(8000)
 
 for i in 1..100:
   evq.addWork doEchoClient("127.0.0.1", 8000,
-                           100000, "The quick brown fox jumped over the lazy dog")
+                           2000, "The quick brown fox jumped over the lazy dog")
 
 # Forever run the event queue
 
