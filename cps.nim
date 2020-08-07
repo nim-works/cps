@@ -585,6 +585,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
   var env: Env
+  var booty = newStmtList()
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
@@ -614,9 +615,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     ## -- is to write a copy of the proc to types; this will serve
     ## as the "bootstrap" which performs alloc of the continuation
     ## before calling the rewritten version of this proc
-    var (booty, body) = (copyNimNode(n), newStmtList())
+    var body: NimNode
+    (booty, body) = (copyNimNode(n), newStmtList())
     for i, child in pairs(n):
-      if i != 5:
+      if i != 6:
         booty.add copyNimNode(child)
       else:
         booty.add body
@@ -628,10 +630,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     # template continuation = result; insert it after the `result =`
     when not cpsMutant:
       body.add env.rootTemplate
-
-    # add this overload into the result via the types container
-    types.add booty
-    echo booty.treeRepr()
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
@@ -656,6 +654,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)
+
+  # adding in the bootstrap
+  result.add booty
+  echo treeRepr(result)
 
   # spamming the developers
   when cpsDebug:
