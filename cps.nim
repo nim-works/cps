@@ -694,6 +694,7 @@ macro cpsMagic*(n: untyped): untyped =
                                                         msg.newLit)
   else:
     m.body.add nnkCall.newNimNode(n).newTree(ident"error", msg.newLit)
+  # add it to our statement list result
   result.add m
 
   when not defined(nimdoc):
