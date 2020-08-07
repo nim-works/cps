@@ -557,10 +557,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
   when defined(nimdoc): return n
 
-  let info = lineInfoObj(n)
-
   # enhanced spam before it all goes to shit
   when cpsDebug:
+    let info = lineInfoObj(n)
     var orig = copyNimTree(n)
     debugEcho "=== .cps. on " & $n.name & "(original)  === " & $info
     when defined(cpsTree):
