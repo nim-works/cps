@@ -19,7 +19,7 @@ proc two() {.cps:C.} =
 
 proc one() {.cps:C.} =
   echo "one a"
-  return two()
+  return two()    # <== HERE
   echo "one b"
 
 
