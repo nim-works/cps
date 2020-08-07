@@ -137,68 +137,70 @@ proc sockConnect(address: string, port: int): SocketHandle =
   return fd
 
 
+cps Cont:
 
-var evq = newEvq()
-var count = 0
-var clients = 0
+  var evq = newEvq()
+  var count = 0
+  var clients = 0
 
-# CPS server session hander
+  # CPS server session hander
 
-proc handleClient(fdc: SocketHandle) {.cps:Cont.} =
+  proc handleClient(fdc: SocketHandle) =
 
-  inc clients
+    inc clients
 
-  while true:
-    cps evq.io(fdc, POLLIN)
-    let s: string = sockRecv(fdc)
-    if s.len == 0: break
-    inc count
-    cps evq.io(fdc, POLLOUT)
-    sockSend(fdc, s)
+    while true:
+      cps evq.io(fdc, POLLIN)
+      let s: string = sockRecv(fdc)
+      if s.len == 0: break
+      inc count
+      cps evq.io(fdc, POLLOUT)
+      sockSend(fdc, s)
 
-  dec clients
-  discard fdc.close()
-
-
-# CPS server listener handler
-
-proc doEchoServer(port: int) {.cps:Cont.} =
-  let fds: SocketHandle = sockBind(port)
-  echo "listening fd: ", fds.int
-  while true:
-    cps evq.io(fds, POLLIN)
-    let fdc: SocketHandle = sockAccept(fds)
-    #echo "accepted fd:", fdc.int
-    # Create new client and add to work queue
-    evq.addWork handleClient(fdc)
+    dec clients
+    discard fdc.close()
 
 
-# CPS client handler
+  # CPS server listener handler
 
-proc doEchoClient(address: string, port: int, n: int, msg: string) {.cps:Cont.} =
-  let fd: SocketHandle = sockConnect(address, port)
-  #echo "connected fd: ", fd.int
+  proc doEchoServer(port: int) =
+    let fds: SocketHandle = sockBind(port)
+    echo "listening fd: ", fds.int
+    while true:
+      cps evq.io(fds, POLLIN)
+      let fdc: SocketHandle = sockAccept(fds)
+      #echo "accepted fd:", fdc.int
+      # Create new client and add to work queue
+      evq.addWork handleClient(fdc)
 
-  var i: int = 0
-  while i < n:
-    cps evq.io(fd, POLLOUT)
-    sockSend(fd, msg)
-    cps evq.io(fd, POLLIN)
-    let msg2: string = sockRecv(fd)
-    doAssert msg2 == msg
-    inc i
 
-  discard fd.close()
-  #echo "disconnected fd: ", fd.int
+  # CPS client handler
 
-# Progress reporting
+  proc doEchoClient(address: string, port: int, n: int, msg: string) =
+    let fd: SocketHandle = sockConnect(address, port)
+    #echo "connected fd: ", fd.int
 
-proc doTicker() {.cps:Cont.} =
-  while true:
-    cps evq.sleep(1000)
-    echo "tick. clients: ", clients, " echoed ", count, " messages"
-    if clients == 0:
-      evq.stop()
+    var i: int = 0
+    while i < n:
+      cps evq.io(fd, POLLOUT)
+      sockSend(fd, msg)
+      cps evq.io(fd, POLLIN)
+      let msg2: string = sockRecv(fd)
+      doAssert msg2 == msg
+      inc i
+
+    discard fd.close()
+    #echo "disconnected fd: ", fd.int
+
+
+  # Progress reporting
+
+  proc doTicker() =
+    while true:
+      cps evq.sleep(1000)
+      echo "tick. clients: ", clients, " echoed ", count, " messages"
+      if clients == 0:
+        evq.stop()
 
 
 # Spawn workers

@@ -552,7 +552,8 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
-macro cps*(T: untyped, n: untyped): untyped =
+
+proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
   when defined(nimdoc): return n
 
@@ -639,6 +640,29 @@ macro cps*(T: untyped, n: untyped): untyped =
       debugEcho treeRepr(result)
     else:
       debugEcho repr(result).numberedLines
+
+
+proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
+  # Perform CPS transformation on a NimNode. This can be a single
+  # proc, or a top level stmtList.
+  n.expectKind {nnkStmtList, nnkProcDef}
+
+  if n.kind == nnkProcDef:
+    return cpsXfrmProc(T, n)
+
+  if n.kind == nnkStmtList:
+    result = n.copyNimNode
+    for nc in n:
+      if nc.kind == nnkProcDef:
+        result.add cpsXfrmProc(T, nc)
+      else:
+        result.add nc.copyNimTree
+
+
+macro cps*(T: untyped, n: untyped): untyped =
+  # I hate doing stuff inside macros, call the proc to do the work
+  cpsXfrm(T, n)
+
 
 when false:
   macro cps*(c: typed; n: typed): untyped =
