@@ -676,12 +676,9 @@ proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   of nnkStmtList:
     result = copyNimNode(n)
     for nc in items(n):
-      if nc.kind == nnkProcDef:
-        result.add cpsXfrmProc(T, nc)
-      else:
-        result.add copyNimTree(nc)
+      result.add cpsXfrm(T, nc)
   else:
-    raise newException(Defect, "unexpected input\n" & treeRepr(n))
+    result = copyNimTree(n)
 
 
 macro cps*(T: untyped, n: untyped): untyped =
