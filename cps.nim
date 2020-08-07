@@ -619,7 +619,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     (booty, body) = (copyNimNode(n), newStmtList())
     for i, child in pairs(n):
       if i != 6:
-        booty.add copyNimNode(child)
+        booty.add copyNimTree(child)
       else:
         booty.add body
 
