@@ -36,13 +36,13 @@ const
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
 when cpsDebug:
-  proc numberedLines(s: string): string =
+  proc numberedLines(s: string; first = 1): string =
     for n, line in pairs(splitLines(s, keepEol = true)):
-      result.add "$1  $2" % [ align($n, 3), line ]
+      result.add "$1  $2" % [ align($(n + first), 3), line ]
 
   proc snippet(n: NimNode; name: string): string =
     result &= "----8<---- " & name & "\t" & "vvv"
-    result &= "\n" & n.repr.numberedLines & "\n"
+    result &= "\n" & n.repr.numberedLines(n.lineInfoObj.line) & "\n"
     result &= "----8<---- " & name & "\t" & "^^^"
 
 proc filter(n: NimNode; f: NodeFilter): NimNode =
@@ -565,7 +565,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     when defined(cpsTree):
       debugEcho treeRepr(orig)
     else:
-      debugEcho repr(orig).numberedLines
+      debugEcho repr(orig).numberedLines(info.line)
 
   assert n.kind in RoutineNodes
 
@@ -665,7 +665,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     when defined(cpsTree):
       debugEcho treeRepr(result)
     else:
-      debugEcho repr(result).numberedLines
+      debugEcho repr(result).numberedLines(info.line)
 
 proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   # Perform CPS transformation on a NimNode. This can be a single
