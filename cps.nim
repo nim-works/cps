@@ -568,6 +568,14 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   assert n.kind in RoutineNodes
 
+  # https://github.com/disruptek/cps/issues/20
+  #
+  # we don't allow a return-type so that a call to retrieve the result
+  # is able to determine what that value actually is. we don't actually
+  # support result yet, but we will, so this creates the space for us
+  # to receive that value and have it parse, even when it may not be
+  # semantically correct.
+
   # check or set the continuation return type
   if not n.params[0].isEmpty:
     error "No return type allowed for now"
@@ -600,29 +608,46 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
         env = newEnv(ident"result", types, n.params[0])
       else:
         env = newEnv(ident"continuation", types, n.params[0])
-    when false:
-      ##
-      ## we don't do this anymore,
-      ## -- so that you can foo() from outside cps context
-      ##
 
-      # and insert it into the proc's params automatically
-      n.params.insert(1, env.firstDef)
-      inc first
+    ##
+    ## what we DO do,
+    ## -- is to write a copy of the proc to types; this will serve
+    ## as the "bootstrap" which performs alloc of the continuation
+    ## before calling the rewritten version of this proc
+    var (booty, body) = (copyNimNode(n), newStmtList())
+    for i, child in pairs(n):
+      if i != 5:
+        booty.add child
+      else:
+        booty.add body
+    assert booty.name == n.name
+    assert booty.params == n.params
 
+    # XXX: this will fail if requires-init
+    # now we can insert our `result =`, which includes the proc params
+    body.add env.rootResult(ident"result", n.name)
+
+    # template continuation = result; insert it after the `result =`
+    when not cpsMutant:
+      body.add env.rootTemplate
+
+    # add this overload into the result via the types container
+    types.add booty
+
+  ## the preamble for the proc is the space above the user-supplied body.
+  ## here we setup the locals, mapping the proc parameters into our
+  ## continuation.
   var preamble = newStmtList()
 
-  # adding the remaining proc params to the environment
+  # first, add the remaining proc params to the environment
   for defs in n.params[first .. ^1]:
     for name, list in env.localSection(defs):
       preamble.add list
 
-  # XXX: this will fail if requires-init
-  # now we can insert our `result =`, which includes the proc params
-  preamble.insert(0, env.rootResult(ident"result"))
-  # template continuation = result; insert it after the `result =`
-  when not cpsMutant:
-    preamble.insert(1, env.rootTemplate)
+  # the bootstrap may not have a continuation as its first argument,
+  # but we know that we do, because we insert it here ;-)
+  n.params.insert(1, env.firstDef)
+  inc first   # gratuitous tracking for correctness
 
   # ensaftening the proc's body and combining it with the preamble
   n.body = newStmtList(preamble, env.saften(n.body))
@@ -640,7 +665,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       debugEcho treeRepr(result)
     else:
       debugEcho repr(result).numberedLines
-
 
 proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   # Perform CPS transformation on a NimNode. This can be a single

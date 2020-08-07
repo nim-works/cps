@@ -340,7 +340,7 @@ proc makeType*(e: var Env): NimNode =
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
-proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newNilLit())
+proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newEmptyNode())
 
 proc newEnv*(parent: var Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -603,8 +603,10 @@ proc newContinuation*(e: Env; via: NimNode; goto: NimNode): NimNode =
       # specify the gensym'd field name and the local name
       result.add newColonExpr(field, name)
 
-proc rootResult*(e: Env; name: NimNode): NimNode =
-  result = newAssignment(name, e.newContinuation(e.first, newNilLit()))
+proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
+  ## usually, `result = rootResult(ident"result")`
+  ##      or, `result = rootResult(ident"result", )`
+  result = newAssignment(name, e.newContinuation(e.first, goto))
 
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # we store the type whenever we define locals, because the next code that
