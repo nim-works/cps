@@ -176,10 +176,11 @@ proc isWritten(e: Env): bool =
   ## why say in three lines what you can say in six?
   block found:
     for section in items(e.store):
-      for def in items(section):
-        result = repr(def[0]) == repr(e.identity)
-        if result:
-          break found
+      if section.kind == nnkTypeSection:
+        for def in items(section):
+          result = repr(def[0]) == repr(e.identity)
+          if result:
+            break found
 
 proc isDirty*(e: Env): bool =
   ## the type hasn't been written since an add occurred

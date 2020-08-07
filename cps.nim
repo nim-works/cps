@@ -617,11 +617,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     var (booty, body) = (copyNimNode(n), newStmtList())
     for i, child in pairs(n):
       if i != 5:
-        booty.add child
+        booty.add copyNimNode(child)
       else:
         booty.add body
-    assert booty.name == n.name
-    assert booty.params == n.params
 
     # XXX: this will fail if requires-init
     # now we can insert our `result =`, which includes the proc params
@@ -633,6 +631,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
     # add this overload into the result via the types container
     types.add booty
+    echo booty.treeRepr()
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
