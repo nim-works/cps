@@ -671,18 +671,18 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   # Perform CPS transformation on a NimNode. This can be a single
   # proc, or a top level stmtList.
-  n.expectKind {nnkStmtList, nnkProcDef}
-
-  if n.kind == nnkProcDef:
-    return cpsXfrmProc(T, n)
-
-  if n.kind == nnkStmtList:
-    result = n.copyNimNode
-    for nc in n:
+  case n.kind
+  of nnkProcDef:
+    result = cpsXfrmProc(T, n)
+  of nnkStmtList:
+    result = copyNimNode(n)
+    for nc in items(n):
       if nc.kind == nnkProcDef:
         result.add cpsXfrmProc(T, nc)
       else:
-        result.add nc.copyNimTree
+        result.add copyNimTree(nc)
+  else:
+    raise newException(Defect, "unexpected input\n" & treeRepr(n))
 
 
 macro cps*(T: untyped, n: untyped): untyped =
