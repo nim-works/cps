@@ -697,7 +697,7 @@ when false:
     result.add safe
     assert false
 
-macro cpsMagic*(n: untyped): untyped =
+macro cpsMagic*(n: untyped): untyped {.deprecated.} =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
   expectKind(n, nnkProcDef)
