@@ -681,7 +681,7 @@ proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
     result = copyNimTree(n)
 
 
-macro cps*(T: untyped, n: untyped): untyped =
+macro cps*(T: type, n: untyped): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   cpsXfrm(T, n)
 
