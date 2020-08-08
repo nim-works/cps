@@ -626,14 +626,42 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     ## as the "bootstrap" which performs alloc of the continuation before
     ## calling the cps version of the proc
 
-    booty = clone n
-    booty.body = newStmtList()
+    block:
+      let name = env.first      # ident"result" or ident"continuation", etc.
 
-    when not cpsMutant:
-      # XXX: this will fail if requires-init
+      booty = clone n
+      booty.body = newStmtList()
 
+      # if we're not storing to result, we need a variable
+      when not cpsMutant:
+        booty.body.add newVarStmt(
+          newIdentDefs(name, T, newEmptyNode()), newEmptyNode())
+
+      # XXX: this may fail if requires-init
       # now we can insert our `result =`, which includes the proc params
-      booty.body.add env.rootResult(ident"result", n.name)
+      booty.body.add env.rootResult(name, n.name)
+
+      # add a trampoline to resolve the continuation
+      when not cpsMutant:
+        let fn = newDotExpr(name, ident"fn")
+
+        # we'll construct the while statement's body first
+        var wh = newStmtList()
+        wh.add newAssignment(name, newCall(fn, name))
+
+        # if a result is expected, copy it out when only the fn is nil
+        if not n.params[0].isEmpty:
+          wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
+                            infix(fn, "==", newNilLit())),
+                           newAssignment(ident"result", env.get)))
+
+        # compose the complete trampoline with the while and its guards
+        wh = nnkWhileStmt.newTree(
+          infix( infix(name, "!=", newNilLit()), "and",
+                 infix(fn, "!=", newNilLit())), wh)
+
+        # add the trampoline to the bootstrap
+        booty.body.add wh
 
       when false:
         # no longer useful in the bootstrap
