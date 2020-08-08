@@ -54,12 +54,13 @@ proc filter(n: NimNode; f: NodeFilter): NimNode =
 
 proc isCpsCall(n: NimNode): bool =
   # cps foo()
+  assert not n.isNil
   if len(n) > 0:
     case n.kind
     of callish:
       result = n[0].eqIdent("cps") and n[1].kind in callish
-    of cpsish:
-      result = n[0].kind in callish
+    #of cpsish:
+    #  result = n[0].kind in callish
     else:
       result = false
 
@@ -560,12 +561,11 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # enhanced spam before it all goes to shit
   when cpsDebug:
     let info = lineInfoObj(n)
-    var orig = copyNimTree(n)
     debugEcho "=== .cps. on " & $n.name & "(original)  === " & $info
     when defined(cpsTree):
-      debugEcho treeRepr(orig)
+      debugEcho treeRepr(n)
     else:
-      debugEcho repr(orig).numberedLines(info.line)
+      debugEcho repr(n).numberedLines(info.line)
 
   assert n.kind in RoutineNodes
 
@@ -577,10 +577,13 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # to receive that value and have it parse, even when it may not be
   # semantically correct.
 
-  # check or set the continuation return type
-  if not n.params[0].isEmpty:
-    error "No return type allowed for now"
-  n.params[0] = T
+  # we don't do this anymore because in typed mode, we are unable to
+  # change our return type
+  when false:
+    # check or set the continuation return type
+    if not n.params[0].isEmpty:
+      error "No return type allowed for now"
+    n.params[0] = T
 
   # establish a new environment with the supplied continuation type;
   # accumulates byproducts of cps in the types statement list
@@ -591,7 +594,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # creating the env with the continuation type,
   # and adding proc parameters to the env
   var first = 1 # index of first param to add to locals
-  if len(n.params) > 1 and eqIdent(n.params[0], n.params[1][1]):
+  if false and len(n.params) > 1 and eqIdent(n.params[0], n.params[1][1]):
+    ## we don't do this anymore because we must consistently mutate this
+    ## proc so as not to collide with the original pre-xform version
+
     # if the return type matches that of the first argument, we'll assume
     # the user wants that argument name to reflect the continuation
     env = newEnv(n.params[1][0], types, n.params[0])
@@ -611,26 +617,25 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       else:
         env = newEnv(ident"continuation", types, n.params[0])
 
-    ##
     ## what we DO do,
-    ## -- is to write a copy of the proc to types; this will serve
-    ## as the "bootstrap" which performs alloc of the continuation
-    ## before calling the rewritten version of this proc
-    var body: NimNode
-    (booty, body) = (copyNimNode(n), newStmtList())
-    for i, child in pairs(n):
-      if i != 6:
-        booty.add copyNimTree(child)
-      else:
-        booty.add body
+    ## -- is to write a copy of the proc to the result; this will serve
+    ## as the "bootstrap" which performs alloc of the continuation before
+    ## calling the cps version of the proc
 
-    # XXX: this will fail if requires-init
-    # now we can insert our `result =`, which includes the proc params
-    body.add env.rootResult(ident"result", n.name)
+    booty = copy n
+    booty.body = newStmtList()
 
-    # template continuation = result; insert it after the `result =`
     when not cpsMutant:
-      body.add env.rootTemplate
+      # XXX: this will fail if requires-init
+
+      # now we can insert our `result =`, which includes the proc params
+      booty.body.add env.rootResult(ident"result", n.name)
+
+      when false:
+        # no longer useful in the bootstrap
+        #
+        # template continuation = result; insert it after the `result =`
+        booty.body.add env.rootTemplate
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
@@ -642,13 +647,25 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     for name, list in env.localSection(defs):
       preamble.add list
 
+  # we can't mutate typed nodes, so copy ourselves
+  var n = copy n
+
+  # and do some pruning of these typed trees
+  for p in [booty, n]:
+    p.name = ident(p.name.repr)
+    while len(p) > 7:
+      p.del(7)
+
   # the bootstrap may not have a continuation as its first argument,
   # but we know that we do, because we insert it here ;-)
   n.params.insert(1, env.firstDef)
   inc first   # gratuitous tracking for correctness
 
-  # ensaftening the proc's body and combining it with the preamble
-  n.body = newStmtList(preamble, env.saften(n.body))
+  # ensaftening the proc's body
+  n.body = env.saften(n.body).newStmtList
+
+  if len(preamble) > 0:           # if necessary, insert the preamble
+    n.body.insert(0, preamble)    # ahead of the rest of the body
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
@@ -674,28 +691,15 @@ proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   of nnkProcDef:
     result = cpsXfrmProc(T, n)
   of nnkStmtList:
-    result = copyNimNode(n)
+    result = copyNimNode n
     for nc in items(n):
       result.add cpsXfrm(T, nc)
   else:
-    result = copyNimTree(n)
+    result = copy n
 
-
-macro cps*(T: type, n: untyped): untyped =
+macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
-  cpsXfrm(T, n)
-
-
-when false:
-  macro cps*(c: typed; n: typed): untyped =
-    var
-      safe = xfrm(n, c)
-      decls = lambdaLift(safe)
-    result = newStmtList()
-    if len(decls) > 0:
-      result.add decls
-    result.add safe
-    assert false
+  result = cpsXfrm(T, n)
 
 macro cpsMagic*(n: untyped): untyped {.deprecated.} =
   ## upgrade cps primitives to generate errors out of context

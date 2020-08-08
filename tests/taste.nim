@@ -13,7 +13,7 @@ testes:
     inc x
 
   block trampoline:
-    proc foo() {.cps:Cont.} =
+    proc foo(): Cont {.cps:Cont.} =
       r = 1
     trampoline foo()
     check r == 1
@@ -69,9 +69,9 @@ testes:
     ## https://github.com/disruptek/cps/issues/22 (2nd)
     proc foo(a, b, c: var int) {.cps: Cont.} =
       a = 5
-      cps noop()
+      yield continuation.noop()
       b = b + a
-      cps noop()
+      yield continuation.noop()
       check a == 5
       check b == 7
       check c == 3

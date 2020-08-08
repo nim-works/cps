@@ -303,7 +303,7 @@ when cpsTrace:
           writeLine(stderr, $frame)
 
 else:
-  proc writeStackTrace*(): Cont {.cpsMagic.} =
+  proc writeStackTrace*(c: Cont): Cont =
     when declaredInScope(result):
       result = c
     warning "--define:cpsTrace:on to output traces"
@@ -404,12 +404,12 @@ proc run*(interval: Duration = DurationZero) =
   while eq.state == Running:
     poll()
 
-proc jield*(): Cont {.cpsMagic.} =
+proc jield*(c: Cont): Cont =
   ## Yield to pending continuations in the dispatcher before continuing.
   wakeAfter:
     addLast(eq.yields, c)
 
-proc sleep*(interval: Duration): Cont {.cpsMagic.} =
+proc sleep*(c: Cont; interval: Duration): Cont =
   ## Sleep for `interval` before continuing.
   if interval < oneMs:
     raise newException(ValueError, "intervals < 1ms unsupported")
@@ -423,20 +423,20 @@ proc sleep*(interval: Duration): Cont {.cpsMagic.} =
       when cpsDebug:
         echo "⏰timer ", fd.Fd
 
-proc sleep*(ms: int): Cont {.cpsMagic.} =
+proc sleep*(c: Cont; ms: int): Cont =
   ## Sleep for `ms` milliseconds before continuing.
   let interval = initDuration(milliseconds = ms)
   sleep(c, interval)
 
-proc sleep*(secs: float): Cont {.cpsMagic.} =
+proc sleep*(c: Cont; secs: float): Cont =
   ## Sleep for `secs` seconds before continuing.
   sleep(c, (1_000 * secs).int)
 
-proc discart*(): Cont {.cpsMagic.} =
+proc discart*(c: Cont): Cont =
   ## Discard the current continuation.
   discard
 
-proc noop*(): Cont {.cpsMagic.} =
+proc noop*(c: Cont): Cont =
   ## A primitive that merely sheds scope.
   result = c
 
@@ -477,7 +477,7 @@ proc signalAll*(s: var Semaphore) =
       signalImpl s:
         break
 
-proc wait*(s: var Semaphore): Cont {.cpsMagic.} =
+proc wait*(c: Cont; s: var Semaphore): Cont =
   ## Queue the current continuation pending readiness of the given
   ## Semaphore `s`.
   let id = nextId()
@@ -488,7 +488,7 @@ proc wait*(s: var Semaphore): Cont {.cpsMagic.} =
     eq[s] = id
     eq[id] = c
 
-proc fork*(): Cont {.cpsMagic.} =
+proc fork*(c: Cont): Cont =
   ## Duplicate the current continuation.
   result = c
   wakeAfter:
@@ -503,7 +503,7 @@ proc spawn*(c: Cont) =
   wakeAfter:
     addLast(eq.yields, c)
 
-proc io*(file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
+proc io*(c: Cont; file: int | SocketHandle; events: set[Event]): Cont =
   ## Continue upon any of `events` on the given file-descriptor or
   ## SocketHandle.
   if len(events) == 0:
