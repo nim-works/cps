@@ -343,6 +343,8 @@ proc makeType*(e: var Env): NimNode =
 proc first*(e: Env): NimNode = e.c
 proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newEmptyNode())
 
+proc get*(e: Env): NimNode = newDotExpr(e.first, e.rs)
+
 proc newEnv*(parent: var Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
   ## or on-demand in the back-end (with copy = on)
