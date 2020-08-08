@@ -553,6 +553,10 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
+proc clone(n: NimNode): NimNode =
+  assert not n.isNil
+  result = newNimNode(n.kind, n)
+  copyChildrenTo(n, result)
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
@@ -622,7 +626,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     ## as the "bootstrap" which performs alloc of the continuation before
     ## calling the cps version of the proc
 
-    booty = copy n
+    booty = clone n
     booty.body = newStmtList()
 
     when not cpsMutant:
@@ -648,7 +652,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       preamble.add list
 
   # we can't mutate typed nodes, so copy ourselves
-  var n = copy n
+  var n = clone n
 
   # and do some pruning of these typed trees
   for p in [booty, n]:
