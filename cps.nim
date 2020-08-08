@@ -593,18 +593,18 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
   var env: Env
-  var booty = newStmtList()
+  var booty: NimNode
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
   var first = 1 # index of first param to add to locals
-  if false and len(n.params) > 1 and eqIdent(n.params[0], n.params[1][1]):
+  if false and len(n.params) > 1 and eqIdent(T, n.params[1][1]):
     ## we don't do this anymore because we must consistently mutate this
     ## proc so as not to collide with the original pre-xform version
 
     # if the return type matches that of the first argument, we'll assume
     # the user wants that argument name to reflect the continuation
-    env = newEnv(n.params[1][0], types, n.params[0])
+    env = newEnv(n.params[1][0], types, T)
     inc first
 
   else:
@@ -614,12 +614,12 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       ## -- so that we don't get an `environment misses` error
       ##
       # otherwise, just use a gensym'd "cps"
-      env = newEnv(genSym(nskParam, "cps"), types, n.params[0])
+      env = newEnv(genSym(nskParam, "cps"), types, T)
     else:
       when cpsMutant:
-        env = newEnv(ident"result", types, n.params[0])
+        env = newEnv(ident"result", types, T)
       else:
-        env = newEnv(ident"continuation", types, n.params[0])
+        env = newEnv(ident"continuation", types, T)
 
     ## what we DO do,
     ## -- is to write a copy of the proc to the result; this will serve
