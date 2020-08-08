@@ -593,21 +593,30 @@ iterator localRetrievals(e: Env; locals: NimNode): Pair =
                                  newDotExpr(locals, field))
         yield (key: name, val: section)
 
-proc newContinuation*(e: Env; via: NimNode; goto: NimNode): NimNode =
+proc newContinuation*(e: Env; via: NimNode;
+                      goto: NimNode; defaults = false): NimNode =
   ## else, perform the following alloc...
   result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
   for field, section in pairs(e):
     if repr(field) notin [repr(e.fn), repr(e.ex)]:
-      # the name from identdefs is not gensym'd (usually!)
-      let name = section.last[0]
+      let defs = section.last
+      if defaults:
+        # initialize the field with any default supplied in its declaration
+        if not defs.last.isEmpty:
+          # only initialize a field that has a default
+          # FIXME: this needs to only add requiresInit stuff
+          result.add newColonExpr(field, defs.last)
+      else:
+        # the name from identdefs is not gensym'd (usually!)
+        let name = defs[0]
 
-      # specify the gensym'd field name and the local name
-      result.add newColonExpr(field, name)
+        # specify the gensym'd field name and the local name
+        result.add newColonExpr(field, name)
 
 proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
   ## usually, `result = rootResult(ident"result")`
   ##      or, `result = rootResult(ident"result", )`
-  result = newAssignment(name, e.newContinuation(e.first, goto))
+  result = newAssignment(name, e.newContinuation(e.first, goto, defaults = true))
 
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # we store the type whenever we define locals, because the next code that
