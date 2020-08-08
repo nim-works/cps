@@ -641,6 +641,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       # now we can insert our `result =`, which includes the proc params
       booty.body.add env.rootResult(name, n.name)
 
+      # XXX: let the user supply the trampoline?
       # add a trampoline to resolve the continuation
       when not cpsMutant:
         let fn = newDotExpr(name, ident"fn")
