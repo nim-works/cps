@@ -555,7 +555,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
 proc clone(n: NimNode): NimNode =
 
-  let id = ident($n[0] & "_clone")
+  let id = ident($n[0] & "_clyybber")
   let params = n[3]
   let body = n[6]
 
