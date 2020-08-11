@@ -554,9 +554,23 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         discard "nil return; no remaining goto for " & $n.kind
 
 proc clone(n: NimNode): NimNode =
-  assert not n.isNil
-  result = newNimNode(n.kind, n)
-  copyChildrenTo(n, result)
+
+  let id = ident($n[0] & "_clone")
+  let params = n[3]
+  let body = n[6]
+
+  result = nnkProcDef.newTree(
+    id,
+    newEmptyNode(),
+    newEmptyNode(),
+    params,
+    newEmptyNode(),
+    newEmptyNode(),
+    copyNimTree(body)
+  )
+
+  echo result.repr
+
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
