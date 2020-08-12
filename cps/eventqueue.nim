@@ -404,12 +404,12 @@ proc run*(interval: Duration = DurationZero) =
   while eq.state == Running:
     poll()
 
-proc jield*(c: Cont): Cont =
+proc jield*(c: Cont): Cont {.cpsMagic.} =
   ## Yield to pending continuations in the dispatcher before continuing.
   wakeAfter:
     addLast(eq.yields, c)
 
-proc sleep*(c: Cont; interval: Duration): Cont =
+proc sleep*(c: Cont; interval: Duration): Cont {.cpsMagic.} =
   ## Sleep for `interval` before continuing.
   if interval < oneMs:
     raise newException(ValueError, "intervals < 1ms unsupported")
@@ -423,20 +423,20 @@ proc sleep*(c: Cont; interval: Duration): Cont =
       when cpsDebug:
         echo "⏰timer ", fd.Fd
 
-proc sleep*(c: Cont; ms: int): Cont =
+proc sleep*(c: Cont; ms: int): Cont {.cpsMagic.} =
   ## Sleep for `ms` milliseconds before continuing.
   let interval = initDuration(milliseconds = ms)
   sleep(c, interval)
 
-proc sleep*(c: Cont; secs: float): Cont =
+proc sleep*(c: Cont; secs: float): Cont {.cpsMagic.} =
   ## Sleep for `secs` seconds before continuing.
   sleep(c, (1_000 * secs).int)
 
-proc discart*(c: Cont): Cont =
+proc discart*(c: Cont): Cont {.cpsMagic.} =
   ## Discard the current continuation.
   discard
 
-proc noop*(c: Cont): Cont =
+proc noop*(c: Cont): Cont {.cpsMagic.} =
   ## A primitive that merely sheds scope.
   result = c
 
@@ -477,7 +477,7 @@ proc signalAll*(s: var Semaphore) =
       signalImpl s:
         break
 
-proc wait*(c: Cont; s: var Semaphore): Cont =
+proc wait*(c: Cont; s: var Semaphore): Cont {.cpsMagic.} =
   ## Queue the current continuation pending readiness of the given
   ## Semaphore `s`.
   let id = nextId()
@@ -488,7 +488,7 @@ proc wait*(c: Cont; s: var Semaphore): Cont =
     eq[s] = id
     eq[id] = c
 
-proc fork*(c: Cont): Cont =
+proc fork*(c: Cont): Cont {.cpsMagic.} =
   ## Duplicate the current continuation.
   result = c
   wakeAfter:
@@ -503,7 +503,7 @@ proc spawn*(c: Cont) =
   wakeAfter:
     addLast(eq.yields, c)
 
-proc io*(c: Cont; file: int | SocketHandle; events: set[Event]): Cont =
+proc io*(c: Cont; file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
   ## Continue upon any of `events` on the given file-descriptor or
   ## SocketHandle.
   if len(events) == 0:

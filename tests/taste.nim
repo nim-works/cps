@@ -22,7 +22,7 @@ testes:
   block yield_magic:
     proc foo() {.cps: Cont.} =
       jield()
-    trampoline foo_clyybber()
+    foo_clyybber()
 
   block noop_magic:
     var noopJ = 2

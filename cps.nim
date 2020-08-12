@@ -6,6 +6,7 @@ import std/sequtils
 import std/algorithm
 
 const
+  cpsMagicExists {.booldefine, used.} = true
   cpsMutant {.booldefine, used.} = false    ## mutate continuations
   cpsDebug {.booldefine, used.} = false
   strict = true        ## only cps operations are strictly cps operations
@@ -758,6 +759,8 @@ macro cpsMagic*(n: untyped): untyped {.deprecated.} =
   var m = copyNimTree n
   let msg = $n.name & "() is only valid in {.cps.} context"
   m.params[0] = newEmptyNode()
+  when cpsMagicExists:
+    del(m.params, 1)
   m.body = newStmtList(n.body[0])
   when false:
     m.addPragma newColonExpr(ident"error", msg.newLit)
@@ -772,7 +775,8 @@ macro cpsMagic*(n: untyped): untyped {.deprecated.} =
 
   when not defined(nimdoc):
     # manipulate the primitive to take its return type as a first arg
-    n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
+    when not cpsMagicExists:
+      n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
     result.add n
 
 when not strict:
