@@ -13,35 +13,36 @@ testes:
     inc x
 
   block trampoline:
-    proc foo(): Cont {.cps:Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
       r = 1
-    trampoline foo()
+    trampoline foo_clyybber()
     check r == 1
 
   block yield_magic:
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       yield jield()
-    trampoline foo()
+    trampoline foo_clyybber()
 
   block noop_magic:
     var noopJ = 2
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 3
       noopJ = 4
       cps noop()
       check i == 3
-    trampoline foo()
+    trampoline foo_clyybber()
     check noopJ == 4
 
   block sleep_magic:
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 3:
         cps sleep(i + 1)
         adder(i)
       r = i
       check r == 3
-    trampoline foo()
+    trampoline foo_clyybber()
 
   block:
     ## shadowing and proc param defaults
@@ -62,7 +63,7 @@ testes:
         check a == 5
         check b == 7
         check c == 3
-      trampoline foo(1, 2)
+      trampoline foo_clyybber(1, 2)
 
   block:
     ## reassignment of var proc params
@@ -76,7 +77,7 @@ testes:
       check b == 7
       check c == 3
     var (x, y, z) = (1, 2, 3)
-    trampoline foo(x, y, z)
+    trampoline foo_clyybber(x, y, z)
 
   block:
     ## multiple variable declaration
@@ -95,7 +96,7 @@ testes:
       inc p
       inc q
       inc r
-    trampoline foo()
+    trampoline foo_clyybber()
 
   block:
     ## declaration via tuple deconstruction
@@ -109,7 +110,7 @@ testes:
         check i == 1
         check j == 2
         check k == 3
-      trampoline foo()
+      trampoline foo_clyybber()
 
   block:
     ## declaration without type
@@ -120,11 +121,11 @@ testes:
         var j = 2
         cps noop()
         check j == 2
-      trampoline foo()
+      trampoline foo_clyybber()
 
   block:
     ## simple block with break
-    proc test1() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       block:
         if true:
@@ -132,14 +133,14 @@ testes:
           break
         assert false
       inc r
-    trampoline test1()
+    trampoline foo_clyybber()
     if r != 3:
-      echo "r for test1 wasn't 3: ", r
+      echo "r wasn't 3: ", r
       assert false
 
   block:
     ## block with yield and break
-    proc test2() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       block:
         if true:
@@ -148,9 +149,9 @@ testes:
           break
         assert false
       inc r
-    trampoline test2()
+    trampoline foo_clyybber()
     if r != 3:
-      echo "r for test2 wasn't 3: ", r
+      echo "r wasn't 3: ", r
       assert false
 
   block:
@@ -166,8 +167,8 @@ testes:
       yield wait(sem)
       success = true
 
-    trampoline signalSleeper(10)
-    trampoline signalWaiter()
+    spawn signalSleeper_clyybber(10)
+    spawn signalWaiter_clyybber()
 
     run()
 
@@ -176,7 +177,7 @@ testes:
 
   block:
     ## break statements without cps 🥴
-    proc break1() =
+    proc foo() =
       r = 1
       check r == 1
       while true:
@@ -185,12 +186,12 @@ testes:
         inc r
         check r <= 2
         return
-    break1()
+    foo()
     assert r == 1, "r was " & $r
 
   block:
     ## a fairly tame cps break
-    proc break2() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       while true:
         cps jield()
@@ -200,13 +201,12 @@ testes:
         if r > 2:
           assert false
         return
-    spawn break2()
-    run()
+    trampoline foo_clyybber()
     assert r == 1, "r was " & $r
 
   block:
     ## break in a nested else (don't ask)
-    proc break3() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       while true:
         cps noop()
@@ -217,12 +217,12 @@ testes:
           else:
             break
       inc r
-    trampoline break3()
+    trampoline foo_clyybber()
     assert r == 3, "r was " & $r
 
   block:
     ## named breaks
-    proc break4() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       block found:
         while true:
@@ -233,12 +233,12 @@ testes:
           inc r
         assert false
       r = r * -1
-    trampoline break4()
+    trampoline foo_clyybber()
     assert r == -3, "r was " & $r
 
   block:
     ## while statement
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 2:
         let x: int = i
@@ -247,11 +247,11 @@ testes:
         check x < i
       r = i
       check r == 2
-    trampoline foo()
+    trampoline foo_clyybber()
 
   block:
     ## while with break
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while true:
         let x: int = i
@@ -262,11 +262,11 @@ testes:
         check x < i
       r = i
       check r == 2
-    trampoline foo()
+    trampoline foo_clyybber()
 
   block:
     ## while with continue
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 2:
         let x: int = i
@@ -276,11 +276,11 @@ testes:
         assert x > 0
       r = i
       check r == 2
-    trampoline foo()
+    trampoline foo_clyybber()
 
   block:
     ## simple name shadowing test
-    proc b(x: int) {.cps:Cont.} =
+    proc b(x: int) {.cps: Cont.} =
       doAssert x > 0
       let x: int = 3
       doAssert x == 3
@@ -294,7 +294,7 @@ testes:
       doAssert x == 3
       doAssert y == 7
 
-    proc a(x: int) {.cps:Cont.} =
+    proc a(x: int) {.cps: Cont.} =
       doAssert x > 0
       doAssert x > 0
       doAssert x == 1
@@ -309,7 +309,7 @@ testes:
 
   block:
     ## for loop with continue, break
-    proc test() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       while true:
         for i in 0 .. 3:
@@ -322,7 +322,7 @@ testes:
         if r == 5:
           break
       inc r
-    trampoline test()
+    trampoline foo_clyybber()
     assert r == 6, "r is " & $r
 
   block:
@@ -330,27 +330,25 @@ testes:
     when not declaredInScope(fork):
       skip("fork() not declared")
     else:
-      proc adder() {.cps:Cont.} =
+      proc foo() {.cps: Cont.} =
         cps fork()
         inc r
 
-      spawn adder()
-      run()
+      trampoline foo_clyybber()
       if r != 2:
         raise newException(Defect, "uh oh")
 
   block:
     ## the famous tock test
-    proc tock(name: string; ms: int) {.cps: Cont.} =
+    proc foo(name: string; ms: int) {.cps: Cont.} =
       var count: int = 10
       while count > 0:
         dec count
         yield sleep(ms)
         echo name, " ", count
 
-    trampoline tock("tick", 3)
-    trampoline tock("tock", 7)
-
+    spawn foo_clyybber("tick", 3)
+    spawn foo_clyybber("foo", 7)
     run()
 
   block:
@@ -358,7 +356,7 @@ testes:
     when true:
       skip("will not work until new scopes go in")
     else:
-      proc b(x: int) {.cps:Cont.} =
+      proc b(x: int) {.cps: Cont.} =
         cps noop()
         doAssert x > 0
         cps noop()
@@ -382,7 +380,7 @@ testes:
         cps noop()
         doAssert y == 7
 
-      proc a(x: int) {.cps:Cont.} =
+      proc a(x: int) {.cps: Cont.} =
         cps noop()
         doAssert x > 0
         cps noop()
@@ -411,7 +409,7 @@ testes:
       big = start * 2
     var count = start
 
-    proc higher(ms: int) {.cps:Cont.} =
+    proc higher(ms: int) {.cps: Cont.} =
       while count < big and count > tiny:
         inc count
         cps sleep(ms)
@@ -422,14 +420,14 @@ testes:
         cps jield()
         cps jield()
 
-    proc lower(ms: int) {.cps:Cont.} =
+    proc lower(ms: int) {.cps: Cont.} =
       while count < big and count > tiny:
         dec count
         cps sleep(ms)
         cps jield()
 
-    trampoline higher(1)
-    trampoline lower(1)
+    spawn higher(1)
+    spawn lower(1)
 
     run()
 
@@ -574,7 +572,7 @@ testes:
     var clients = 0
 
     ## CPS server session hander
-    proc handleClient(fdc: SocketHandle) {.cps:Cont.} =
+    proc handleClient(fdc: SocketHandle) {.cps: Cont.} =
 
       inc clients
 
@@ -591,7 +589,7 @@ testes:
 
 
     ## CPS server listener handler
-    proc doEchoServer(port: int) {.cps:Cont.} =
+    proc doEchoServer(port: int) {.cps: Cont.} =
       let fds: SocketHandle = sockBind(port)
       echo "listening fd: ", fds.int
       while true:
@@ -603,7 +601,7 @@ testes:
 
 
     ## CPS client handler
-    proc doEchoClient(address: string, port: int, n: int, msg: string) {.cps:Cont.} =
+    proc doEchoClient(address: string, port: int, n: int, msg: string) {.cps: Cont.} =
       let fd: SocketHandle = sockConnect(address, port)
       #echo "connected fd: ", fd.int
 
@@ -620,7 +618,7 @@ testes:
       #echo "disconnected fd: ", fd.int
 
     ## Progress reporting
-    proc doTicker() {.cps:Cont.} =
+    proc doTicker() {.cps: Cont.} =
       while true:
         cps evq.sleep(1000)
         echo "tick. clients: ", clients, " echoed ", count, " messages"

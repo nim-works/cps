@@ -553,8 +553,8 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
-proc clone(n: NimNode): NimNode =
-
+proc cloneProc(n: NimNode): NimNode =
+  ## create a copy of a typed proc which satisfies the compiler
   let id = ident($n[0] & "_clyybber")
   let params = n[3]
   let body = n[6]
@@ -566,11 +566,8 @@ proc clone(n: NimNode): NimNode =
     params,
     newEmptyNode(),
     newEmptyNode(),
-    copyNimTree(body)
+    copy body
   )
-
-  echo result.repr
-
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
@@ -643,7 +640,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     block:
       let name = env.first      # ident"result" or ident"continuation", etc.
 
-      booty = clone n
+      booty = cloneProc n
       booty.body = newStmtList()
 
       # if we're not storing to result, we need a variable
@@ -695,7 +692,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       preamble.add list
 
   # we can't mutate typed nodes, so copy ourselves
-  var n = clone n
+  var n = cloneProc n
 
   # and do some pruning of these typed trees
   for p in [booty, n]:
@@ -707,6 +704,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # but we know that we do, because we insert it here ;-)
   n.params.insert(1, env.firstDef)
   inc first   # gratuitous tracking for correctness
+
+  # install our return type in the clone
+  n.params[0] = T
 
   # ensaftening the proc's body
   n.body = env.saften(n.body).newStmtList
