@@ -441,14 +441,11 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
       inc c
       # create a new identifier for the object field
       var field =
-        # symbols (probably gensym'd?) flow through...  think ex, rs
-        if name.kind == nnkSym:
-          name
+        # symbols have to get de-sym'd since we're typed now
+        when cpsZevv:
+          genSym(nskField, name.strVal & $c)
         else:
-          when cpsZevv:
-            genSym(nskField, name.strVal & $c)
-          else:
-            genSym(nskField, name.strVal)
+          genSym(nskField, name.strVal)
       var value = newTree(kind,     # ident: <no var> type = default
                           newIdentDefs(name, stripVar(n[^2]), n[^1]))
       e = e.set(field, value)
