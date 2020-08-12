@@ -650,7 +650,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
       # XXX: this may fail if requires-init
       # now we can insert our `result =`, which includes the proc params
-      booty.body.add env.rootResult(name, n.name)
+      booty.body.add env.rootResult(name, booty.name)
 
       # XXX: let the user supply the trampoline?
       # add a trampoline to resolve the continuation
