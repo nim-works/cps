@@ -29,7 +29,7 @@ testes:
     proc foo() {.cps: Cont.} =
       var i: int = 3
       noopJ = 4
-      cps noop()
+      noop()
       check i == 3
     trampoline foo_clyybber()
     check noopJ == 4
@@ -38,7 +38,7 @@ testes:
     proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 3:
-        cps sleep(i + 1)
+        sleep(i + 1)
         adder(i)
       r = i
       check r == 3
@@ -54,11 +54,11 @@ testes:
         ## a=1, b=2, c=3
         var a: int = 5
         ## a=5, b=2, c=3
-        cps noop()
+        noop()
         ## a=5, b=2, c=3
         var b: int = b + a
         ## a=5, b=7, c=3
-        cps noop()
+        noop()
         ## a=5, b=7, c=3
         check a == 5
         check b == 7
@@ -89,7 +89,7 @@ testes:
       var p: int
       var q: int = 0
       var r: int = j
-      cps jield()
+      jield()
       inc i
       inc j
       inc k
@@ -106,7 +106,7 @@ testes:
     else:
       proc foo() {.cps: Cont.} =
         var (i, j, k) = (1, 2, 3)
-        cps noop()
+        noop()
         check i == 1
         check j == 2
         check k == 3
@@ -119,7 +119,7 @@ testes:
     else:
       proc foo() {.cps: Cont.} =
         var j = 2
-        cps noop()
+        noop()
         check j == 2
       trampoline foo_clyybber()
 
@@ -194,7 +194,7 @@ testes:
     proc foo() {.cps: Cont.} =
       r = 1
       while true:
-        cps jield()
+        jield()
         if true:
           break
         inc r
@@ -209,7 +209,7 @@ testes:
     proc foo() {.cps: Cont.} =
       r = 1
       while true:
-        cps noop()
+        noop()
         if true:
           inc r
           if r > 2:
@@ -226,10 +226,10 @@ testes:
       r = 1
       block found:
         while true:
-          cps noop()
+          noop()
           if r > 2:
             break found
-          cps noop()
+          noop()
           inc r
         assert false
       r = r * -1
@@ -331,7 +331,7 @@ testes:
       skip("fork() not declared")
     else:
       proc foo() {.cps: Cont.} =
-        cps fork()
+        fork()
         inc r
 
       trampoline foo_clyybber()
@@ -357,43 +357,43 @@ testes:
       skip("will not work until new scopes go in")
     else:
       proc b(x: int) {.cps: Cont.} =
-        cps noop()
+        noop()
         doAssert x > 0
-        cps noop()
+        noop()
         let x: int = 3
-        cps noop()
+        noop()
         doAssert x == 3
-        cps noop()
+        noop()
         var y: int = 8
         block:
-          cps noop()
+          noop()
           var x: int = 4
-          cps noop()
+          noop()
           inc x
-          cps noop()
+          noop()
           dec y
-          cps noop()
+          noop()
           doAssert x == 5
           doAssert y == 7
-        cps noop()
+        noop()
         doAssert x == 3
-        cps noop()
+        noop()
         doAssert y == 7
 
       proc a(x: int) {.cps: Cont.} =
-        cps noop()
+        noop()
         doAssert x > 0
-        cps noop()
+        noop()
         doAssert x > 0
-        cps noop()
+        noop()
         var x: int = 2
-        cps noop()
+        noop()
         doAssert x == 2
-        cps noop()
+        noop()
         spawn b(x)
-        cps noop()
+        noop()
         doAssert x == 2
-        cps noop()
+        noop()
         doAssert x == 2
 
       spawn a(1)
@@ -412,19 +412,19 @@ testes:
     proc higher(ms: int) {.cps: Cont.} =
       while count < big and count > tiny:
         inc count
-        cps sleep(ms)
-        cps jield()
-        cps jield()
-        cps jield()
-        cps jield()
-        cps jield()
-        cps jield()
+        sleep(ms)
+        jield()
+        jield()
+        jield()
+        jield()
+        jield()
+        jield()
 
     proc lower(ms: int) {.cps: Cont.} =
       while count < big and count > tiny:
         dec count
-        cps sleep(ms)
-        cps jield()
+        sleep(ms)
+        jield()
 
     spawn higher(1)
     spawn lower(1)
@@ -577,11 +577,11 @@ testes:
       inc clients
 
       while true:
-        cps evq.io(fdc, POLLIN)
+        evq.io(fdc, POLLIN)
         let s: string = sockRecv(fdc)
         if s.len == 0: break
         inc count
-        cps evq.io(fdc, POLLOUT)
+        evq.io(fdc, POLLOUT)
         sockSend(fdc, s)
 
       dec clients
@@ -593,7 +593,7 @@ testes:
       let fds: SocketHandle = sockBind(port)
       echo "listening fd: ", fds.int
       while true:
-        cps evq.io(fds, POLLIN)
+        evq.io(fds, POLLIN)
         let fdc: SocketHandle = sockAccept(fds)
         #echo "accepted fd:", fdc.int
         # Create new client and add to work queue
@@ -607,9 +607,9 @@ testes:
 
       var i: int = 0
       while i < n:
-        cps evq.io(fd, POLLOUT)
+        evq.io(fd, POLLOUT)
         sockSend(fd, msg)
-        cps evq.io(fd, POLLIN)
+        evq.io(fd, POLLIN)
         let msg2: string = sockRecv(fd)
         doAssert msg2 == msg
         inc i
@@ -620,7 +620,7 @@ testes:
     ## Progress reporting
     proc doTicker() {.cps: Cont.} =
       while true:
-        cps evq.sleep(1000)
+        evq.sleep(1000)
         echo "tick. clients: ", clients, " echoed ", count, " messages"
         if clients == 0:
           evq.stop()
