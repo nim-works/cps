@@ -62,7 +62,7 @@ testes:
         check a == 5
         check b == 7
         check c == 3
-      trampoline foo_clyybber(1, 2)
+      foo_clyybber(1, 2)
 
   block:
     ## reassignment of var proc params
@@ -76,7 +76,7 @@ testes:
       check b == 7
       check c == 3
     var (x, y, z) = (1, 2, 3)
-    trampoline foo_clyybber(x, y, z)
+    foo_clyybber(x, y, z)
 
   block:
     ## multiple variable declaration
@@ -95,7 +95,7 @@ testes:
       inc p
       inc q
       inc r
-    trampoline foo_clyybber()
+    foo_clyybber()
 
   block:
     ## declaration via tuple deconstruction
@@ -109,7 +109,7 @@ testes:
         check i == 1
         check j == 2
         check k == 3
-      trampoline foo_clyybber()
+      foo_clyybber()
 
   block:
     ## declaration without type
@@ -120,7 +120,7 @@ testes:
         var j = 2
         noop()
         check j == 2
-      trampoline foo_clyybber()
+      foo_clyybber()
 
   block:
     ## simple block with break
@@ -132,7 +132,7 @@ testes:
           break
         assert false
       inc r
-    trampoline foo_clyybber()
+    foo_clyybber()
     if r != 3:
       echo "r wasn't 3: ", r
       assert false
@@ -148,7 +148,7 @@ testes:
           break
         assert false
       inc r
-    trampoline foo_clyybber()
+    foo_clyybber()
     if r != 3:
       echo "r wasn't 3: ", r
       assert false
@@ -200,7 +200,7 @@ testes:
         if r > 2:
           assert false
         return
-    trampoline foo_clyybber()
+    foo_clyybber()
     assert r == 1, "r was " & $r
 
   block:
@@ -216,7 +216,7 @@ testes:
           else:
             break
       inc r
-    trampoline foo_clyybber()
+    foo_clyybber()
     assert r == 3, "r was " & $r
 
   block:
@@ -232,7 +232,7 @@ testes:
           inc r
         assert false
       r = r * -1
-    trampoline foo_clyybber()
+    foo_clyybber()
     assert r == -3, "r was " & $r
 
   block:
@@ -246,7 +246,7 @@ testes:
         check x < i
       r = i
       check r == 2
-    trampoline foo_clyybber()
+    foo_clyybber()
 
   block:
     ## while with break
@@ -261,7 +261,7 @@ testes:
         check x < i
       r = i
       check r == 2
-    trampoline foo_clyybber()
+    foo_clyybber()
 
   block:
     ## while with continue
@@ -275,7 +275,7 @@ testes:
         assert x > 0
       r = i
       check r == 2
-    trampoline foo_clyybber()
+    foo_clyybber()
 
   block:
     ## simple name shadowing test
@@ -321,7 +321,7 @@ testes:
         if r == 5:
           break
       inc r
-    trampoline foo_clyybber()
+    foo_clyybber()
     assert r == 6, "r is " & $r
 
   block:
@@ -333,7 +333,7 @@ testes:
         fork()
         inc r
 
-      trampoline foo_clyybber()
+      foo_clyybber()
       if r != 2:
         raise newException(Defect, "uh oh")
 
