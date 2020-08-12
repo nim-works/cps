@@ -16,12 +16,12 @@ testes:
     r = 0
     proc foo() {.cps: Cont.} =
       r = 1
-    trampoline foo_clyybber()
+    foo_clyybber()
     check r == 1
 
   block yield_magic:
     proc foo() {.cps: Cont.} =
-      yield jield()
+      jield()
     trampoline foo_clyybber()
 
   block noop_magic:
