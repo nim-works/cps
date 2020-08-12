@@ -1,9 +1,16 @@
+##[
+
+  Scopes are used to keep track of control-flow targets; calls, breaks,
+  continues, returns, flow-through, that sort of thing.
+
+]##
 import std/strutils
 import std/macros
 
+const
+  scopeful = {nnkTryStmt, nnkWhileStmt, nnkIfStmt, nnkBlockStmt, nnkForStmt}
+
 type
-  # scopes are used to keep track of control-flow targets; calls, breaks,
-  # continues, flow-through, that sort of thing
   Scope* = ref object
     parent*: NimNode          # the source node we're coming from
     kind*: NimNodeKind        # the source node kind we're coming from
@@ -37,11 +44,11 @@ func isEmpty*(scope: Scope): bool =
 
 proc `$`*(scope: Scope): string =
   if scope.isNil:
-    result = "scope(nil)"
+    result = "🔭(nil)"
   elif scope.isEmpty:
-    result = "scope(empty)"
+    result = "🔭(empty)"
   else:
-    result = "scope(kind: $1, name: $2, label: $4, node: $3)" % [
+    result = "🔭(kind: $1, name: $2, label: $4, node: $3)" % [
       $scope.kind, repr(scope.name),
       lispRepr(scope.node), repr(scope.label) ]
 
@@ -120,3 +127,30 @@ proc add*(ns: var Scopes; k: NimNode; n: NimNode) =
   assert n.kind in {nnkIdent, nnkSym}
   var scope = newScope(k, n, n)
   ns.add scope
+
+proc openScope*(s: Scope; n: NimNode): Scope =
+  ## open a new scope for the given node; returns the current scope
+  assert not n.isNil
+  case n.kind
+  of scopeful:
+    result = newScope(n, parent = s)
+  else:
+    result = s
+
+proc closeScope*(s: Scope; n: NimNode): Scope =
+  ## close an open scope for the given node; returns the current scope
+  assert not n.isNil
+  case n.kind
+  of scopeful:
+    result = s.scope
+  else:
+    result = s
+
+template withScope*(s: Scope; n: NimNode; body: untyped) =
+  ## do some work on a particular node with a particular scope
+  openScope(s, n)
+  try:
+    var scope {.inject} = s
+    body
+  finally:
+    closeScope(s, n)
