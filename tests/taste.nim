@@ -1,5 +1,4 @@
 import std/macros
-import std/os
 
 import testes
 
@@ -25,14 +24,14 @@ testes:
     foo_clyybber()
 
   block noop_magic:
-    var noopJ = 2
+    var j = 2
     proc foo() {.cps: Cont.} =
-      var i: int = 3
-      noopJ = 4
+      var i = 3
+      j = 4
       noop()
       check i == 3
-    trampoline foo_clyybber()
-    check noopJ == 4
+    foo_clyybber()
+    check j == 4
 
   block sleep_magic:
     proc foo() {.cps: Cont.} =
@@ -42,7 +41,7 @@ testes:
         adder(i)
       r = i
       check r == 3
-    trampoline foo_clyybber()
+    foo_clyybber()
 
   block:
     ## shadowing and proc param defaults
@@ -70,9 +69,9 @@ testes:
     ## https://github.com/disruptek/cps/issues/22 (2nd)
     proc foo(a, b, c: var int) {.cps: Cont.} =
       a = 5
-      yield continuation.noop()
+      noop()
       b = b + a
-      yield continuation.noop()
+      noop()
       check a == 5
       check b == 7
       check c == 3
@@ -139,12 +138,12 @@ testes:
       assert false
 
   block:
-    ## block with yield and break
+    ## block with break
     proc foo() {.cps: Cont.} =
       r = 1
       block:
         if true:
-          yield noop()
+          noop()
           inc r
           break
         assert false
@@ -160,11 +159,11 @@ testes:
     var success = false
 
     proc signalSleeper(ms: int) {.cps: Cont.} =
-      yield sleep(ms)
+      sleep(ms)
       signal(sem)
 
     proc signalWaiter() {.cps: Cont.} =
-      yield wait(sem)
+      wait(sem)
       success = true
 
     spawn signalSleeper_clyybber(10)
@@ -344,7 +343,7 @@ testes:
       var count: int = 10
       while count > 0:
         dec count
-        yield sleep(ms)
+        sleep(ms)
         echo name, " ", count
 
     spawn foo_clyybber("tick", 3)
@@ -438,6 +437,7 @@ import epoll
 import posix
 import tables
 import deques
+import os
 
 testes:
   block:
