@@ -559,19 +559,15 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
 proc cloneProc(n: NimNode): NimNode =
   ## create a copy of a typed proc which satisfies the compiler
-  let id = ident($n[0] & "_clyybber")
-  let params = n[3]
-  let body = n[6]
-
+  assert n.kind == nnkProcDef
   result = nnkProcDef.newTree(
-    id,
+    ident($n.name & "_clyybber"),
     newEmptyNode(),
     newEmptyNode(),
-    params,
+    n.params,
     newEmptyNode(),
     newEmptyNode(),
-    copy body
-  )
+    copy n.body)
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
