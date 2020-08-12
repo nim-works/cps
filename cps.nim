@@ -645,8 +645,8 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
       # if we're not storing to result, we need a variable
       when not cpsMutant:
-        booty.body.add newVarStmt(
-          newIdentDefs(name, T, newEmptyNode()), newEmptyNode())
+        booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
+                                                          newEmptyNode())
 
       # XXX: this may fail if requires-init
       # now we can insert our `result =`, which includes the proc params
