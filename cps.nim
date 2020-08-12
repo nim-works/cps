@@ -417,6 +417,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
   let n = stripComments input
   for i, nc in pairs(n):
+    if nc.isNil:
+      result.add nc
+      continue
     # if it's a cps call,
     if nc.isCpsCall:
       # we want to make sure that a pop inside the after body doesn't
