@@ -288,7 +288,8 @@ proc populateType(e: Env; n: var NimNode) =
   for name, section in pairs(e.locals):
     for defs in items(section):
       if defs[1].isEmpty:
-        error "give " & $name & " a type: " & repr(section)
+        # get the type of the assignment
+        n.add newIdentDefs(name, getType(defs.last))
       else:
         # name is an ident or symbol
         n.add newIdentDefs(name, defs[1])
