@@ -21,6 +21,9 @@ export Continuation, ContinuationProc
 type
   NodeFilter = proc(n: NimNode): NimNode
 
+template cpsCall*() {.pragma.}          ## a cps call
+template cpsCall*(n: typed) {.pragma.}  ## redirection
+
 template installLocal(id, env, field) =
   when cpsMutant:
     template id(): untyped = (env(result).field)
@@ -53,17 +56,36 @@ proc filter(n: NimNode; f: NodeFilter): NimNode =
     for kid in items(n):
       result.add filter(kid, f)
 
+proc hasPragma(n: NimNode; s: static[string]): bool =
+  ## `true` if the `n` holds the pragma `s`
+  assert not n.isNil
+  case n.kind
+  of nnkPragma:
+    for p in n:
+      # just skip ColonExprs, etc.
+      if p.kind in {nnkSym, nnkIdent}:
+        result = p.strVal == s
+  of RoutineNodes:
+    result = hasPragma(n.pragma, s)
+  of nnkObjectTy:
+    result = hasPragma(n[0], s)
+    assert n[0].kind == nnkPragma
+  of nnkRefTy:
+    result = hasPragma(n.last, s)
+  of nnkTypeDef:
+    result = hasPragma(n.last, s)
+  of nnkTypeSection:
+    result = anyIt(toSeq items(n), hasPragma(it, s))
+  else:
+    result = false
+
 proc isCpsCall(n: NimNode): bool =
-  # cps foo()
+  ## true if this node holds a call to a cps procedure
   assert not n.isNil
   if len(n) > 0:
-    case n.kind
-    of callish:
-      result = n[0].eqIdent("cps") and n[1].kind in callish
-    #of cpsish:
-    #  result = n[0].kind in callish
-    else:
-      result = false
+    if n.kind in callish:
+      let p = n[0].getImpl
+      result = p.hasPragma("cpsCall")
 
 func stripComments(n: NimNode): NimNode =
   ## remove doc statements because that was a stupid idea
@@ -75,29 +97,20 @@ func stripComments(n: NimNode): NimNode =
 proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
+  assert p.isCpsCall, "does not appear to be a cps call"
   result = newStmtList()
   let locals = e.defineLocals(n)  # goto supplied identifier, not nextGoto!
-  var call: NimNode
-  case p.kind
-  of callish:
-    # cps foo()
-    call = p[1]
-  of cpsish:
-    # yield foo()
-    call = p[0]
-  else:
-    assert p.isCpsCall, "does not appear to be a cps call"
-    raise newException(Defect, "unexpected cps call type: " & $p.kind)
-  call.insert(1, e.maybeConvertToRoot(locals))
+  p[0] = ident(p[0].strVal)       # de-sym the proc target
+  p.insert(1, e.maybeConvertToRoot(locals))
   when cpsMutant:
-    result.add newAssignment(e.first, call)
+    result.add newAssignment(e.first, p)
     result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
   else:
-    result.add nnkReturnStmt.newNimNode(n).add call
+    result.add nnkReturnStmt.newNimNode(n).add p
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
-  assert not isCpsCall(n)
+  assert not n.isCpsCall
   var ret = nnkReturnStmt.newNimNode(n)
   if n.kind == nnkNilLit:
     # we don't want to "fall back" to goto here
@@ -153,23 +166,6 @@ func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
 
 when not strict:
   proc isCpsProc(n: NimNode): bool
-
-proc hasPragma(n: NimNode; s: static[string]): bool =
-  ## `true` if the `n` holds the pragma `s`
-  assert not n.isNil
-  case n.kind
-  of RoutineNodes:
-    result = bindSym(s) in toSeq(n.pragma)
-  of nnkObjectTy:
-    result = bindSym(s) in toSeq(n[0])
-  of nnkRefTy:
-    result = hasPragma(n.last, s)
-  of nnkTypeDef:
-    result = hasPragma(n.last, s)
-  of nnkTypeSection:
-    result = anyIt(toSeq items(n), hasPragma(it, s))
-  else:
-    result = false
 
 proc filterPragma(ns: seq[NimNode], liftee: NimNode): NimNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
@@ -695,6 +691,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   if len(preamble) > 0:           # if necessary, insert the preamble
     n.body.insert(0, preamble)    # ahead of the rest of the body
 
+  # add in a pragma so other cps macros can identify this as a cps call
+  n.addPragma ident"cpsCall"
+
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
@@ -729,11 +728,14 @@ macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
 
-macro cpsMagic*(n: untyped): untyped {.deprecated.} =
+macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
   expectKind(n, nnkProcDef)
   result = newStmtList()
+
+  # ensure that .cpsCall. is added to the copies of the proc
+  n.addPragma ident"cpsCall"
 
   # create a version of the proc that pukes outside of cps context
   var m = copyNimTree n
