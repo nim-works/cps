@@ -166,8 +166,8 @@ testes:
       wait(sem)
       success = true
 
-    spawn signalSleeper_clyybber(10)
-    spawn signalWaiter_clyybber()
+    signalSleeper_clyybber(10)
+    signalWaiter_clyybber()
 
     run()
 
@@ -299,11 +299,11 @@ testes:
       doAssert x == 1
       let x: int = 2
       doAssert x == 2
-      spawn b(x)
+      b(x)
       doAssert x == 2
       doAssert x == 2
 
-    spawn a(1)
+    a(1)
     run()
 
   block:
@@ -346,8 +346,8 @@ testes:
         sleep(ms)
         echo name, " ", count
 
-    spawn foo_clyybber("tick", 3)
-    spawn foo_clyybber("foo", 7)
+    foo_clyybber("tick", 3)
+    foo_clyybber("foo", 7)
     run()
 
   block:
@@ -425,9 +425,8 @@ testes:
         sleep(ms)
         jield()
 
-    spawn higher(1)
-    spawn lower(1)
-
+    higher(1)
+    lower(1)
     run()
 
     if count != tiny:

@@ -616,7 +616,7 @@ proc newContinuation*(e: Env; via: NimNode;
 proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
   ## usually, `result = rootResult(ident"result")`
   ##      or, `result = rootResult(ident"result", )`
-  result = newAssignment(name, e.newContinuation(e.first, goto, defaults = true))
+  result = newAssignment(name, e.newContinuation(e.first, goto, defaults = false))
 
 proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # we store the type whenever we define locals, because the next code that

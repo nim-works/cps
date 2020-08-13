@@ -609,87 +609,64 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # creating the env with the continuation type,
   # and adding proc parameters to the env
   var first = 1 # index of first param to add to locals
-  if false and len(n.params) > 1 and eqIdent(T, n.params[1][1]):
-    ## we don't do this anymore because we must consistently mutate this
-    ## proc so as not to collide with the original pre-xform version
-
-    # if the return type matches that of the first argument, we'll assume
-    # the user wants that argument name to reflect the continuation
-    env = newEnv(n.params[1][0], types, T)
-    inc first
-
+  when cpsMutant:
+    env = newEnv(ident"result", types, T)
   else:
-    when false:
-      ##
-      ## we don't do this anymore,
-      ## -- so that we don't get an `environment misses` error
-      ##
-      # otherwise, just use a gensym'd "cps"
-      env = newEnv(genSym(nskParam, "cps"), types, T)
-    else:
-      when cpsMutant:
-        env = newEnv(ident"result", types, T)
-      else:
-        env = newEnv(ident"continuation", types, T)
-
-    ## what we DO do,
-    ## -- is to write a copy of the proc to the result; this will serve
-    ## as the "bootstrap" which performs alloc of the continuation before
-    ## calling the cps version of the proc
-
-    block:
-      let name = env.first      # ident"result" or ident"continuation", etc.
-
-      booty = cloneProc n
-      booty.body = newStmtList()
-
-      # if we're not storing to result, we need a variable
-      when not cpsMutant:
-        booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
-                                                          newEmptyNode())
-
-      # XXX: this may fail if requires-init
-      # now we can insert our `result =`, which includes the proc params
-      booty.body.add env.rootResult(name, booty.name)
-
-      # XXX: let the user supply the trampoline?
-      # add a trampoline to resolve the continuation
-      when not cpsMutant:
-        let fn = newDotExpr(name, ident"fn")
-
-        # we'll construct the while statement's body first
-        var wh = newStmtList()
-        wh.add newAssignment(name, newCall(fn, name))
-
-        # if a result is expected, copy it out when only the fn is nil
-        if not n.params[0].isEmpty:
-          wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
-                            infix(fn, "==", newNilLit())),
-                           newAssignment(ident"result", env.get)))
-
-        # compose the complete trampoline with the while and its guards
-        wh = nnkWhileStmt.newTree(
-          infix( infix(name, "!=", newNilLit()), "and",
-                 infix(fn, "!=", newNilLit())), wh)
-
-        # add the trampoline to the bootstrap
-        booty.body.add wh
-
-      when false:
-        # no longer useful in the bootstrap
-        #
-        # template continuation = result; insert it after the `result =`
-        booty.body.add env.rootTemplate
+    env = newEnv(ident"continuation", types, T)
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
   ## continuation.
   var preamble = newStmtList()
 
-  # first, add the remaining proc params to the environment
-  for defs in n.params[first .. ^1]:
-    for name, list in env.localSection(defs):
-      preamble.add list
+  ## what we DO do,
+  ## -- is to write a copy of the proc to the result; this will serve
+  ## as the "bootstrap" which performs alloc of the continuation before
+  ## calling the cps version of the proc
+
+  block:
+    let name = env.first      # ident"result" or ident"continuation", etc.
+
+    booty = cloneProc n
+    booty.body = newStmtList()
+
+    # add the remaining proc params to the environment
+    # and set them up in the bootstrap at the same time
+    for defs in n.params[first .. ^1]:
+      for name, list in env.localSection(defs):
+        preamble.add list
+
+    # if we're not storing to result, we need a variable
+    when not cpsMutant:
+      booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
+                                                        newEmptyNode())
+
+    # XXX: this may fail if requires-init
+    # now we can insert our `result =`, which includes the proc params
+    booty.body.add env.rootResult(name, booty.name)
+
+    # XXX: let the user supply the trampoline?
+    # add a trampoline to resolve the continuation
+    when not cpsMutant:
+      let fn = newDotExpr(name, ident"fn")
+
+      # we'll construct the while statement's body first
+      var wh = newStmtList()
+      wh.add newAssignment(name, newCall(fn, name))
+
+      # if a result is expected, copy it out when only the fn is nil
+      if not n.params[0].isEmpty:
+        wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
+                          infix(fn, "==", newNilLit())),
+                         newAssignment(ident"result", env.get)))
+
+      # compose the complete trampoline with the while and its guards
+      wh = nnkWhileStmt.newTree(
+        infix( infix(name, "!=", newNilLit()), "and",
+               infix(fn, "!=", newNilLit())), wh)
+
+      # add the trampoline to the bootstrap
+      booty.body.add wh
 
   # we can't mutate typed nodes, so copy ourselves
   var n = cloneProc n
@@ -707,6 +684,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # install our return type in the clone
   n.params[0] = T
+
+  # now remove any other arguments (for now)
+  while len(n.params) > 2:
+    del(n.params, 2)
 
   # ensaftening the proc's body
   n.body = env.saften(n.body).newStmtList

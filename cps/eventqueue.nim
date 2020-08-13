@@ -13,7 +13,7 @@ import sorta
 import cps
 import cps/semaphore
 
-export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash, semaphore.wait, isReady, withReady
+export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash
 export Event
 
 const
