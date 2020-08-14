@@ -640,7 +640,10 @@ macro cpsMagic*(n: untyped): untyped =
   m.params[0] = newEmptyNode()
   when cpsMagicExists:
     del(m.params, 1)
-  m.body = newStmtList(n.body[0])
+  m.body = newStmtList()
+  # add a documentation comment if possible
+  if len(n.body) > 0 and n.body[0].kind == nnkCommentStmt:
+    m.body.add n.body[0]
   when false:
     m.addPragma newColonExpr(ident"error", msg.newLit)
     m.body.add nnkDiscardStmt.newNimNode(n).add newEmptyNode()
