@@ -643,13 +643,15 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
     wrap.add nnkFinally.newNimNode(n)
         .add nnkDiscardStmt.newNimNode(n)
         .add newEmptyNode()
-  else:
-    var wrap = n
 
-  # we'll use a statement list as the body
-  result = newStmtList(doc("done locals for " & $e.identity), wrap)
   when false:
+    # we'll use a statement list as the body
+    result = newStmtList(doc("done locals for " & $e.identity), n)
     # into that list, we will insert the local variables in scope
     for name, asgn in localRetrievals(e, locals):
       result.insert(0, asgn)
     result.insert(0, doc "installing locals for " & $e.identity)
+  else:
+    result = n
+    for field, section in pairs(e):
+      result = result.resym(section[0][0], newDotExpr(e.first, field))

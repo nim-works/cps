@@ -53,13 +53,14 @@ proc filter*(n: NimNode; f: NodeFilter): NimNode =
 proc desym*(n: NimNode): NimNode =
   result = if n.kind == nnkSym: ident(n.strVal) else: n
 
-proc desym*(n: NimNode; s: NimNode): NimNode =
-  assert s.kind in {nnkSym, nnkIdent}
-  let sig = signatureHash(s)
-  proc desymify(n: NimNode): NimNode =
-    if n.kind == nnkSym and signatureHash(n) == sig:
-      result = ident(n.strVal)
-  result = filter(n, desymify)
+proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
+  assert sym.kind in {nnkSym, nnkIdent}
+  let sig = signatureHash(sym)
+  proc resymify(n: NimNode): NimNode =
+    if n.kind == nnkSym:
+      if signatureHash(n) == sig:
+        result = field
+  result = filter(n, resymify)
 
 func stripComments*(n: NimNode): NimNode =
   ## remove doc statements because that was a stupid idea
