@@ -656,4 +656,5 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
     result.insert(0, doc "installing locals for " & $e.identity)
   else:
     for field, section in pairs(e):
-      result = result.resym(section[0][0], newDotExpr(e.first, field))
+      result = result.resym(section[0][0],
+                            newDotExpr(newCall(e.identity, e.first), field))

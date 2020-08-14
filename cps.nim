@@ -396,8 +396,10 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       try:
         var loop = newStmtList()
         result.doc "add tail call for while loop with body " & $nc[1].kind
+        # process the loop itself, and only then, turn it into a tail call
+        loop.add newIfStmt((nc[0], env.saften(nc[1])))
+        # this will rewrite the loop using filter, so...  it's destructive
         result.add env.makeTail(w, loop)
-        loop.add newIfStmt((nc[0], newStmtList(env.saften(nc[1]))))
         discard env.popGoto # the loop rewind was added to the body
         if brakeEngaged:
           loop.doc "add tail call for break proc"
