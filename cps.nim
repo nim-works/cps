@@ -5,24 +5,11 @@ import std/strutils
 import std/sequtils
 import std/algorithm
 
-const
-  cpsMagicExists {.booldefine, used.} = true
-  cpsMutant {.booldefine, used.} = false    ## mutate continuations
-  cpsDebug {.booldefine, used.} = false
-  strict = true        ## only cps operations are strictly cps operations
-
-when (NimMajor, NimMinor) < (1, 3):
-  {.fatal: "requires nim-1.3".}
-
+import cps/spec
 import cps/scopes
 import cps/environment
-export Continuation, ContinuationProc
-
-type
-  NodeFilter = proc(n: NimNode): NimNode
-
-template cpsCall*() {.pragma.}          ## a cps call
-template cpsCall*(n: typed) {.pragma.}  ## redirection
+export Continuation, ContinuationProc, cpsCall
+export cpsDebug, cpsTrace, cpsMutant
 
 template installLocal(id, env, field) =
   when cpsMutant:
@@ -39,46 +26,6 @@ const
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
-when cpsDebug:
-  proc numberedLines(s: string; first = 1): string =
-    for n, line in pairs(splitLines(s, keepEol = true)):
-      result.add "$1  $2" % [ align($(n + first), 3), line ]
-
-  proc snippet(n: NimNode; name: string): string =
-    result &= "----8<---- " & name & "\t" & "vvv"
-    result &= "\n" & n.repr.numberedLines(n.lineInfoObj.line) & "\n"
-    result &= "----8<---- " & name & "\t" & "^^^"
-
-proc filter(n: NimNode; f: NodeFilter): NimNode =
-  result = f(n)
-  if result.isNil:
-    result = copyNimNode n
-    for kid in items(n):
-      result.add filter(kid, f)
-
-proc hasPragma(n: NimNode; s: static[string]): bool =
-  ## `true` if the `n` holds the pragma `s`
-  assert not n.isNil
-  case n.kind
-  of nnkPragma:
-    for p in n:
-      # just skip ColonExprs, etc.
-      if p.kind in {nnkSym, nnkIdent}:
-        result = p.strVal == s
-  of RoutineNodes:
-    result = hasPragma(n.pragma, s)
-  of nnkObjectTy:
-    result = hasPragma(n[0], s)
-    assert n[0].kind == nnkPragma
-  of nnkRefTy:
-    result = hasPragma(n.last, s)
-  of nnkTypeDef:
-    result = hasPragma(n.last, s)
-  of nnkTypeSection:
-    result = anyIt(toSeq items(n), hasPragma(it, s))
-  else:
-    result = false
-
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   assert not n.isNil
@@ -87,20 +34,13 @@ proc isCpsCall(n: NimNode): bool =
       let p = n[0].getImpl
       result = p.hasPragma("cpsCall")
 
-func stripComments(n: NimNode): NimNode =
-  ## remove doc statements because that was a stupid idea
-  result = copyNimNode n
-  for child in items(n):
-    if child.kind != nnkCommentStmt:
-      result.add stripComments(child)
-
 proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
   assert p.isCpsCall, "does not appear to be a cps call"
   result = newStmtList()
   let locals = e.defineLocals(n)  # goto supplied identifier, not nextGoto!
-  p[0] = ident(p[0].strVal)       # de-sym the proc target
+  p[0] = desym(p[0])              # de-sym the proc target
   p.insert(1, e.maybeConvertToRoot(locals))
   when cpsMutant:
     result.add newAssignment(e.first, p)
@@ -163,51 +103,6 @@ func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
     result = isReturnCall(n)
     if result:
       r = newStmtList([doc "simple return call: " & n.repr, n])
-
-when not strict:
-  proc isCpsProc(n: NimNode): bool
-
-proc filterPragma(ns: seq[NimNode], liftee: NimNode): NimNode =
-  ## given a seq of pragmas, omit a match and return Pragma or Empty
-  var pragmas = nnkPragma.newNimNode
-  for p in filterIt(ns, it != liftee):
-    pragmas.add p
-    copyLineInfo(pragmas, p)
-  if len(pragmas) > 0:
-    pragmas
-  else:
-    newEmptyNode()
-
-proc stripPragma(n: NimNode; s: static[string]): NimNode =
-  ## filter a pragma with the matching name from various nodes
-  case n.kind
-  of nnkPragma:
-    result = filterPragma(toSeq n, bindSym(s))
-  of RoutineNodes:
-    n.pragma = stripPragma(n.pragma, s)
-    result = n
-  of nnkObjectTy:
-    n[0] = filterPragma(toSeq n[0], bindSym(s))
-    result = n
-  of nnkRefTy:
-    n[^1] = stripPragma(n.last, s)
-    result = n
-  of nnkTypeDef:
-    n[^1] = stripPragma(n.last, s)
-    result = n
-  of nnkTypeSection:
-    result = newNimNode(n.kind, n)
-    for item in items(n):
-      result.add stripPragma(item, s)
-  else:
-    result = n
-
-proc isLiftable(n: NimNode): bool =
-  ## is this a node we should float to top-level?
-  result = n.kind in {nnkProcDef, nnkTypeSection} and n.hasPragma "cpsLift"
-
-proc hasLiftableChild(n: NimNode): bool =
-  result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
 
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -291,6 +186,8 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     # the locals value is, nominally, a proc param -- or it was.
     # now we just use whatever the macro provided the env
     var locals = env.first
+
+    # setup the proc body with whatever locals it still needs
     var body = env.wrapProcBody(locals, n)
 
     when cpsMutant:
@@ -382,7 +279,7 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
   if i < n.len-1:
     # if a tail remains after this crap
     # select lines from `i` to `n[^1]`
-    var body = newStmtList().add n[i+1 ..< n.len]
+    var body = newStmtList(n[i+1 ..< n.len])
 
     # ensure the proc body is rewritten
     body = env.saften(body)
@@ -669,7 +566,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # and do some pruning of these typed trees
   for p in [booty, n]:
-    p.name = ident(p.name.repr)
+    p.name = desym(p.name)
     while len(p) > 7:
       p.del(7)
 
@@ -761,7 +658,7 @@ macro cpsMagic*(n: untyped): untyped =
       n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
     result.add n
 
-when not strict:
+when false:
   proc isCpsProc(n: NimNode): bool =
     ## `true` if the node is a routine with our .cps. pragma
     let liftee = bindSym"cps"

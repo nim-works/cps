@@ -1,3 +1,9 @@
+##[
+
+The Env(ironment) tracks continuation types and the variables of which
+they are comprised.
+
+]##
 import std/sets
 import std/sequtils
 import std/hashes
@@ -7,29 +13,10 @@ import std/algorithm
 
 {.experimental: "dynamicBindSym".}
 
+import cps/spec
 import cps/scopes
 
-const
-  cpsZevv {.booldefine.} = true   ## increment gensyms
-  cpsCast {.booldefine.} = false
-  cpsDebug {.booldefine.} = false
-  cpsTrace {.booldefine.} = false
-  cpsExcept {.booldefine.} = false
-  cpsFn {.booldefine.} = false
-  comments* = cpsDebug  ## embed comments within the transformation
-
 type
-  Continuation* = concept c
-    c.fn is ContinuationProc[Continuation]
-    c is ref object
-    c of RootObj
-
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
-
-  Pair = tuple
-    key: NimNode
-    val: NimNode
-
   # the idents|symbols and the typedefs they refer to in order of discovery
   LocalCache = OrderedTable[NimNode, NimNode]
 
@@ -51,30 +38,6 @@ type
     fn: NimNode                     # the sym we use for the goto target
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
-
-when cpsDebug:
-  template twice*(body: untyped): untyped =
-    ## an exercise in futility, apparently
-    block twice:
-      once:
-        break twice
-      body
-
-  proc `$`(p: Pair): string =
-    result = p[0].repr & ": " & p[1].repr
-
-func doc*(s: string): NimNode =
-  ## generate a doc statement for debugging
-  when comments:
-    newCommentStmtNode(s)
-  else:
-    newEmptyNode()
-
-proc doc*(n: var NimNode; s: string) =
-  ## add a doc statement to the ast for debugging
-  when comments:
-    if n.kind == nnkStmtList:
-      n.add doc(s)
 
 func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
@@ -150,11 +113,6 @@ proc namedBreak*(e: Env; n: NimNode): Scope =
           break
     result = searchScope(e, breaks, match)
 
-proc hash*(n: NimNode): Hash =
-  var h: Hash = 0
-  h = h !& hash($n)
-  result = !$h
-
 proc len*(e: Env): int =
   if not e.isNil:
     result = len(e.locals)
@@ -203,9 +161,6 @@ proc root*(e: Env): NimNode =
   while not r.parent.isNil:
     r = r.parent
   result = r.inherits
-
-proc init[T](c: T; l: LineInfo): T {.used.} =
-  warning "provide an init proc for cpsTrace"
 
 proc addTrace(e: Env; n: NimNode): NimNode =
   if n.isNil or n.kind == nnkNilLit: return
@@ -269,12 +224,6 @@ proc allPairs(e: Env): seq[Pair] =
     # add any inherited types from the parent
     result.add allPairs(e.parent)
 
-proc definedName(n: NimNode): NimNode =
-  ## create an identifier from an typesection/identDef as cached;
-  ## this is a copy and it is repr'd to ensure gensym compat...
-  assert n.kind in {nnkVarSection, nnkLetSection}, "use this on env[key]"
-  result = ident(repr(n[0][0]))
-
 iterator pairs(e: Env): Pair =
   assert not e.isNil
   var seen = initHashSet[string]()
@@ -293,8 +242,6 @@ proc populateType(e: Env; n: var NimNode) =
       else:
         # name is an ident or symbol
         n.add newIdentDefs(name, defs[1])
-
-template cpsLift*() {.pragma.}
 
 proc contains*(e: Env; key: NimNode): bool =
   ## you're giving us a symbol|ident and we're telling you if we have it
@@ -423,10 +370,6 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
   result.seen.incl key.strVal
   setDirty result
 
-proc stripVar(n: NimNode): NimNode =
-  ## pull the type out of a VarTy
-  result = if n.kind == nnkVarTy: n[0] else: n
-
 iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ## add `a, b, c: type = default` to the env;
   ## yields pairs of field, value as added
@@ -461,20 +404,6 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ]#
   else:
     error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
-
-proc letOrVar(n: NimNode): NimNodeKind =
-  ## choose between let or var for proc parameters
-  assert n.kind == nnkIdentDefs
-  if len(n) == 2:
-    # ident: type; we'll add a default for numbering reasons
-    n.add newEmptyNode()
-  case n[^2].kind
-  of nnkEmpty:
-    error "i need a type: " & repr(n)
-  of nnkVarTy:
-    result = nnkVarSection
-  else:
-    result = nnkLetSection
 
 proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   ## the initial version of the environment
@@ -719,7 +648,8 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
 
   # we'll use a statement list as the body
   result = newStmtList(doc("done locals for " & $e.identity), wrap)
-  # into that list, we will insert the local variables in scope
-  for name, asgn in localRetrievals(e, locals):
-    result.insert(0, asgn)
-  result.insert(0, doc "installing locals for " & $e.identity)
+  when false:
+    # into that list, we will insert the local variables in scope
+    for name, asgn in localRetrievals(e, locals):
+      result.insert(0, asgn)
+    result.insert(0, doc "installing locals for " & $e.identity)

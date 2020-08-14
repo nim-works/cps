@@ -7,6 +7,8 @@
 import std/strutils
 import std/macros
 
+import cps/spec
+
 const
   scopeful = {nnkTryStmt, nnkWhileStmt, nnkIfStmt, nnkBlockStmt, nnkForStmt}
 
@@ -21,10 +23,6 @@ type
     brake*: Scope             # where do you go in the event of a break?
     scope*: Scope             # where did you come from?
   Scopes* = seq[Scope]
-
-func isEmpty*(n: NimNode): bool =
-  ## `true` if the node `n` is Empty
-  result = not n.isNil and n.kind == nnkEmpty
 
 func isNil*(scope: Scope): bool =
   ## `true` if the scope `scope` is undefined

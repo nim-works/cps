@@ -17,11 +17,8 @@ export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash
 export Event
 
 const
-  cpsMutant {.booldefine, used.} = false    ## mutate continuations
-  cpsDebug {.booldefine, used.} = false    ## produce gratuitous output
-  cpsPoolSize {.intdefine, used.} = 64     ## expected pending continuations
-  cpsTrace {.booldefine, used.} = false    ## store "stack" traces
-  cpsTraceSize {.intdefine, used.} = 1000  ## limit the traceback
+  cpsPoolSize {.intdefine, used.} = 64    ## expected pending continuations
+  cpsTraceSize {.intdefine, used.} = 1000 ## limit the traceback
 
 type
   State = enum
