@@ -566,7 +566,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       when cpsTrampBooty:
         booty.body.add wh
       else:
-        booty[3][0] = T
+        booty.params[0] = T
         booty.body.add nnkReturnStmt.newTree(name)
 
   # we can't mutate typed nodes, so copy ourselves
