@@ -448,11 +448,18 @@ proc initialization(e: Env; kind: NimNodeKind;
   # the defined name is composed from the let|var section
   let name = definedName(value)
 
-  when defined(release):
-    result = newStmtList(e.makeTemplate(name, field))
+  when false:
+    #
+    # we don't do this anymore because we would rather perform proper
+    # symbol substitution instead
+    #
+    when defined(release):
+      result = newStmtList(e.makeTemplate(name, field))
+    else:
+      result = newStmtList(nnkCall.newTree(ident"installLocal", name,
+                                           e.identity, field))
   else:
-    result = newStmtList(nnkCall.newTree(ident"installLocal", name,
-                                         e.identity, field))
+    result = newStmtList()
 
   # don't attempt to redefine proc params!
   if kind in {nnkVarSection, nnkLetSection}:
@@ -617,13 +624,7 @@ template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
   else:
     body
 
-proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
-  # return a proc body that defines the locals in a scope above the
-  # original body; this lets the lower scope shadow existing locals or
-  # proc parameters.
-  #
-  # except that we don't use multiple scopes anymore.  we just use templates.
-
+proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   when cpsExcept:
     var wrap = nnkTryStmt.newNimNode(n)
 
@@ -647,14 +648,21 @@ proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
   else:
     result = n
 
-  when false:
-    # we'll use a statement list as the body
-    result = newStmtList(doc("done locals for " & $e.identity), result)
-    # into that list, we will insert the local variables in scope
-    for name, asgn in localRetrievals(e, locals):
-      result.insert(0, asgn)
-    result.insert(0, doc "installing locals for " & $e.identity)
-  else:
-    let child = e.castToChild(e.first)
-    for field, section in pairs(e):
-      result = result.resym(section[0][0], newDotExpr(child, field))
+  # swap symbols for those in the continuation
+  let child = e.castToChild(e.first)
+  for field, section in pairs(e):
+    result = result.resym(section[0][0], newDotExpr(child, field))
+
+proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode
+  {.deprecated.} =
+  # return a proc body that defines the locals in a scope above the
+  # original body; this lets the lower scope shadow existing locals or
+  # proc parameters.
+  #
+  # except that we don't use multiple scopes anymore.  we just use templates.
+  # we'll use a statement list as the body
+  result = newStmtList(doc("done locals for " & $e.identity), result)
+  # into that list, we will insert the local variables in scope
+  for name, asgn in localRetrievals(e, locals):
+    result.insert(0, asgn)
+  result.insert(0, doc "installing locals for " & $e.identity)
