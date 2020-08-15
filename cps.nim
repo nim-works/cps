@@ -456,7 +456,7 @@ proc cloneProc(n: NimNode): NimNode =
   ## create a copy of a typed proc which satisfies the compiler
   assert n.kind == nnkProcDef
   result = nnkProcDef.newTree(
-    ident($n.name & "_clyybber"),
+    ident($n.name),
     newEmptyNode(),
     newEmptyNode(),
     n.params,
@@ -563,7 +563,11 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
                infix(fn, "!=", newNilLit())), wh)
 
       # add the trampoline to the bootstrap
-      booty.body.add wh
+      when cpsTrampBooty:
+        booty.body.add wh
+      else:
+        booty[3][0] = T
+        booty.body.add nnkReturnStmt.newTree(name)
 
   # we can't mutate typed nodes, so copy ourselves
   var n = cloneProc n
