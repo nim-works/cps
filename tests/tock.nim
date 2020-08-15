@@ -8,7 +8,7 @@ proc tock(name: string; ms: int) {.cps: Cont.} =
     sleep(ms)
     echo name, " ", count
 
-tock("tick", 300)
-tock("tock", 700)
+tock_clyybber("tick", 300)
+tock_clyybber("tock", 700)
 
 run()
