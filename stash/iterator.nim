@@ -28,25 +28,24 @@ proc produce(c: var Iterator): Option[int] =
 # The `jield` proc is cps magic to generate a new value from within an
 # interator
 
-proc jield(c: Iterator): Iterator {.cpsMagic.} =
-  result = c
-  #c.val = some(42)
-  #return c
+proc jield(c: Iterator, val: int): Iterator {.cpsMagic.} =
+  c.val = some(val)
+  return c
 
 
 # A simple counting iterator, will produce all integers from 'lo' to 'high',
 # inclusive
 
 proc counter(lo: int, hi: int) {.cps:Iterator.} =
-  var i:int = lo
+  var i = lo
   while i <= hi:
-    jield()
+    jield(i)
     inc i
 
 
 # Create an instance of the iterator, counting from 3 up to 7
 
-var a = counter_clybber(3, 7)
+var a = counter(3, 7)
 
 
 # Resume the iterator a bunch of times
