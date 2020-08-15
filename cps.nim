@@ -547,6 +547,8 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
       # we'll construct the while statement's body first
       var wh = newStmtList()
+      when cpsDebug:
+        wh.add nnkCommand.newTree(ident"echo", "bootstrap trampoline".newLit)
       wh.add newAssignment(name, newCall(fn, name))
 
       # if a result is expected, copy it out when only the fn is nil
