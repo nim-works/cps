@@ -19,7 +19,7 @@ const
   cpsTrace* {.booldefine.} = false       ## store "stack" traces
   cpsExcept* {.booldefine.} = false      ## also stash exceptions
   cpsFn* {.booldefine.} = false          ## multiple fns in continuations
-  cpsTrampBooty* {.booldefine.} = true   ## put a tramp in da booty
+  cpsTrampBooty* {.booldefine.} = false  ## put a tramp in da booty
   comments* = cpsDebug         ## embed comments within the transformation
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
