@@ -37,8 +37,8 @@ proc jield(c: Iterator, val: int): Iterator {.cpsMagic.} =
 # inclusive
 
 proc counter(lo: int, hi: int) {.cps:Iterator.} =
-  var i = 0
-  while i <= 3:
+  var i = lo
+  while i <= hi:
     jield(i)
     inc i
 
