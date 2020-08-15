@@ -567,7 +567,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
         booty.body.add wh
       else:
         booty.params[0] = T
-        booty.body.add nnkReturnStmt.newTree(name)
+        booty.body.add newAssignment(ident"result", newCall(env.root, name))
 
   # we can't mutate typed nodes, so copy ourselves
   var n = cloneProc n
