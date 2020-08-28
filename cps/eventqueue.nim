@@ -8,8 +8,6 @@ import std/tables
 import std/times
 import std/deques
 
-import sorta
-
 import cps
 import cps/semaphore
 
@@ -38,7 +36,7 @@ type
     state: State                  ## dispatcher readiness
     pending: PendingIds           ## maps pending semaphores to Ids
     waiting: WaitingIds           ## maps waiting selector Fds to Ids
-    goto: SortedTable[Id, Cont]   ## where to go from here!
+    goto: Table[Id, Cont]         ## where to go from here!
     lastId: Id                    ## id of last-issued registration
     selector: Selector[Id]        ## watches selectable stuff
     yields: Deque[Cont]           ## continuations ready to run
@@ -238,7 +236,7 @@ proc stop*() =
     eq.pending = initTable[Semaphore, Id](cpsPoolSize)
 
     # discard the contents of the continuation cache
-    eq.goto = initSortedTable[Id, Cont]()
+    eq.goto = initTable[Id, Cont]()
 
     # re-initialize the queue
     eq.state = Unready

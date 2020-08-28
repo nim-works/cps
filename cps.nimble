@@ -4,7 +4,6 @@ description = "continuation-passing style"
 license = "MIT"
 requires "nim >= 1.3.5"
 
-requires "https://github.com/narimiran/sorta < 1.0.0"
 requires "https://github.com/disruptek/testes >= 0.2.1 & < 1.0.0"
 
 proc execCmd(cmd: string) =
