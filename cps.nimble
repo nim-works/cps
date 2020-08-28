@@ -11,27 +11,21 @@ proc execCmd(cmd: string) =
   exec cmd
 
 proc execTest(test: string) =
-  if getEnv("TRAVIS_COMPILER", "unlikely") == "unlikely":
-    execCmd "nim c             --gc:refc -r " & test
-  else:
-    execCmd "nim c              -r " & test
-    execCmd "nim c   -d:release -r " & test
-    execCmd "nim c   -d:danger  -r " & test
-    execCmd "nim c             --gc:arc -r " & test
-    execCmd "nim c   -d:danger --gc:arc -r " & test
-    execCmd "nim cpp            -r " & test
-    execCmd "nim cpp -d:danger  -r " & test
-    execCmd "nim cpp           --gc:arc -r " & test
-    execCmd "nim cpp -d:danger --gc:arc -r " & test
+  execCmd "nim c              -r " & test
+  execCmd "nim c   -d:release -r " & test
+  execCmd "nim c   -d:danger  -r " & test
+  execCmd "nim c             --gc:arc -r " & test
+  execCmd "nim c   -d:danger --gc:arc -r " & test
+  execCmd "nim cpp            -r " & test
+  execCmd "nim cpp -d:danger  -r " & test
+  execCmd "nim cpp           --gc:arc -r " & test
+  execCmd "nim cpp -d:danger --gc:arc -r " & test
 
-task test, "run tests for travis":
+task test, "run tests for ci":
   execTest("tests/taste.nim")
   execTest("tests/tzevv.nim")
 
 task docs, "generate the docs":
-  exec "nim doc --path:. --outdir=docs cps.nim"
-  exec "nim doc --path:. --outdir=docs/cps cps/eventqueue.nim"
-  exec "nim doc --path:. --outdir=docs/cps cps/semaphore.nim"
   exec "nim c --gc:refc --define:danger -r -f tests/tzevv.nim"
   exec "nim c --gc:refc --define:danger -r -f tests/taste.nim"
   exec "nim c --gc:refc --define:danger -r --d:cpsDebug -f tests/tock.nim"

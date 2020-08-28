@@ -1,0 +1,155 @@
+name: CI
+on:
+  push:
+    paths:
+      - '**.cfg'
+      - '**.nims'
+      - '**.nim'
+      - '**.nimble'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - '**.cfg'
+      - '**.nims'
+      - '**.nim'
+      - '**.nimble'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [devel]
+        target: [linux, macos, windows]
+        include:
+          - target: linux
+            builder: ubuntu-18.04
+          - target: macos
+            builder: macos-10.15
+          - target: windows
+            builder: windows-2019
+    name: '${{ matrix.target }} (${{ matrix.branch }})'
+    runs-on: ${{ matrix.builder }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          path: cps
+
+      - name: Setup environment
+        shell: bash
+        run: echo '::add-path::${{ github.workspace }}/nim/bin'
+
+      - name: Get latest Nim commit hash
+        id: versions
+        shell: bash
+        run: |
+          getHash() {
+            git ls-remote "https://github.com/$1" "${2:-HEAD}" | cut -f 1
+          }
+          nimHash=$(getHash nim-lang/Nim '${{ matrix.branch }}')
+          csourcesHash=$(getHash nim-lang/csources)
+          echo "::set-output name=nim::$nimHash"
+          echo "::set-output name=csources::$csourcesHash"
+      - name: Restore prebuilt Nim from cache
+        id: nim-cache
+        uses: actions/cache@v1
+        with:
+          path: nim
+          key: 'nim-${{ matrix.target }}-${{ steps.versions.outputs.nim }}'
+
+      - name: Restore prebuilt csources from cache
+        if: steps.nim-cache.outputs.cache-hit != 'true'
+        id: csources-cache
+        uses: actions/cache@v1
+        with:
+          path: csources/bin
+          key: 'csources-${{ matrix.target }}-${{ steps.versions.outputs.csources }}'
+
+      - name: Checkout Nim csources
+        if: >
+          steps.csources-cache.outputs.cache-hit != 'true' &&
+          steps.nim-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          repository: nim-lang/csources
+          path: csources
+          ref: ${{ steps.versions.outputs.csources }}
+
+      - name: Checkout Nim
+        if: steps.nim-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          repository: nim-lang/Nim
+          path: nim
+          ref: ${{ steps.versions.outputs.nim }}
+
+      - name: Build Nim and associated tools
+        if: steps.nim-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          ncpu=
+          ext=
+          case '${{ runner.os }}' in
+          'Linux')
+            ncpu=$(nproc)
+            ;;
+          'macOS')
+            ncpu=$(sysctl -n hw.ncpu)
+            ;;
+          'Windows')
+            ncpu=$NUMBER_OF_PROCESSORS
+            ext=.exe
+            ;;
+          esac
+          [[ -z "$ncpu" || $ncpu -le 0 ]] && ncpu=1
+          if [[ ! -e csources/bin/nim$ext ]]; then
+            make -C csources -j $ncpu CC=gcc
+          else
+            echo 'Using prebuilt csources'
+          fi
+          cp -v csources/bin/nim$ext nim/bin
+          cd nim
+          nim c koch
+          ./koch boot -d:release
+          ./koch tools -d:release
+          # clean up to save cache space
+          rm koch
+          rm -rf nimcache
+          rm -rf dist
+          rm -rf .git
+
+      - name: Run tests
+        shell: bash
+        run: |
+          cd cps
+          nimble --accept develop
+          nimble test
+
+      - name: Build docs
+        if: ${{ matrix.docs }} == 'true'
+        shell: bash
+        run: |
+          cd cps
+          branch=${{ github.ref }}
+          branch=${branch##*/}
+          nimble doc --project --outdir:docs \
+            '--git.url:https://github.com/${{ github.repository }}' \
+            '--git.commit:${{ github.sha }}' \
+            "--git.devel:$branch" \
+            cps.nim
+          # Ignore failures for older Nim
+          cp docs/{the,}index.html || true
+
+      - name: Publish docs
+        if: >
+          github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+          matrix.target == 'linux' && matrix.branch == 'devel'
+        uses: crazy-max/ghaction-github-pages@v1
+        with:
+          build_dir: cps/docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
