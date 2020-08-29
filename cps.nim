@@ -148,8 +148,10 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
       result = newEmptyNode()
   result = filter(n, liften)
 
-  # we currently install proc declarations during proc construction
-  when false:
+  when true:
+    # we currently install proc declarations during proc construction
+    discard
+  else:
     # clone the proc declarations
     proc declaren(n: NimNode): NimNode =
       if n.kind == nnkProcDef:
@@ -487,9 +489,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # to receive that value and have it parse, even when it may not be
   # semantically correct.
 
-  # we don't do this anymore because in typed mode, we are unable to
-  # change our return type
-  when false:
+  when true:
+    # in typed mode, we are unable to change our return type
+    discard
+  else:
     # check or set the continuation return type
     if not n.params[0].isEmpty:
       error "No return type allowed for now"
