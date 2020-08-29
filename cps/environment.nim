@@ -201,20 +201,18 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   else:
     locals
 
-var c {.compiletime.}: int
 proc init(e: var Env) =
   e.seen = initHashSet[string]()
   if e.fn.isNil:
     when cpsFn:
-      e.fn = genSym(nskField, "fn" & $c)
+      e.fn = genSym(nskField, "fn")
     else:
       e.fn = ident"fn"
   if e.ex.isNil:
-    e.ex = genSym(nskField, "ex" & $c)
+    e.ex = genSym(nskField, "ex")
   if e.rs.isNil:
-    e.rs = genSym(nskField, "rs" & $c)
-  e.id = genSym(nskType, "env" & $c)
-  inc c
+    e.rs = genSym(nskField, "rs")
+  e.id = genSym(nskType, "env")
 
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
@@ -380,13 +378,11 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
       n.add newEmptyNode()
     # iterate over the identifier names (a, b, c)
     for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
-      # the workaround that zevv demanded repeatedly
-      inc c
       # create a new identifier for the object field
       var field =
         # symbols have to get de-sym'd since we're typed now
         when cpsZevv:
-          genSym(nskField, name.strVal & $c)
+          genSym(nskField, name.strVal)
         else:
           genSym(nskField, name.strVal)
       var value = newTree(kind,     # ident: <no var> type = default
