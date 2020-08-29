@@ -538,7 +538,9 @@ proc newContinuation*(e: Env; via: NimNode;
   ## else, perform the following alloc...
   result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
   for field, section in pairs(e):
-    if repr(field) notin [repr(e.fn), repr(e.ex)]:
+    # (not used yet)
+    #if repr(field) notin [repr(e.fn), repr(e.ex)]:
+    if true:
       let defs = section.last
       if defaults:
         # initialize the field with any default supplied in its declaration
