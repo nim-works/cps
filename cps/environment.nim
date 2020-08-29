@@ -461,12 +461,16 @@ proc initialization(e: Env; kind: NimNodeKind;
   else:
     result = newStmtList()
 
+  # this is our continuation type, fully cast
+  let child = e.castToChild(e.first)
+
   # don't attempt to redefine proc params!
   if kind in {nnkVarSection, nnkLetSection}:
     # search first|only typedefs in a var/let section
     let defs = value[0]
     if len(defs) > 2 and not defs.last.isEmpty:
-      result.add newAssignment(name, defs.last)
+      # this is basically env2323(cont).foo34 = "some default"
+      result.add newAssignment(newDotExpr(child, field), defs.last)
 
 iterator addAssignment(e: var Env; kind: NimNodeKind;
                        defs: NimNode): Pair =
