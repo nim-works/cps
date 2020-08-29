@@ -346,12 +346,12 @@ proc storeType*(e: var Env; force = off): Env =
     when cpsFn:
       e.store.add e.makeFnGetter
     when cpsDebug:
-      echo "storing type ", $e.identity
+      echo "storing type ", repr(e.identity)
     # clearly, if we ever write again, we want it to be a new type
     result = newEnv(e, copy = on)
     e = result
     when cpsDebug:
-      echo "next type ", $e.identity
+      echo "next type ", repr(e.identity)
   else:
     result = e
     assert not e.isDirty
