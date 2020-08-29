@@ -479,6 +479,8 @@ iterator addAssignment(e: var Env; kind: NimNodeKind;
       letOrVar(defs)
   for field, value in e.addIdentDef(section, defs):
     let name = definedName(value)
+    when cpsDebug:
+      echo $kind, "\t", repr(defs)
     yield (key: name, val: e.initialization(kind, field, value))
 
 iterator localSection*(e: var Env; n: NimNode): Pair =
@@ -488,8 +490,6 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
 
   ## add a let/var section or proc param to the env
   try:
-    when cpsDebug:
-      echo "local section ", $n.kind, "\n", repr(n)
     case n.kind
     of nnkVarSection, nnkLetSection:
       for defs in items(n):
