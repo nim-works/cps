@@ -441,21 +441,18 @@ proc initialization(e: Env; kind: NimNodeKind;
   ## produce the `x = 34` appropriate given the field and identDefs
   assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
 
-  # the defined name is composed from the let|var section
-  let name = definedName(value)
+  when true:
+    # prepare to perform symbol substitution!
+    result = newStmtList()
+  else:
+    # the defined name is composed from the let|var section
+    let name = definedName(value)
 
-  when false:
-    #
-    # we don't do this anymore because we would rather perform proper
-    # symbol substitution instead
-    #
     when defined(release):
       result = newStmtList(e.makeTemplate(name, field))
     else:
       result = newStmtList(nnkCall.newTree(ident"installLocal", name,
                                            e.identity, field))
-  else:
-    result = newStmtList()
 
   # this is our continuation type, fully cast
   let child = e.castToChild(e.first)
