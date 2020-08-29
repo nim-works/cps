@@ -553,6 +553,7 @@ proc newContinuation*(e: Env; via: NimNode;
         let name = defs[0]
 
         # specify the gensym'd field name and the local name
+        assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
         result.add newColonExpr(field, name)
 
 proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
