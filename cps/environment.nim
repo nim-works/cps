@@ -162,21 +162,22 @@ proc root*(e: Env): NimNode =
     r = r.parent
   result = r.inherits
 
-proc addTrace(e: Env; n: NimNode): NimNode =
-  if n.isNil or n.kind == nnkNilLit: return
-  # XXX: this doesn't work, sadly
-  #discard bindSym("init" & $e.root, rule = brForceOpen)
-  let info = lineInfoObj(n)
-  var identity =
-    if e.camefrom.isNil or e.camefrom.isEmpty:
-      "nil"
-    else:
-      repr(e.camefrom.returnTo)
-  identity.add "(" & repr(e.identity) & ")"
-  result = newCall(ident("init"), n, identity.newLit,
-                   info.filename.newLit,
-                   info.line.newLit,
-                   info.column.newLit)
+when cpsTrace:
+  proc addTrace(e: Env; n: NimNode): NimNode =
+    if n.isNil or n.kind == nnkNilLit: return
+    # XXX: this doesn't work, sadly
+    #discard bindSym("init" & $e.root, rule = brForceOpen)
+    let info = lineInfoObj(n)
+    var identity =
+      if e.camefrom.isNil or e.camefrom.isEmpty:
+        "nil"
+      else:
+        repr(e.camefrom.returnTo)
+    identity.add "(" & repr(e.identity) & ")"
+    result = newCall(ident("init"), n, identity.newLit,
+                     info.filename.newLit,
+                     info.line.newLit,
+                     info.column.newLit)
 
 proc castToRoot(e: Env; n: NimNode): NimNode =
   when cpsCast:
@@ -260,9 +261,9 @@ proc objectType(e: Env): NimNode =
   var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
-proc `==`(a, b: Env): bool = a.seen == b.seen
+proc `==`(a, b: Env): bool {.deprecated, used.} = a.seen == b.seen
 proc `<`(a, b: Env): bool = a.seen < b.seen
-proc `*`(a, b: Env): HashSet[string] = a.seen * b.seen
+proc `*`(a, b: Env): HashSet[string] {.deprecated, used.} = a.seen * b.seen
 
 proc reparent(e: var Env; p: Env) =
   ## set all nodes to have a parent at least as large as p
@@ -315,20 +316,21 @@ proc newEnv*(parent: var Env; copy = off): Env =
   else:
     result = parent
 
-proc makeFnType(e: Env): NimNode =
-  # ensure that the continuation type is not nillable
-  var continuation = e.firstDef
-  continuation[^1] = newEmptyNode()
-  result = newTree(nnkProcTy,
-                   newTree(nnkFormalParams,
-                           e.via, continuation), newEmptyNode())
+when defined(whenyouwishuponastarmakesnodifferencewhoyouare):
+  proc makeFnType(e: Env): NimNode =
+    # ensure that the continuation type is not nillable
+    var continuation = e.firstDef
+    continuation[^1] = newEmptyNode()
+    result = newTree(nnkProcTy,
+                     newTree(nnkFormalParams,
+                             e.via, continuation), newEmptyNode())
 
-proc makeFnGetter(e: Env): NimNode =
-  result = newProc(ident"fn",
-                   params = [e.makeFnType, newIdentDefs(ident"c",
-                                                        e.identity)],
-                   pragmas = nnkPragma.newTree bindSym"cpsLift",
-                   body = newDotExpr(ident"c", e.fn))
+  proc makeFnGetter(e: Env): NimNode =
+    result = newProc(ident"fn",
+                     params = [e.makeFnType, newIdentDefs(ident"c",
+                                                          e.identity)],
+                     pragmas = nnkPragma.newTree bindSym"cpsLift",
+                     body = newDotExpr(ident"c", e.fn))
 
 proc storeType*(e: var Env; force = off): Env =
   ## turn an env into a complete typedef in a type section
@@ -429,30 +431,28 @@ proc rootTemplate*(e: Env): NimNode =
                                   newEmptyNode(), newEmptyNode(),
                                   ident"result")
 
-proc makeTemplate(e: Env; name: NimNode; field: NimNode): NimNode =
-  let locals = e.castToChild(e.first)
-  result = nnkTemplateDef.newTree(name, newEmptyNode(),
-                                  newEmptyNode(), newEmptyNode(),
-                                  newEmptyNode(), newEmptyNode(),
-                                  newDotExpr(locals, field))
-
 proc initialization(e: Env; kind: NimNodeKind;
                     field: NimNode; value: NimNode): NimNode =
   ## produce the `x = 34` appropriate given the field and identDefs
   assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
 
+  result = newStmtList()
   when true:
     # prepare to perform symbol substitution!
-    result = newStmtList()
+    discard
   else:
     # the defined name is composed from the let|var section
     let name = definedName(value)
 
+    # add a template to install locals
     when defined(release):
-      result = newStmtList(e.makeTemplate(name, field))
+      let locals = e.castToChild(e.first)
+      result.add nnkTemplateDef.newTree(name, newEmptyNode(),
+                                        newEmptyNode(), newEmptyNode(),
+                                        newEmptyNode(), newEmptyNode(),
+                                        newDotExpr(locals, field))
     else:
-      result = newStmtList(nnkCall.newTree(ident"installLocal", name,
-                                           e.identity, field))
+      result.add nnkCall.newTree(ident"installLocal", name, e.identity, field)
 
   # this is our continuation type, fully cast
   let child = e.castToChild(e.first)
@@ -499,32 +499,6 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
       raise newException(Defect, "unrecognized input node " & repr(n))
   finally:
     e.setDirty
-
-iterator localRetrievals(e: Env; locals: NimNode): Pair =
-  ## read locals out of an env
-  let locals = e.castToChild(locals)
-  for field, value in pairs(e):
-    # we skip special fields here
-    if repr(field) notin [repr(e.fn), repr(e.ex)]:
-      # remake the section; we use locals here only for line info
-      let section = newNimNode(value.kind, locals)
-      # the name of this local is the first field of the only val
-      assert len(value) == 1
-
-      # recreate the name to cast a field symbol into a local value
-      let name = definedName(value)
-
-      when true:
-        when defined(release):
-          yield (key: name, val: e.makeTemplate(name, field))
-        else:
-          yield (key: name, val: nnkCall.newTree(ident"installLocal", name,
-                                                 e.identity, field))
-      else:
-        section.add newIdentDefs(name, value[0][1],
-                                 # basically, `name: int = locals.field`
-                                 newDotExpr(locals, field))
-        yield (key: name, val: section)
 
 proc newContinuation*(e: Env; via: NimNode;
                       goto: NimNode; defaults = false): NimNode =
@@ -653,16 +627,46 @@ proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   for field, section in pairs(e):
     result = result.resym(section[0][0], newDotExpr(child, field))
 
-proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode
-  {.deprecated.} =
-  # return a proc body that defines the locals in a scope above the
-  # original body; this lets the lower scope shadow existing locals or
-  # proc parameters.
-  #
-  # except that we don't use multiple scopes anymore.  we just use templates.
-  # we'll use a statement list as the body
-  result = newStmtList(doc("done locals for " & $e.identity), result)
-  # into that list, we will insert the local variables in scope
-  for name, asgn in localRetrievals(e, locals):
-    result.insert(0, asgn)
-  result.insert(0, doc "installing locals for " & $e.identity)
+when false:
+  # we don't do local retrievals anymore because now we just substitute
+  # the symbols directly, so localRetrievals() and wrapProcBody() are dead
+
+  iterator localRetrievals(e: Env; locals: NimNode): Pair {.deprecated.} =
+    ## read locals out of an env
+    let locals = e.castToChild(locals)
+    for field, value in pairs(e):
+      # (unused for now)
+      #if repr(field) notin [repr(e.fn), repr(e.ex)]:
+      if true:
+        # the name of this local is the first field of the only val
+        assert len(value) == 1
+
+        # recreate the name to cast a field symbol into a local value
+        let name = definedName(value)
+
+        when true:
+          when defined(release):
+            yield (key: name, val: e.makeTemplate(name, field))
+          else:
+            yield (key: name, val: nnkCall.newTree(ident"installLocal", name,
+                                                   e.identity, field))
+        else:
+          # remake the section; we use locals here only for line info
+          let section = newNimNode(value.kind, locals)
+          section.add newIdentDefs(name, value[0][1],
+                                   # basically, `name: int = locals.field`
+                                   newDotExpr(locals, field))
+          yield (key: name, val: section)
+
+  proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
+    # return a proc body that defines the locals in a scope above the
+    # original body; this lets the lower scope shadow existing locals or
+    # proc parameters.
+    #
+    # except that we don't use multiple scopes anymore.  we just use templates.
+    # we'll use a statement list as the body
+    result = newStmtList(doc("done locals for " & $e.identity), result)
+    # into that list, we will insert the local variables in scope
+    for name, asgn in localRetrievals(e, locals):
+      result.insert(0, asgn)
+    result.insert(0, doc "installing locals for " & $e.identity)

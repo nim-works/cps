@@ -112,9 +112,9 @@ proc get(w: var WaitingIds; fd: int | Fd): Id =
       dec eq.waiters
     w[fd.int] = invalidId
 
-method clone[T: Continuation](c: T): T {.base.} =
+method clone(c: Cont): Cont {.base.} =
   ## copy the continuation for the purposes of, eg. fork
-  result = new T
+  new result
   result[] = c[]
 
 proc init() {.inline.} =
@@ -337,7 +337,8 @@ proc poll*() =
     for event in items(ready):
       # get the registration of the pending continuation
       let id = eq.waiting.get(event.fd)
-      assert getData(eq.selector, event.fd) == id
+      # pity the fool that removed this assert due to ioselectors spam
+      #assert getData(eq.selector, event.fd) == id
       # the id will be wakeupId if it's a wake-up event
       assert id != invalidId
       if id == wakeupId:

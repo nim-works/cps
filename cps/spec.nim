@@ -75,7 +75,7 @@ func stripComments*(n: NimNode): NimNode =
 when cpsDebug:
   import std/strutils
 
-  proc `$`(p: Pair): string =
+  proc `$`(p: Pair): string {.used.} =
     result = p[0].repr & ": " & p[1].repr
 
   proc numberedLines*(s: string; first = 1): string =

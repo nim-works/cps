@@ -1,7 +1,4 @@
 import std/macros
-import std/tables
-import std/sets
-import std/strutils
 import std/sequtils
 import std/algorithm
 
@@ -21,10 +18,13 @@ when not defined(nimdoc): export installLocal # omit from docs
 
 const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes
-  cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
   unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
+
+when defined(yourdaywillcomelittleonecommayourdaywillcomedotdotdot):
+  const
+    cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
 
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
