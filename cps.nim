@@ -343,6 +343,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
           return
 
     case nc.kind
+    of nnkReturnStmt:
+      result.add env.rewriteReturn(nc)
+
     of nnkVarSection, nnkLetSection:
       # add definitions into the environment
       for name, list in env.localSection(nc):
@@ -482,25 +485,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     else:
       debugEcho repr(n).numberedLines(info.line)
 
-  assert n.kind in RoutineNodes
-
-  # https://github.com/disruptek/cps/issues/20
-  #
-  # we don't allow a return-type so that a call to retrieve the result
-  # is able to determine what that value actually is. we don't actually
-  # support result yet, but we will, so this creates the space for us
-  # to receive that value and have it parse, even when it may not be
-  # semantically correct.
-
-  when true:
-    # in typed mode, we are unable to change our return type
-    discard
-  else:
-    # check or set the continuation return type
-    if not n.params[0].isEmpty:
-      error "No return type allowed for now"
-    n.params[0] = T
-
   # establish a new environment with the supplied continuation type;
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
@@ -514,6 +498,11 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     env = newEnv(ident"result", types, T)
   else:
     env = newEnv(ident"continuation", types, T)
+
+  # assign the return type if necessary
+  if not n.params[0].isEmpty:
+    env.setReturn n.params[0]
+    n.params[0] = newEmptyNode()
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
