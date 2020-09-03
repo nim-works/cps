@@ -602,6 +602,33 @@ template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
   else:
     body
 
+proc setReturn*(e: var Env; n: NimNode) =
+  ## Teach the Env that it should return the provided type.
+  let defs = newIdentDefs(e.rs, newEmptyNode(), n)
+  # verbose 'cause we want to use n to inherit the line info
+  discard e.set(e.rs, newNimNode(nnkVarSection, n).add defs)
+  # we need to store the type so we can add a getter for its result
+  e = storeType(e, force = true)
+  # the getter has to get lifted 'cause it's a method
+  e.store.add newProc(ident"result", procType = nnkMethodDef,
+                      body = e.get, params = [n, e.firstDef],
+                      pragmas = nnkPragma.newTree bindSym"cpsLift")
+
+proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
+  ## Rewrite a return statement to use our result field.
+  if n.len == 1 and n[0].kind == nnkAsgn:
+    # okay, it's a return: result = ...
+    result = newStmtList()
+    # ignore the result symbol and create a new assignment
+    result.add newAssignment(e.rs, n.last.last)
+    # and just issue an empty `return`
+    result.add nnkReturnStmt.newTree newEmptyNode()
+  elif n.len == 1 and n[0].kind == nnkEmpty:
+    # this is fine...
+    result = n
+  else:
+    raise newException(Defect, "unexpected return form\n" & treeRepr(n))
+
 proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   when cpsExcept:
     var wrap = nnkTryStmt.newNimNode(n)
