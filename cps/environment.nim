@@ -607,8 +607,13 @@ proc setReturn*(e: var Env; n: NimNode) =
   let defs = newIdentDefs(e.rs, newEmptyNode(), n)
   # verbose 'cause we want to use n to inherit the line info
   discard e.set(e.rs, newNimNode(nnkVarSection, n).add defs)
-  # we need to store the type so we can add a getter for its result
-  e = storeType(e, force = true)
+
+  when false:
+    discard "actually, our dirty tests are currently smart enough 😉"
+  else:
+    # we need to store the type so we can add a getter for its result
+    e = storeType(e, force = true)
+
   # the getter has to get lifted 'cause it's a method
   e.store.add newProc(ident"result", procType = nnkMethodDef,
                       body = e.get, params = [n, e.firstDef],
