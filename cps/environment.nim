@@ -212,7 +212,7 @@ proc init(e: var Env) =
   if e.ex.isNil:
     e.ex = genSym(nskField, "ex")
   if e.rs.isNil:
-    e.rs = genSym(nskField, "rs")
+    e.rs = genSym(nskField, "result")
   e.id = genSym(nskType, "env")
 
 proc allPairs(e: Env): seq[Pair] =
