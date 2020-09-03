@@ -620,8 +620,9 @@ proc setReturn*(e: var Env; n: NimNode) =
                         body = e.get, params = [n, e.firstDef],
                         pragmas = nnkPragma.newTree bindSym"cpsLift")
   else:
+    let via = newIdentDefs(e.first, e.identity, newEmptyNode())
     e.store.add newProc(ident n.strVal, procType = nnkProcDef,
-                        body = e.get, params = [n, e.firstDef],
+                        body = e.get, params = [n, via],
                         pragmas = nnkPragma.newTree bindSym"cpsLift")
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
