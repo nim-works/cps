@@ -347,9 +347,69 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       result.add env.rewriteReturn(nc)
 
     of nnkVarSection, nnkLetSection:
-      # add definitions into the environment
-      for name, list in env.localSection(nc):
-        result.add list
+      if nc.len != 1:
+        raise newException(Defect, "unexpected section size: " & repr(nc))
+      if isCpsCall(nc.last.last):
+
+        #[
+
+        this is a little tricky, so here's a sketch of the transform:
+
+        let foo = cpsProcedure(bar)
+        echo foo
+
+        #     ...turns into...
+
+        return Cont(fn: shim, bar: bar)
+
+        proc shim(c: Cont): Cont =
+          # we use a new proc here for easier type transition
+          cpsProcedure(env(c).bar)
+
+          # this result field was created by cpsProcedure
+          return Cont(fh: after, foo: env(c).result)
+
+        proc after(c: Cont): Cont =
+          # now we have foo in our env and we continue on...
+          echo env(c).foo
+
+        ]#
+
+        # add the local into the env so we can install the field
+        var field: NimNode
+        for name, list in env.localSection(nc):
+          # we only really care about caching the name
+          field = name
+
+        # skip this node by passing i + 1 to the split
+        let after = env.splitAt(n, "after", i + 1)
+        # we add it to the goto stack as usual
+        env.addGoto(after)
+
+        let call = nc.last[^1]
+        let variable = nc.last[0]
+        # our field is gensym'd but the strVal should match
+        assert variable.strVal == field.strVal
+
+        var body = newStmtList()
+        # add the call to the cps proc and let it get saftened as per usual
+        body.add call
+        let shim = procScope(env, nc, "shim", body)
+        assert shim.name != nil
+
+        # now we'll add a tail call to the shim; gratuitous returnTo?
+        result.add env.tailCall(shim.name, returnTo(after))
+
+        # let's get the hell outta here before things get any uglier
+        return
+
+      elif isCpsBlock(nc.last.last):
+        raise newException(Defect,
+          "only calls are supported here: " & repr(nc.last))
+      else:
+        # add definitions into the environment
+        for name, list in env.localSection(nc):
+          result.add list
 
     of nnkForStmt:
       withBreak env.splitAt(n, "brake", i):
