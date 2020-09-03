@@ -18,6 +18,18 @@ testes:
     trampoline foo()
     assert r == 1
 
+  block:
+    ## declaration via tuple deconstruction
+    proc foo() {.cps: Cont.} =
+      var (i, j, k) = (1, 2, 3)
+      let (x, y, z) = (4, 5, 6)
+      noop()
+      assert i == 1
+      assert j == 2
+      assert k == 3
+    trampoline foo()
+
+when false:
   block assignment_shim:
     r = 0
     proc bar(a: int): int {.cps: Cont.} =
@@ -33,6 +45,7 @@ testes:
     trampoline foo()
     assert r == 13
 
+when false:
   block yield_magic:
     proc foo() {.cps: Cont.} =
       jield()
@@ -112,20 +125,6 @@ when false:
       inc q
       inc r
     foo_clyybber()
-
-  block:
-    ## declaration via tuple deconstruction
-    ## https://github.com/disruptek/cps/issues/15
-    when true:
-      skip("broken until cps macro is typed")
-    else:
-      proc foo() {.cps: Cont.} =
-        var (i, j, k) = (1, 2, 3)
-        noop()
-        assert i == 1
-        assert j == 2
-        assert k == 3
-      foo_clyybber()
 
   block:
     ## declaration without type

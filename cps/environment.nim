@@ -385,25 +385,22 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
     # iterate over the identifier names (a, b, c)
     for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
       # create a new identifier for the object field
-      var field =
-        # symbols have to get de-sym'd since we're typed now
-        when cpsZevv:
-          genSym(nskField, name.strVal)
-        else:
-          genSym(nskField, name.strVal)
-      var value = newTree(kind,     # ident: <no var> type = default
+      let field = genSym(nskField, name.strVal)
+      let value = newTree(kind,     # ident: <no var> type = default
                           newIdentDefs(name, stripVar(n[^2]), n[^1]))
       e = e.set(field, value)
       yield (key: field, val: value)
-  #[
   of nnkVarTuple:
-    assert n.last.kind == nnkPar, "expected parenthesis: " & repr(n)
-    let par = n.last
-    for i in 0 ..< len(par):
+    # transform tuple to section
+    assert n.last.kind == nnkTupleConstr, "expected tuple: " & treeRepr(n)
+    let tup = n.last
+    for i in 0 ..< len(tup):
       let name = n[i]
-      e[name] = newTree(n.kind,
-                        newIdentDefs(name, getTypeInst(par[i]), par[i]))
-  ]#
+      let field = genSym(nskField, name.strVal)
+      let value = newTree(kind,
+                          newIdentDefs(name, getTypeInst(tup[i]), tup[i]))
+      e = e.set(field, value)
+      yield (key: field, val: value)
   else:
     error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
 
