@@ -460,6 +460,32 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
+proc rewriteIdentDefs(n: NimNode): NimNode =
+  ## Rewrite an identDefs to ensure it has three children.
+  if n.kind == nnkIdentDefs:
+    if len(n) == 2:
+      n.add newEmptyNode()
+    result = n
+
+proc rewriteVarLet(n: NimNode): NimNode =
+  ## Rewrite a var|let section of multiple identDefs
+  ## into multiple such sections with well-formed identDefs
+  if n.kind in {nnkLetSection, nnkVarSection}:
+    result = newStmtList()
+    for child in items(n):
+      # a new section with a single rewritten identdefs within
+      #result.add newNimNode(n.kind, n).add(rewriteIdentDefs child)
+      result.add newNimNode(n.kind, n).add(child)
+
+proc normalizingRewrites(n: NimNode): NimNode =
+  case n.kind
+  of nnkIdentDefs:
+    rewriteIdentDefs n
+  of nnkLetSection, nnkVarSection:
+    rewriteVarLet n
+  else:
+    nil
+
 proc cloneProc(n: NimNode): NimNode =
   ## create a copy of a typed proc which satisfies the compiler
   assert n.kind == nnkProcDef
@@ -585,8 +611,11 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   while len(n.params) > 2:
     del(n.params, 2)
 
+  # make the body easier for us to consume
+  n.body = filter(n.body, normalizingRewrites)
+
   # perform sym substitutions (or whatever)
-  n.body = env.prepProcBody(n.body.newStmtList)
+  n.body = env.prepProcBody(newStmtList n.body)
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)
