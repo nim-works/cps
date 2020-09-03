@@ -274,6 +274,17 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
 
 proc saften(parent: var Env; input: NimNode): NimNode
 
+proc procScope(env: var Env; parent: NimNode; name: string;
+              body: NimNode): Scope =
+    # ensure the proc body is rewritten
+    var body = env.saften(body)
+    # generate a new name for this proc
+    var name = genSym(nskProc, name)
+    # we'll return a scope holding the tail call to the proc
+    result = newScope(parent, name, env.makeTail(name, body))
+    result.goto = env.nextGoto
+    result.brake = env.nextBreak
+
 proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
   ## split a statement list to create a tail call given
   ## a label prefix and an index at which to split
@@ -282,15 +293,7 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
     # if a tail remains after this crap
     # select lines from `i` to `n[^1]`
     var body = newStmtList(n[i+1 ..< n.len])
-
-    # ensure the proc body is rewritten
-    body = env.saften(body)
-
-    var name = genSym(nskProc, name)
-    # we'll return a scope holding the tail call to the proc
-    result = newScope(n[i], name, env.makeTail(name, body))
-    result.goto = env.nextGoto
-    result.brake = env.nextBreak
+    result = procScope(env, n[i], name, body)
   else:
     # there's nothing left to do in this scope; we're
     # going to just return the next goto (this might be empty)
