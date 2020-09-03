@@ -59,6 +59,10 @@ func lastBreakLoop*(e: Env): Scope = searchScope(e, breaks, last)
 func nextGoto*(e: Env): Scope = searchScope(e, gotos, next)
 func nextBreak*(e: Env): Scope = searchScope(e, breaks, next)
 
+proc addGoto*(e: var Env; scope: Scope) =
+  ## it's nice when we can do this simply
+  e.gotos.add scope
+
 proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
   ## add to a stack of gotos, which are normal exits from control flow.
   ##
