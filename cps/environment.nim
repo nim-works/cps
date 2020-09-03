@@ -294,7 +294,7 @@ proc makeType*(e: var Env): NimNode =
 proc first*(e: Env): NimNode = e.c
 proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newEmptyNode())
 
-proc get*(e: Env): NimNode = newDotExpr(e.first, e.rs)
+proc get*(e: Env): NimNode = newDotExpr(e.castToChild(e.first), e.rs)
 
 proc newEnv*(parent: var Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -608,16 +608,21 @@ proc setReturn*(e: var Env; n: NimNode) =
   # verbose 'cause we want to use n to inherit the line info
   discard e.set(e.rs, newNimNode(nnkVarSection, n).add defs)
 
-  when false:
+  when true:
     discard "actually, our dirty tests are currently smart enough 😉"
   else:
     # we need to store the type so we can add a getter for its result
     e = storeType(e, force = true)
 
-  # the getter has to get lifted 'cause it's a method
-  e.store.add newProc(ident"result", procType = nnkMethodDef,
-                      body = e.get, params = [n, e.firstDef],
-                      pragmas = nnkPragma.newTree bindSym"cpsLift")
+  when false:
+    # this getter has to get lifted 'cause it's a method
+    e.store.add newProc(ident"result", procType = nnkMethodDef,
+                        body = e.get, params = [n, e.firstDef],
+                        pragmas = nnkPragma.newTree bindSym"cpsLift")
+  else:
+    e.store.add newProc(ident n.strVal, procType = nnkProcDef,
+                        body = e.get, params = [n, e.firstDef],
+                        pragmas = nnkPragma.newTree bindSym"cpsLift")
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.

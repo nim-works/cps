@@ -26,7 +26,7 @@ testes:
 
     proc foo() {.cps: Cont.} =
       let w = 4
-      let x = bar(w)
+      let x = bar(w).int
       let z = 5
       discard x + z
 
