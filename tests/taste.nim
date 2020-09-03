@@ -16,7 +16,22 @@ testes:
     proc foo() {.cps: Cont.} =
       r = 1
     trampoline foo()
-    check r == 1
+    assert r == 1
+
+  block assignment_shim:
+    r = 0
+    proc bar(a: int): int {.cps: Cont.} =
+      jield()
+      return a * 2
+
+    proc foo() {.cps: Cont.} =
+      let w = 4
+      let x = bar(w)
+      let z = 5
+      discard x + z
+
+    trampoline foo()
+    assert r == 13
 
   block yield_magic:
     proc foo() {.cps: Cont.} =
@@ -29,9 +44,9 @@ testes:
       var i = 3
       j = 4
       noop()
-      check i == 3
+      assert i == 3
     trampoline foo()
-    check j == 4
+    assert j == 4
 
 when false:
   block sleep_magic:
@@ -41,7 +56,7 @@ when false:
         sleep(i + 1)
         adder(i)
       r = i
-      check r == 3
+      assert r == 3
     foo_clyybber()
 
   block:
@@ -60,9 +75,9 @@ when false:
         ## a=5, b=7, c=3
         noop()
         ## a=5, b=7, c=3
-        check a == 5
-        check b == 7
-        check c == 3
+        assert a == 5
+        assert b == 7
+        assert c == 3
       foo_clyybber(1, 2)
 
   block:
@@ -73,9 +88,9 @@ when false:
       noop()
       b = b + a
       noop()
-      check a == 5
-      check b == 7
-      check c == 3
+      assert a == 5
+      assert b == 7
+      assert c == 3
     var (x, y, z) = (1, 2, 3)
     foo_clyybber(x, y, z)
 
@@ -107,9 +122,9 @@ when false:
       proc foo() {.cps: Cont.} =
         var (i, j, k) = (1, 2, 3)
         noop()
-        check i == 1
-        check j == 2
-        check k == 3
+        assert i == 1
+        assert j == 2
+        assert k == 3
       foo_clyybber()
 
   block:
@@ -120,7 +135,7 @@ when false:
       proc foo() {.cps: Cont.} =
         var j = 2
         noop()
-        check j == 2
+        assert j == 2
       foo_clyybber()
 
   block:
@@ -179,12 +194,12 @@ when false:
     ## break statements without cps 🥴
     proc foo() =
       r = 1
-      check r == 1
+      assert r == 1
       while true:
         if true:
           break
         inc r
-        check r <= 2
+        assert r <= 2
         return
     foo()
     assert r == 1, "r was " & $r
@@ -244,9 +259,9 @@ when false:
         let x: int = i
         adder(i)
         assert x < i
-        check x < i
+        assert x < i
       r = i
-      check r == 2
+      assert r == 2
     foo_clyybber()
 
   block:
@@ -259,9 +274,9 @@ when false:
         if i >= 2:
           break
         assert x < i
-        check x < i
+        assert x < i
       r = i
-      check r == 2
+      assert r == 2
     foo_clyybber()
 
   block:
@@ -275,7 +290,7 @@ when false:
           continue
         assert x > 0
       r = i
-      check r == 2
+      assert r == 2
     foo_clyybber()
 
   block:
