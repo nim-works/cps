@@ -276,8 +276,9 @@ proc saften(parent: var Env; input: NimNode): NimNode
 
 proc procScope(env: var Env; parent: NimNode; name: string;
               body: NimNode): Scope =
+    var body = env.prepProcBody(body)
     # ensure the proc body is rewritten
-    var body = env.saften(body)
+    body = env.saften(body)
     # generate a new name for this proc
     var name = genSym(nskProc, name)
     # we'll return a scope holding the tail call to the proc
