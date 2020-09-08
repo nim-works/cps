@@ -52,7 +52,7 @@ proc filter*(n: NimNode; f: NodeFilter): NimNode =
       result.add filter(kid, f)
 
 proc desym*(n: NimNode): NimNode =
-  result = if n.kind == nnkSym: ident(n.strVal) else: n
+  result = if n.kind == nnkSym: ident(repr n) else: n
 
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   if sym.kind == nnkSym:
@@ -64,6 +64,20 @@ proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
     result = filter(n, resymify)
   else:
     result = n
+
+proc replacedSymsWithIdents*(n: NimNode): NimNode =
+  proc desymifier(n: NimNode): NimNode =
+    case n.kind
+    #of nnkTypeSection:
+    #  result = n
+    of nnkSym:
+      if n.strVal notin ["cpsLift", "cpsCall"]:
+        result = desym n
+      else:
+        result = n
+    else:
+      discard
+  result = filter(n, desymifier)
 
 func stripComments*(n: NimNode): NimNode =
   ## remove doc statements because that was a stupid idea

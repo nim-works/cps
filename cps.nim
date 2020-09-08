@@ -535,7 +535,6 @@ proc rewriteVarLet(n: NimNode): NimNode =
     result = newStmtList()
     for child in items(n):
       # a new section with a single rewritten identdefs within
-      #result.add newNimNode(n.kind, n).add(rewriteIdentDefs child)
       result.add newNimNode(n.kind, n).add(child)
 
 proc normalizingRewrites(n: NimNode): NimNode =
@@ -690,6 +689,11 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
+
+  # Araq: "learn how to desemantic your ast, knuckleheads"
+  n.body = replacedSymsWithIdents(n.body)
+  types = replacedSymsWithIdents(types)
+  booty = replacedSymsWithIdents(booty)
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)

@@ -11,6 +11,17 @@ testes:
   proc adder(x: var int) =
     inc x
 
+  block noop_magic:
+    var j = 2
+    proc foo() {.cps: Cont.} =
+      var i = 3
+      j = 4
+      noop()
+      assert i == 3
+    trampoline foo()
+    assert j == 4
+
+when false:
   block trampoline:
     r = 0
     proc foo() {.cps: Cont.} =
@@ -45,23 +56,11 @@ when false:
     trampoline foo()
     assert r == 13
 
-when false:
   block yield_magic:
     proc foo() {.cps: Cont.} =
       jield()
     trampoline foo()
 
-  block noop_magic:
-    var j = 2
-    proc foo() {.cps: Cont.} =
-      var i = 3
-      j = 4
-      noop()
-      assert i == 3
-    trampoline foo()
-    assert j == 4
-
-when false:
   block sleep_magic:
     proc foo() {.cps: Cont.} =
       var i: int = 0
