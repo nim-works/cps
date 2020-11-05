@@ -2,7 +2,7 @@ version = "0.0.13"
 author = "disruptek"
 description = "continuation-passing style"
 license = "MIT"
-requires "nim >= 1.3.5"
+requires "nim >= 1.5.1"
 
 requires "https://github.com/disruptek/testes >= 0.2.1 & < 1.0.0"
 
