@@ -1,5 +1,4 @@
 import std/macros
-import std/os
 
 import testes
 
@@ -12,36 +11,65 @@ testes:
   proc adder(x: var int) =
     inc x
 
+  block noop_magic:
+    var j = 2
+    proc foo() {.cps: Cont.} =
+      var i = 3
+      j = 4
+      noop()
+      assert i == 3
+    trampoline foo()
+    assert j == 4
+
+when false:
   block trampoline:
-    proc foo() {.cps:Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
       r = 1
     trampoline foo()
-    check r == 1
+    assert r == 1
+
+  block:
+    ## declaration via tuple deconstruction
+    proc foo() {.cps: Cont.} =
+      var (i, j, k) = (1, 2, 3)
+      let (x, y, z) = (4, 5, 6)
+      noop()
+      assert i == 1
+      assert j == 2
+      assert k == 3
+    trampoline foo()
+
+when false:
+  block assignment_shim:
+    r = 0
+    proc bar(a: int): int {.cps: Cont.} =
+      jield()
+      return a * 2
+
+    proc foo() {.cps: Cont.} =
+      let w = 4
+      let x = bar(w).int
+      let z = 5
+      discard x + z
+
+    trampoline foo()
+    assert r == 13
 
   block yield_magic:
-    proc foo() {.cps:Cont.} =
-      yield jield()
+    proc foo() {.cps: Cont.} =
+      jield()
     trampoline foo()
-
-  block noop_magic:
-    var noopJ = 2
-    proc foo() {.cps:Cont.} =
-      var i: int = 3
-      noopJ = 4
-      cps noop()
-      check i == 3
-    trampoline foo()
-    check noopJ == 4
 
   block sleep_magic:
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 3:
-        cps sleep(i + 1)
+        sleep(i + 1)
         adder(i)
       r = i
-      check r == 3
-    trampoline foo()
+      assert r == 3
+    foo_clyybber()
 
   block:
     ## shadowing and proc param defaults
@@ -53,30 +81,30 @@ testes:
         ## a=1, b=2, c=3
         var a: int = 5
         ## a=5, b=2, c=3
-        cps noop()
+        noop()
         ## a=5, b=2, c=3
         var b: int = b + a
         ## a=5, b=7, c=3
-        cps noop()
+        noop()
         ## a=5, b=7, c=3
-        check a == 5
-        check b == 7
-        check c == 3
-      trampoline foo(1, 2)
+        assert a == 5
+        assert b == 7
+        assert c == 3
+      foo_clyybber(1, 2)
 
   block:
     ## reassignment of var proc params
     ## https://github.com/disruptek/cps/issues/22 (2nd)
     proc foo(a, b, c: var int) {.cps: Cont.} =
       a = 5
-      cps noop()
+      noop()
       b = b + a
-      cps noop()
-      check a == 5
-      check b == 7
-      check c == 3
+      noop()
+      assert a == 5
+      assert b == 7
+      assert c == 3
     var (x, y, z) = (1, 2, 3)
-    trampoline foo(x, y, z)
+    foo_clyybber(x, y, z)
 
   block:
     ## multiple variable declaration
@@ -88,28 +116,14 @@ testes:
       var p: int
       var q: int = 0
       var r: int = j
-      cps jield()
+      jield()
       inc i
       inc j
       inc k
       inc p
       inc q
       inc r
-    trampoline foo()
-
-  block:
-    ## declaration via tuple deconstruction
-    ## https://github.com/disruptek/cps/issues/15
-    when true:
-      skip("broken until cps macro is typed")
-    else:
-      proc foo() {.cps: Cont.} =
-        var (i, j, k) = (1, 2, 3)
-        cps noop()
-        check i == 1
-        check j == 2
-        check k == 3
-      trampoline foo()
+    foo_clyybber()
 
   block:
     ## declaration without type
@@ -118,13 +132,13 @@ testes:
     else:
       proc foo() {.cps: Cont.} =
         var j = 2
-        cps noop()
-        check j == 2
-      trampoline foo()
+        noop()
+        assert j == 2
+      foo_clyybber()
 
   block:
     ## simple block with break
-    proc test1() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       block:
         if true:
@@ -132,25 +146,25 @@ testes:
           break
         assert false
       inc r
-    trampoline test1()
+    foo_clyybber()
     if r != 3:
-      echo "r for test1 wasn't 3: ", r
+      echo "r wasn't 3: ", r
       assert false
 
   block:
-    ## block with yield and break
-    proc test2() {.cps:Cont.} =
+    ## block with break
+    proc foo() {.cps: Cont.} =
       r = 1
       block:
         if true:
-          yield noop()
+          noop()
           inc r
           break
         assert false
       inc r
-    trampoline test2()
+    foo_clyybber()
     if r != 3:
-      echo "r for test2 wasn't 3: ", r
+      echo "r wasn't 3: ", r
       assert false
 
   block:
@@ -159,15 +173,15 @@ testes:
     var success = false
 
     proc signalSleeper(ms: int) {.cps: Cont.} =
-      yield sleep(ms)
+      sleep(ms)
       signal(sem)
 
     proc signalWaiter() {.cps: Cont.} =
-      yield wait(sem)
+      wait(sem)
       success = true
 
-    trampoline signalSleeper(10)
-    trampoline signalWaiter()
+    signalSleeper_clyybber(10)
+    signalWaiter_clyybber()
 
     run()
 
@@ -176,40 +190,39 @@ testes:
 
   block:
     ## break statements without cps 🥴
-    proc break1() =
+    proc foo() =
       r = 1
-      check r == 1
+      assert r == 1
       while true:
         if true:
           break
         inc r
-        check r <= 2
+        assert r <= 2
         return
-    break1()
+    foo()
     assert r == 1, "r was " & $r
 
   block:
     ## a fairly tame cps break
-    proc break2() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       while true:
-        cps jield()
+        jield()
         if true:
           break
         inc r
         if r > 2:
           assert false
         return
-    spawn break2()
-    run()
+    foo_clyybber()
     assert r == 1, "r was " & $r
 
   block:
     ## break in a nested else (don't ask)
-    proc break3() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       while true:
-        cps noop()
+        noop()
         if true:
           inc r
           if r > 2:
@@ -217,41 +230,41 @@ testes:
           else:
             break
       inc r
-    trampoline break3()
+    foo_clyybber()
     assert r == 3, "r was " & $r
 
   block:
     ## named breaks
-    proc break4() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       block found:
         while true:
-          cps noop()
+          noop()
           if r > 2:
             break found
-          cps noop()
+          noop()
           inc r
         assert false
       r = r * -1
-    trampoline break4()
+    foo_clyybber()
     assert r == -3, "r was " & $r
 
   block:
     ## while statement
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 2:
         let x: int = i
         adder(i)
         assert x < i
-        check x < i
+        assert x < i
       r = i
-      check r == 2
-    trampoline foo()
+      assert r == 2
+    foo_clyybber()
 
   block:
     ## while with break
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while true:
         let x: int = i
@@ -259,14 +272,14 @@ testes:
         if i >= 2:
           break
         assert x < i
-        check x < i
+        assert x < i
       r = i
-      check r == 2
-    trampoline foo()
+      assert r == 2
+    foo_clyybber()
 
   block:
     ## while with continue
-    proc foo() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 2:
         let x: int = i
@@ -275,12 +288,12 @@ testes:
           continue
         assert x > 0
       r = i
-      check r == 2
-    trampoline foo()
+      assert r == 2
+    foo_clyybber()
 
   block:
     ## simple name shadowing test
-    proc b(x: int) {.cps:Cont.} =
+    proc b(x: int) {.cps: Cont.} =
       doAssert x > 0
       let x: int = 3
       doAssert x == 3
@@ -294,22 +307,22 @@ testes:
       doAssert x == 3
       doAssert y == 7
 
-    proc a(x: int) {.cps:Cont.} =
+    proc a(x: int) {.cps: Cont.} =
       doAssert x > 0
       doAssert x > 0
       doAssert x == 1
       let x: int = 2
       doAssert x == 2
-      spawn b(x)
+      b(x)
       doAssert x == 2
       doAssert x == 2
 
-    spawn a(1)
+    a(1)
     run()
 
   block:
     ## for loop with continue, break
-    proc test() {.cps:Cont.} =
+    proc foo() {.cps: Cont.} =
       r = 1
       while true:
         for i in 0 .. 3:
@@ -322,7 +335,7 @@ testes:
         if r == 5:
           break
       inc r
-    trampoline test()
+    foo_clyybber()
     assert r == 6, "r is " & $r
 
   block:
@@ -330,27 +343,25 @@ testes:
     when not declaredInScope(fork):
       skip("fork() not declared")
     else:
-      proc adder() {.cps:Cont.} =
-        cps fork()
+      proc foo() {.cps: Cont.} =
+        fork()
         inc r
 
-      spawn adder()
-      run()
+      foo_clyybber()
       if r != 2:
         raise newException(Defect, "uh oh")
 
   block:
     ## the famous tock test
-    proc tock(name: string; ms: int) {.cps: Cont.} =
+    proc foo(name: string; ms: int) {.cps: Cont.} =
       var count: int = 10
       while count > 0:
         dec count
-        yield sleep(ms)
+        sleep(ms)
         echo name, " ", count
 
-    trampoline tock("tick", 3)
-    trampoline tock("tock", 7)
-
+    foo_clyybber("tick", 3)
+    foo_clyybber("foo", 7)
     run()
 
   block:
@@ -358,44 +369,44 @@ testes:
     when true:
       skip("will not work until new scopes go in")
     else:
-      proc b(x: int) {.cps:Cont.} =
-        cps noop()
+      proc b(x: int) {.cps: Cont.} =
+        noop()
         doAssert x > 0
-        cps noop()
+        noop()
         let x: int = 3
-        cps noop()
+        noop()
         doAssert x == 3
-        cps noop()
+        noop()
         var y: int = 8
         block:
-          cps noop()
+          noop()
           var x: int = 4
-          cps noop()
+          noop()
           inc x
-          cps noop()
+          noop()
           dec y
-          cps noop()
+          noop()
           doAssert x == 5
           doAssert y == 7
-        cps noop()
+        noop()
         doAssert x == 3
-        cps noop()
+        noop()
         doAssert y == 7
 
-      proc a(x: int) {.cps:Cont.} =
-        cps noop()
+      proc a(x: int) {.cps: Cont.} =
+        noop()
         doAssert x > 0
-        cps noop()
+        noop()
         doAssert x > 0
-        cps noop()
+        noop()
         var x: int = 2
-        cps noop()
+        noop()
         doAssert x == 2
-        cps noop()
+        noop()
         spawn b(x)
-        cps noop()
+        noop()
         doAssert x == 2
-        cps noop()
+        noop()
         doAssert x == 2
 
       spawn a(1)
@@ -411,228 +422,229 @@ testes:
       big = start * 2
     var count = start
 
-    proc higher(ms: int) {.cps:Cont.} =
+    proc higher(ms: int) {.cps: Cont.} =
       while count < big and count > tiny:
         inc count
-        cps sleep(ms)
-        cps jield()
-        cps jield()
-        cps jield()
-        cps jield()
-        cps jield()
-        cps jield()
+        sleep(ms)
+        jield()
+        jield()
+        jield()
+        jield()
+        jield()
+        jield()
 
-    proc lower(ms: int) {.cps:Cont.} =
+    proc lower(ms: int) {.cps: Cont.} =
       while count < big and count > tiny:
         dec count
-        cps sleep(ms)
-        cps jield()
+        sleep(ms)
+        jield()
 
-    trampoline higher(1)
-    trampoline lower(1)
-
+    higher(1)
+    lower(1)
     run()
 
     if count != tiny:
       raise newException(ValueError, "you're a terrible coder")
 
-import epoll
-import posix
-import tables
-import deques
+when false:
+  import epoll
+  import posix
+  import tables
+  import deques
+  import os
 
-testes:
-  block:
-    ## zevv's echo service
+  testes:
+    block:
+      ## zevv's echo service
 
-    proc timerfd_create(clock_id: ClockId, flags: cint): cint
-       {.cdecl, importc: "timerfd_create", header: "<sys/timerfd.h>".}
+      proc timerfd_create(clock_id: ClockId, flags: cint): cint
+         {.cdecl, importc: "timerfd_create", header: "<sys/timerfd.h>".}
 
-    proc timerfd_settime(ufd: cint, flags: cint,
-                          utmr: ptr Itimerspec, otmr: ptr Itimerspec): cint
-       {.cdecl, importc: "timerfd_settime", header: "<sys/timerfd.h>".}
+      proc timerfd_settime(ufd: cint, flags: cint,
+                            utmr: ptr Itimerspec, otmr: ptr Itimerspec): cint
+         {.cdecl, importc: "timerfd_settime", header: "<sys/timerfd.h>".}
 
-    type
+      type
 
-      Cont = ref object of RootObj
-        fn*: proc(c: Cont): Cont {.nimcall.}
+        Cont = ref object of RootObj
+          fn*: proc(c: Cont): Cont {.nimcall.}
 
-      Evq = ref object
-        epfd: cint
-        work: Deque[Cont]
-        fds: Table[cint, Cont]
-        running: bool
+        Evq = ref object
+          epfd: cint
+          work: Deque[Cont]
+          fds: Table[cint, Cont]
+          running: bool
 
-      Timer = proc()
+        Timer = proc()
 
-    ## Event queue implementation
+      ## Event queue implementation
 
-    proc newEvq(): Evq =
-      new result
-      result.epfd = epoll_create(1)
+      proc newEvq(): Evq =
+        new result
+        result.epfd = epoll_create(1)
 
-    proc stop(evq: Evq) =
-      evq.running = false
+      proc stop(evq: Evq) =
+        evq.running = false
 
-    proc addWork(evq: Evq, cont: Cont) =
-      evq.work.addLast cont
+      proc addWork(evq: Evq, cont: Cont) =
+        evq.work.addLast cont
 
-    proc addFd(evq: Evq, fd: SocketHandle | cint, cont: Cont) =
-      evq.fds[fd.cint] = cont
+      proc addFd(evq: Evq, fd: SocketHandle | cint, cont: Cont) =
+        evq.fds[fd.cint] = cont
 
-    proc delFd(evq: Evq, fd: SocketHandle | cint) =
-      evq.fds.del(fd.cint)
+      proc delFd(evq: Evq, fd: SocketHandle | cint) =
+        evq.fds.del(fd.cint)
 
-    proc io(evq: Evq, c: Cont, fd: SocketHandle | cint, event: int): Cont =
-      var epv = EpollEvent(events: event.uint32)
-      epv.data.u64 = fd.uint
-      discard epoll_ctl(evq.epfd, EPOLL_CTL_ADD, fd.cint, epv.addr)
-      evq.addFd(fd, c)
+      proc io(evq: Evq, c: Cont, fd: SocketHandle | cint, event: int): Cont =
+        var epv = EpollEvent(events: event.uint32)
+        epv.data.u64 = fd.uint
+        discard epoll_ctl(evq.epfd, EPOLL_CTL_ADD, fd.cint, epv.addr)
+        evq.addFd(fd, c)
 
-    proc sleep(evq: Evq, c: Cont, timeout: int): Cont =
-      let fd = timerfd_create(CLOCK_MONOTONIC, 0)
-      var ts: Itimerspec
-      ts.it_interval.tv_sec = Time(timeout div 1_000)
-      ts.it_interval.tv_nsec = (timeout %% 1_000) * 1_000_000
-      ts.it_value.tv_sec = ts.it_interval.tv_sec
-      ts.it_value.tv_nsec = ts.it_interval.tv_nsec
-      doAssert timerfd_settime(fd.cint, 0.cint, ts.addr, nil) != -1
-      evq.io(c, fd, POLLIN)
+      proc sleep(evq: Evq, c: Cont, timeout: int): Cont =
+        let fd = timerfd_create(CLOCK_MONOTONIC, 0)
+        var ts: Itimerspec
+        ts.it_interval.tv_sec = Time(timeout div 1_000)
+        ts.it_interval.tv_nsec = (timeout %% 1_000) * 1_000_000
+        ts.it_value.tv_sec = ts.it_interval.tv_sec
+        ts.it_value.tv_nsec = ts.it_interval.tv_nsec
+        doAssert timerfd_settime(fd.cint, 0.cint, ts.addr, nil) != -1
+        evq.io(c, fd, POLLIN)
 
-    proc run(evq: Evq) =
-      evq.running = true
-      while true:
+      proc run(evq: Evq) =
+        evq.running = true
+        while true:
 
-        # Pump the queue until empty
-        while evq.work.len > 0:
-          let c = evq.work.popFirst
-          let c2 = c.fn(c)
-          if c2 != nil:
-            evq.addWork c2
+          # Pump the queue until empty
+          while evq.work.len > 0:
+            let c = evq.work.popFirst
+            let c2 = c.fn(c)
+            if c2 != nil:
+              evq.addWork c2
 
-        if not evq.running:
-          break
+          if not evq.running:
+            break
 
-        # Wait for all registered file descriptors
-        var events: array[8, EpollEvent]
-        let n = epoll_wait(evq.epfd, events[0].addr, events.len.cint, 1000)
+          # Wait for all registered file descriptors
+          var events: array[8, EpollEvent]
+          let n = epoll_wait(evq.epfd, events[0].addr, events.len.cint, 1000)
 
-        # Put continuations for all ready fds back into the queue
-        for i in 0..<n:
-          let fd = events[i].data.u64.cint
-          evq.addWork evq.fds[fd]
-          evq.delFd(fd)
-          discard epoll_ctl(evq.epfd, EPOLL_CTL_DEL, fd.cint, nil)
+          # Put continuations for all ready fds back into the queue
+          for i in 0..<n:
+            let fd = events[i].data.u64.cint
+            evq.addWork evq.fds[fd]
+            evq.delFd(fd)
+            discard epoll_ctl(evq.epfd, EPOLL_CTL_DEL, fd.cint, nil)
 
-    ## Some convenience functions to hide the dirty socket stuff, this
-    ## keeps the CPS functions as clean and readable as possible
+      ## Some convenience functions to hide the dirty socket stuff, this
+      ## keeps the CPS functions as clean and readable as possible
 
-    proc sockBind(port: int): SocketHandle =
-      let fds = posix.socket(AF_INET, SOCK_STREAM, 0)
-      var sas: Sockaddr_in
-      sas.sin_family = AF_INET.uint16
-      sas.sin_port = htons(port.uint16)
-      sas.sin_addr.s_addr = INADDR_ANY
-      var yes: int = 1
-      doAssert setsockopt(fds, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen) != -1
-      doAssert bindSocket(fds, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
-      doAssert listen(fds, SOMAXCONN) != -1
-      return fds
+      proc sockBind(port: int): SocketHandle =
+        let fds = posix.socket(AF_INET, SOCK_STREAM, 0)
+        var sas: Sockaddr_in
+        sas.sin_family = AF_INET.uint16
+        sas.sin_port = htons(port.uint16)
+        sas.sin_addr.s_addr = INADDR_ANY
+        var yes: int = 1
+        doAssert setsockopt(fds, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen) != -1
+        doAssert bindSocket(fds, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
+        doAssert listen(fds, SOMAXCONN) != -1
+        return fds
 
-    proc sockAccept(fds: SocketHandle): SocketHandle =
-      var sac: Sockaddr_in
-      var sacLen: SockLen
-      let fdc = posix.accept(fds, cast[ptr SockAddr](sac.addr), sacLen.addr)
-      doAssert fcntl(fdc, F_SETFL, fcntl(fdc, F_GETFL, 0) or O_NONBLOCK) != -1
-      return fdc
+      proc sockAccept(fds: SocketHandle): SocketHandle =
+        var sac: Sockaddr_in
+        var sacLen: SockLen
+        let fdc = posix.accept(fds, cast[ptr SockAddr](sac.addr), sacLen.addr)
+        doAssert fcntl(fdc, F_SETFL, fcntl(fdc, F_GETFL, 0) or O_NONBLOCK) != -1
+        return fdc
 
-    proc sockRecv(fd: SocketHandle): string =
-      result = newString(1024)
-      let n = posix.recv(fd, result[0].addr, result.len, 0)
-      if n >= 0:
-        result.setlen(n)
-      else:
-        result.setlen(0)
+      proc sockRecv(fd: SocketHandle): string =
+        result = newString(1024)
+        let n = posix.recv(fd, result[0].addr, result.len, 0)
+        if n >= 0:
+          result.setlen(n)
+        else:
+          result.setlen(0)
 
-    proc sockSend(fd: SocketHandle, s: string) =
-      let n = posix.send(fd, s[0].unsafeAddr, s.len, 0)
-      assert(n == s.len)
+      proc sockSend(fd: SocketHandle, s: string) =
+        let n = posix.send(fd, s[0].unsafeAddr, s.len, 0)
+        assert(n == s.len)
 
-    proc sockConnect(address: string, port: int): SocketHandle =
-      discard
-      let fd = posix.socket(AF_INET, SOCK_STREAM, 0)
-      var sas: Sockaddr_in
-      sas.sin_family = AF_INET.uint16
-      sas.sin_port = htons(port.uint16)
-      sas.sin_addr.s_addr = inet_addr(address)
-      var yes: int = 1
-      doAssert connect(fd, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
-      return fd
+      proc sockConnect(address: string, port: int): SocketHandle =
+        discard
+        let fd = posix.socket(AF_INET, SOCK_STREAM, 0)
+        var sas: Sockaddr_in
+        sas.sin_family = AF_INET.uint16
+        sas.sin_port = htons(port.uint16)
+        sas.sin_addr.s_addr = inet_addr(address)
+        var yes: int = 1
+        doAssert connect(fd, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
+        return fd
 
-    var evq = newEvq()
-    var count = 0
-    var clients = 0
+      var evq = newEvq()
+      var count = 0
+      var clients = 0
 
-    ## CPS server session hander
-    proc handleClient(fdc: SocketHandle) {.cps:Cont.} =
+      ## CPS server session hander
+      proc handleClient(fdc: SocketHandle) {.cps: Cont.} =
 
-      inc clients
+        inc clients
 
-      while true:
-        cps evq.io(fdc, POLLIN)
-        let s: string = sockRecv(fdc)
-        if s.len == 0: break
-        inc count
-        cps evq.io(fdc, POLLOUT)
-        sockSend(fdc, s)
+        while true:
+          evq.io(fdc, POLLIN)
+          let s: string = sockRecv(fdc)
+          if s.len == 0: break
+          inc count
+          evq.io(fdc, POLLOUT)
+          sockSend(fdc, s)
 
-      dec clients
-      discard fdc.close()
-
-
-    ## CPS server listener handler
-    proc doEchoServer(port: int) {.cps:Cont.} =
-      let fds: SocketHandle = sockBind(port)
-      echo "listening fd: ", fds.int
-      while true:
-        cps evq.io(fds, POLLIN)
-        let fdc: SocketHandle = sockAccept(fds)
-        #echo "accepted fd:", fdc.int
-        # Create new client and add to work queue
-        evq.addWork handleClient(fdc)
+        dec clients
+        discard fdc.close()
 
 
-    ## CPS client handler
-    proc doEchoClient(address: string, port: int, n: int, msg: string) {.cps:Cont.} =
-      let fd: SocketHandle = sockConnect(address, port)
-      #echo "connected fd: ", fd.int
+      ## CPS server listener handler
+      proc doEchoServer(port: int) {.cps: Cont.} =
+        let fds: SocketHandle = sockBind(port)
+        echo "listening fd: ", fds.int
+        while true:
+          evq.io(fds, POLLIN)
+          let fdc: SocketHandle = sockAccept(fds)
+          #echo "accepted fd:", fdc.int
+          # Create new client and add to work queue
+          evq.addWork handleClient(fdc)
 
-      var i: int = 0
-      while i < n:
-        cps evq.io(fd, POLLOUT)
-        sockSend(fd, msg)
-        cps evq.io(fd, POLLIN)
-        let msg2: string = sockRecv(fd)
-        doAssert msg2 == msg
-        inc i
 
-      discard fd.close()
-      #echo "disconnected fd: ", fd.int
+      ## CPS client handler
+      proc doEchoClient(address: string, port: int, n: int, msg: string) {.cps: Cont.} =
+        let fd: SocketHandle = sockConnect(address, port)
+        #echo "connected fd: ", fd.int
 
-    ## Progress reporting
-    proc doTicker() {.cps:Cont.} =
-      while true:
-        cps evq.sleep(1000)
-        echo "tick. clients: ", clients, " echoed ", count, " messages"
-        if clients == 0:
-          evq.stop()
+        var i: int = 0
+        while i < n:
+          evq.io(fd, POLLOUT)
+          sockSend(fd, msg)
+          evq.io(fd, POLLIN)
+          let msg2: string = sockRecv(fd)
+          doAssert msg2 == msg
+          inc i
 
-    ## Spawn workers
-    evq.addWork doTicker()
-    evq.addWork doEchoServer(8000)
-    for i in 1..100:
-      evq.addWork doEchoClient("127.0.0.1", 8000,
-                               2000, "The quick brown fox jumped over the lazy dog")
+        discard fd.close()
+        #echo "disconnected fd: ", fd.int
 
-    ## Forever run the event queue
-    evq.run()
+      ## Progress reporting
+      proc doTicker() {.cps: Cont.} =
+        while true:
+          evq.sleep(1000)
+          echo "tick. clients: ", clients, " echoed ", count, " messages"
+          if clients == 0:
+            evq.stop()
+
+      ## Spawn workers
+      evq.addWork doTicker()
+      evq.addWork doEchoServer(8000)
+      for i in 1..100:
+        evq.addWork doEchoClient("127.0.0.1", 8000,
+                                 2000, "The quick brown fox jumped over the lazy dog")
+
+      ## Forever run the event queue
+      evq.run()

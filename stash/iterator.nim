@@ -12,6 +12,8 @@ type Iterator = ref object of RootObj
   fn*: proc(c: Iterator): Iterator {.nimcall.}
   val: Option[int]
 
+assert Iterator is Continuation
+
 # The `produce` proc is called to pump the iterator. It will trampoline the
 # continuation until a value is available in `val`.
 
@@ -26,7 +28,7 @@ proc produce(c: var Iterator): Option[int] =
 # The `jield` proc is cps magic to generate a new value from within an
 # interator
 
-proc jield(c: Iterator, val: int): Iterator =
+proc jield(c: Iterator, val: int): Iterator {.cpsMagic.} =
   c.val = some(val)
   return c
 
@@ -35,9 +37,9 @@ proc jield(c: Iterator, val: int): Iterator =
 # inclusive
 
 proc counter(lo: int, hi: int) {.cps:Iterator.} =
-  var i:int = lo
+  var i = lo
   while i <= hi:
-    cps jield(i)
+    jield(i)
     inc i
 
 

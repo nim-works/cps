@@ -8,20 +8,15 @@ import std/tables
 import std/times
 import std/deques
 
-import sorta
-
 import cps
 import cps/semaphore
 
-export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash, semaphore.wait, isReady, withReady
+export Semaphore, semaphore.`==`, semaphore.`<`, semaphore.hash
 export Event
 
 const
-  cpsMutant {.booldefine, used.} = false    ## mutate continuations
-  cpsDebug {.booldefine, used.} = false    ## produce gratuitous output
-  cpsPoolSize {.intdefine, used.} = 64     ## expected pending continuations
-  cpsTrace {.booldefine, used.} = false    ## store "stack" traces
-  cpsTraceSize {.intdefine, used.} = 1000  ## limit the traceback
+  cpsPoolSize {.intdefine, used.} = 64    ## expected pending continuations
+  cpsTraceSize {.intdefine, used.} = 1000 ## limit the traceback
 
 type
   State = enum
@@ -41,7 +36,7 @@ type
     state: State                  ## dispatcher readiness
     pending: PendingIds           ## maps pending semaphores to Ids
     waiting: WaitingIds           ## maps waiting selector Fds to Ids
-    goto: SortedTable[Id, Cont]   ## where to go from here!
+    goto: Table[Id, Cont]         ## where to go from here!
     lastId: Id                    ## id of last-issued registration
     selector: Selector[Id]        ## watches selectable stuff
     yields: Deque[Cont]           ## continuations ready to run
@@ -117,9 +112,9 @@ proc get(w: var WaitingIds; fd: int | Fd): Id =
       dec eq.waiters
     w[fd.int] = invalidId
 
-method clone[T: Continuation](c: T): T {.base.} =
+method clone(c: Cont): Cont {.base.} =
   ## copy the continuation for the purposes of, eg. fork
-  result = new T
+  new result
   result[] = c[]
 
 proc init() {.inline.} =
@@ -241,7 +236,7 @@ proc stop*() =
     eq.pending = initTable[Semaphore, Id](cpsPoolSize)
 
     # discard the contents of the continuation cache
-    eq.goto = initSortedTable[Id, Cont]()
+    eq.goto = initTable[Id, Cont]()
 
     # re-initialize the queue
     eq.state = Unready
@@ -303,7 +298,7 @@ when cpsTrace:
           writeLine(stderr, $frame)
 
 else:
-  proc writeStackTrace*(): Cont {.cpsMagic.} =
+  proc writeStackTrace*(c: Cont): Cont =
     when declaredInScope(result):
       result = c
     warning "--define:cpsTrace:on to output traces"
@@ -342,7 +337,8 @@ proc poll*() =
     for event in items(ready):
       # get the registration of the pending continuation
       let id = eq.waiting.get(event.fd)
-      assert getData(eq.selector, event.fd) == id
+      # pity the fool that removed this assert due to ioselectors spam
+      #assert getData(eq.selector, event.fd) == id
       # the id will be wakeupId if it's a wake-up event
       assert id != invalidId
       if id == wakeupId:
@@ -404,12 +400,12 @@ proc run*(interval: Duration = DurationZero) =
   while eq.state == Running:
     poll()
 
-proc jield*(): Cont {.cpsMagic.} =
+proc jield*(c: Cont): Cont {.cpsMagic.} =
   ## Yield to pending continuations in the dispatcher before continuing.
   wakeAfter:
     addLast(eq.yields, c)
 
-proc sleep*(interval: Duration): Cont {.cpsMagic.} =
+proc sleep*(c: Cont; interval: Duration): Cont {.cpsMagic.} =
   ## Sleep for `interval` before continuing.
   if interval < oneMs:
     raise newException(ValueError, "intervals < 1ms unsupported")
@@ -423,20 +419,20 @@ proc sleep*(interval: Duration): Cont {.cpsMagic.} =
       when cpsDebug:
         echo "⏰timer ", fd.Fd
 
-proc sleep*(ms: int): Cont {.cpsMagic.} =
+proc sleep*(c: Cont; ms: int): Cont {.cpsMagic.} =
   ## Sleep for `ms` milliseconds before continuing.
   let interval = initDuration(milliseconds = ms)
   sleep(c, interval)
 
-proc sleep*(secs: float): Cont {.cpsMagic.} =
+proc sleep*(c: Cont; secs: float): Cont {.cpsMagic.} =
   ## Sleep for `secs` seconds before continuing.
   sleep(c, (1_000 * secs).int)
 
-proc discart*(): Cont {.cpsMagic.} =
+proc discart*(c: Cont): Cont {.cpsMagic.} =
   ## Discard the current continuation.
   discard
 
-proc noop*(): Cont {.cpsMagic.} =
+proc noop*(c: Cont): Cont {.cpsMagic.} =
   ## A primitive that merely sheds scope.
   result = c
 
@@ -477,7 +473,7 @@ proc signalAll*(s: var Semaphore) =
       signalImpl s:
         break
 
-proc wait*(s: var Semaphore): Cont {.cpsMagic.} =
+proc wait*(c: Cont; s: var Semaphore): Cont {.cpsMagic.} =
   ## Queue the current continuation pending readiness of the given
   ## Semaphore `s`.
   let id = nextId()
@@ -488,7 +484,7 @@ proc wait*(s: var Semaphore): Cont {.cpsMagic.} =
     eq[s] = id
     eq[id] = c
 
-proc fork*(): Cont {.cpsMagic.} =
+proc fork*(c: Cont): Cont {.cpsMagic.} =
   ## Duplicate the current continuation.
   result = c
   wakeAfter:
@@ -503,7 +499,7 @@ proc spawn*(c: Cont) =
   wakeAfter:
     addLast(eq.yields, c)
 
-proc io*(file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
+proc io*(c: Cont; file: int | SocketHandle; events: set[Event]): Cont {.cpsMagic.} =
   ## Continue upon any of `events` on the given file-descriptor or
   ## SocketHandle.
   if len(events) == 0:

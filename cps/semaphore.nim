@@ -11,12 +11,15 @@ type
 proc id*(s: Semaphore): int = s.id
 
 proc hash*(s: Semaphore): Hash =
+  ## helper for use in containers
   result = s.id.Hash
 
 proc `==`*(a, b: Semaphore): bool =
+  ## helper for use in containers
   result = a.id == b.id
 
 proc `<`*(a, b: Semaphore): bool =
+  ## helper for use in containers
   result = a.id < b.id
 
 proc init*(s: var Semaphore; id: int) =

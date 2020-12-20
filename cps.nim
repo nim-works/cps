@@ -1,24 +1,12 @@
 import std/macros
-import std/tables
-import std/sets
-import std/strutils
 import std/sequtils
 import std/algorithm
 
-const
-  cpsMutant {.booldefine, used.} = false    ## mutate continuations
-  cpsDebug {.booldefine, used.} = false
-  strict = true        ## only cps operations are strictly cps operations
-
-when (NimMajor, NimMinor) < (1, 3):
-  {.fatal: "requires nim-1.3".}
-
+import cps/spec
 import cps/scopes
 import cps/environment
-export Continuation, ContinuationProc
-
-type
-  NodeFilter = proc(n: NimNode): NimNode
+export Continuation, ContinuationProc, cpsCall
+export cpsDebug, cpsTrace, cpsMutant
 
 template installLocal(id, env, field) =
   when cpsMutant:
@@ -30,72 +18,39 @@ when not defined(nimdoc): export installLocal # omit from docs
 
 const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes
-  cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
   unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkElifBranch, nnkElse, nnkStmtList}
 
-when cpsDebug:
-  proc numberedLines(s: string; first = 1): string =
-    for n, line in pairs(splitLines(s, keepEol = true)):
-      result.add "$1  $2" % [ align($(n + first), 3), line ]
-
-  proc snippet(n: NimNode; name: string): string =
-    result &= "----8<---- " & name & "\t" & "vvv"
-    result &= "\n" & n.repr.numberedLines(n.lineInfoObj.line) & "\n"
-    result &= "----8<---- " & name & "\t" & "^^^"
-
-proc filter(n: NimNode; f: NodeFilter): NimNode =
-  result = f(n)
-  if result.isNil:
-    result = copyNimNode n
-    for kid in items(n):
-      result.add filter(kid, f)
+when defined(yourdaywillcomelittleonecommayourdaywillcomedotdotdot):
+  const
+    cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
 
 proc isCpsCall(n: NimNode): bool =
-  # cps foo()
+  ## true if this node holds a call to a cps procedure
+  assert not n.isNil
   if len(n) > 0:
-    case n.kind
-    of callish:
-      result = n[0].eqIdent("cps") and n[1].kind in callish
-    of cpsish:
-      result = n[0].kind in callish
-    else:
-      result = false
-
-func stripComments(n: NimNode): NimNode =
-  ## remove doc statements because that was a stupid idea
-  result = copyNimNode n
-  for child in items(n):
-    if child.kind != nnkCommentStmt:
-      result.add stripComments(child)
+    if n.kind in callish:
+      let p = n[0].getImpl
+      result = p.hasPragma("cpsCall")
 
 proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
+  assert p.isCpsCall, "does not appear to be a cps call"
   result = newStmtList()
   let locals = e.defineLocals(n)  # goto supplied identifier, not nextGoto!
-  var call: NimNode
-  case p.kind
-  of callish:
-    # cps foo()
-    call = p[1]
-  of cpsish:
-    # yield foo()
-    call = p[0]
-  else:
-    assert p.isCpsCall, "does not appear to be a cps call"
-    raise newException(Defect, "unexpected cps call type: " & $p.kind)
-  call.insert(1, e.maybeConvertToRoot(locals))
+  p[0] = desym(p[0])              # de-sym the proc target
+  p.insert(1, e.maybeConvertToRoot(locals))
   when cpsMutant:
-    result.add newAssignment(e.first, call)
+    result.add newAssignment(e.first, p)
     result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
   else:
-    result.add nnkReturnStmt.newNimNode(n).add call
+    result.add nnkReturnStmt.newNimNode(n).add p
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
-  assert not isCpsCall(n)
+  assert not n.isCpsCall
   var ret = nnkReturnStmt.newNimNode(n)
   if n.kind == nnkNilLit:
     # we don't want to "fall back" to goto here
@@ -149,68 +104,6 @@ func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
     if result:
       r = newStmtList([doc "simple return call: " & n.repr, n])
 
-when not strict:
-  proc isCpsProc(n: NimNode): bool
-
-proc hasPragma(n: NimNode; s: static[string]): bool =
-  ## `true` if the `n` holds the pragma `s`
-  assert not n.isNil
-  case n.kind
-  of RoutineNodes:
-    result = bindSym(s) in toSeq(n.pragma)
-  of nnkObjectTy:
-    result = bindSym(s) in toSeq(n[0])
-  of nnkRefTy:
-    result = hasPragma(n.last, s)
-  of nnkTypeDef:
-    result = hasPragma(n.last, s)
-  of nnkTypeSection:
-    result = anyIt(toSeq items(n), hasPragma(it, s))
-  else:
-    result = false
-
-proc filterPragma(ns: seq[NimNode], liftee: NimNode): NimNode =
-  ## given a seq of pragmas, omit a match and return Pragma or Empty
-  var pragmas = nnkPragma.newNimNode
-  for p in filterIt(ns, it != liftee):
-    pragmas.add p
-    copyLineInfo(pragmas, p)
-  if len(pragmas) > 0:
-    pragmas
-  else:
-    newEmptyNode()
-
-proc stripPragma(n: NimNode; s: static[string]): NimNode =
-  ## filter a pragma with the matching name from various nodes
-  case n.kind
-  of nnkPragma:
-    result = filterPragma(toSeq n, bindSym(s))
-  of RoutineNodes:
-    n.pragma = stripPragma(n.pragma, s)
-    result = n
-  of nnkObjectTy:
-    n[0] = filterPragma(toSeq n[0], bindSym(s))
-    result = n
-  of nnkRefTy:
-    n[^1] = stripPragma(n.last, s)
-    result = n
-  of nnkTypeDef:
-    n[^1] = stripPragma(n.last, s)
-    result = n
-  of nnkTypeSection:
-    result = newNimNode(n.kind, n)
-    for item in items(n):
-      result.add stripPragma(item, s)
-  else:
-    result = n
-
-proc isLiftable(n: NimNode): bool =
-  ## is this a node we should float to top-level?
-  result = n.kind in {nnkProcDef, nnkTypeSection} and n.hasPragma "cpsLift"
-
-proc hasLiftableChild(n: NimNode): bool =
-  result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
-
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
@@ -255,8 +148,10 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
       result = newEmptyNode()
   result = filter(n, liften)
 
-  # we currently install proc declarations during proc construction
-  when false:
+  when true:
+    # we currently install proc declarations during proc construction
+    discard
+  else:
     # clone the proc declarations
     proc declaren(n: NimNode): NimNode =
       if n.kind == nnkProcDef:
@@ -293,7 +188,9 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     # the locals value is, nominally, a proc param -- or it was.
     # now we just use whatever the macro provided the env
     var locals = env.first
-    var body = env.wrapProcBody(locals, n)
+
+    # setup the proc body with whatever locals it still needs
+    var body = env.prepProcBody(n)
 
     when cpsMutant:
       #result.doc "creating a new proc: " & name.repr
@@ -377,6 +274,18 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
 
 proc saften(parent: var Env; input: NimNode): NimNode
 
+proc procScope(env: var Env; parent: NimNode; name: string;
+              body: NimNode): Scope =
+    var body = env.prepProcBody(body)
+    # ensure the proc body is rewritten
+    body = env.saften(body)
+    # generate a new name for this proc
+    var name = genSym(nskProc, name)
+    # we'll return a scope holding the tail call to the proc
+    result = newScope(parent, name, env.makeTail(name, body))
+    result.goto = env.nextGoto
+    result.brake = env.nextBreak
+
 proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
   ## split a statement list to create a tail call given
   ## a label prefix and an index at which to split
@@ -384,16 +293,8 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
   if i < n.len-1:
     # if a tail remains after this crap
     # select lines from `i` to `n[^1]`
-    var body = newStmtList().add n[i+1 ..< n.len]
-
-    # ensure the proc body is rewritten
-    body = env.saften(body)
-
-    var name = genSym(nskProc, name)
-    # we'll return a scope holding the tail call to the proc
-    result = newScope(n[i], name, env.makeTail(name, body))
-    result.goto = env.nextGoto
-    result.brake = env.nextBreak
+    var body = newStmtList(n[i+1 ..< n.len])
+    result = procScope(env, n[i], name, body)
   else:
     # there's nothing left to do in this scope; we're
     # going to just return the next goto (this might be empty)
@@ -415,6 +316,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
   let n = stripComments input
   for i, nc in pairs(n):
+    if nc.isNil:
+      result.add nc
+      continue
     # if it's a cps call,
     if nc.isCpsCall:
       # we want to make sure that a pop inside the after body doesn't
@@ -440,10 +344,73 @@ proc saften(parent: var Env; input: NimNode): NimNode =
           return
 
     case nc.kind
+    of nnkReturnStmt:
+      result.add env.rewriteReturn(nc)
+
     of nnkVarSection, nnkLetSection:
-      # add definitions into the environment
-      for name, list in env.localSection(nc):
-        result.add list
+      if nc.len != 1:
+        raise newException(Defect, "unexpected section size: " & repr(nc))
+      if isCpsCall(nc.last.last):
+
+        #[
+
+        this is a little tricky, so here's a sketch of the transform:
+
+        let foo = cpsProcedure(bar)
+        echo foo
+
+        #     ...turns into...
+
+        return Cont(fn: shim, bar: bar)
+
+        proc shim(c: Cont): Cont =
+          # we use a new proc here for easier type transition
+          cpsProcedure(env(c).bar)
+
+          # this result field was created by cpsProcedure
+          return Cont(fh: after, foo: env(c).result)
+
+        proc after(c: Cont): Cont =
+          # now we have foo in our env and we continue on...
+          echo env(c).foo
+
+        ]#
+
+        # add the local into the env so we can install the field
+        var field: NimNode
+        for name, list in env.localSection(nc):
+          # we only really care about caching the name
+          field = name
+
+        # skip this node by passing i + 1 to the split
+        let after = env.splitAt(n, "after", i + 1)
+        # we add it to the goto stack as usual
+        env.addGoto(after)
+
+        let call = nc.last[^1]
+        let variable = nc.last[0]
+        # our field is gensym'd but the strVal should match
+        assert variable.strVal == field.strVal
+
+        var body = newStmtList()
+        # add the call to the cps proc and let it get saftened as per usual
+        body.add call
+        let shim = procScope(env, nc, "shim", body)
+        assert shim.name != nil
+
+        # now we'll add a tail call to the shim; gratuitous returnTo?
+        result.add env.tailCall(shim.name, returnTo(after))
+
+        # let's get the hell outta here before things get any uglier
+        return
+
+      elif isCpsBlock(nc.last.last):
+        raise newException(Defect,
+          "only calls are supported here: " & repr(nc.last))
+      else:
+        # add definitions into the environment
+        for name, list in env.localSection(nc):
+          result.add list
 
     of nnkForStmt:
       withBreak env.splitAt(n, "brake", i):
@@ -498,8 +465,10 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       try:
         var loop = newStmtList()
         result.doc "add tail call for while loop with body " & $nc[1].kind
+        # process the loop itself, and only then, turn it into a tail call
+        loop.add newIfStmt((nc[0], env.saften(nc[1])))
+        # this will rewrite the loop using filter, so...  it's destructive
         result.add env.makeTail(w, loop)
-        loop.add newIfStmt((nc[0], newStmtList(env.saften(nc[1]))))
         discard env.popGoto # the loop rewind was added to the body
         if brakeEngaged:
           loop.doc "add tail call for break proc"
@@ -552,6 +521,42 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
+proc rewriteIdentDefs(n: NimNode): NimNode =
+  ## Rewrite an identDefs to ensure it has three children.
+  if n.kind == nnkIdentDefs:
+    if len(n) == 2:
+      n.add newEmptyNode()
+    result = n
+
+proc rewriteVarLet(n: NimNode): NimNode =
+  ## Rewrite a var|let section of multiple identDefs
+  ## into multiple such sections with well-formed identDefs
+  if n.kind in {nnkLetSection, nnkVarSection}:
+    result = newStmtList()
+    for child in items(n):
+      # a new section with a single rewritten identdefs within
+      result.add newNimNode(n.kind, n).add(child)
+
+proc normalizingRewrites(n: NimNode): NimNode =
+  case n.kind
+  of nnkIdentDefs:
+    rewriteIdentDefs n
+  of nnkLetSection, nnkVarSection:
+    rewriteVarLet n
+  else:
+    nil
+
+proc cloneProc(n: NimNode): NimNode =
+  ## create a copy of a typed proc which satisfies the compiler
+  assert n.kind == nnkProcDef
+  result = nnkProcDef.newTree(
+    ident($n.name),
+    newEmptyNode(),
+    newEmptyNode(),
+    n.params,
+    newEmptyNode(),
+    newEmptyNode(),
+    copy n.body)
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
@@ -560,98 +565,135 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # enhanced spam before it all goes to shit
   when cpsDebug:
     let info = lineInfoObj(n)
-    var orig = copyNimTree(n)
     debugEcho "=== .cps. on " & $n.name & "(original)  === " & $info
     when defined(cpsTree):
-      debugEcho treeRepr(orig)
+      debugEcho treeRepr(n)
     else:
-      debugEcho repr(orig).numberedLines(info.line)
-
-  assert n.kind in RoutineNodes
-
-  # https://github.com/disruptek/cps/issues/20
-  #
-  # we don't allow a return-type so that a call to retrieve the result
-  # is able to determine what that value actually is. we don't actually
-  # support result yet, but we will, so this creates the space for us
-  # to receive that value and have it parse, even when it may not be
-  # semantically correct.
-
-  # check or set the continuation return type
-  if not n.params[0].isEmpty:
-    error "No return type allowed for now"
-  n.params[0] = T
+      debugEcho repr(n).numberedLines(info.line)
 
   # establish a new environment with the supplied continuation type;
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
   var env: Env
-  var booty = newStmtList()
+  var booty: NimNode
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
   var first = 1 # index of first param to add to locals
-  if len(n.params) > 1 and eqIdent(n.params[0], n.params[1][1]):
-    # if the return type matches that of the first argument, we'll assume
-    # the user wants that argument name to reflect the continuation
-    env = newEnv(n.params[1][0], types, n.params[0])
-    inc first
-
+  when cpsMutant:
+    env = newEnv(ident"result", types, T)
   else:
-    when false:
-      ##
-      ## we don't do this anymore,
-      ## -- so that we don't get an `environment misses` error
-      ##
-      # otherwise, just use a gensym'd "cps"
-      env = newEnv(genSym(nskParam, "cps"), types, n.params[0])
-    else:
-      when cpsMutant:
-        env = newEnv(ident"result", types, n.params[0])
-      else:
-        env = newEnv(ident"continuation", types, n.params[0])
+    env = newEnv(ident"continuation", types, T)
 
-    ##
-    ## what we DO do,
-    ## -- is to write a copy of the proc to types; this will serve
-    ## as the "bootstrap" which performs alloc of the continuation
-    ## before calling the rewritten version of this proc
-    var body: NimNode
-    (booty, body) = (copyNimNode(n), newStmtList())
-    for i, child in pairs(n):
-      if i != 6:
-        booty.add copyNimTree(child)
-      else:
-        booty.add body
-
-    # XXX: this will fail if requires-init
-    # now we can insert our `result =`, which includes the proc params
-    body.add env.rootResult(ident"result", n.name)
-
-    # template continuation = result; insert it after the `result =`
-    when not cpsMutant:
-      body.add env.rootTemplate
+  # assign the return type if necessary
+  if not n.params[0].isEmpty:
+    env.setReturn n.params[0]
+    n.params[0] = newEmptyNode()
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
   ## continuation.
   var preamble = newStmtList()
 
-  # first, add the remaining proc params to the environment
-  for defs in n.params[first .. ^1]:
-    for name, list in env.localSection(defs):
-      preamble.add list
+  ## what we DO do,
+  ## -- is to write a copy of the proc to the result; this will serve
+  ## as the "bootstrap" which performs alloc of the continuation before
+  ## calling the cps version of the proc
+
+  block:
+    let name = env.first      # ident"result" or ident"continuation", etc.
+
+    booty = cloneProc n
+    booty.body = newStmtList()
+
+    # add the remaining proc params to the environment
+    # and set them up in the bootstrap at the same time
+    for defs in n.params[first .. ^1]:
+      for name, list in env.localSection(defs):
+        preamble.add list
+
+    # XXX: let the user supply the trampoline?
+    # add a trampoline to resolve the continuation
+    when not cpsMutant:
+      when cpsTrampBooty:
+        # if we're not storing to result, we need a variable
+        booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
+                                                          newEmptyNode())
+        # XXX: this may fail if requires-init
+        # now we can insert our `result =`, which includes the proc params
+        booty.body.add env.rootResult(name, booty.name)
+
+        let fn = newDotExpr(name, ident"fn")
+
+        # we'll construct the while statement's body first
+        var wh = newStmtList()
+        when cpsDebug:
+          wh.add nnkCommand.newTree(ident"echo", "bootstrap trampoline".newLit)
+        wh.add newAssignment(name, newCall(fn, name))
+
+        # if a result is expected, copy it out when only the fn is nil
+        if not n.params[0].isEmpty:
+          wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
+                            infix(fn, "==", newNilLit())),
+                           newAssignment(ident"result", env.get)))
+
+        # compose the complete trampoline with the while and its guards
+        wh = nnkWhileStmt.newTree(
+          infix( infix(name, "!=", newNilLit()), "and",
+                 infix(fn, "!=", newNilLit())), wh)
+
+        # add the trampoline to the bootstrap
+        booty.body.add wh
+      else:
+        booty.params[0] = T
+        # XXX: this may fail if requires-init
+        # now we can insert our `result =`, which includes the proc params
+        booty.body.add env.rootResult(ident"result", booty.name)
+
+  # we can't mutate typed nodes, so copy ourselves
+  var n = cloneProc n
+
+  # and do some pruning of these typed trees
+  for p in [booty, n]:
+    p.name = desym(p.name)
+    while len(p) > 7:
+      p.del(7)
 
   # the bootstrap may not have a continuation as its first argument,
   # but we know that we do, because we insert it here ;-)
   n.params.insert(1, env.firstDef)
   inc first   # gratuitous tracking for correctness
 
-  # ensaftening the proc's body and combining it with the preamble
-  n.body = newStmtList(preamble, env.saften(n.body))
+  # install our return type in the clone
+  n.params[0] = T
+
+  # now remove any other arguments (for now)
+  while len(n.params) > 2:
+    del(n.params, 2)
+
+  # make the body easier for us to consume
+  n.body = filter(n.body, normalizingRewrites)
+
+  # perform sym substitutions (or whatever)
+  n.body = env.prepProcBody(newStmtList n.body)
+
+  # ensaftening the proc's body
+  n.body = env.saften(n.body)
+
+  when false:
+    if len(preamble) > 0:           # if necessary, insert the preamble
+      n.body.insert(0, preamble)    # ahead of the rest of the body
+
+  # add in a pragma so other cps macros can identify this as a cps call
+  n.addPragma ident"cpsCall"
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
+
+  # Araq: "learn how to desemantic your ast, knuckleheads"
+  n.body = replacedSymsWithIdents(n.body)
+  types = replacedSymsWithIdents(types)
+  booty = replacedSymsWithIdents(booty)
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)
@@ -674,40 +716,35 @@ proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   of nnkProcDef:
     result = cpsXfrmProc(T, n)
   of nnkStmtList:
-    result = copyNimNode(n)
+    result = copyNimNode n
     for nc in items(n):
       result.add cpsXfrm(T, nc)
   else:
-    result = copyNimTree(n)
+    result = copy n
 
-
-macro cps*(T: type, n: untyped): untyped =
+macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
-  cpsXfrm(T, n)
+  result = cpsXfrm(T, n)
 
-
-when false:
-  macro cps*(c: typed; n: typed): untyped =
-    var
-      safe = xfrm(n, c)
-      decls = lambdaLift(safe)
-    result = newStmtList()
-    if len(decls) > 0:
-      result.add decls
-    result.add safe
-    assert false
-
-macro cpsMagic*(n: untyped): untyped {.deprecated.} =
+macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
   expectKind(n, nnkProcDef)
   result = newStmtList()
 
+  # ensure that .cpsCall. is added to the copies of the proc
+  n.addPragma ident"cpsCall"
+
   # create a version of the proc that pukes outside of cps context
   var m = copyNimTree n
   let msg = $n.name & "() is only valid in {.cps.} context"
   m.params[0] = newEmptyNode()
-  m.body = newStmtList(n.body[0])
+  when cpsMagicExists:
+    del(m.params, 1)
+  m.body = newStmtList()
+  # add a documentation comment if possible
+  if len(n.body) > 0 and n.body[0].kind == nnkCommentStmt:
+    m.body.add n.body[0]
   when false:
     m.addPragma newColonExpr(ident"error", msg.newLit)
     m.body.add nnkDiscardStmt.newNimNode(n).add newEmptyNode()
@@ -721,10 +758,11 @@ macro cpsMagic*(n: untyped): untyped {.deprecated.} =
 
   when not defined(nimdoc):
     # manipulate the primitive to take its return type as a first arg
-    n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
+    when not cpsMagicExists:
+      n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
     result.add n
 
-when not strict:
+when false:
   proc isCpsProc(n: NimNode): bool =
     ## `true` if the node is a routine with our .cps. pragma
     let liftee = bindSym"cps"
