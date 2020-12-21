@@ -4,31 +4,15 @@ description = "continuation-passing style"
 license = "MIT"
 requires "nim >= 1.5.1"
 
-requires "https://github.com/disruptek/testes >= 0.2.1 & < 1.0.0"
-
-proc execCmd(cmd: string) =
-  echo "execCmd:" & cmd
-  exec cmd
-
-proc execTest(test: string) =
-  execCmd "nim c              -r " & test
-  execCmd "nim c   -d:release -r " & test
-  execCmd "nim c   -d:danger  -r " & test
-  execCmd "nim c             --gc:arc -r " & test
-  execCmd "nim c   -d:danger --gc:arc -r " & test
-  execCmd "nim cpp            -r " & test
-  execCmd "nim cpp -d:danger  -r " & test
-  execCmd "nim cpp           --gc:arc -r " & test
-  execCmd "nim cpp -d:danger --gc:arc -r " & test
+requires "https://github.com/disruptek/testes >= 0.7.3 & < 1.0.0"
 
 task test, "run tests for ci":
-  execTest("tests/taste.nim")
-  execTest("tests/tzevv.nim")
+  when defined(windows):
+    exec "testes.cmd"
+  else:
+    exec findExe"testes"
 
-task docs, "generate the docs":
-  exec "nim c --gc:refc --define:danger -r -f tests/tzevv.nim"
-  exec "nim c --gc:refc --define:danger -r -f tests/taste.nim"
-  exec "nim c --gc:refc --define:danger -r --d:cpsDebug -f tests/tock.nim"
-  exec "termtosvg docs/demo.svg --loop-delay=5000 --screen-geometry=80x60 --template=window_frame_powershell --command=bin/tock"
-  exec "termtosvg docs/tzevv.svg --loop-delay=10000 --screen-geometry=80x25 --template=window_frame_powershell --command=bin/tzevv"
-  exec "termtosvg docs/taste.svg --loop-delay=10000 --screen-geometry=80x60 --template=window_frame_powershell --command=bin/taste"
+task demo, "generate the demos":
+  exec """demo docs/demo.svg "nim c -d:danger -d:cpsDebug --out=\$1 testes/tock.nim""""
+  exec """demo docs/tzevv.svg "nim c --out=\$1 testes/tzevv.nim""""
+  exec """demo docs/taste.svg "nim c --out=\$1 testes/taste.nim""""
