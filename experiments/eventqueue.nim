@@ -23,9 +23,10 @@ type
     Ring = "trigger when async i/o is available for a linux fd"
     #When = "trigger when a condition variable is signalled"
 
-  Handler = object
+  Handler[C] = object
     id: Id
-    cont: Cont
+    cont: C
+    fn: Fn[C]
     deleted: bool
 
     case kind: HandlerKind
@@ -41,29 +42,38 @@ type
     #of When:
     #  cond: Cond
 
-  Evq* = object                     ## event queue
+  Evq*[C] = object                  ## event queue
     stop: bool                      ## stop the dispatcher
     clock: Clock                    ## current time
-    sockers: Table[Id, Handler]     ## socket handlers
-    timers: Table[Id, Handler]      ## timer handlers
-    selectors: Deque[Handler]       ## selector handlers
+    sockers: Table[Id, Handler[C]]  ## socket handlers
+    timers: Table[Id, Handler[C]]   ## timer handlers
+    selectors: Deque[Handler[C]]    ## selector handlers
     lastId: Id                      ## id of last-issued handler
 
-  Cont* = ref object of RootObj
-    fn*: proc(c: Cont): Cont {.nimcall.}
-
+  Fn*[C] = proc(c: var C): pointer {.nimcall.}
+  Cont* = object
+    i*: int
+  Continuation = concept c, type C
+    C is object
 
 # Continuation trampoline
 
-proc run*(c: Cont) =
+proc run*[C: Continuation](c: var C; fn: Fn[C]) =
+  var fn = fn
+  while fn != nil:
+    fn = cast[Fn[C]](fn(c))
+
+proc run*[C: Continuation](c: C; fn: Fn[C]) =
   var c = c
-  while c != nil and c.fn != nil:
-    c = c.fn(c)
+  run(c, fn)
 
-var evq {.threadvar.}: Evq
-evq.selectors = initDeque[Handler](0)
+proc init[C](evq: var Evq[C]) =
+  evq.selectors = initDeque[Handler[C]](4)
 
-template now(): Clock = getMonoTime()
+var evq {.threadvar.}: Evq[Cont]
+init evq
+
+template rightNow(): Clock = getMonoTime()
 
 proc nextId(): Id =
   inc evq.lastId
@@ -71,15 +81,15 @@ proc nextId(): Id =
 
 # Register/unregister a file descriptor to the loop
 
-proc newHandler(kind: HandlerKind; cont: Cont): Handler =
+proc initHandler[C](kind: HandlerKind; cont: C; fn: Fn): Handler[C] =
   ## create a new handler for the given continuation
-  result = Handler(kind: kind, cont: cont, id: nextId())
+  result = Handler[C](kind: kind, cont: cont, fn: fn, id: nextId())
 
 template add(tab: var Table[Id, Handler]; handler: Handler) =
   tab.add(handler.id, handler)
 
-proc addFd*(sock: SocketHandle, cont: Cont) =
-  var handler = newHandler(Sock, cont)
+proc addFd*(sock: SocketHandle; cont: Continuation; fn: Fn) =
+  var handler = initHandler(Sock, cont, fn)
   handler.sock = sock
   evq.sockers.add handler
 
@@ -89,31 +99,31 @@ proc delFd*(id: Id) =
 
 # Register/unregister timers
 
-proc addTimer*(cont: Cont; interval: Duration) =
-  var handler = newHandler(Time, cont)
+proc addTimer*[C](cont: C; fn: Fn[C]; interval: Duration) =
+  var handler = initHandler(Time, cont, fn)
   handler.interval = interval
-  handler.hence = now() + interval
+  handler.hence = rightNow() + interval
   evq.timers.add handler
 
-proc addTimer*(cont: Cont; ticks: int64) =
+proc addTimer*[C](cont: C; fn: Fn[C]; ticks: int64) =
   let interval = initDuration(nanoseconds = ticks)
-  addTimer(cont, interval)
+  addTimer(cont, fn, interval)
 
-proc addTimer*(cont: Cont; time: float) =
+proc addTimer*[C](cont: C; fn: Fn[C]; time: float) =
   let interval = initDuration(nanoseconds = (time * 1_000_000).int64)
-  addTimer(cont, interval)
+  addTimer(cont, fn, interval)
 
 proc delTimer*(id: Id) =
   evq.timers[id].deleted = true
   evq.timers.del id
 
-proc pollTimers() =
+proc pollTimers[C](evq: var Evq[C]) =
   ## Call expired timer handlers. Don't call while iterating because
   ## callbacks might mutate the list
 
   if len(evq.timers) > 0:
-    evq.clock = now()
-    var timers: seq[Handler]
+    evq.clock = rightNow()
+    var timers: seq[Handler[C]]
 
     for timer in values(evq.timers):
       if not timer.deleted:
@@ -124,7 +134,7 @@ proc pollTimers() =
 
     for timer in items(timers):
       if not timer.deleted:
-        run timer.cont
+        run(timer.cont, timer.fn)
         delTimer timer.id
 
 proc soonestTimer(sleepy: var Duration) =
@@ -139,14 +149,12 @@ proc soonestTimer(sleepy: var Duration) =
           sleepy = DurationZero
           break
 
-proc pollSelectors() =
-
-proc poll() =
+proc poll[C](evq: var Evq[C]) =
   ## Run one iteration of the dispatcher
 
   # Calculate sleep time
 
-  evq.clock = now()
+  evq.clock = rightNow()
   var sleepy = initDuration(seconds = 1)
 
   # perhaps we should wait less than `sleepy`?
@@ -162,9 +170,7 @@ proc poll() =
   assert r != -1
 
   # run any timers that are ready
-  pollTimers()
-
-  pollSelectors()
+  pollTimers evq
 
   # if sockets are ready, run them
   if r > 0:
@@ -172,7 +178,7 @@ proc poll() =
     # Call sock handlers with events. Don't call while iterating because
     # callbacks might mutate the list
 
-    var sockers: seq[Handler]
+    var sockers: seq[Handler[C]]
 
     for socket in items(ready):
       for socker in values(evq.sockers):
@@ -181,7 +187,7 @@ proc poll() =
 
     for socker in items(sockers):
       if not socker.deleted:
-        run socker.cont
+        run(socker.cont, socker.fn)
         delFd socker.id
 
 
@@ -189,7 +195,9 @@ proc stop*() =
   ## tell the dispatcher to stop
   evq.stop = true
 
-proc run*() =
+proc forever*() =
   ## Run forever
   while not evq.stop:
-    poll()
+    poll evq
+    if evq.timers.len == 0:
+      break
