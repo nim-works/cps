@@ -1,5 +1,3 @@
-import std/macros
-
 import testes
 
 import cps
@@ -17,9 +15,9 @@ testes:
       var i = 3
       j = 4
       noop()
-      assert i == 3
+      check i == 3
     trampoline foo()
-    assert j == 4
+    check j == 4
 
 when false:
   block trampoline:
@@ -27,7 +25,7 @@ when false:
     proc foo() {.cps: Cont.} =
       r = 1
     trampoline foo()
-    assert r == 1
+    check r == 1
 
   block:
     ## declaration via tuple deconstruction
@@ -35,9 +33,10 @@ when false:
       var (i, j, k) = (1, 2, 3)
       let (x, y, z) = (4, 5, 6)
       noop()
-      assert i == 1
-      assert j == 2
-      assert k == 3
+      check:
+        i == 1
+        j == 2
+        k == 3
     trampoline foo()
 
 when false:
@@ -54,7 +53,7 @@ when false:
       discard x + z
 
     trampoline foo()
-    assert r == 13
+    check r == 13
 
   block yield_magic:
     proc foo() {.cps: Cont.} =
@@ -68,7 +67,7 @@ when false:
         sleep(i + 1)
         adder(i)
       r = i
-      assert r == 3
+      check r == 3
     foo_clyybber()
 
   block:
@@ -87,9 +86,10 @@ when false:
         ## a=5, b=7, c=3
         noop()
         ## a=5, b=7, c=3
-        assert a == 5
-        assert b == 7
-        assert c == 3
+        check:
+          a == 5
+          b == 7
+          c == 3
       foo_clyybber(1, 2)
 
   block:
@@ -100,9 +100,10 @@ when false:
       noop()
       b = b + a
       noop()
-      assert a == 5
-      assert b == 7
-      assert c == 3
+      check:
+        a == 5
+        b == 7
+        c == 3
     var (x, y, z) = (1, 2, 3)
     foo_clyybber(x, y, z)
 
@@ -133,7 +134,7 @@ when false:
       proc foo() {.cps: Cont.} =
         var j = 2
         noop()
-        assert j == 2
+        check j == 2
       foo_clyybber()
 
   block:
@@ -144,12 +145,12 @@ when false:
         if true:
           inc r
           break
-        assert false
+        check false
       inc r
     foo_clyybber()
     if r != 3:
-      echo "r wasn't 3: ", r
-      assert false
+      checkpoint "r wasn't 3: ", r
+      check false
 
   block:
     ## block with break
@@ -160,12 +161,12 @@ when false:
           noop()
           inc r
           break
-        assert false
+        check false
       inc r
     foo_clyybber()
     if r != 3:
-      echo "r wasn't 3: ", r
-      assert false
+      checkpoint "r wasn't 3: ", r
+      check false
 
   block:
     ## semaphores
@@ -192,15 +193,15 @@ when false:
     ## break statements without cps 🥴
     proc foo() =
       r = 1
-      assert r == 1
+      check r == 1
       while true:
         if true:
           break
         inc r
-        assert r <= 2
+        check r <= 2
         return
     foo()
-    assert r == 1, "r was " & $r
+    check r == 1, "r was " & $r
 
   block:
     ## a fairly tame cps break
@@ -212,10 +213,10 @@ when false:
           break
         inc r
         if r > 2:
-          assert false
+          check false
         return
     foo_clyybber()
-    assert r == 1, "r was " & $r
+    check r == 1, "r was " & $r
 
   block:
     ## break in a nested else (don't ask)
@@ -226,12 +227,12 @@ when false:
         if true:
           inc r
           if r > 2:
-            assert false
+            check false
           else:
             break
       inc r
     foo_clyybber()
-    assert r == 3, "r was " & $r
+    check r == 3, "r was " & $r
 
   block:
     ## named breaks
@@ -244,10 +245,10 @@ when false:
             break found
           noop()
           inc r
-        assert false
+        check false
       r = r * -1
     foo_clyybber()
-    assert r == -3, "r was " & $r
+    check r == -3, "r was " & $r
 
   block:
     ## while statement
@@ -256,10 +257,9 @@ when false:
       while i < 2:
         let x: int = i
         adder(i)
-        assert x < i
-        assert x < i
+        check x < i
       r = i
-      assert r == 2
+      check r == 2
     foo_clyybber()
 
   block:
@@ -271,10 +271,9 @@ when false:
         adder(i)
         if i >= 2:
           break
-        assert x < i
-        assert x < i
+        check x < i
       r = i
-      assert r == 2
+      check r == 2
     foo_clyybber()
 
   block:
@@ -286,36 +285,34 @@ when false:
         adder(i)
         if x == 0:
           continue
-        assert x > 0
+        check x > 0
       r = i
-      assert r == 2
+      check r == 2
     foo_clyybber()
 
   block:
     ## simple name shadowing test
     proc b(x: int) {.cps: Cont.} =
-      doAssert x > 0
+      check x > 0
       let x: int = 3
-      doAssert x == 3
+      check x == 3
       var y: int = 8
       block:
         var x: int = 4
         inc x
         dec y
-        doAssert x == 5
-        doAssert y == 7
-      doAssert x == 3
-      doAssert y == 7
+        check x == 5
+        check y == 7
+      check x == 3
+      check y == 7
 
     proc a(x: int) {.cps: Cont.} =
-      doAssert x > 0
-      doAssert x > 0
-      doAssert x == 1
+      check x > 0
+      check x == 1
       let x: int = 2
-      doAssert x == 2
+      check x == 2
       b(x)
-      doAssert x == 2
-      doAssert x == 2
+      check x == 2
 
     a(1)
     run()
@@ -336,7 +333,7 @@ when false:
           break
       inc r
     foo_clyybber()
-    assert r == 6, "r is " & $r
+    check r == 6, "r is " & $r
 
   block:
     ## fork
@@ -358,7 +355,7 @@ when false:
       while count > 0:
         dec count
         sleep(ms)
-        echo name, " ", count
+        checkpoint name, " ", count
 
     foo_clyybber("tick", 3)
     foo_clyybber("foo", 7)
@@ -371,11 +368,11 @@ when false:
     else:
       proc b(x: int) {.cps: Cont.} =
         noop()
-        doAssert x > 0
+        check x > 0
         noop()
         let x: int = 3
         noop()
-        doAssert x == 3
+        check x == 3
         noop()
         var y: int = 8
         block:
@@ -386,28 +383,28 @@ when false:
           noop()
           dec y
           noop()
-          doAssert x == 5
-          doAssert y == 7
+          check x == 5
+          check y == 7
         noop()
-        doAssert x == 3
+        check x == 3
         noop()
-        doAssert y == 7
+        check y == 7
 
       proc a(x: int) {.cps: Cont.} =
         noop()
-        doAssert x > 0
+        check x > 0
         noop()
-        doAssert x > 0
+        check x > 0
         noop()
         var x: int = 2
         noop()
-        doAssert x == 2
+        check x == 2
         noop()
         spawn b(x)
         noop()
-        doAssert x == 2
+        check x == 2
         noop()
-        doAssert x == 2
+        check x == 2
 
       spawn a(1)
       run()
@@ -508,7 +505,7 @@ when false:
         ts.it_interval.tv_nsec = (timeout %% 1_000) * 1_000_000
         ts.it_value.tv_sec = ts.it_interval.tv_sec
         ts.it_value.tv_nsec = ts.it_interval.tv_nsec
-        doAssert timerfd_settime(fd.cint, 0.cint, ts.addr, nil) != -1
+        check timerfd_settime(fd.cint, 0.cint, ts.addr, nil) != -1
         evq.io(c, fd, POLLIN)
 
       proc run(evq: Evq) =
@@ -546,16 +543,16 @@ when false:
         sas.sin_port = htons(port.uint16)
         sas.sin_addr.s_addr = INADDR_ANY
         var yes: int = 1
-        doAssert setsockopt(fds, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen) != -1
-        doAssert bindSocket(fds, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
-        doAssert listen(fds, SOMAXCONN) != -1
+        check setsockopt(fds, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen) != -1
+        check bindSocket(fds, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
+        check listen(fds, SOMAXCONN) != -1
         return fds
 
       proc sockAccept(fds: SocketHandle): SocketHandle =
         var sac: Sockaddr_in
         var sacLen: SockLen
         let fdc = posix.accept(fds, cast[ptr SockAddr](sac.addr), sacLen.addr)
-        doAssert fcntl(fdc, F_SETFL, fcntl(fdc, F_GETFL, 0) or O_NONBLOCK) != -1
+        check fcntl(fdc, F_SETFL, fcntl(fdc, F_GETFL, 0) or O_NONBLOCK) != -1
         return fdc
 
       proc sockRecv(fd: SocketHandle): string =
@@ -568,7 +565,7 @@ when false:
 
       proc sockSend(fd: SocketHandle, s: string) =
         let n = posix.send(fd, s[0].unsafeAddr, s.len, 0)
-        assert(n == s.len)
+        check(n == s.len)
 
       proc sockConnect(address: string, port: int): SocketHandle =
         discard
@@ -578,7 +575,7 @@ when false:
         sas.sin_port = htons(port.uint16)
         sas.sin_addr.s_addr = inet_addr(address)
         var yes: int = 1
-        doAssert connect(fd, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
+        check connect(fd, cast[ptr SockAddr](sas.addr), sizeof(sas).SockLen) != -1
         return fd
 
       var evq = newEvq()
@@ -605,11 +602,11 @@ when false:
       ## CPS server listener handler
       proc doEchoServer(port: int) {.cps: Cont.} =
         let fds: SocketHandle = sockBind(port)
-        echo "listening fd: ", fds.int
+        checkpoint "listening fd: ", fds.int
         while true:
           evq.io(fds, POLLIN)
           let fdc: SocketHandle = sockAccept(fds)
-          #echo "accepted fd:", fdc.int
+          #checkpoint "accepted fd:", fdc.int
           # Create new client and add to work queue
           evq.addWork handleClient(fdc)
 
@@ -617,7 +614,7 @@ when false:
       ## CPS client handler
       proc doEchoClient(address: string, port: int, n: int, msg: string) {.cps: Cont.} =
         let fd: SocketHandle = sockConnect(address, port)
-        #echo "connected fd: ", fd.int
+        #checkpoint "connected fd: ", fd.int
 
         var i: int = 0
         while i < n:
@@ -625,17 +622,17 @@ when false:
           sockSend(fd, msg)
           evq.io(fd, POLLIN)
           let msg2: string = sockRecv(fd)
-          doAssert msg2 == msg
+          check msg2 == msg
           inc i
 
         discard fd.close()
-        #echo "disconnected fd: ", fd.int
+        #checkpoint "disconnected fd: ", fd.int
 
       ## Progress reporting
       proc doTicker() {.cps: Cont.} =
         while true:
           evq.sleep(1000)
-          echo "tick. clients: ", clients, " echoed ", count, " messages"
+          checkpoint "tick. clients: ", clients, " echoed ", count, " messages"
           if clients == 0:
             evq.stop()
 
