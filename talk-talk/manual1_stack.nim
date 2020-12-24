@@ -120,7 +120,10 @@ when true:
   # continuation and transferring any arguments in
 
   proc foo(n: int): C =
-    var c = C()
+    when supportsCopyMem(C):
+      var c = C()
+    else:
+      var c = (ref C)()
     echo sizeof(c.storage)
 
     c.storage.stor_Env_foo_0.n_gensymmed = n
@@ -202,4 +205,7 @@ when true:
   # Trampoline it
 
   while c.fn != nil:
-    c.fn(c)
+    when supportsCopyMem(C):
+      c.fn(c)
+    else:
+      c.fn(c[])
