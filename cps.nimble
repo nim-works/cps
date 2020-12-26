@@ -13,6 +13,6 @@ task test, "run tests for ci":
     exec findExe"testes"
 
 task demo, "generate the demos":
-  exec """demo docs/demo.svg "nim c -d:danger -d:cpsDebug --out=\$1 testes/tock.nim""""
-  exec """demo docs/tzevv.svg "nim c --out=\$1 testes/tzevv.nim""""
-  exec """demo docs/taste.svg "nim c --out=\$1 testes/taste.nim""""
+  exec """demo docs/demo.svg "nim c -d:danger -d:cpsDebug --out=\$1 tests/tock.nim""""
+  exec """demo docs/tzevv.svg "nim c --out=\$1 tests/tzevv.nim""""
+  exec """demo docs/taste.svg "nim c --out=\$1 tests/taste.nim""""
