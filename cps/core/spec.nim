@@ -19,7 +19,6 @@ const
   cpsTrace* {.booldefine.} = false       ## store "stack" traces
   cpsExcept* {.booldefine.} = false      ## also stash exceptions
   cpsFn* {.booldefine.} = false          ## multiple fns in continuations
-  cpsTrampBooty* {.booldefine.} = false  ## put a tramp in da booty
   comments* = cpsDebug         ## embed comments within the transformation
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
@@ -35,7 +34,12 @@ type
     ## A continuation describes the rest of the computation
     ## until the resumable function or coroutine end.
     cont.fn is ContinuationProc[Continuation]
-    cont.envs is object
+    cont.frame is (object or ref)
+    block:
+      if cont.frame is ref:
+        cont.frame of RootObj
+      else:
+        true
     # Low-level details:
     # On the C/C++ backend:
     #   - We use raw "Continuation"
@@ -43,12 +47,13 @@ type
     #     AND involves only trivial types (no ref and no destructors)
     #     (TODO, need compiler support to tell us that
     #      but maybe "owner" can help)
-    #   - cont.envs is an union type if only trivial types are involved.
+    #   - cont.frame is an union type if only trivial types are involved.
     #     Type erasure via {.union.} doesn't involve RTTI and the GC.
     #   - We use "ref Continuation"
     #     if the continuation does escape.
-    #   - cont.envs is an "object of RootObj"
+    #   - cont.frame is a "ref object of RootObj"
     #     if there are non-trivial types involved (ref or destructors)
+    #     TODO: if the continuation escapes in that case we have to 2 allocs
     #
     # On the JS backend:
     #   - We always use "ref Continuation"

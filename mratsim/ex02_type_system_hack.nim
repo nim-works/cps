@@ -16,3 +16,11 @@ let b = ContinuationFoo(envs: (ref EnvB)(j: "Hello"))
 
 let s = [a, b]
 echo s.repr
+
+import macros
+
+proc foo(c: var ContinuationFoo) =
+  discard
+
+dumpTree:
+  let c = (ref ContinuationFoo)(fn: foo, envs: EnvA(i: 42))

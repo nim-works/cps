@@ -58,8 +58,9 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
     # and the return statement casting those locals to the root type
     result = newStmtList()
     let locals = e.defineLocals(n)
+    result.add locals
     ret.add newEmptyNode()
-    result.add newAssignment(e.first, e.maybeConvertToRoot(locals))
+    # result.add newAssignment(e.first, e.maybeConvertToRoot(locals))
     result.add ret
 
 func isReturnCall(n: NimNode): bool =
@@ -559,6 +560,8 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   #   env.setReturn n.params[0]
   #   n.params[0] = newEmptyNode()
 
+  env.addFrame(T)
+
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
   ## continuation.
@@ -581,41 +584,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       for name, list in env.localSection(defs):
         preamble.add list
 
-    when cpsTrampBooty:
-      # if we're not storing to result, we need a variable
-      booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
-                                                        newEmptyNode())
-      # XXX: this may fail if requires-init
-      # now we can insert our `result =`, which includes the proc params
-      booty.body.add env.rootResult(name, booty.name)
-
-      let fn = newDotExpr(name, ident"fn")
-
-      # we'll construct the while statement's body first
-      var wh = newStmtList()
-      when cpsDebug:
-        wh.add nnkCommand.newTree(ident"echo", "bootstrap trampoline".newLit)
-      wh.add newAssignment(name, newCall(fn, name))
-
-      # if a result is expected, copy it out when only the fn is nil
-      if not n.params[0].isEmpty:
-        wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
-                          infix(fn, "==", newNilLit())),
-                          newAssignment(ident"result", env.get)))
-
-      # compose the complete trampoline with the while and its guards
-      wh = nnkWhileStmt.newTree(
-        infix( infix(name, "!=", newNilLit()), "and",
-                infix(fn, "!=", newNilLit())), wh)
-
-      # add the trampoline to the bootstrap
-      booty.body.add wh
-    else:
-      booty.params[0] = T
-      # XXX: this may fail if requires-init
-      # now we can insert our `result =`, which includes the proc params
-      booty.body.add env.rootResult(ident"result", booty.name)
-
+    booty.params[0] = T
+    # XXX: this may fail if requires-init
+    # now we can insert our `result =`, which includes the proc params
+    booty.body.add env.rootResult(ident"result", booty.name)
 
   # we can't mutate typed nodes, so copy ourselves
   var n = cloneProc n

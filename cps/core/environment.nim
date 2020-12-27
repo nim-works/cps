@@ -143,7 +143,40 @@ template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
     body
 
 # Environment traits
-# --------------------------------
+# ----------------------------------------------------------------------
+
+proc addFrame*(e: var Env, baseType: NimNode) =
+  ## Add the base frame object
+  # TODO: {.union.} types
+  e.store.add nnkTypeSection.newTree(
+    nnkTypeDef.newTree(
+      ident($baseType & "Frame"), # TODO: unique ID
+      newEmptyNode(),
+      nnkObjectTy.newTree(
+        newEmptyNode(),
+        nnkOfInherit.newTree ident"RootObj",
+        newEmptyNode()
+      )
+    )
+  )
+
+proc getFrame(cont: NimNode): NimNode =
+  ## Does continuation.frame
+  nnkDotExpr.newTree(cont, ident"frame")
+
+proc constructValueOrRef*(contTypeName: NimNode, fields: openarray[NimNode], escapesScope = true, isTrivial = true): NimNode =
+  ## Construct a value object if it doesn't escape scope
+  ## or requires GC or custom destructors
+  ##
+  ## Otherwise a ref is construction
+  if escapesScope or not isTrivial:
+    result = nnkObjConstr.newTree(
+      nnkPar.newTree nnkRefTy.newTree(contTypeName)
+    )
+  else:
+    result = nnkObjConstr.newTree(contTypeName)
+
+  result.add fields
 
 proc init(e: var Env) =
   e.seen = initHashSet[string]()
@@ -156,7 +189,7 @@ proc init(e: var Env) =
     e.ex = genSym(nskField, "ex")
   if e.rs.isNil:
     e.rs = genSym(nskField, "result")
-  e.id = genSym(nskType, "env")
+  e.id = genSym(nskType, "cps" & $e.via & "Frame")
 
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
@@ -202,9 +235,13 @@ proc identity(e: Env): NimNode =
 
 proc isWritten(e: Env): bool =
   ## why say in three lines what you can say in six?
+  var frameSection = true # skip the frame section
   block found:
     for section in items(e.store):
       if section.kind == nnkTypeSection:
+        if frameSection:
+          frameSection = false
+          continue
         for def in items(section):
           result = repr(def[0]) == repr(e.identity)
           if result:
@@ -281,7 +318,8 @@ proc objectType(e: Env): NimNode =
     var pragma = newEmptyNode()
   var record = nnkRecList.newNimNode(e.identity)
   populateType(e, record)
-  var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
+  let frameBase = ident($e.inherits & "Frame")
+  var parent = nnkOfInherit.newNimNode(e.root).add frameBase
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
 proc `==`(a, b: Env): bool {.deprecated, used.} = a.seen == b.seen
@@ -313,7 +351,7 @@ proc makeType(e: var Env): NimNode =
 proc first*(e: Env): NimNode = e.c
 proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newEmptyNode())
 
-proc get*(e: Env): NimNode = newDotExpr(e.castToChild(e.first), e.rs)
+proc get*(e: Env): NimNode = newDotExpr(e.castToChild(e.first.getFrame()), e.rs)
 
 proc newEnv*(parent: var Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -466,7 +504,7 @@ proc initialization(e: Env; kind: NimNodeKind;
 
     # add a template to install locals
     when defined(release):
-      let locals = e.castToChild(e.first)
+      let locals = e.castToChild(e.first.getFrame())
       result.add nnkTemplateDef.newTree(name, newEmptyNode(),
                                         newEmptyNode(), newEmptyNode(),
                                         newEmptyNode(), newEmptyNode(),
@@ -475,7 +513,7 @@ proc initialization(e: Env; kind: NimNodeKind;
       result.add nnkCall.newTree(ident"installLocal", name, e.identity, field)
 
   # this is our continuation type, fully cast
-  let child = e.castToChild(e.first)
+  let child = e.castToChild(e.first.getFrame())
 
   # don't attempt to redefine proc params!
   if kind in {nnkVarSection, nnkLetSection}:
@@ -523,7 +561,8 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
 proc newContinuation(e: Env; via: NimNode;
                       goto: NimNode; defaults = false): NimNode =
   ## else, perform the following alloc...
-  result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
+  # TODO: non-robust monkey-patching to separate the env from the continuation
+  result = nnkObjConstr.newTree(e.identity)
   for field, section in pairs(e):
     # (not used yet)
     #if repr(field) notin [repr(e.fn), repr(e.ex)]:
@@ -542,6 +581,14 @@ proc newContinuation(e: Env; via: NimNode;
         # specify the gensym'd field name and the local name
         assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
         result.add newColonExpr(field, name)
+
+  # And behold the monkey
+  result = constructValueOrRef(
+    # TODO don't use ref if no escape from scope
+    e.via,
+    [newColonExpr(e.fn, goto),
+    newColonExpr(ident("frame"), result)]
+  )
 
 proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
   ## usually, `result = rootResult(ident"result")`
@@ -571,7 +618,8 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
     var reuse = newStmtList(
       doc"re-use the local continuation by setting the fn",
       newAssignment(newDotExpr(e.first, e.fn), goto),
-      e.first)
+      # e.first
+    )
     when true:
       # FIXME: we currently cheat.
       result = reuse
@@ -659,7 +707,7 @@ proc prepProcBody*(e: var Env; n: NimNode): NimNode =
     result = n
 
   # swap symbols for those in the continuation
-  let child = e.castToChild(e.first)
+  let child = e.castToChild(e.first.getFrame())
   for field, section in pairs(e):
     result = result.resym(section[0][0], newDotExpr(child, field))
 
