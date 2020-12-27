@@ -126,7 +126,6 @@ proc tock(name: string; ms: int): Cont =
 - use `--define:cpsCast` to `cast` continuations (versus type conversion)
 - use `--define:cpsTree` to dump AST via `treeRepr` in `cpsDebug` mode
 - use `--define:cpsExcept` catch exceptions and stash them in the continuation
-- use `--define:cpsMutant` toggle mutating continuations (default: _off_)
 
 ## Documentation
 

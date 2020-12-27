@@ -13,7 +13,6 @@ when (NimMajor, NimMinor) < (1, 3):
 const
   cpsDebug* {.booldefine.} = false       ## produce gratuitous output
   cpsMagicExists* {.booldefine.} = true  ## make use of .cpsMagic.
-  cpsMutant* {.booldefine.} = false      ## mutate continuations
   cpsZevv* {.booldefine.} = true         ## increment gensyms
   cpsCast* {.booldefine.} = false        ## use cast instead of conversion
   cpsTrace* {.booldefine.} = false       ## store "stack" traces
