@@ -14,7 +14,7 @@ macro cps(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
 
-macro cpsMagic*(n: untyped{nkProcDef}): untyped =
+macro cpsMagic(n: untyped{nkProcDef}): untyped =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
   result = newStmtList()
@@ -158,6 +158,25 @@ proc resumableImpl(def: NimNode): NimNode =
   echo "resumable ~~~~~~"
   echo result.repr
 
+proc suspendProcDefImpl(def: NimNode): NimNode =
+  ## Inserts the continuation as the first param
+  ## Provides a call `bindCallerContinuation`
+  ## to capture the caller continuation.
+  ## The caller will be suspended on this function exit.
+
+  let cont = genSym(nskParam, "cont")
+
+  result = copyNimTree(def)
+  result.params.insert 1, newIdentDefs(cont, nnkVarTy.newTree ident"Continuation")
+
+  result.body = newStmtList()
+  result.body.add quote do:
+    template bindCallerContinuation(): untyped =
+      `cont` # how to enforce move?
+  def.body.copyChildrenTo result.body
+
+  result.addPragma bindSym"cpsMagic"
+
 # Type Erasure
 # --------------------------------------------------------------------------------------------
 type
@@ -238,7 +257,8 @@ macro suspend*(def: untyped): untyped =
   ## - `alloca` will not be preserved across suspension points.
   ## - `setjmp`/`longjmp` across suspension point will result in undefined behavior.
   ##   Nim exceptions will be special-cased.
-  discard
+  def.expectKind nnkProcDef
+  return suspendProcDefImpl(def)
 
 macro coro*(def: untyped): untyped =
   ## Create a coroutine
@@ -283,6 +303,7 @@ proc resume*(cont: var Continuation) {.inline.} =
   while cont.fn != nil:
     cont.fn(cont)
 
-macro suspendAfter*(procCall: untyped): untyped =
+template suspendAfter*(procCall: untyped): untyped =
   ## Call a suspending function.
   ## Suspending function are defined with {.suspend.}
+  procCall

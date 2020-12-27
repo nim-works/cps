@@ -68,6 +68,8 @@ type
     key: NimNode
     val: NimNode
 
+# func `=`*[T: object and Continuation](dst: var T, src: T) {.error: "Continuations cannot be copied".}
+
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
   result = not n.isNil and n.kind == nnkEmpty
