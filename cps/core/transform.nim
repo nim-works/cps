@@ -5,8 +5,6 @@ import std/algorithm
 import ./spec
 import ./scopes
 import ./environment
-export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace, cpsMutant
 
 template installLocal(id, env, field) =
   when cpsMutant:

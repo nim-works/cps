@@ -1,4 +1,9 @@
-import ./transform
+import
+  std/macros,
+  ./transform,
+  ./spec
+
+export cpsCall
 
 macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
