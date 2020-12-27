@@ -7,12 +7,12 @@ export cpsCall, Continuation, Coroutine
 
 const cpsMutant* = true # We are all mutants
 
+# Internals
+# --------------------------------------------------------------------------------------------
+
 macro cps(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
-
-# Internals
-# --------------------------------------------------------------------------------------------
 
 macro cpsMagic*(n: untyped{nkProcDef}): untyped =
   ## upgrade cps primitives to generate errors out of context
@@ -157,6 +157,29 @@ proc resumableImpl(def: NimNode): NimNode =
 
   echo "resumable ~~~~~~"
   echo result.repr
+
+# Type Erasure
+# --------------------------------------------------------------------------------------------
+type
+  ContinuationOpaque* = object
+    ## A type erased continuation
+    ## This can be used by schedulers
+    # Gimme gimme gimme a VTable after midnight
+    fn: proc(c: var ContinuationOpaque) {.nimcall.}
+    frame: ref RootObj
+
+    # Question:
+    # - where is the RTTI info?
+    # - casting "ref object" to "ref object of RootObj" defined behavior?
+
+proc typeEraser*(typedCont: var Continuation): var ContinuationOpaque {.inline.}=
+  ## Type-erase a continuation
+  # This is safe as ContinuationOpaque as the same size as the base continuation
+  # and the GC has the RTTI of the frame field.
+  # TODO: solve {.union.}
+  # - If continuation is ref it's OK, but we need to cast to ref of RootObj, safe?
+  # - runtimes who wants to manually manage memory can sizeof() the type.
+  `=sink`(result, cast[var ContinuationOpaque](typedCont.addr))
 
 # Proc definitions
 # --------------------------------------------------------------------------------------------
