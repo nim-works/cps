@@ -24,3 +24,10 @@ proc foo(c: var ContinuationFoo) =
 
 dumpTree:
   let c = (ref ContinuationFoo)(fn: foo, envs: EnvA(i: 42))
+
+  type
+    ContinuationFoo = object
+      fn: proc(c: var ContinuationFoo) {.nimcall.}
+      envs: ref EnvBase
+
+  proc foo(x: int){.cps:int.} = discard

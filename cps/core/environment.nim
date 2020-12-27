@@ -145,38 +145,38 @@ template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
 # Environment traits
 # ----------------------------------------------------------------------
 
-proc addFrame*(e: var Env, baseType: NimNode) =
-  ## Add the base frame object
-  # TODO: {.union.} types
-  e.store.add nnkTypeSection.newTree(
-    nnkTypeDef.newTree(
-      ident($baseType & "Frame"), # TODO: unique ID
-      newEmptyNode(),
-      nnkObjectTy.newTree(
-        newEmptyNode(),
-        nnkOfInherit.newTree ident"RootObj",
-        newEmptyNode()
-      )
-    )
-  )
-
 proc getFrame(cont: NimNode): NimNode =
   ## Does continuation.frame
   nnkDotExpr.newTree(cont, ident"frame")
 
-proc constructValueOrRef*(contTypeName: NimNode, fields: openarray[NimNode], escapesScope = true, isTrivial = true): NimNode =
+proc constructValueOrRef*(
+       contTypeName: NimNode,
+       fields: openarray[NimNode],
+       escapesScope = true, isTrivial = false): NimNode =
   ## Construct a value object if it doesn't escape scope
   ## or requires GC or custom destructors
   ##
   ## Otherwise a ref is construction
-  if escapesScope or not isTrivial:
-    result = nnkObjConstr.newTree(
-      nnkPar.newTree nnkRefTy.newTree(contTypeName)
-    )
-  else:
-    result = nnkObjConstr.newTree(contTypeName)
+  # if escapesScope or not isTrivial:
+  #   result = nnkObjConstr.newTree(
+  #     nnkPar.newTree nnkRefTy.newTree(contTypeName)
+  #   )
+  # else:
+  result = nnkObjConstr.newTree(contTypeName)
 
   result.add fields
+
+proc paramValueOrRef*(
+       contType: NimNode,
+       escapesScope = true, isTrivial = false): NimNode =
+  ## Set a continuation param type as value if it doesn't escape scope
+  ## or requires GC or custom destructors
+  ##
+  ## Otherwise use ref
+  # if escapesScope or not isTrivial:
+  #   nnkRefTy.newTree(contType)
+  # else:
+  contType
 
 proc init(e: var Env) =
   e.seen = initHashSet[string]()
@@ -189,7 +189,7 @@ proc init(e: var Env) =
     e.ex = genSym(nskField, "ex")
   if e.rs.isNil:
     e.rs = genSym(nskField, "result")
-  e.id = genSym(nskType, "cps" & $e.via & "Frame")
+  e.id = genSym(nskType, "cpsFrame_" & $e.via)
 
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
@@ -318,7 +318,7 @@ proc objectType(e: Env): NimNode =
     var pragma = newEmptyNode()
   var record = nnkRecList.newNimNode(e.identity)
   populateType(e, record)
-  let frameBase = ident($e.inherits & "Frame")
+  let frameBase = ident("cpsFrame_" & $e.inherits)
   var parent = nnkOfInherit.newNimNode(e.root).add frameBase
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 

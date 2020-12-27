@@ -7,7 +7,7 @@ export cpsCall, Continuation, Coroutine
 
 const cpsMutant* = true # We are all mutants
 
-macro cps*(T: typed, n: typed): untyped =
+macro cps(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
 
@@ -76,13 +76,87 @@ proc coroYield[T](coro: var Coroutine[T], yieldedOut: T) {.inline.}=
   #   and resume only returns it.
   # coro.hasFinished = coro.fn.hasCpsCall()
 
-proc resumableImpl(def: NimNode{nkProcDef}): NimNode =
+proc defFrame(name: string): NimNode =
+  ## Add the base frame object
+  # TODO: {.union.} types
+
+  # TODO: should be gensym'ed or derived from
+  # the proc signature to ensure type unicity
+
+  return nnkTypeSection.newTree(
+    nnkTypeDef.newTree(
+      ident("cpsFrame_" & name), # TODO: unique ID
+      newEmptyNode(),
+      nnkObjectTy.newTree(
+        newEmptyNode(),
+        nnkOfInherit.newTree ident"RootObj",
+        newEmptyNode()
+      )
+    )
+  )
+
+proc frameValueOrRef*(
+       name: string,
+       escapesScope = true, isTrivial = false): NimNode =
+  if escapesScope or not isTrivial:
+    nnkRefTy.newTree(ident(name))
+  else:
+    ident(name)
+
+proc defBaseContinuation(name: string): NimNode =
+  ## Typedef the base continuation
+  # TODO: should be gensym'ed or derived from
+  # the proc signature to ensure type unicity
+  let frameName = "cpsFrame_" & name
+  let name = ident(name)
+
+  nnkTypeSection.newTree(
+    nnkTypeDef.newTree(
+      name,
+      newEmptyNode(),
+      nnkObjectTy.newTree(
+        newEmptyNode(),
+        newEmptyNode(),
+        nnkRecList.newTree(
+          # fn: proc(c: var ContinuationName) {.nimcall.}
+          newIdentDefs(
+            ident"fn",
+            nnkProcTy.newTree(
+              nnkFormalParams.newTree(
+                newEmptyNode(),
+                newIdentDefs(ident"c", nnkVarTy.newTree(name))
+              ),
+              nnkPragma.newTree(ident"nimcall")
+            )
+          ),
+          newIdentDefs(ident"frame", frameValueOrRef(frameName))        )
+      )
+    )
+  )
+
+proc resumableImpl(def: NimNode): NimNode =
   ## CPS transforms a proc definition:
   ## 1. Associate an unique Continuation type
   ## 2. CPS-transform the proc
   ## 3. Generate en entry point to the CPS world
   ## 4. ....
   ## 5. Profit!
+  # Generate a type for this proc
+  let typeName = "Continuation_" & $def.name
+
+  result = newStmtList()
+  result.add defFrame(typeName)
+  result.add defBaseContinuation(typeName)
+
+  # Seems like cpsXfrm wants typed body,
+  # so we just replace {.resumable.} with {.cps:Type.}
+  # result.add cpsXfrm(ident(typeName), def)
+  let cpsMacro = bindSym"cps"
+  def.addPragma(nnkExprColonExpr.newTree(cpsMacro, ident(typeName)))
+  result.add def
+
+  echo "resumable ~~~~~~"
+  echo result.repr
 
 # Proc definitions
 # --------------------------------------------------------------------------------------------
@@ -115,6 +189,7 @@ macro resumable*(def: untyped): untyped =
   ## - `setjmp`/`longjmp` across suspension point will result in undefined behavior.
   ##   Nim exceptions will be special-cased.
   def.expectKind(nnkProcDef)
+  return def.resumableImpl()
 
 macro suspend*(def: untyped): untyped =
   ## Tagging a proc {.suspend.}:

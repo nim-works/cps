@@ -36,8 +36,14 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   result = newStmtList()
   let locals = e.defineLocals(n)  # goto supplied identifier, not nextGoto!
   p[0] = desym(p[0])              # de-sym the proc target
-  p.insert(1, e.maybeConvertToRoot(locals))
-  result.add newAssignment(e.first, p)
+
+  # Sorry for the mess
+  # let converted = e.maybeConvertToRoot(locals)
+  result.add locals
+  # locals contains "continuation.fn = nextCont", we extract the continuation
+  p.insert(1, locals[1][0][0])
+  # result.add newAssignment(e.first, p)
+  result.add p
   result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
@@ -181,18 +187,23 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
 
     #result.doc "creating a new proc: " & name.repr
     # add the declaration
-    result.add newProc(name = name, pragmas = pragmas,
-                        body = newEmptyNode(),
-                        params = [newEmptyNode(),
-                                  newIdentDefs(locals,
-                                              newTree(nnkVarTy,
-                                                      env.root))])
+    result.add newProc(
+      name = name,
+      pragmas = pragmas,
+      body = newEmptyNode(),
+      params = [newEmptyNode(),
+                newIdentDefs(locals,
+                            newTree(nnkVarTy,
+                                    paramValueOrRef(env.root)))])
     # add the implementation
-    result.add newProc(name = name, pragmas = pragmas, body = body,
-                        params = [newEmptyNode(),
-                                  newIdentDefs(locals,
-                                              newTree(nnkVarTy,
-                                                      env.root))])
+    result.add newProc(
+      name = name,
+      pragmas = pragmas,
+      body = body,
+      params = [newEmptyNode(),
+                newIdentDefs(locals,
+                            newTree(nnkVarTy,
+                                    paramValueOrRef(env.root)))])
 
 proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   ## either create and return a tail call proc, or return nil
@@ -559,8 +570,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # if not n.params[0].isEmpty:
   #   env.setReturn n.params[0]
   #   n.params[0] = newEmptyNode()
-
-  env.addFrame(T)
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our
