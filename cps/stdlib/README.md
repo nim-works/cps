@@ -3,6 +3,9 @@
 A large part of the standard library can be rewritten
 with a standard composable and suspendable interface.
 
+Codename: **Unyielding**\
+*Resistance is futile, you will be assimilated*
+
 Coroutine-based:
 - [ ] closure iterators
 - [ ] sequtils
