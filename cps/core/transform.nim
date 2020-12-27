@@ -552,7 +552,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # creating the env with the continuation type,
   # and adding proc parameters to the env
   var first = 1 # index of first param to add to locals
-  env = newEnv(ident"result", types, T)
+  env = initialEnv(ident"continuation", types, T)
 
   # assign the return type if necessary
   if not n.params[0].isEmpty:
@@ -581,6 +581,42 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       for name, list in env.localSection(defs):
         preamble.add list
 
+    when cpsTrampBooty:
+      # if we're not storing to result, we need a variable
+      booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
+                                                        newEmptyNode())
+      # XXX: this may fail if requires-init
+      # now we can insert our `result =`, which includes the proc params
+      booty.body.add env.rootResult(name, booty.name)
+
+      let fn = newDotExpr(name, ident"fn")
+
+      # we'll construct the while statement's body first
+      var wh = newStmtList()
+      when cpsDebug:
+        wh.add nnkCommand.newTree(ident"echo", "bootstrap trampoline".newLit)
+      wh.add newAssignment(name, newCall(fn, name))
+
+      # if a result is expected, copy it out when only the fn is nil
+      if not n.params[0].isEmpty:
+        wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
+                          infix(fn, "==", newNilLit())),
+                          newAssignment(ident"result", env.get)))
+
+      # compose the complete trampoline with the while and its guards
+      wh = nnkWhileStmt.newTree(
+        infix( infix(name, "!=", newNilLit()), "and",
+                infix(fn, "!=", newNilLit())), wh)
+
+      # add the trampoline to the bootstrap
+      booty.body.add wh
+    else:
+      booty.params[0] = T
+      # XXX: this may fail if requires-init
+      # now we can insert our `result =`, which includes the proc params
+      booty.body.add env.rootResult(ident"result", booty.name)
+
+
   # we can't mutate typed nodes, so copy ourselves
   var n = cloneProc n
 
@@ -594,6 +630,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # but we know that we do, because we insert it here ;-)
   n.params.insert(1, env.firstDef)
   inc first   # gratuitous tracking for correctness
+
+  # This shouldn't be here,
+  # somehow the bootstrap is missing `var` for cpsMutant
+  n.params[1][1] = nnkVarTy.newTree(n.params[1][1])
 
   # now remove any other arguments (for now)
   while len(n.params) > 2:

@@ -9,7 +9,7 @@ import cps/core, options
 # and an Option[int] to pass the last produced value
 
 type Iterator = ref object of RootObj
-  fn*: proc(c: Iterator): Iterator {.nimcall.}
+  fn*: proc(c: var Iterator) {.nimcall.}
   val: Option[int]
 
 assert Iterator is Continuation
@@ -19,11 +19,10 @@ assert Iterator is Continuation
 
 proc produce(c: var Iterator): Option[int] =
   while c != nil and c.fn != nil and c.val.isNone:
-    c = c.fn(c)
+    c.fn(c)
   if c != nil and c.val.isSome:
     result = c.val
     c.val = none(int)
-
 
 # The `jield` proc is cps magic to generate a new value from within an
 # interator
@@ -32,12 +31,11 @@ proc jield(c: Iterator, val: int): Iterator {.cpsMagic.} =
   c.val = some(val)
   return c
 
-
 # A simple counting iterator, will produce all integers from 'lo' to 'high',
 # inclusive
 
 proc counter(lo: int, hi: int) {.cps:Iterator.} =
-  var i = lo
+  var i: int = lo
   while i <= hi:
     jield(i)
     inc i

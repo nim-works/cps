@@ -6,6 +6,7 @@ boring utilities likely useful to multiple pieces of cps machinery
 import std/hashes
 import std/sequtils
 import std/macros
+import std/options
 
 when (NimMajor, NimMinor) < (1, 3):
   {.fatal: "requires nim-1.3".}
@@ -28,12 +29,35 @@ template cpsCall*(n: typed) {.pragma.}  ## redirection
 type
   NodeFilter* = proc(n: NimNode): NimNode
 
-  Continuation* = concept c
-    c.fn is ContinuationProc[Continuation]
-    c is ref object
-    c of RootObj
+  ContinuationProc[T] = proc(c: var T) {.nimcall.}
 
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+  Continuation* = concept cont
+    ## A continuation describes the rest of the computation
+    ## until the resumable function or coroutine end.
+    cont.fn is ContinuationProc[Continuation]
+    # cont.envs is object
+    # Low-level details:
+    # On the C/C++ backend:
+    #   - We use raw "Continuation"
+    #     if the continuation doesn't escape its scope
+    #     AND involves only trivial types (no ref and no destructors)
+    #     (TODO, need compiler support to tell us that
+    #      but maybe "owner" can help)
+    #   - cont.envs is an union type if only trivial types are involved.
+    #     Type erasure via {.union.} doesn't involve RTTI and the GC.
+    #   - We use "ref Continuation"
+    #     if the continuation does escape.
+    #   - cont.envs is an "object of RootObj"
+    #     if there are non-trivial types involved (ref or destructors)
+    #
+    # On the JS backend:
+    #   - We always use "ref Continuation"
+    #   - cont.envs is always an object of RootObj
+
+  Coroutine*[T] = concept coro
+    coro is Continuation
+    coro.promise is Option[T]
+    coro.hasFinished is bool
 
   Pair* = tuple
     key: NimNode

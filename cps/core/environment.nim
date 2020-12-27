@@ -241,6 +241,8 @@ proc populateType(e: Env; n: var NimNode) =
     for defs in items(section):
       if defs[1].isEmpty:
         # get the type of the assignment
+        # TODO: this require var foo: FooType = something
+        #       which is not ergonomic
         n.add newIdentDefs(name, getType(defs.last))
       else:
         # name is an ident or symbol
@@ -404,11 +406,11 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   else:
     error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
 
-proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
+proc initialEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   ## the initial version of the environment
   assert not via.isNil
   assert not via.isEmpty
-  var c = if c.isNil or c.isEmpty: ident"continuation" else: c
+  assert not c.isNil
   result = Env(c: c, store: store, via: via, id: via)
   result.seen = initHashSet[string]()
   result.scope = newScope()
