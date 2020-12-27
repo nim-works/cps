@@ -39,6 +39,9 @@ type
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
 
+# Control Flow
+# ----------------------------------------------------------------------
+
 func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
 template searchScope(env: Env; x: untyped;
@@ -117,94 +120,30 @@ proc namedBreak*(e: Env; n: NimNode): Scope =
           break
     result = searchScope(e, breaks, match)
 
-proc len(e: Env): int =
-  if not e.isNil:
-    result = len(e.locals)
-
-proc isEmpty(e: Env): bool =
-  result = len(e) == 0
-
-proc inherits(e: Env): NimNode =
-  assert not e.isNil
-  assert not e.via.isNil
-  assert not e.via.isEmpty
-  result = if e.parent.isNil: e.via else: e.parent.id
-
-proc identity(e: Env): NimNode =
-  assert not e.isNil
-  result = e.id
-
-proc isWritten(e: Env): bool =
-  ## why say in three lines what you can say in six?
-  block found:
-    for section in items(e.store):
-      if section.kind == nnkTypeSection:
-        for def in items(section):
-          result = repr(def[0]) == repr(e.identity)
-          if result:
-            break found
-
-proc isDirty(e: Env): bool =
-  ## the type hasn't been written since an add occurred
-  when false:
-    assert not e.isNil
-    result = if e.parent.isNil: len(e) > 0 else: e.id != e.parent.id
-    # a dirty parent yields a dirty child
-    result = result or (not e.parent.isNil and e.parent.isDirty)
+template withGoto*(f: Scope; body: untyped): untyped {.dirty.} =
+  ## run a body with a longer gotos stack
+  if len(stripComments f.node) > 0:
+    env.gotos.add(f)
+    try:
+      body
+    finally:
+      result.add pop(env.gotos).node
   else:
-    result = not(e.isWritten) or (not(e.parent.isNil) and e.parent.isDirty)
+    body
 
-proc setDirty(e: var Env) =
-  when false:
-    assert not e.isNil
-    e.id = newEmptyNode()
-    assert e.isDirty
-
-proc root*(e: Env): NimNode =
-  var r = e
-  while not r.parent.isNil:
-    r = r.parent
-  result = r.inherits
-
-when cpsTrace:
-  proc addTrace(e: Env; n: NimNode): NimNode =
-    if n.isNil or n.kind == nnkNilLit: return
-    # XXX: this doesn't work, sadly
-    #discard bindSym("init" & $e.root, rule = brForceOpen)
-    let info = lineInfoObj(n)
-    var identity =
-      if e.camefrom.isNil or e.camefrom.isEmpty:
-        "nil"
-      else:
-        repr(e.camefrom.returnTo)
-    identity.add "(" & repr(e.identity) & ")"
-    result = newCall(ident("init"), n, identity.newLit,
-                     info.filename.newLit,
-                     info.line.newLit,
-                     info.column.newLit)
-
-proc castToRoot(e: Env; n: NimNode): NimNode =
-  when cpsCast:
-    result = newTree(nnkCast, e.root, n)
+template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
+  ## run a body with a longer breaks stack
+  if len(stripComments s.node) > 0:
+    env.breaks.add(s)
+    try:
+      body
+    finally:
+      result.add pop(env.breaks).node
   else:
-    result = newTree(nnkCall, e.root, n)
-  when cpsTrace:
-    result = e.addTrace(result)
+    body
 
-proc castToChild(e: Env; n: NimNode): NimNode =
-  when cpsTrace:
-    var n = e.addTrace(n)
-  when cpsCast:
-    result = newTree(nnkCast, e.identity, n)
-  else:
-    result = newTree(nnkCall, e.identity, n)
-
-proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
-  ## add an Obj(foo: bar).Other conversion if necessary
-  if not eqIdent(locals[0], e.root):
-    e.castToRoot(locals)
-  else:
-    locals
+# Environment traits
+# --------------------------------
 
 proc init(e: var Env) =
   e.seen = initHashSet[string]()
@@ -248,12 +187,90 @@ proc populateType(e: Env; n: var NimNode) =
         # name is an ident or symbol
         n.add newIdentDefs(name, defs[1])
 
-proc contains(e: Env; key: NimNode): bool =
-  ## you're giving us a symbol|ident and we're telling you if we have it
-  ## recorded with that name.
-  assert not key.isNil
-  assert key.kind in {nnkSym, nnkIdent}
-  result = key.strVal in e.seen
+# Type Erasure - inheritance based
+# ----------------------------------------------------------------------
+
+proc inherits(e: Env): NimNode =
+  assert not e.isNil
+  assert not e.via.isNil
+  assert not e.via.isEmpty
+  result = if e.parent.isNil: e.via else: e.parent.id
+
+proc identity(e: Env): NimNode =
+  assert not e.isNil
+  result = e.id
+
+proc isWritten(e: Env): bool =
+  ## why say in three lines what you can say in six?
+  block found:
+    for section in items(e.store):
+      if section.kind == nnkTypeSection:
+        for def in items(section):
+          result = repr(def[0]) == repr(e.identity)
+          if result:
+            break found
+
+proc isDirty(e: Env): bool =
+  ## the type hasn't been written since an add occurred
+  when false:
+    assert not e.isNil
+    result = if e.parent.isNil: len(e) > 0 else: e.id != e.parent.id
+    # a dirty parent yields a dirty child
+    result = result or (not e.parent.isNil and e.parent.isDirty)
+  else:
+    result = not(e.isWritten) or (not(e.parent.isNil) and e.parent.isDirty)
+
+proc root*(e: Env): NimNode =
+  var r = e
+  while not r.parent.isNil:
+    r = r.parent
+  result = r.inherits
+
+when cpsTrace:
+  proc addTrace(e: Env; n: NimNode): NimNode =
+    if n.isNil or n.kind == nnkNilLit: return
+    # XXX: this doesn't work, sadly
+    #discard bindSym("init" & $e.root, rule = brForceOpen)
+    let info = lineInfoObj(n)
+    var identity =
+      if e.camefrom.isNil or e.camefrom.isEmpty:
+        "nil"
+      else:
+        repr(e.camefrom.returnTo)
+    identity.add "(" & repr(e.identity) & ")"
+    result = newCall(ident("init"), n, identity.newLit,
+                     info.filename.newLit,
+                     info.line.newLit,
+                     info.column.newLit)
+
+proc setDirty(e: var Env) =
+  when false:
+    assert not e.isNil
+    e.id = newEmptyNode()
+    assert e.isDirty
+
+proc castToRoot(e: Env; n: NimNode): NimNode =
+  when cpsCast:
+    result = newTree(nnkCast, e.root, n)
+  else:
+    result = newTree(nnkCall, e.root, n)
+  when cpsTrace:
+    result = e.addTrace(result)
+
+proc castToChild(e: Env; n: NimNode): NimNode =
+  when cpsTrace:
+    var n = e.addTrace(n)
+  when cpsCast:
+    result = newTree(nnkCast, e.identity, n)
+  else:
+    result = newTree(nnkCall, e.identity, n)
+
+proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
+  ## add an Obj(foo: bar).Other conversion if necessary
+  if not eqIdent(locals[0], e.root):
+    e.castToRoot(locals)
+  else:
+    locals
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
@@ -579,28 +596,6 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
   # record the last-rendered scope for use in trace composition
   e.camefrom = newScope(result, goto, result)
 
-template withGoto*(f: Scope; body: untyped): untyped {.dirty.} =
-  ## run a body with a longer gotos stack
-  if len(stripComments f.node) > 0:
-    env.gotos.add(f)
-    try:
-      body
-    finally:
-      result.add pop(env.gotos).node
-  else:
-    body
-
-template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
-  ## run a body with a longer breaks stack
-  if len(stripComments s.node) > 0:
-    env.breaks.add(s)
-    try:
-      body
-    finally:
-      result.add pop(env.breaks).node
-  else:
-    body
-
 # proc setReturn*(e: var Env; n: NimNode) =
 #   ## Teach the Env that it should return the provided type.
 #   let defs = newIdentDefs(e.rs, newEmptyNode(), n)
@@ -667,6 +662,24 @@ proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   let child = e.castToChild(e.first)
   for field, section in pairs(e):
     result = result.resym(section[0][0], newDotExpr(child, field))
+
+
+# Dead code
+# ----------------------------------------------------------------------
+
+proc len(e: Env): int =
+  if not e.isNil:
+    result = len(e.locals)
+
+proc isEmpty(e: Env): bool =
+  result = len(e) == 0
+
+proc contains(e: Env; key: NimNode): bool =
+  ## you're giving us a symbol|ident and we're telling you if we have it
+  ## recorded with that name.
+  assert not key.isNil
+  assert key.kind in {nnkSym, nnkIdent}
+  result = key.strVal in e.seen
 
 when false:
   # we don't do local retrievals anymore because now we just substitute
