@@ -3,7 +3,7 @@
 # This is an example implementation for a basic CPS-based iterator.
 #
 
-import cps, options
+import cps/core, options
 
 # This is our iterator type. It holds the continuation function
 # and an Option[int] to pass the last produced value
@@ -58,4 +58,3 @@ echo "produced ", a.produce()
 echo "produced ", a.produce()
 echo "produced ", a.produce()
 echo "produced ", a.produce()
-

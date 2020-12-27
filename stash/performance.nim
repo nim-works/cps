@@ -3,8 +3,8 @@
 # This is an example implementation for a basic CPS-based iterator.
 #
 
-import cps, times
-  
+import cps/core, times
+
 template howLong(what, code): float =
   let start = cpuTime()
   block:

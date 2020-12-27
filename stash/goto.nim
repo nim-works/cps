@@ -3,7 +3,7 @@
 # This is an example implementation for a basic CPS-based iterator.
 #
 
-import cps, tables
+import cps/core, tables
 
 
 type

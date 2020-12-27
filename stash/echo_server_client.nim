@@ -1,6 +1,6 @@
 
 
-import cps
+import cps/core
 import epoll
 import posix
 import tables
@@ -57,7 +57,7 @@ proc io(evq: Evq, c: Cont, fd: SocketHandle | cint, event: int): Cont =
 proc sleep(evq: Evq, c: Cont, timeout: int): Cont =
   let fd = timerfd_create(CLOCK_MONOTONIC, 0)
   var ts: Itimerspec
-  ts.it_interval.tv_sec = Time(timeout div 1_000)             
+  ts.it_interval.tv_sec = Time(timeout div 1_000)
   ts.it_interval.tv_nsec = (timeout %% 1_000) * 1_000_000
   ts.it_value.tv_sec = ts.it_interval.tv_sec
   ts.it_value.tv_nsec = ts.it_interval.tv_nsec
@@ -216,4 +216,3 @@ for i in 1..100:
 # Forever run the event queue
 
 evq.run()
-

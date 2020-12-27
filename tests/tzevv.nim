@@ -4,7 +4,7 @@ const
 import std/macros
 import std/unittest
 
-import cps
+import cps/core
 
 
 type

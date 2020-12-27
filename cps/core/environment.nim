@@ -13,8 +13,8 @@ import std/algorithm
 
 {.experimental: "dynamicBindSym".}
 
-import cps/spec
-import cps/scopes
+import ./spec
+import ./scopes
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery

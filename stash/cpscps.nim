@@ -1,6 +1,6 @@
 
-import cps
-import cps/eventqueue
+import cps/core
+import cps/schedulers
 
 # Middleware
 

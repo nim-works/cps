@@ -3,7 +3,7 @@
 # Proof of concept try/catch/throw
 #
 
-import cps
+import cps/core
 
 
 type
@@ -39,7 +39,7 @@ proc deeper() {.cps:Tc.} =
 # function that will throw
 
 proc foo() {.cps:Tc.} =
-  
+
   cps start()
 
   if not err:
@@ -48,7 +48,7 @@ proc foo() {.cps:Tc.} =
     return deeper()
     echo "three"
     echo "four"
-  
+
   if err:
     echo "** caught error: ", msg, " **"
 

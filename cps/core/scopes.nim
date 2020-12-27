@@ -7,7 +7,7 @@
 import std/strutils
 import std/macros
 
-import cps/spec
+import ./spec
 
 const
   scopeful = {nnkTryStmt, nnkWhileStmt, nnkIfStmt, nnkBlockStmt, nnkForStmt}

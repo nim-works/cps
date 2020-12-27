@@ -1,7 +1,7 @@
 import testes
 
-import cps
-import cps/eventqueue
+import cps/core
+import cps/schedulers
 
 testes:
   var r = 0

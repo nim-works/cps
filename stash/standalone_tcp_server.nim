@@ -13,7 +13,7 @@
 # - Make multi threaded with a single event queue per thread, using EPOLLEXCLUSIVE
 #
 
-import cps
+import cps/core
 import epoll
 import posix
 import tables
@@ -143,4 +143,3 @@ while true:
     evq.work.addLast evq.readers[fd]
     evq.readers.del(fd)
     discard epoll_ctl(epfd, EPOLL_CTL_DEL, fd.cint, nil)
-

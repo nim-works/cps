@@ -1,5 +1,5 @@
-import cps
-import cps/eventqueue
+import cps/core
+import cps/schedulers
 
 proc tock(name: string; ms: int) {.cps: Cont.} =
   var count: int = 10

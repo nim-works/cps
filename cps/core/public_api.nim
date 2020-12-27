@@ -2,9 +2,9 @@ import std/macros
 import std/sequtils
 import std/algorithm
 
-import cps/spec
-import cps/scopes
-import cps/environment
+import ./spec
+import ./scopes
+import ./environment
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug, cpsTrace, cpsMutant
 
