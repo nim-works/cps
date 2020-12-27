@@ -7,6 +7,29 @@ export cpsCall, Continuation, Coroutine
 
 const cpsMutant* = true # We are all mutants
 
+# Type Erasure
+# --------------------------------------------------------------------------------------------
+type
+  ContinuationOpaque* = object
+    ## A type erased continuation
+    ## This can be used by schedulers
+    # Gimme gimme gimme a VTable after midnight
+    fn: proc(c: var ContinuationOpaque) {.nimcall.}
+    frame: ref RootObj
+
+    # Question:
+    # - where is the RTTI info?
+    # - casting "ref object" to "ref object of RootObj" defined behavior?
+
+proc typeEraser(typedCont: var Continuation): var ContinuationOpaque {.inline.}=
+  ## Type-erase a continuation
+  # This is safe as ContinuationOpaque as the same size as the base continuation
+  # and the GC has the RTTI of the frame field.
+  # TODO: solve {.union.}
+  # - If continuation is ref it's OK, but we need to cast to ref of RootObj, safe?
+  # - runtimes who wants to manually manage memory can sizeof() the type.
+  `=sink`(result, cast[var ContinuationOpaque](typedCont.addr))
+
 # Internals
 # --------------------------------------------------------------------------------------------
 
@@ -155,9 +178,6 @@ proc resumableImpl(def: NimNode): NimNode =
   def.addPragma(nnkExprColonExpr.newTree(cpsMacro, ident(typeName)))
   result.add def
 
-  echo "resumable ~~~~~~"
-  echo result.repr
-
 proc suspendProcDefImpl(def: NimNode): NimNode =
   ## Inserts the continuation as the first param
   ## Provides a call `bindCallerContinuation`
@@ -169,36 +189,15 @@ proc suspendProcDefImpl(def: NimNode): NimNode =
   result = copyNimTree(def)
   result.params.insert 1, newIdentDefs(cont, nnkVarTy.newTree ident"Continuation")
 
+  let typeEraser = bindSym"typeEraser"
+
   result.body = newStmtList()
   result.body.add quote do:
     template bindCallerContinuation(): untyped =
-      `cont` # how to enforce move?
+      `typeEraser`(`cont`) # how to enforce move?
   def.body.copyChildrenTo result.body
 
   result.addPragma bindSym"cpsMagic"
-
-# Type Erasure
-# --------------------------------------------------------------------------------------------
-type
-  ContinuationOpaque* = object
-    ## A type erased continuation
-    ## This can be used by schedulers
-    # Gimme gimme gimme a VTable after midnight
-    fn: proc(c: var ContinuationOpaque) {.nimcall.}
-    frame: ref RootObj
-
-    # Question:
-    # - where is the RTTI info?
-    # - casting "ref object" to "ref object of RootObj" defined behavior?
-
-proc typeEraser*(typedCont: var Continuation): var ContinuationOpaque {.inline.}=
-  ## Type-erase a continuation
-  # This is safe as ContinuationOpaque as the same size as the base continuation
-  # and the GC has the RTTI of the frame field.
-  # TODO: solve {.union.}
-  # - If continuation is ref it's OK, but we need to cast to ref of RootObj, safe?
-  # - runtimes who wants to manually manage memory can sizeof() the type.
-  `=sink`(result, cast[var ContinuationOpaque](typedCont.addr))
 
 # Proc definitions
 # --------------------------------------------------------------------------------------------
@@ -285,19 +284,19 @@ macro coro*(def: untyped): untyped =
 # Calls
 # --------------------------------------------------------------------------------------------
 
-proc resume*[T](coro: var Coroutine[T]): Option[T] {.inline.} =
-  ## Resume a coroutine until its next `yield`
-  while coro.fn != nil and not coro.hasYielded:
-    coro.fn(coro)
-  if coro.promise.isSome():
-    result = move coro.promise
-    # TODO: set hasFinished here or we will be one iteration late.
-    # - a naive solution would be to run the loop here.
-    # - another is to check if coro.fn is nil or without cpsCall.
-  else:
-    coro.hasFinished = true
+# proc resume*[T](coro: var Coroutine[T]): Option[T] {.inline.} =
+#   ## Resume a coroutine until its next `yield`
+#   while coro.fn != nil and not coro.hasYielded:
+#     coro.fn(coro)
+#   if coro.promise.isSome():
+#     result = move coro.promise
+#     # TODO: set hasFinished here or we will be one iteration late.
+#     # - a naive solution would be to run the loop here.
+#     # - another is to check if coro.fn is nil or without cpsCall.
+#   else:
+#     coro.hasFinished = true
 
-proc resume*(cont: var Continuation) {.inline.} =
+proc resume*(cont: var (Continuation|ContinuationOpaque)) {.inline.} =
   ## Resume a continuation until its next `suspend`
   static: doAssert not (cont is Coroutine), "Dispatch overload bug"
   while cont.fn != nil:

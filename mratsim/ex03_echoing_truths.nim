@@ -7,7 +7,7 @@ proc echoingTruth(i: int) {.suspend.}=
   echo "Truth: ", $i
 
   scheduler.setLen(scheduler.len + 1)
-  scheduler[^1] = move bindCallerContinuation().typeEraser()
+  scheduler[^1] = move bindCallerContinuation()
 
   # assert bindCallerContinuation() = nil
   # how to enforce moves?
@@ -19,4 +19,11 @@ proc truthOrDare(lo: int, hi: int) {.resumable.} =
     echoingTruth(i)
     inc i
 
-let a = truthOrDare(1, 4)
+var a = truthOrDare(1, 4)
+a.resume()
+
+var b = scheduler.pop()
+b.resume()
+
+var c = scheduler.pop()
+c.resume()
