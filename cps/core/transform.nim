@@ -663,7 +663,8 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   inc first   # gratuitous tracking for correctness
 
   # install our return type in the clone
-  n.params[0] = T
+  when not cpsMutant:
+    n.params[0] = T
 
   # now remove any other arguments (for now)
   while len(n.params) > 2:
