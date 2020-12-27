@@ -565,9 +565,13 @@ macro cps*(T: untyped, n: untyped): untyped =
 
   assert n.kind in RoutineNodes
 
+  var n = n
+  var res: NimNode
+
   # check or set the continuation return type
   if not n.params[0].isEmpty:
-    error "No return type allowed for now"
+    warning "Using a return type in CPS. Do not shadow the `result` variable."
+    res = n.params[0]
   n.params[0] = T
 
   # establish a new environment with the supplied continuation type;
@@ -652,6 +656,9 @@ when false:
 macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
+  echo "----------------------"
+  echo result.repr()
+
   expectKind(n, nnkProcDef)
   result = newStmtList()
 
@@ -674,6 +681,9 @@ macro cpsMagic*(n: untyped): untyped =
     # manipulate the primitive to take its return type as a first arg
     n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
     result.add n
+
+  echo "----------------------"
+  echo result.repr()
 
 when not strict:
   proc isCpsProc(n: NimNode): bool =
