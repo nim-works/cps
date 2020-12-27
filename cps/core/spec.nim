@@ -199,6 +199,9 @@ proc stripVar*(n: NimNode): NimNode =
 
 proc letOrVar*(n: NimNode): NimNodeKind =
   ## choose between let or var for proc parameters
+  # TODO: cleaner fix if we have https://github.com/nim-lang/Nim/issues/9443
+  # otherwise "when(compiles(addr n))" works:
+  # https://github.com/numforge/laser/blob/d1e6ae6/laser/strided_iteration/foreach_common.nim#L11-L14
   assert n.kind == nnkIdentDefs
   if len(n) == 2:
     # ident: type; we'll add a default for numbering reasons
