@@ -554,10 +554,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   var first = 1 # index of first param to add to locals
   env = initialEnv(ident"continuation", types, T)
 
-  # assign the return type if necessary
-  if not n.params[0].isEmpty:
-    env.setReturn n.params[0]
-    n.params[0] = newEmptyNode()
+  # # assign the return type if necessary
+  # if not n.params[0].isEmpty:
+  #   env.setReturn n.params[0]
+  #   n.params[0] = newEmptyNode()
 
   ## the preamble for the proc is the space above the user-supplied body.
   ## here we setup the locals, mapping the proc parameters into our

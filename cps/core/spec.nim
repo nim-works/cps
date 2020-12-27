@@ -35,7 +35,7 @@ type
     ## A continuation describes the rest of the computation
     ## until the resumable function or coroutine end.
     cont.fn is ContinuationProc[Continuation]
-    # cont.envs is object
+    cont.envs is object
     # Low-level details:
     # On the C/C++ backend:
     #   - We use raw "Continuation"

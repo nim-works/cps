@@ -53,8 +53,8 @@ template searchScope(env: Env; x: untyped;
       break
   r
 
-func lastGotoLoop*(e: Env): Scope = searchScope(e, gotos, last)
-func lastBreakLoop*(e: Env): Scope = searchScope(e, breaks, last)
+func lastGotoLoop(e: Env): Scope = searchScope(e, gotos, last)
+func lastBreakLoop(e: Env): Scope = searchScope(e, breaks, last)
 
 func nextGoto*(e: Env): Scope = searchScope(e, gotos, next)
 func nextBreak*(e: Env): Scope = searchScope(e, breaks, next)
@@ -92,7 +92,7 @@ proc insideFor*(e: Env): bool =
   ## does what it says on the tin, and does it well, i might add
   lastBreakLoop(e).kind == nnkForStmt
 
-proc insideWhile*(e: Env): bool =
+proc insideWhile(e: Env): bool =
   ## actually, this is the better one.
   lastBreakLoop(e).kind == nnkWhileStmt
 
@@ -117,20 +117,20 @@ proc namedBreak*(e: Env; n: NimNode): Scope =
           break
     result = searchScope(e, breaks, match)
 
-proc len*(e: Env): int =
+proc len(e: Env): int =
   if not e.isNil:
     result = len(e.locals)
 
-proc isEmpty*(e: Env): bool =
+proc isEmpty(e: Env): bool =
   result = len(e) == 0
 
-proc inherits*(e: Env): NimNode =
+proc inherits(e: Env): NimNode =
   assert not e.isNil
   assert not e.via.isNil
   assert not e.via.isEmpty
   result = if e.parent.isNil: e.via else: e.parent.id
 
-proc identity*(e: Env): NimNode =
+proc identity(e: Env): NimNode =
   assert not e.isNil
   result = e.id
 
@@ -144,7 +144,7 @@ proc isWritten(e: Env): bool =
           if result:
             break found
 
-proc isDirty*(e: Env): bool =
+proc isDirty(e: Env): bool =
   ## the type hasn't been written since an add occurred
   when false:
     assert not e.isNil
@@ -248,7 +248,7 @@ proc populateType(e: Env; n: var NimNode) =
         # name is an ident or symbol
         n.add newIdentDefs(name, defs[1])
 
-proc contains*(e: Env; key: NimNode): bool =
+proc contains(e: Env; key: NimNode): bool =
   ## you're giving us a symbol|ident and we're telling you if we have it
   ## recorded with that name.
   assert not key.isNil
@@ -285,7 +285,7 @@ proc reparent(e: var Env; p: Env) =
       # offer ourselves to our parent instead
       reparent(e.parent, e)
 
-proc makeType*(e: var Env): NimNode =
+proc makeType(e: var Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
 
   # determine if a symbol clash necessitates pointing to a new parent
@@ -427,7 +427,7 @@ proc identity*(e: var Env): NimNode =
   assert not e.id.isEmpty
   result = e.id
 
-proc rootTemplate*(e: Env): NimNode =
+proc rootTemplate(e: Env): NimNode =
   ## the template used to rename `result` in .cps. procs
   result = nnkTemplateDef.newTree(e.first, newEmptyNode(),
                                   newEmptyNode(), newEmptyNode(),
@@ -503,7 +503,7 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
   finally:
     e.setDirty
 
-proc newContinuation*(e: Env; via: NimNode;
+proc newContinuation(e: Env; via: NimNode;
                       goto: NimNode; defaults = false): NimNode =
   ## else, perform the following alloc...
   result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
@@ -601,28 +601,28 @@ template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
   else:
     body
 
-proc setReturn*(e: var Env; n: NimNode) =
-  ## Teach the Env that it should return the provided type.
-  let defs = newIdentDefs(e.rs, newEmptyNode(), n)
-  # verbose 'cause we want to use n to inherit the line info
-  discard e.set(e.rs, newNimNode(nnkVarSection, n).add defs)
-
-  when true:
-    discard "actually, our dirty tests are currently smart enough 😉"
-  else:
-    # we need to store the type so we can add a getter for its result
-    e = storeType(e, force = true)
-
-  when false:
-    # this getter has to get lifted 'cause it's a method
-    e.store.add newProc(ident"result", procType = nnkMethodDef,
-                        body = e.get, params = [n, e.firstDef],
-                        pragmas = nnkPragma.newTree bindSym"cpsLift")
-  else:
-    let via = newIdentDefs(e.first, e.identity, newEmptyNode())
-    e.store.add newProc(ident n.strVal, procType = nnkProcDef,
-                        body = e.get, params = [n, via],
-                        pragmas = nnkPragma.newTree bindSym"cpsLift")
+# proc setReturn*(e: var Env; n: NimNode) =
+#   ## Teach the Env that it should return the provided type.
+#   let defs = newIdentDefs(e.rs, newEmptyNode(), n)
+#   # verbose 'cause we want to use n to inherit the line info
+#   discard e.set(e.rs, newNimNode(nnkVarSection, n).add defs)
+#
+#   when true:
+#     discard "actually, our dirty tests are currently smart enough 😉"
+#   else:
+#     # we need to store the type so we can add a getter for its result
+#     e = storeType(e, force = true)
+#
+#   when false:
+#     # this getter has to get lifted 'cause it's a method
+#     e.store.add newProc(ident"result", procType = nnkMethodDef,
+#                         body = e.get, params = [n, e.firstDef],
+#                         pragmas = nnkPragma.newTree bindSym"cpsLift")
+#   else:
+#     let via = newIdentDefs(e.first, e.identity, newEmptyNode())
+#     e.store.add newProc(ident n.strVal, procType = nnkProcDef,
+#                         body = e.get, params = [n, via],
+#                         pragmas = nnkPragma.newTree bindSym"cpsLift")
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
@@ -699,7 +699,7 @@ when false:
                                    newDotExpr(locals, field))
           yield (key: name, val: section)
 
-  proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
+  proc wrapProcBody(e: var Env; locals: NimNode; n: NimNode): NimNode =
     # return a proc body that defines the locals in a scope above the
     # original body; this lets the lower scope shadow existing locals or
     # proc parameters.
