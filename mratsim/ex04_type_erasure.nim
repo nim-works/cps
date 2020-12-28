@@ -59,7 +59,12 @@
 #
 # On the stack, generics and inheritance generate the same code
 # modulo header field nested an extra time for inheritance.
-# However
+#
+# On the usage of {.union.}:
+# On the stack we cannot reallocate, the frame needs to have the max possible size.
+# this also avoids copies at the cost of space.
+# The conversion between "object of Continuation" would not work on the stack
+# unless they have the same size.
 
 type TestKind = enum
   Inheritance

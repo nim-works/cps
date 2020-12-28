@@ -284,17 +284,17 @@ macro coro*(def: untyped): untyped =
 # Calls
 # --------------------------------------------------------------------------------------------
 
-# proc resume*[T](coro: var Coroutine[T]): Option[T] {.inline.} =
-#   ## Resume a coroutine until its next `yield`
-#   while coro.fn != nil and not coro.hasYielded:
-#     coro.fn(coro)
-#   if coro.promise.isSome():
-#     result = move coro.promise
-#     # TODO: set hasFinished here or we will be one iteration late.
-#     # - a naive solution would be to run the loop here.
-#     # - another is to check if coro.fn is nil or without cpsCall.
-#   else:
-#     coro.hasFinished = true
+proc resume*[T](coro: var Coroutine[T]): Option[T] {.inline.} =
+  ## Resume a coroutine until its next `yield`
+  while coro.fn != nil and not coro.hasYielded:
+    coro.fn(coro)
+  if coro.promise.isSome():
+    result = move coro.promise
+    # TODO: set hasFinished here or we will be one iteration late.
+    # - a naive solution would be to run the loop here.
+    # - another is to check if coro.fn is nil or without cpsCall.
+  else:
+    coro.hasFinished = true
 
 proc resume*(cont: var (Continuation|ContinuationOpaque)) {.inline.} =
   ## Resume a continuation until its next `suspend`
