@@ -745,7 +745,7 @@ proc workaroundRewrites(n: NimNode): NimNode =
 macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
-  result = workaroundRewrites(n)
+  result = workaroundRewrites(result)
 
 macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
