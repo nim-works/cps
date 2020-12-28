@@ -1,3 +1,4 @@
+# Example 2: making Continuation an object
 type
   EnvBase = object of RootObj
 

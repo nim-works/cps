@@ -1,3 +1,5 @@
+# Example 3: Testing the proposed continuation API.
+
 import ../cps/core
 import macros
 
