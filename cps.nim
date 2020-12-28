@@ -718,6 +718,17 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     else:
       debugEcho repr(result).numberedLines(info.line)
 
+proc workaroundRewrites(n: NimNode): NimNode =
+  proc workaroundSigmatchSkip(n: NimNode): NimNode =
+    if n.kind in nnkCallKinds:
+      # We recreate the node here, to set its .typ to nil
+      # so that sigmatch doesn't decide to skip it
+      result = newNimNode(n.kind, n)
+      for child in n.items:
+        result.add child
+
+  result = filter(n, workaroundSigmatchSkip)
+
 proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   # Perform CPS transformation on a NimNode. This can be a single
   # proc, or a top level stmtList.
@@ -730,22 +741,11 @@ proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
       result.add cpsXfrm(T, nc)
   else:
     result = copy n
-
-proc workaroundRewrites(n: NimNode): NimNode =
-  proc workaroundSigmatchSkip(n: NimNode): NimNode =
-    if n.kind in nnkCallKinds:
-      # We recreate the node here, to set its .typ to nil
-      # so that sigmatch doesn't decide to skip it
-      result = newNimNode(n.kind)
-      for child in items(n):
-        result.add child
-
-  result = filter(n, workaroundSigmatchSkip)
+  result = workaroundRewrites(result)
 
 macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
-  result = workaroundRewrites(result)
 
 macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
