@@ -34,6 +34,38 @@ proc isCpsCall(n: NimNode): bool =
       let p = n[0].getImpl
       result = p.hasPragma("cpsCall")
 
+proc firstReturn(p: NimNode): NimNode =
+  ## find the first return statement within statement lists, or nil
+  for child in p.items:
+    case child.kind
+    of nnkReturnStmt:
+      return child
+    of nnkStmtList:
+      result = child.firstReturn
+      if not result.isNil:
+        break
+    else:
+      discard
+
+proc addReturn(p: var NimNode; n: NimNode) =
+  ## adds a return statement if none exists; can consume nnkReturnStmt
+  ## or wrap other nodes as necessary
+  if p.firstReturn.isNil:
+    p.add:
+      if n.isNil:
+        newEmptyNode()
+      elif not n.firstReturn.isNil:
+        n
+      else:
+        nnkReturnStmt.newNimNode(n).add n
+  else:
+    p.doc "omitted a return of " & repr(n)
+
+template addReturn(e: var Env; p: NimNode; n: untyped) =
+  ## adds a return statement with consideration of the env;
+  ## this means performing an appropriate rewriteReturn
+  addReturn(p, e.rewriteReturn n)
+
 proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
@@ -44,9 +76,9 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   p.insert(1, e.maybeConvertToRoot(locals))
   when cpsMutant:
     result.add newAssignment(e.first, p)
-    result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
+    result.addReturn newEmptyNode()
   else:
-    result.add nnkReturnStmt.newNimNode(n).add p
+    result.addReturn p
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
@@ -59,8 +91,8 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
     else:
       when cpsMutant:
         ret.add newEmptyNode()
-        result.add n
-        result.add ret
+        result = nnkStmtList.newNimNode(n).add n
+        result.addReturn newEmptyNode()
       else:
         ret.add n
         result = ret
@@ -78,6 +110,8 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
 
 func isReturnCall(n: NimNode): bool =
   ## true if the node looks like a tail call
+  if n.isNil:
+    return false
   let n = stripComments n
   case n.kind
   # simple `return foo()`
@@ -87,20 +121,21 @@ func isReturnCall(n: NimNode): bool =
         result = true
   # `return foo(); proc foo() = ...`
   of nnkStmtList:
-    if len(n) > 0:
-      result = n.last.isReturnCall
+    result = n.firstReturn.isReturnCall
   else:
     discard
 
 func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
   ## fill `r` with `return foo()` if that is a safe simplification
+  {.warning: "asSimpleReturnCall disabled".}
+  return false
   var n = stripComments n
   block done:
     while n.kind == nnkStmtList:
       if len(n) != 1:
         break done
       n = n[0]
-    result = isReturnCall(n)
+    result = n.isReturnCall
     if result:
       r = newStmtList([doc "simple return call: " & n.repr, n])
 
@@ -218,14 +253,15 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
                          params = [env.root, newIdentDefs(locals,
                                                           env.root)])
 
-proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode =
+proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode {.deprecated.} =
   ## either create and return a tail call proc, or return nil
   if len(n) == 0:
-    # no code to run means we just `return Cont()`
-    when cpsMutant:
-      result = nnkReturnStmt.newNimNode(n).add newEmptyNode()
-    else:
-      result = nnkReturnStmt.newNimNode(n).add newCall(env.root)
+    result = nnkReturnStmt.newNimNode(n).add:
+      # no code to run means we just `return Cont()`
+      when cpsMutant:
+        newEmptyNode()
+      else:
+        newCall(env.root)
   else:
     # create a tail call with the given body
     result = env.makeTail(name, n)
@@ -247,13 +283,21 @@ proc callTail(env: var Env; scope: Scope): NimNode =
     result = env.tailCall(n)
   of nnkStmtList:
     # maybe we can optimize it out
-    if asSimpleReturnCall(n, result):
+    if n.len == 0:
+      result = nnkReturnStmt.newNimNode(n).add:
+        # no code to run means we just `return Cont()`
+        when cpsMutant:
+          newEmptyNode()
+        else:
+          newCall(env.root)
+    elif asSimpleReturnCall(n, result):
       discard "the call was stuffed into result"
-    elif isReturnCall(n):
+    elif not n.firstReturn.isNil:
       # just copy the call
       result = newStmtList([doc"verbatim tail call", n])
     else:
-      result = env.returnTail(genSym(nskProc, "tail"), n)
+      # create a tail call with the given body
+      result = env.makeTail(genSym(nskProc, "tail"), n)
   of nnkEmpty:
     error "empty node in call tail"
   else:
@@ -270,7 +314,11 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
     env.optimizeSimpleReturn(into, simple)
   else:
     into.doc "add an unoptimized tail call"
-    into.add env.callTail(newScope(n))
+    let call = env.callTail newScope(n)
+    if call.isReturnCall:
+      into.addReturn call
+    else:
+      into.add call
 
 proc saften(parent: var Env; input: NimNode): NimNode
 
@@ -327,8 +375,10 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       result.add env.tailCall(nc, returnTo(after))
       # include the definition for the after proc
       if after.node.kind != nnkSym:
-        # XXX: hack
-        result.add after.node
+        # add the proc definition and declaration without the return
+        for child in after.node.items:
+          if child.firstReturn.isNil:
+            result.add child
       result.doc "post-cps call; time to bail"
       # done!
       return
@@ -345,7 +395,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
     case nc.kind
     of nnkReturnStmt:
-      result.add env.rewriteReturn(nc)
+      # add a return statement with a potential result assignment
+      # stored in the environment
+      env.addReturn(result, nc)
 
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
@@ -512,8 +564,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
   if result.kind == nnkStmtList and n.kind in returner:
     # let a for loop, uh, loop
     if not env.insideFor:
-      let duh = stripComments result
-      if len(duh) > 0 and isReturnCall(duh.last):
+      if not result.firstReturn.isNil:
         result.doc "omit return call from " & $n.kind
       elif env.nextGoto.kind != nnkNilLit:
         result.doc "adding return call to " & $n.kind

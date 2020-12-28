@@ -630,7 +630,7 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
     # ignore the result symbol and create a new assignment
     result.add newAssignment(e.rs, n.last.last)
     # and just issue an empty `return`
-    result.add nnkReturnStmt.newTree newEmptyNode()
+    result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
   elif n.len == 1 and n[0].kind == nnkEmpty:
     # this is fine...
     result = n
