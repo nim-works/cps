@@ -521,28 +521,37 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
-proc rewriteIdentDefs(n: NimNode): NimNode =
-  ## Rewrite an identDefs to ensure it has three children.
-  if n.kind == nnkIdentDefs:
-    if len(n) == 2:
-      n.add newEmptyNode()
-    result = n
-
-proc rewriteVarLet(n: NimNode): NimNode =
-  ## Rewrite a var|let section of multiple identDefs
-  ## into multiple such sections with well-formed identDefs
-  if n.kind in {nnkLetSection, nnkVarSection}:
-    result = newStmtList()
-    for child in items(n):
-      # a new section with a single rewritten identdefs within
-      result.add newNimNode(n.kind, n).add(child)
-
 proc normalizingRewrites(n: NimNode): NimNode =
+  proc rewriteIdentDefs(n: NimNode): NimNode =
+    ## Rewrite an identDefs to ensure it has three children.
+    if n.kind == nnkIdentDefs:
+      if len(n) == 2:
+        n.add newEmptyNode()
+      result = n
+
+  proc rewriteVarLet(n: NimNode): NimNode =
+    ## Rewrite a var|let section of multiple identDefs
+    ## into multiple such sections with well-formed identDefs
+    if n.kind in {nnkLetSection, nnkVarSection}:
+      result = newStmtList()
+      for child in items(n):
+        # a new section with a single rewritten identdefs within
+        result.add newNimNode(n.kind, n).add(child)
+
+  proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
+    ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
+    case n.kind
+    of nnkHiddenAddr, nnkHiddenDeref:
+      result = n[0]
+    else: discard
+
   case n.kind
   of nnkIdentDefs:
     rewriteIdentDefs n
   of nnkLetSection, nnkVarSection:
     rewriteVarLet n
+  of nnkHiddenAddr, nnkHiddenDeref:
+    rewriteHiddenAddrDeref n
   else:
     nil
 
@@ -722,9 +731,21 @@ proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
   else:
     result = copy n
 
+proc workaroundRewrites(n: NimNode): NimNode =
+  proc workaroundSigmatchSkip(n: NimNode): NimNode =
+    if n.kind in nnkCallKinds:
+      # We recreate the node here, to set its .typ to nil
+      # so that sigmatch doesn't decide to skip it
+      result = newNimNode(n.kind)
+      for child in items(n):
+        result.add child
+
+  result = filter(n, workaroundSigmatchSkip)
+
 macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
+  result = workaroundRewrites(n)
 
 macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
