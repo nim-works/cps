@@ -377,7 +377,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       if after.node.kind != nnkSym:
         # add the proc definition and declaration without the return
         for child in after.node.items:
-          if child.firstReturn.isNil:
+          if child.kind == nnkProcDef:
             result.add child
       result.doc "post-cps call; time to bail"
       # done!
