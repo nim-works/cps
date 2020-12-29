@@ -71,24 +71,21 @@ testes:
   block:
     ## shadowing and proc param defaults
     ## https://github.com/disruptek/cps/issues/22
-    when true:
-      skip("broken until scopes are improved")
-    else:
-      proc foo(a, b, c: int = 3) {.cps: Cont.} =
-        ## a=1, b=2, c=3
-        var a: int = 5
-        ## a=5, b=2, c=3
-        noop()
-        ## a=5, b=2, c=3
-        var b: int = b + a
-        ## a=5, b=7, c=3
-        noop()
-        ## a=5, b=7, c=3
-        check:
-          a == 5
-          b == 7
-          c == 3
-      trampoline foo(1, 2)
+    proc foo(a, b, c: int = 3) {.cps: Cont.} =
+      ## a=1, b=2, c=3
+      var a: int = 5
+      ## a=5, b=2, c=3
+      noop()
+      ## a=5, b=2, c=3
+      var b: int = b + a
+      ## a=5, b=7, c=3
+      noop()
+      ## a=5, b=7, c=3
+      check:
+        a == 5
+        b == 7
+        c == 3
+    trampoline foo(1, 2)
 
   block:
     ## reassignment of var proc params
@@ -360,56 +357,53 @@ testes:
 
   block:
     ## shadow mission impossible
-    when true:
-      skip"will not work until new scopes go in"
-    else:
-      proc b(x: int) {.cps: Cont.} =
+    proc b(x: int) {.cps: Cont.} =
+      noop()
+      check x > 0
+      noop()
+      let x: int = 3
+      noop()
+      check x == 3
+      noop()
+      var y: int = 8
+      block:
         noop()
-        check x > 0
+        var x: int = 4
         noop()
-        let x: int = 3
+        inc x
         noop()
-        check x == 3
+        dec y
         noop()
-        var y: int = 8
-        block:
-          noop()
-          var x: int = 4
-          noop()
-          inc x
-          noop()
-          dec y
-          noop()
-          check x == 5
-          check y == 7
-        noop()
-        check x == 3
-        noop()
+        check x == 5
         check y == 7
+      noop()
+      check x == 3
+      noop()
+      check y == 7
 
-      proc a(x: int) {.cps: Cont.} =
-        noop()
-        check x > 0
-        noop()
-        check x > 0
-        noop()
-        var x: int = 2
-        noop()
-        check x == 2
-        noop()
-        spawn b(x)
-        noop()
-        check x == 2
-        noop()
-        check x == 2
+    proc a(x: int) {.cps: Cont.} =
+      noop()
+      check x > 0
+      noop()
+      check x > 0
+      noop()
+      var x: int = 2
+      noop()
+      check x == 2
+      noop()
+      spawn b(x)
+      noop()
+      check x == 2
+      noop()
+      check x == 2
 
-      spawn a(1)
-      run()
+    spawn a(1)
+    run()
 
   block:
     ## the sluggish yield test
     when defined(release):
-      skip("too slow for release mode")
+      skip"too slow for release mode"
     const
       start = 2
       tiny = 0
