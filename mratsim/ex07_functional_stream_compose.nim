@@ -9,15 +9,16 @@ proc infiniteList(): int {.coro.} =
     inc count
 
 proc takeWhile(source: sink Coroutine, cond: proc(x: int): bool): int {.coro.} =
-  # while (let val = pull(source); val.isSome() and val.get.cond()):
-  #   yield val
-  while true:
-    let val: int = source.pull()
-    if val.isSome() and val.get().cond():
-      yield val.get()
-    else: # The end of monkey patching, break or return
-          # lead to weird AST due to the "exiter" fix in transform.
-      return
+  # undeclared identifier "source" :/
+  while (let val = pull(source); val.isSome() and val.get.cond()):
+    yield val
+  # while true:
+  #   let val: int = source.pull()
+  #   if val.isSome() and val.get().cond():
+  #     yield val.get()
+  #   else: # The end of monkey patching, break or return
+  #         # lead to weird AST due to the "exiter" fix in transform.
+  #     return
 
 var a = infiniteList() # .takeWhile(x => x < 10)
 
