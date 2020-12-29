@@ -772,11 +772,14 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 proc workaroundRewrites(n: NimNode): NimNode =
   proc workaroundSigmatchSkip(n: NimNode): NimNode =
     if n.kind in nnkCallKinds:
-      # We recreate the node here, to set its .typ to nil
+      # We recreate the arguments nodes here, to set their .typ to nil
       # so that sigmatch doesn't decide to skip it
-      result = newNimNode(n.kind, n)
-      for child in n.items:
-        result.add child
+      result = n
+      for i in 1..<result.len:
+        if result[i].kind notin AtomicNodes:
+          var arg = newNimNode(result[i].kind, result[i])
+          for child in result[i].items: arg.add child
+          result[i] = arg
 
   result = filter(n, workaroundSigmatchSkip)
 
