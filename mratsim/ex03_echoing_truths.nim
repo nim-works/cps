@@ -17,8 +17,7 @@ proc echoingTruth(i: int) {.suspend.}=
 proc truthOrDare(lo: int, hi: int) {.resumable.} =
   var i: int = lo
   while i <= hi:
-    # TODO: "suspendAfter echoingTruthWorking(i)"
-    echoingTruth(i)
+    suspendAfter echoingTruth(i)
     inc i
 
 var a = truthOrDare(1, 4)

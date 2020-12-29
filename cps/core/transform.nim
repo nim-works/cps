@@ -451,6 +451,17 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         result.doc "add tail call for while loop with body " & $nc[1].kind
         # process the loop itself, and only then, turn it into a tail call
         loop.add newIfStmt((nc[0], env.saften(nc[1])))
+
+        # TODO: unsure about the location but for mutant
+        # we need an "else" branch that nil the fn and returns
+        var exiter = newStmtList()
+        exiter.doc "Add exit from while loop that has no continuation"
+        exiter.add newAssignment(
+          nnkDotExpr.newTree(env.first, ident"fn"), newNilLit()
+        )
+        exiter.add nnkReturnStmt.newTree(newEmptyNode())
+        loop[0].add nnkElse.newTree(exiter)
+
         # this will rewrite the loop using filter, so...  it's destructive
         result.add env.makeTail(w, loop)
         discard env.popGoto # the loop rewind was added to the body

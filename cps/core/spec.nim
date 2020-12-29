@@ -59,9 +59,10 @@ type
     #   - We always use "ref Continuation"
     #   - cont.envs is always an object of RootObj
 
-  Coroutine*[T] = concept coro
+  Coroutine* = concept coro
+    type Output = auto
     coro is Continuation
-    coro.promise is Option[T]
+    coro.promise is Option[Output]
     coro.hasFinished is bool
 
   Pair* = tuple
