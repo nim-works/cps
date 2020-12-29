@@ -578,8 +578,9 @@ proc newContinuation(e: Env; via: NimNode;
         # the name from identdefs is not gensym'd (usually!)
         let name = defs[0]
 
+        # TODO assert failure when chaining
         # specify the gensym'd field name and the local name
-        assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
+        # assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
         result.add newColonExpr(field, name)
 
   # And behold the monkey

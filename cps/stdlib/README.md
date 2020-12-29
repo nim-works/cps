@@ -7,7 +7,7 @@ Codename: **Unyielding**\
 *Resistance is futile, you will be assimilated*
 
 Coroutine-based:
-- [ ] closure iterators
+- [x] closure iterators
 - [ ] sequtils
 - [ ] algorithm
 - [ ] strutils
