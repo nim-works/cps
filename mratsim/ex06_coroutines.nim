@@ -8,7 +8,7 @@ import ../cps/core, options, macros
 proc counter(lo: int, hi: int): int {.coro.} =
   var i: int = lo
   while i <= hi:
-    coroYield i
+    yield i
     inc i
 
 var a = counter(3, 7)

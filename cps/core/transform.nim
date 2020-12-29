@@ -28,6 +28,13 @@ proc isCpsCall(n: NimNode): bool =
     if n.kind in callish:
       let p = n[0].getImpl
       result = p.hasPragma("cpsCall")
+      if p.kind != nnkNilLit: # not builtins
+        # Generics transform cpsCall into cpsCall() ¯\_(ツ)_/¯
+        result = result or ( # Assume that the pragma is alone for now
+          p[4].kind == nnkPragma and
+          p[4][0].kind == nnkCall and
+          p[4][0][0].eqIdent"cpsCall"
+        )
 
 proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`

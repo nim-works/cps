@@ -37,7 +37,7 @@ macro cps(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
   result = cpsXfrm(T, n)
 
-macro cpsMagic*(n: untyped{nkProcDef}): untyped =
+macro cpsMagic(n: untyped{nkProcDef}): untyped =
   ## upgrade cps primitives to generate errors out of context
   ## and take continuations as input inside {.cps.} blocks
   result = newStmtList()
@@ -66,20 +66,17 @@ macro cpsMagic*(n: untyped{nkProcDef}): untyped =
   # add it to our statement list result
   result.add m
 
-  echo "~~~cpsMagic~~~"
-  echo result.repr
-
   when not defined(nimdoc):
     # manipulate the primitive to take its return type as a first arg
     when not cpsMagicExists:
       n.params.insert(1, newIdentDefs(ident"c", n.params[0]))
     result.add n
 
-proc coroYield*(yieldedOut: int) {.cpsCall.} =
+proc coroYield*(yieldedOut: auto) {.cpsCall.} =
   {.warning: "yield is only valid in a coroutine context".}
 
-proc coroYield*(c: var Continuation, yieldedOut: int) {.inline, cpsCall.}=
-  # TODO: auto doesn't produce anything, why?
+proc coroYield*(c: var Continuation, yieldedOut: auto) {.inline, cpsCall.}=
+  # Important: auto/generics transform the cpsCall pragma to cpsCall()
   c.promise = some yieldedOut
   # TODO:
   # If the continuation has no further yield
@@ -315,7 +312,6 @@ proc coroProcDefImpl(def: NimNode): NimNode =
   let cpsMacro = bindSym"cps"
   redef.addPragma(nnkExprColonExpr.newTree(cpsMacro, ident(typeName)))
   result.add redef
-  echo result.repr
 
 proc suspendProcDefImpl(def: NimNode): NimNode =
   ## Inserts the continuation as the first param
