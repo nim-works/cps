@@ -36,16 +36,16 @@ proc isCpsCall(n: NimNode): bool =
 
 proc firstReturn(p: NimNode): NimNode =
   ## find the first return statement within statement lists, or nil
-  for child in p.items:
-    case child.kind
-    of nnkReturnStmt:
-      return child
-    of nnkStmtList:
+  case p.kind
+  of nnkReturnStmt:
+    result = p
+  of nnkStmtList:
+    for child in p.items:
       result = child.firstReturn
       if not result.isNil:
         break
-    else:
-      discard
+  else:
+    result = nil
 
 proc addReturn(p: var NimNode; n: NimNode) =
   ## adds a return statement if none exists; can consume nnkReturnStmt
