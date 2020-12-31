@@ -323,19 +323,19 @@ proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
 
 proc saften(parent: var Env; input: NimNode): NimNode
 
-proc procScope(env: var Env; parent: NimNode; name: string;
-              body: NimNode): Scope =
+proc procScope(env: var Env; parent: NimNode;
+              body: NimNode, name = "scope"): Scope =
     var body = env.prepProcBody(body)
     # ensure the proc body is rewritten
     body = env.saften(body)
     # generate a new name for this proc
-    var name = genSym(nskProc, name)
+    var procName = genSym(nskProc, name)
     # we'll return a scope holding the tail call to the proc
-    result = newScope(parent, name, env.makeTail(name, body))
+    result = newScope(parent, procName, env.makeTail(procName, body))
     result.goto = env.nextGoto
     result.brake = env.nextBreak
 
-proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
+proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
   ## split a statement list to create a tail call given
   ## a label prefix and an index at which to split
 
@@ -343,7 +343,7 @@ proc splitAt(env: var Env; n: NimNode; name: string; i: int): Scope =
     # if a tail remains after this crap
     # select lines from `i` to `n[^1]`
     var body = newStmtList(n[i+1 ..< n.len])
-    result = procScope(env, n[i], name, body)
+    result = procScope(env, n[i], body, name)
   else:
     # there's nothing left to do in this scope; we're
     # going to just return the next goto (this might be empty)
@@ -372,7 +372,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
     if nc.isCpsCall:
       # we want to make sure that a pop inside the after body doesn't
       # return to after itself, so we don't add it to the goto list...
-      let after = env.splitAt(n, "after", i)
+      let after = splitAt(env, n, i, "after")
       result.add env.tailCall(nc, returnTo(after))
       # include the definition for the after proc
       if after.node.kind != nnkSym:
@@ -380,7 +380,6 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         for child in after.node.items:
           if child.kind == nnkProcDef:
             result.add child
-      result.doc "post-cps call; time to bail"
       # done!
       return
 
@@ -388,7 +387,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       # if the child is a cps block (not a call), then push a tailcall
       # onto the stack during the saftening of the child
       if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
-        withGoto env.splitAt(n, "exit", i):
+        withGoto env.splitAt(n, i, "exit"):
           result.add env.saften(nc)
           result.doc "add the exit proc definition"
           # we've completed the split, so we're done here
@@ -436,7 +435,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
           field = name
 
         # skip this node by passing i + 1 to the split
-        let after = env.splitAt(n, "after", i + 1)
+        let after = env.splitAt(n, i + 1, "after")
         # we add it to the goto stack as usual
         env.addGoto(after)
 
@@ -448,7 +447,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         var body = newStmtList()
         # add the call to the cps proc and let it get saftened as per usual
         body.add call
-        let shim = procScope(env, nc, "shim", body)
+        let shim = procScope(env, nc, body, "shim")
         assert shim.name != nil
 
         # now we'll add a tail call to the shim; gratuitous returnTo?
@@ -466,7 +465,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
           result.add list
 
     of nnkForStmt:
-      withBreak env.splitAt(n, "brake", i):
+      withBreak env.splitAt(n, i, "brake"):
         nc[^1] = env.saften(nc[^1])
         result.add nc
 
@@ -493,7 +492,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         result.add env.tailCall(returnTo(env.namedBreak(nc)))
 
     of nnkBlockStmt:
-      let bp = env.splitAt(n, "brake", i)
+      let bp = env.splitAt(n, i, "brake")
       env.addBreak bp
       withGoto bp:
         try:
@@ -508,8 +507,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
-      let bp = env.splitAt(n, "brake", i)
+      let bp = env.splitAt(n, i, "brake")
       # we have to assume a break may exist
+      # XXX: we can probably determine this safely now that we're typed
       let brakeEngaged = true
       if brakeEngaged:
         env.addBreak bp
@@ -535,7 +535,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
       # if any `if` clause is a cps block, then every clause must be
       # if we've pushed any goto or breaks, then we're already in cps
       if nc.isCpsBlock:
-        withGoto env.splitAt(n, "maybe", i):
+        withGoto env.splitAt(n, i, "maybe"):
           result.doc "add if body"
           result.add env.saften(nc)
           # the split is complete
@@ -547,9 +547,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         result.doc "if body inside cps"
         result.add env.saften(nc)
       else:
-        result.doc "boring if body"
         result.add env.saften(nc)
-
     else:
       result.add env.saften(nc)
 
@@ -557,7 +555,7 @@ proc saften(parent: var Env; input: NimNode): NimNode =
     if i < n.len-1:
       # and it's a cps call,
       if nc.isCpsCall or nc.isCpsBlock:
-        let x = env.splitAt(n, "tail", i)
+        let x = env.splitAt(n, i, "tail")
         env.optimizeSimpleReturn(result, x.node)
         # the split is complete
         return
