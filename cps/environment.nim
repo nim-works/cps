@@ -643,6 +643,13 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   else:
     raise newException(Defect, "unexpected return form\n" & treeRepr(n))
 
+proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
+  ## swap symbols for those in the continuation
+  result = n
+  let child = e.castToChild(e.first)
+  for field, section in pairs(e):
+    result = result.resym(section[0][0], newDotExpr(child, field))
+
 proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   when cpsExcept:
     var wrap = nnkTryStmt.newNimNode(n)
@@ -667,10 +674,7 @@ proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   else:
     result = n
 
-  # swap symbols for those in the continuation
-  let child = e.castToChild(e.first)
-  for field, section in pairs(e):
-    result = result.resym(section[0][0], newDotExpr(child, field))
+  result = rewriteSymbolsIntoEnvDotField(e, n)
 
 when false:
   # we don't do local retrievals anymore because now we just substitute
