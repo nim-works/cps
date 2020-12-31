@@ -20,6 +20,7 @@ const
   cpsExcept* {.booldefine.} = false      ## also stash exceptions
   cpsFn* {.booldefine.} = false          ## multiple fns in continuations
   cpsTrampBooty* {.booldefine.} = false  ## put a tramp in da booty
+  cpsTrustSigHash* {.booldefine.} = true ## trust signatureHash(symbol)
   comments* = cpsDebug         ## embed comments within the transformation
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
@@ -40,6 +41,38 @@ type
     key: NimNode
     val: NimNode
 
+func cpsHash*(n: NimNode): auto =
+  ## hash a symbol to safely disambiguate it from similar nodes
+  when cpsTrustSigHash:
+    result = signatureHash(n)
+  else:
+    var h: Hash = 0
+    if n.isNil or n.kind == nnkNilLit:
+      return h
+    expectKind(n, nnkSym)
+    if not n.owner.isNil:
+      case n.owner.kind
+      of nnkSym:
+        if n.owner.kind == nnkSym:
+          case n.owner.symKind
+          of {NimSymKind.low .. NimSymKind.high}:
+            h = h !& hash(n.owner.symKind)         # owner kind
+            h = h !& cpsHash(n.owner)              # owner
+          else:
+            # it's, like, not a valid value (24, in my tests)
+            #debugEcho ord(n.owner.symKind), " (", $n.owner.symKind, ")"
+            discard
+      of nnkNilLit:
+        discard
+      else:
+        raise newException(Defect, "expected owner kind of sym or nil")
+    h = h !& hash(n.strVal)                    # name
+    # ...
+    h = h !& hash(n.lineInfoObj.line)          # line
+    h = h !& hash(n.lineInfoObj.column)        # column
+    #debugEcho n.strVal, " ", n.symKind, " ", ord(n.symKind), " ", n.lineInfoObj.line, " ", n.lineInfoObj.column, " hash ", signatureHash(n)
+    result = !$h
+
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
   result = not n.isNil and n.kind == nnkEmpty
@@ -55,12 +88,24 @@ proc desym*(n: NimNode): NimNode =
   result = if n.kind == nnkSym: ident(repr n) else: n
 
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
+  #debugEcho "resym call on ", treeRepr(sym), " into ", repr(field)
   if sym.kind == nnkSym:
-    let sig = signatureHash(sym)
+    let sig = cpsHash(sym)
     proc resymify(n: NimNode): NimNode =
       if n.kind == nnkSym:
-        if signatureHash(n) == sig:
-          result = field
+        if n.strVal == sym.strVal:
+          when false:
+            debugEcho "old ", sym.repr
+            debugEcho "old ", getImpl(sym).treeRepr
+            debugEcho "old ", cpsHash(sym)
+            debugEcho "new ", n.repr
+            debugEcho "new ", getImpl(n).treeRepr
+            debugEcho "new ", cpsHash(n)
+          if cpsHash(n) == sig:
+            result = field
+          else:
+            ##debugEcho "sig ", sym.treeRepr, " hash ", sig, " vs. ",
+            ##  n.treeRepr, " hash ", cpsHash(n), " unequal ", field.repr
     result = filter(n, resymify)
   else:
     result = n
