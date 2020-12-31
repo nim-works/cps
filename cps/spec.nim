@@ -87,6 +87,20 @@ proc filter*(n: NimNode; f: NodeFilter): NimNode =
 proc desym*(n: NimNode): NimNode =
   result = if n.kind == nnkSym: ident(repr n) else: n
 
+proc unhide*(n: NimNode): NimNode =
+  ## unwrap hidden nodes
+  proc unhidden(n: NimNode): NimNode =
+    case n.kind
+    of nnkHiddenStdConv:
+      result = copy(unhide n.last)
+    of nnkHiddenCallConv:
+      result = nnkCall.newNimNode(n)
+      for child in n.items:
+        result.add copy(unhide child)
+    else:
+      discard
+  result = filter(n, unhidden)
+
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   #debugEcho "resym call on ", treeRepr(sym), " into ", repr(field)
   if sym.kind == nnkSym:

@@ -631,6 +631,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
     else:
       debugEcho repr(n).numberedLines(info.line)
 
+  # strip hidden converters early
+  var n = unhide n
+
   # establish a new environment with the supplied continuation type;
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
@@ -711,7 +714,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
         booty.body.add env.rootResult(ident"result", booty.name)
 
   # we can't mutate typed nodes, so copy ourselves
-  var n = cloneProc n
+  n = cloneProc n
 
   # and do some pruning of these typed trees
   for p in [booty, n]:
