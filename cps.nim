@@ -431,7 +431,8 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         # add the local into the env so we can install the field
         var field: NimNode
         for name, list in env.localSection(nc):
-          # we only really care about caching the name
+          # we only really care about caching the name;
+          assert field == nil, "too many variable names in section"
           field = name
 
         # skip this node by passing i + 1 to the split
