@@ -529,7 +529,7 @@ proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
   ##      or, `result = rootResult(ident"result", )`
   result = newAssignment(name, e.newContinuation(e.first, goto, defaults = false))
 
-proc defineLocals*(e: var Env; goto: NimNode): NimNode =
+proc defineLocals*(e: var Env; into: var NimNode; goto: NimNode): NimNode =
   # we store the type whenever we define locals, because the next code that
   # executes may need to cut a new type.  to put this another way, a later
   # scope may add a name that clashes with a scope ancestor of ours that is
@@ -539,24 +539,30 @@ proc defineLocals*(e: var Env; goto: NimNode): NimNode =
     # actually, we don't store it here because it might not be necessary;
     # but if we were to store it, which we aren't, we'd want to do it up
     # here (but we're not) because this may precede a read from a cps proc.
+    #
+    # reasons to put this back in or remove it entirely:
+    # - we no longer maintain refs to the identity node,
+    # - we change the order by which we rewrite blocks,
+    # - we no longer use inheritance, use unions, etc.
     e = e.storeType
 
-  # setup the continuation for a tail call to a possibly new environment
+  # setup the continuation for a tail call to a possibly new environment;
+  # this ctor variable is used in the bottom leg of the `when` below...
   var ctor = e.newContinuation(e.identity, goto)
 
   if e.first.isNil or e.first.isEmpty:
     # we don't have a local continuation; just use the ctor we built
-    result = ctor
+    result = e.maybeConvertToRoot(ctor)
   else:
     # when we can reuse the continuation, we'll merely set the fn pointer
-    var reuse = newStmtList(
-      doc"re-use the local continuation by setting the fn",
-      newAssignment(newDotExpr(e.first, e.fn), goto),
-      e.first)
+    assert into.kind == nnkStmtList
+    into.doc "re-use the local continuation by setting the fn"
+    into.add newAssignment(newDotExpr(e.first, e.fn), goto)
     when true:
       # FIXME: we currently cheat.
-      result = reuse
+      result = e.first
     else:
+      # TODO: this dead code is no longer accurate; don't enable it blindly!
       # this when statement returns an e.identity one way or another
       result = nnkWhenStmt.newNimNode
       result.add nnkElifBranch.newTree(

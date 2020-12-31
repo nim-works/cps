@@ -71,9 +71,10 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   # install locals as the 1st argument
   assert p.isCpsCall, "does not appear to be a cps call"
   result = newStmtList()
-  let locals = e.defineLocals(n)  # goto supplied identifier, not nextGoto!
+  # goto supplied identifier, not nextGoto!
+  let locals = e.defineLocals(result, n)
   p[0] = desym(p[0])              # de-sym the proc target
-  p.insert(1, e.maybeConvertToRoot(locals))
+  p.insert(1, locals)
   when cpsMutant:
     result.add newAssignment(e.first, p)
     result.addReturn newEmptyNode()
@@ -100,12 +101,12 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
     # return a statement list including the setup for the locals
     # and the return statement casting those locals to the root type
     result = newStmtList()
-    let locals = e.defineLocals(n)
+    let locals = e.defineLocals(result, n)
     when cpsMutant:
       ret.add newEmptyNode()
-      result.add newAssignment(e.first, e.maybeConvertToRoot(locals))
+      result.add newAssignment(e.first, locals)
     else:
-      ret.add e.maybeConvertToRoot(locals)
+      ret.add locals
     result.add ret
 
 func isReturnCall(n: NimNode): bool =
