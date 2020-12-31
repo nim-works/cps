@@ -17,15 +17,17 @@ testes:
   proc adder(x: var int) =
     inc x
 
-  block noop_magic:
+  block:
+    ## noop is a primitive that merely sheds scope
     var j = 2
     proc foo() {.cps: Cont.} =
       var i = 3
       j = 4
       noop()
+      inc j
       check i == 3
     trampoline foo()
-    check j == 4
+    check j == 5, "expected 5, got " & $j
 
   block trampoline:
     r = 0
@@ -351,14 +353,14 @@ testes:
   block:
     ## the famous tock test
     proc foo(name: string; ms: int) {.cps: Cont.} =
-      var count: int = 10
+      var count = 10
       while count > 0:
         dec count
-        sleep(ms)
+        sleep ms
         checkpoint name, " ", count
 
-    foo("tick", 3)
-    foo("foo", 7)
+    spawn foo("tick", 3)
+    spawn foo("foo", 7)
     run()
 
   block:
