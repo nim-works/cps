@@ -84,7 +84,8 @@ testes:
 
   block:
     ## reassignment of var proc params
-    ## https://github.com/disruptek/cps/issues/22 (2nd)
+    ## https://github.com/disruptek/cps/issues/47
+    skip"pending issue"
     proc foo(a, b, c: var int) {.cps: Cont.} =
       a = 5
       noop()
@@ -360,7 +361,7 @@ testes:
         checkpoint name, " ", count
 
     spawn foo("tick", 3)
-    spawn foo("foo", 7)
+    spawn foo("tock", 7)
     run()
 
   block:
