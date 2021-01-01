@@ -49,7 +49,7 @@ template expPrims(expect: int, body: untyped) =
   doAssert prims == expect, "prim was called " & $prims & " times, expected " & $expect
 
 
-# Wrapper for defining a cps function and sending it to the trampoline
+# Wrapper for defining a function and sending it to the trampoline
 
 template runCps(body: untyped) =
   proc t(): C {.cps:C.} = body
@@ -66,101 +66,101 @@ testes:
 
   test "onecall":
     expPrims 1: runCps:
-      cps prim()
+      prim()
 
   test "twocall":
     expPrims 2: runCps:
-      cps prim()
-      cps prim()
+      prim()
+      prim()
 
   test "if true":
     expPrims 3: runCps:
       var a: int
-      cps prim()
+      prim()
       if true:
-        cps prim()
-      cps prim()
+        prim()
+      prim()
 
   test "if false":
     expPrims 2: runCps:
       var a: int
-      cps prim()
+      prim()
       if false:
-        cps prim()
-      cps prim()
+        prim()
+      prim()
 
   test "if true if false":
     expPrims 3: runCps:
-      cps prim()
+      prim()
       if true:
-        cps prim()
+        prim()
       if false:
-        cps prim()
-      cps prim()
+        prim()
+      prim()
 
   test "nested if 1":
     expPrims 4: runCps:
       var a: int
-      cps prim()
+      prim()
       if true:
-        cps prim()
+        prim()
         if true:
-          cps prim()
-      cps prim()
+          prim()
+      prim()
 
   test "nested if 2":
     expPrims 3: runCps:
       var a: int
-      cps prim()
+      prim()
       if true:
-        cps prim()
+        prim()
         if false:
-          cps prim()
-      cps prim()
+          prim()
+      prim()
 
   test "nested if 3":
     expPrims 2: runCps:
-      cps prim()
+      prim()
       if false:
-        cps prim()
+        prim()
         if true:
-          cps prim()
-      cps prim()
+          prim()
+      prim()
 
   test "block1":
     expPrims 3: runCps:
-      cps prim()
+      prim()
       block:
-        cps prim()
-      cps prim()
+        prim()
+      prim()
 
   test "while1":
     expPrims 5: runCps:
-      cps prim()
+      prim()
       var a: int = 0
       while a < 3:
-        cps prim()
+        prim()
         inc a
-      cps prim()
+      prim()
 
   test "break1":
     expPrims 3: runCps:
-      cps prim()
+      prim()
       while true:
-        cps prim()
+        prim()
         break
-        cps prim()
-      cps prim()
+        prim()
+      prim()
 
   test "break2":
     expPrims 3: runCps:
-      cps prim()
+      prim()
       block:
-        cps prim()
+        prim()
         break
-        cps prim()
-        cps prim()
-      cps prim()
+        prim()
+        prim()
+      prim()
 
   test "for1":
     runCps:
@@ -172,7 +172,7 @@ testes:
   test "for2":
     expPrims 1: runCps:
       var a: int = 0
-      cps prim()
+      prim()
       for i in 0..3:
         inc a, 1
       check a == 4
@@ -185,14 +185,14 @@ testes:
 
   test "continue":
     expPrims 8: runCps:
-      cps prim()
+      prim()
       var i: int = 0
       while i < 10:
         inc i
         if i < 5:
           continue
-        cps prim()
-      cps prim()
+        prim()
+      prim()
 
   test "for3":
     expPrims 1: runCps:
@@ -200,14 +200,14 @@ testes:
       for i in 0..3:
         inc a, 1
       check a == 4
-      cps prim()
+      prim()
 
   test "defer":
     expPrims 3: runCps:
-      cps prim()
+      prim()
       defer:
-        cps prim()
-      cps prim()
+        prim()
+      prim()
 
   test "nested while":
     expPrims 100: runCps:
@@ -218,13 +218,13 @@ testes:
         j = 0
         while j < 10:
           inc j
-          cps prim()
+          prim()
 
   test "paper example 1":
     expPrims 2: runCps:
       var t: bool = false
       while not t:
-        cps prim()
+        prim()
         break
-        cps prim()
-      cps prim()
+        prim()
+      prim()
