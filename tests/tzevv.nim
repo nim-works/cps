@@ -1,8 +1,9 @@
 const
   skippy {.booldefine.} = false
 
+import testes
 import std/macros
-import std/unittest
+#import std/unittest
 
 import cps
 
@@ -38,7 +39,7 @@ template expJumps(expect: int, body: untyped) =
 
 var prims = 0
 
-proc prim(): C {.cpsMagic.} =
+proc prim(c: C): C {.cpsMagic.} =
   inc prims
   return c
 
@@ -57,7 +58,7 @@ template runCps(body: untyped) =
 
 var r: int
 
-suite "cps":
+testes:
 
   test "nocall":
     expPrims 0: runCps:
