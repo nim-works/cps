@@ -50,70 +50,84 @@ The provided `selectors`-based event queue is imported as `cps/eventqueue`. The
 your continuations.
 
 ```nim
-import std/times       # Duration
+# all cps programs need the cps macro to perform the transformation
+import cps
 
-import cps             # .cps. macro
-import cps/eventqueue  # sleep(), trampoline, run(), Cont
+# but each usage of the .cps. macro can have its own dispatcher
+# implementation and continuation type, allowing you to implement
+# custom forms of async or using an existing library implementation
+from cps/eventqueue import sleep, run, spawn, trampoline, Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
-proc tock(name: string; interval: Duration) {.cps: Cont.} =
-  var count: int = 10
+proc tock(name: string; ms: int) {.cps: Cont.} =
+  ## echo the `name` at `ms` millisecond intervals, ten times
+
+  # a recent change to cps allows us to use type inference
+  var count = 10
+  # `for` loops are not supported yet
   while count > 0:
     dec count
-    # this primitive sends the continuation to the dispatcher
-    yield sleep(interval)
-    # this is executed from the dispatcher
+    # the dispatcher supplied this primitive which receives the
+    # continuation and returns control to the caller immediately
+    sleep ms
+    # subsequent control-flow is continues from the dispatcher
+    # when it elects to resume the continuation
     echo name, " ", count
 
-# the trampoline repeatedly invokes continuations...
-trampoline tock("tick", initDuration(milliseconds = 300))
-# ...until they complete or are queued in the dispatcher
-trampoline tock("tock", initDuration(milliseconds = 700))
+# NOTE: all the subsequent code is supplied by the chosen dispatcher
 
-# run the dispatcher to invoke pending continuations
+# the trampoline repeatedly invokes continuations until they
+# complete or are queued in the dispatcher; this call does not block
+trampoline tock("tick", ms = 300)
+
+# you can also send a continuation directly to the dispatcher;
+# this call does not block
+spawn tock("tock", ms = 700)
+
+# run the dispatcher to invoke its pending continuations from the queue;
+# this is a blocking call that completes when the queue is empty
 run()
 ```
 ...is rewritten during compilation to something like...
 
 ```nim
+import cps
+from cps/eventqueue import sleep, run, spawn, trampoline, Cont
+
 type
-  env0_18406164 = ref object of Cont
-    name2_18406181: string
-    ms3_18406189: int
-    count4_18406302: int
+  env_33554698 = ref object of Cont
+    name_33554715: string
+    ms_33554724: int
+    count_33555007: int
 
-proc loop_18406303(continuation: Cont): Cont
-proc after_18406343(continuation: Cont): Cont
-proc after_18406343(continuation: Cont): Cont =
-  template name = env0_18406164(continuation).name2_18406181
-  template ms = env0_18406164(continuation).ms3_18406189
-  template count = env0_18406164(continuation).count4_18406302
-  echo name, " ", count
-  return Cont:
-    continuation.fn = loop_18406303
-    continuation
+proc loop_33555024(continuation: Cont): Cont
+proc after_33555046(continuation: Cont): Cont
 
-proc loop_18406303(continuation: Cont): Cont =
-  template name = env0_18406164(continuation).name2_18406181
-  template ms = env0_18406164(continuation).ms3_18406189
-  template count = env0_18406164(continuation).count4_18406302
-  if count > 0:
-    dec count
-    return sleep(Cont:
-      continuation.fn = after_18406343
-      continuation, ms)
-  return nil
+proc loop_33555024(continuation: Cont): Cont =
+  if 0 < env_33554698(continuation).count_33555007:
+    dec env_33554698(continuation).count_33555007
+    continuation.fn = after_33555046
+    return sleep continuation, env_33554698(continuation).ms_33554724
+
+proc after_33555046(continuation: Cont): Cont =
+  echo env_33554698(continuation).name_33554715, " ",
+       env_33554698(continuation).count_33555007
+  continuation.fn = loop_33555024
+  return continuation
+
+proc tock(continuation: Cont): Cont =
+  env_33554698(continuation).count_33555007 = 10
+  continuation.fn = loop_33555024
+  return continuation
 
 proc tock(name: string; ms: int): Cont =
-  result = env0_18406164(fn: nil, ms3_18406189: ms, name2_18406181: name)
-  template continuation = result
-  template name = env0_18406164(continuation).name2_18406181
-  template ms = env0_18406164(continuation).ms3_18406189
-  template count = env0_18406164(continuation).count4_18406302
-  count = 10
-  return Cont:
-    continuation.fn = loop_18406303
-    continuation
+  result = env_33554698(fn: tock, ms_33554724: ms, name_33554715: name)
+
+trampoline tock("tick", ms = 300)
+
+spawn tock("tock", ms = 700)
+
+run()
 ```
 ...and when built with `--define:cpsDebug`, outputs something like...
 
