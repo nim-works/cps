@@ -620,7 +620,6 @@ proc cloneProc(n: NimNode): NimNode =
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
-  when defined(nimdoc): return n
 
   # enhanced spam before it all goes to shit
   when cpsDebug:
@@ -802,7 +801,10 @@ proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
 
 macro cps*(T: typed, n: typed): untyped =
   # I hate doing stuff inside macros, call the proc to do the work
-  result = cpsXfrm(T, n)
+  when defined(nimdoc):
+    result = n
+  else:
+    result = cpsXfrm(T, n)
 
 macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
