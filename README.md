@@ -25,7 +25,6 @@ These continuations...
 - may be dispatched using your own custom dispatcher
 - may be moved between threads to parallelize execution
 - require no `{.gcsafe.}` for global/local accesses
-- are only 10-15% slower than Nim's native iterators
 - are faster and lighter than async/await futures
 
 ## Work In Progress
@@ -55,7 +54,7 @@ import cps
 
 # but each usage of the .cps. macro can have its own dispatcher
 # implementation and continuation type, allowing you to implement
-# custom forms of async or using an existing library implementation
+# custom forms of async or use an existing library implementation
 from cps/eventqueue import sleep, run, spawn, trampoline, Cont
 
 # a procedure that starts off synchronous and becomes asynchronous
