@@ -91,12 +91,19 @@ proc unhide*(n: NimNode): NimNode =
   ## unwrap hidden nodes
   proc unhidden(n: NimNode): NimNode =
     case n.kind
-    of nnkHiddenStdConv:
-      result = copy(unhide n.last)
     of nnkHiddenCallConv:
       result = nnkCall.newNimNode(n)
       for child in n.items:
-        result.add copy(unhide child)
+        result.add copyNimTree(unhide child)
+    of CallNodes - {nnkHiddenCallConv}:
+      # FIXME: a nutty hack to rewrite varargs conversions
+      if n.len > 1 and n.last.kind == nnkHiddenStdConv:
+        result = copyNimNode(n)
+        for index in 0 ..< n.len - 1: # ie, omit last
+          result.add copyNimTree(unhide n[index])
+        expectKind(n.last.last, nnkBracket)
+        for converted in n.last.last.items:
+          result.add copyNimTree(unhide converted)
     else:
       discard
   result = filter(n, unhidden)
