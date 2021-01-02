@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/github/license/disruptek/cps?style=flat)](#license)
 
 This project provides a macro `cps` which you can apply to a procedure to
-rewrite it to use continuations for control flow.
+rewrite it to use continuations for control-flow.
 
 All runtime functionality is implemented in a dispatcher which you can replace
 to completely change the type and behavior of your continuations.
@@ -14,7 +14,7 @@ to completely change the type and behavior of your continuations.
 For a description of the origins of this concept, see the included papers
 and https://github.com/zevv/nimcsp.
 
-## Why
+## Why?
 
 These continuations...
 
@@ -33,20 +33,15 @@ The macro itself should be considered alpha quality. It is expected to
 fail frequently, but it is in a state where we can begin to add tests and
 refinement.
 
-The included dispatcher is based upon
-[selectors](https://nim-lang.org/docs/selectors.html), so you can see how the
-features of that module will map quite easily to the following list.
+## Example Usage
 
-Windows is not supported by the included dispatcher yet due to the lack of
-native timer support in `selectors`, but [an ioselectors package that supports
-Windows](https://github.com/xflywind/ioselectors) is in an advanced stage of
-development.
+The `cps` macro will use whatever return value you specify to determine the
+type of your continuations. This type is typically a `ref object of RootObj` so
+you can use it with inheritance.
 
-## Usage
-
-The provided `selectors`-based event queue is imported as `cps/eventqueue`. The
-`cps` macro will use whatever return value you specify to determine the type of
-your continuations.
+The included sample `selectors`-based event queue is imported as
+`cps/eventqueue` in this example, but again, this is something that you can
+swap out with the implementation of your choice.
 
 ```nim
 # all cps programs need the cps macro to perform the transformation
@@ -57,18 +52,25 @@ import cps
 # custom forms of async or use an existing library implementation
 from cps/eventqueue import sleep, run, spawn, trampoline, Cont
 
-# a procedure that starts off synchronous and becomes asynchronous
+# this procedure is written in a simple synchronous style, but when
+# the .cps. is applied during compilation, it is rewritten to use
+# the Cont type in a series of asynchronous continuations
+
 proc tock(name: string; ms: int) {.cps: Cont.} =
   ## echo the `name` at `ms` millisecond intervals, ten times
 
   # a recent change to cps allows us to use type inference
   var count = 10
+
   # `for` loops are not supported yet
   while count > 0:
+
     dec count
+
     # the dispatcher supplied this primitive which receives the
     # continuation and returns control to the caller immediately
     sleep ms
+
     # subsequent control-flow is continues from the dispatcher
     # when it elects to resume the continuation
     echo name, " ", count
@@ -132,6 +134,17 @@ run()
 
 ![tick-tock demonstration](docs/demo.svg "tick-tock demonstration")
 
+## Notes on the Example Dispatcher
+
+The included dispatcher is based upon
+[selectors](https://nim-lang.org/docs/selectors.html), so you can see how the
+features of that module will support typical I/O operations with CPS.
+
+Windows is not supported by the sample dispatcher yet due to the lack of
+native timer support in `selectors`, but [an ioselectors package that supports
+Windows](https://github.com/xflywind/ioselectors) is in an advanced stage of
+development.
+
 ## Hacking
 
 - use `--define:cpsDebug` to get extra debugging output
@@ -155,7 +168,7 @@ Here are some tests that Zevv prepared:
 
 ![zevv tests](docs/tzevv.svg "zevv tests")
 
-Here are the simpler tests of AST rewrites:
+Here are more contrived tests of AST rewrites:
 
 ![taste tests](docs/taste.svg "taste tests")
 

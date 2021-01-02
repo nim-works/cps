@@ -6,18 +6,24 @@ import cps
 # custom forms of async or using an existing library implementation
 from cps/eventqueue import sleep, run, spawn, trampoline, Cont
 
-# a procedure that starts off synchronous and becomes asynchronous
+# this procedure is written in a simple synchronous style, but when
+# the .cps. is applied during compilation, it is rewritten to use
+# the Cont type in a series of asynchronous continuations
 proc tock(name: string; ms: int) {.cps: Cont.} =
   ## echo the `name` at `ms` millisecond intervals, ten times
 
   # a recent change to cps allows us to use type inference
   var count = 10
+
   # `for` loops are not supported yet
   while count > 0:
+
     dec count
+
     # the dispatcher supplied this primitive which receives the
     # continuation and returns control to the caller immediately
     sleep ms
+
     # subsequent control-flow is continues from the dispatcher
     # when it elects to resume the continuation
     echo name, " ", count
