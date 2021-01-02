@@ -196,7 +196,8 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   let pragmas = nnkPragma.newTree bindSym"cpsLift"
   result = newStmtList()
   result.doc "new tail call: " & name.repr
-  result.add env.tailCall(name)
+  result.add:
+    tailCall(env, name)
   if n.kind == nnkProcDef:
     result.doc "adding the proc verbatim"
     result.add n
@@ -234,19 +235,6 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
                          params = [env.root, newIdentDefs(locals,
                                                           env.root)])
 
-proc returnTail(env: var Env; name: NimNode; n: NimNode): NimNode {.deprecated.} =
-  ## either create and return a tail call proc, or return nil
-  if len(n) == 0:
-    result = nnkReturnStmt.newNimNode(n).add:
-      # no code to run means we just `return Cont()`
-      when cpsMutant:
-        newEmptyNode()
-      else:
-        newCall(env.root)
-  else:
-    # create a tail call with the given body
-    result = env.makeTail(name, n)
-
 proc callTail(env: var Env; scope: Scope): NimNode =
   ## given a node, either turn it into a
   ## `return call(); proc call() = ...`
@@ -261,7 +249,7 @@ proc callTail(env: var Env; scope: Scope): NimNode =
     warning "weirdo"
   of nnkIdent, nnkSym, nnkNilLit:
     # it's an identifier, symbol, or nil; just issue a call of it
-    result = env.tailCall(n)
+    result = tailCall(env, n)
   of nnkStmtList:
     # maybe we can optimize it out
     if n.len == 0:
@@ -356,7 +344,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       # we want to make sure that a pop inside the after body doesn't
       # return to after itself, so we don't add it to the goto list...
       let after = splitAt(env, n, i, "afterCall")
-      result.add env.tailCall(nc, returnTo(after))
+      result.add:
+        tailCall(env, nc):
+          returnTo after
       # include the definition for the after proc
       if after.node.kind != nnkSym:
         # add the proc definition and declaration without the return
@@ -439,7 +429,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         assert shim.name != nil
 
         # now we'll add a tail call to the shim; gratuitous returnTo?
-        result.add env.tailCall(shim.name, returnTo(after))
+        result.add:
+          tailCall(env, shim.name):
+            returnTo after
 
         # let's get the hell outta here before things get any uglier
         return
@@ -463,7 +455,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.add nc
       else:
         # else, goto the top of the loop
-        result.add env.tailCall returnTo(env.topOfWhile)
+        result.add:
+          tailCall env:
+            returnTo env.topOfWhile
 
     of nnkBreakStmt:
       if env.insideFor and (len(nc) == 0 or nc[0].isEmpty):
@@ -471,13 +465,19 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.add nc
       elif env.nextBreak.isNil:
         #assert false, "no break statements to pop"
-        result.add env.tailCall(returnTo(env.nextBreak))
+        result.add:
+          tailCall env:
+            returnTo env.nextBreak
       elif (len(nc) == 0 or nc[0].isEmpty):
         result.doc "simple break statement"
-        result.add env.tailCall(returnTo(env.nextBreak))
+        result.add:
+          tailCall env:
+            returnTo env.nextBreak
       else:
         result.doc "named break statement to " & repr(nc[0])
-        result.add env.tailCall(returnTo(env.namedBreak(nc)))
+        result.add:
+          tailCall env:
+            returnTo namedBreak(env, nc)
 
     of nnkBlockStmt:
       let bp = env.splitAt(n, i, "blockBreak")
@@ -555,7 +555,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.doc "omit return call from " & $n.kind
       elif env.nextGoto.kind != nnkNilLit:
         result.doc "adding return call to " & $n.kind
-        result.add env.tailCall returnTo(env.nextGoto)
+        result.add:
+          env.tailCall:
+            returnTo env.nextGoto
       else:
         discard "nil return; no remaining goto for " & $n.kind
 
