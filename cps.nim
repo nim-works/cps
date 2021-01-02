@@ -177,18 +177,6 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
       result = newEmptyNode()
   result = filter(n, liften)
 
-  when true:
-    # we currently install proc declarations during proc construction
-    discard
-  else:
-    # clone the proc declarations
-    proc declaren(n: NimNode): NimNode =
-      if n.kind == nnkProcDef:
-        var decl = copyNimTree(n)
-        decl.body = newEmptyNode()
-        result = newStmtList(decl, n)
-    var lifted = filter(lifted, declaren)
-
   # flatten the series of declarations
   var flatter: seq[NimNode]
   proc flatten(n: NimNode): NimNode {.nosinks.} =
