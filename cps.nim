@@ -351,10 +351,6 @@ proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
 
 proc saften(parent: var Env; input: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
-  result = copyNimNode input
-
-  when cpsDebug and false:
-    echo input.snippet "saften"
 
   # the accumulated environment
   var env =
@@ -363,6 +359,13 @@ proc saften(parent: var Env; input: NimNode): NimNode =
     else:
       parent
 
+  # first, rewrite any symbols that have been moved to the env
+  var input = rewriteSymbolsIntoEnvDotField(parent, input)
+
+  # the result is a copy of the current node
+  result = copyNimNode input
+
+  # we're going to iterate over the (non-comment) children
   let n = stripComments input
   for i, nc in pairs(n):
     if nc.isNil:
@@ -401,7 +404,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
 
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
+        # our rewrite pass should prevent this guard from triggering
         raise newException(Defect, "unexpected section size: " & repr(nc))
+
       if isCpsCall(nc.last.last):
 
         #[
@@ -431,8 +436,9 @@ proc saften(parent: var Env; input: NimNode): NimNode =
         # add the local into the env so we can install the field
         var field: NimNode
         for name, list in env.localSection(nc):
-          # we only really care about caching the name;
-          assert field == nil, "too many variable names in section"
+          # our rewrite pass should prevent this guard from triggering
+          if not field.isNil:
+            raise newException(Defect, "too many variable names in section")
           field = name
 
         # skip this node by passing i + 1 to the split
@@ -780,7 +786,8 @@ proc workaroundRewrites(n: NimNode): NimNode =
       for i in 1..<result.len:
         if result[i].kind notin AtomicNodes:
           var arg = newNimNode(result[i].kind, result[i])
-          for child in result[i].items: arg.add child
+          for child in result[i].items:
+            arg.add child
           result[i] = arg
 
   result = filter(n, workaroundSigmatchSkip)
