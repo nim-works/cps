@@ -128,17 +128,10 @@ func isReturnCall(n: NimNode): bool =
 
 func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
   ## fill `r` with `return foo()` if that is a safe simplification
-  {.warning: "asSimpleReturnCall disabled".}
-  return false
-  var n = stripComments n
-  block done:
-    while n.kind == nnkStmtList:
-      if len(n) != 1:
-        break done
-      n = n[0]
-    result = n.isReturnCall
-    if result:
-      r = newStmtList([doc "simple return call: " & n.repr, n])
+  var n = n.firstReturn
+  result = not n.isNil
+  if result:
+    r = n
 
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -288,9 +281,9 @@ proc callTail(env: var Env; scope: Scope): NimNode =
       result = nnkReturnStmt.newNimNode(n).add:
         # no code to run means we just `return Cont()`
         when cpsMutant:
-          newEmptyNode()
+          newEmptyNode()          # return
         else:
-          newCall(env.root)
+          newCall env.root        # return Cont()
     elif asSimpleReturnCall(n, result):
       discard "the call was stuffed into result"
     elif not n.firstReturn.isNil:
