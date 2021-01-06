@@ -74,12 +74,6 @@ proc addBreak*(e: var Env; scope: Scope) =
   ## it's nice when we can do this simply
   e.breaks.add scope
 
-proc addBreak*(e: var Env; k: NimNode; n: NimNode) {.deprecated.} =
-  ## these are breaks, which are like gotos but also not.
-  ##
-  ## we need to keep track of them separately for hysterical reasons.
-  e.breaks.add(k, n)
-
 proc popGoto*(e: var Env): NimNode =
   ## pop a goto proc off the stack; return its node
   pop(e.gotos).node
