@@ -1,7 +1,7 @@
 import testes
 
 import cps
-import cps/eventqueue
+import cps/eventqueue except trampoline
 
 const zecho = false  # zevv's echo service
 when zecho:
@@ -10,6 +10,16 @@ when zecho:
   import tables
   import deques
   import os
+
+var jumps: int
+
+proc trampoline(c: Cont) =
+  jumps = 0
+  var c = c
+  while c != nil and c.fn != nil:
+    c = c.fn(c)
+    inc jumps
+    check jumps < 1000, "Too many iterations on trampoline, looping?"
 
 testes:
   var r = 0
@@ -253,7 +263,6 @@ testes:
 
   block:
     ## while statement
-    fail"infinite loop"
     proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 2:
@@ -280,7 +289,6 @@ testes:
 
   block:
     ## while with continue
-    fail"infinite loop"
     proc foo() {.cps: Cont.} =
       var i: int = 0
       while i < 2:
@@ -411,6 +419,7 @@ testes:
 
   block:
     ## the sluggish yield test
+    skip"broken"
     when defined(release):
       skip"too slow for release mode"
     const

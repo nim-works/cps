@@ -670,6 +670,12 @@ proc prepProcBody*(e: var Env; n: NimNode): NimNode =
 
   result = rewriteSymbolsIntoEnvDotField(e, n)
 
+proc defineProc*(e: var Env; p: NimNode) =
+  ## add a proc definition, eg. as part of makeTail()
+  assert not p.isNil
+  assert p.kind == nnkProcDef
+  e.store.add p
+
 when false:
   # we don't do local retrievals anymore because now we just substitute
   # the symbols directly, so localRetrievals() and wrapProcBody() are dead

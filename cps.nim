@@ -198,9 +198,11 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   result.doc "new tail call: " & name.repr
   result.add:
     tailCall(env, name)
+
+  var procs = newStmtList()
   if n.kind == nnkProcDef:
     result.doc "adding the proc verbatim"
-    result.add n
+    procs.add n
   else:
     # the locals value is, nominally, a proc param -- or it was.
     # now we just use whatever the macro provided the env
@@ -212,28 +214,36 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     when cpsMutant:
       #result.doc "creating a new proc: " & name.repr
       # add the declaration
-      result.add newProc(name = name, pragmas = pragmas,
-                         body = newEmptyNode(),
-                         params = [newEmptyNode(),
-                                   newIdentDefs(locals,
-                                                newTree(nnkVarTy,
-                                                        env.root))])
+      procs.add newProc(name = name, pragmas = pragmas,
+                        body = newEmptyNode(),
+                        params = [newEmptyNode(),
+                                  newIdentDefs(locals,
+                                               newTree(nnkVarTy,
+                                                       env.root))])
       # add the implementation
-      result.add newProc(name = name, pragmas = pragmas, body = body,
-                         params = [newEmptyNode(),
-                                   newIdentDefs(locals,
-                                                newTree(nnkVarTy,
-                                                        env.root))])
+      procs.add newProc(name = name, pragmas = pragmas, body = body,
+                        params = [newEmptyNode(),
+                                  newIdentDefs(locals,
+                                               newTree(nnkVarTy,
+                                                       env.root))])
     else:
       # add the declaration
-      result.add newProc(name = name, pragmas = pragmas,
-                         body = newEmptyNode(),
-                         params = [env.root, newIdentDefs(locals,
-                                                          env.root)])
+      procs.add newProc(name = name, pragmas = pragmas,
+                        body = newEmptyNode(),
+                        params = [env.root, newIdentDefs(locals,
+                                                         env.root)])
       # add the implementation
-      result.add newProc(name = name, pragmas = pragmas, body = body,
-                         params = [env.root, newIdentDefs(locals,
-                                                          env.root)])
+      procs.add newProc(name = name, pragmas = pragmas, body = body,
+                        params = [env.root, newIdentDefs(locals,
+                                                         env.root)])
+
+    when true:
+      # immediately push these definitions into the store and just
+      # return the tail call
+      for p in procs.items:
+        env.defineProc p
+    else:
+      result.add procs
 
 proc callTail(env: var Env; scope: Scope): NimNode =
   ## given a node, either turn it into a
@@ -306,13 +316,15 @@ proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
   ## split a statement list to create a tail call given
   ## a label prefix and an index at which to split
 
-  # if a tail remains after this crap
-  if i < n.len-1:
-    # select the remaining lines
-    var body = newStmtList(n[i+1 ..< n.len])
-    # put them into a proc
-    result = procScope(env, n[i], body, name)
-  else:
+  block:
+    # if a tail remains after this crap
+    if i < n.len-1:
+      # select the remaining lines
+      var body = newStmtList(n[i+1 ..< n.len])
+      if stripComments(body).len > 0:
+        # they aren't merely comments, so put them into a proc
+        result = procScope(env, n[i], body, name)
+        break
     # there's nothing left to do in this scope; we're
     # going to just return the next goto (this might be empty)
     result = env.nextGoto
@@ -498,8 +510,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       let bp = env.splitAt(n, i, "whileBreak")
       # we have to assume a break may exist
       # XXX: we can probably determine this safely now that we're typed
-      let brakeEngaged = true
-      if brakeEngaged:
+      const brakeEngaged = true
+      when brakeEngaged:
         env.addBreak bp
       # the goto is added here so that it won't appear in the break proc
       env.addGoto nc, w
@@ -511,12 +523,12 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         # this will rewrite the loop using filter, so...  it's destructive
         result.add env.makeTail(w, loop)
         discard env.popGoto # the loop rewind was added to the body
-        if brakeEngaged:
+        when brakeEngaged:
           loop.doc "add tail call for break proc"
           loop.add env.callTail(env.nextBreak)
           return
       finally:
-        if brakeEngaged:
+        when brakeEngaged:
           discard env.popBreak
 
     of nnkIfStmt:
