@@ -547,7 +547,11 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.doc "if body inside cps"
         result.add env.saften(nc)
       else:
-        result.add env.saften(nc)
+        withGoto env.splitAt(n, i, "ifClause"):
+          result.doc "boring if clause"
+          result.add env.saften(nc)
+
+    # not a statement cps is interested in
     else:
       result.add env.saften(nc)
 
