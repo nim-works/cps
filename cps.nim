@@ -253,6 +253,8 @@ proc callTail(env: var Env; scope: Scope): NimNode =
     return nnkReturnStmt.newTree newNilLit()
   var n = scope.node
   case n.kind
+  of nnkEmpty:
+    raise newException(Defect, "unexpected")
   of nnkProcDef:
     # if you already put it in a proc, we should just use it
     result = n
@@ -262,23 +264,22 @@ proc callTail(env: var Env; scope: Scope): NimNode =
     result = tailCall(env, n)
   of nnkStmtList:
     # maybe we can optimize it out
-    if n.len == 0:
+    if stripComments(n).len == 0:
       result = nnkReturnStmt.newNimNode(n).add:
         # no code to run means we just `return Cont()`
         when cpsMutant:
           newEmptyNode()          # return
         else:
           newCall env.root        # return Cont()
-    elif asSimpleReturnCall(n, result):
-      discard "the call was stuffed into result"
+    # FIXME: removed because it broke endWhile
+    #elif asSimpleReturnCall(n, result):
+    #  discard "the call was stuffed into result"
     elif not n.firstReturn.isNil:
       # just copy the call
       result = newStmtList([doc"verbatim tail call", n])
     else:
       # create a tail call with the given body
       result = env.makeTail(genSym(nskProc, "tail"), n)
-  of nnkEmpty:
-    error "empty node in call tail"
   else:
     # wrap whatever it is and recurse on it
     result = env.callTail newScope(newStmtList(n))
@@ -507,12 +508,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
     of nnkWhileStmt:
       let w = genSym(nskProc, "loop")
-      let bp = env.splitAt(n, i, "whileBreak")
-      # we have to assume a break may exist
-      # XXX: we can probably determine this safely now that we're typed
-      const brakeEngaged = true
-      when brakeEngaged:
-        env.addBreak bp
+      let bp = env.splitAt(n, i, "endWhile")
+      env.addBreak bp
       # the goto is added here so that it won't appear in the break proc
       env.addGoto nc, w
       try:
@@ -520,16 +517,14 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.doc "add tail call for while loop with body " & $nc[1].kind
         # process the loop itself, and only then, turn it into a tail call
         loop.add newIfStmt((nc[0], env.saften(nc[1])))
+        discard env.popGoto # the loop rewind was added to the body
+        loop.doc "add tail call for break proc: " & repr(bp.name)
+        loop.add env.callTail(bp)
         # this will rewrite the loop using filter, so...  it's destructive
         result.add env.makeTail(w, loop)
-        discard env.popGoto # the loop rewind was added to the body
-        when brakeEngaged:
-          loop.doc "add tail call for break proc"
-          loop.add env.callTail(env.nextBreak)
-          return
+        return
       finally:
-        when brakeEngaged:
-          discard env.popBreak
+        discard env.popBreak
 
     of nnkIfStmt:
       # if any `if` clause is a cps block, then every clause must be

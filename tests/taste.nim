@@ -262,12 +262,34 @@ testes:
     check r == -3, "r was " & $r
 
   block:
-    ## while statement
+    ## while statement L
     proc foo() {.cps: Cont.} =
-      var i: int = 0
+      var i = 0
       while i < 2:
-        let x: int = i
-        adder(i)
+        inc i
+      check i == 2
+      r = i
+    check r == 2
+    trampoline foo()
+
+  block:
+    ## while statement Q
+    proc foo() {.cps: Cont.} =
+      var i = 0
+      while i < 2:
+        noop()
+        inc i
+      r = i
+    check r == 2
+    trampoline foo()
+
+  block:
+    ## while statement N
+    proc foo() {.cps: Cont.} =
+      var i = 0
+      while i < 2:
+        let x = i
+        inc i
         check x < i
       r = i
       check r == 2
