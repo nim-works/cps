@@ -47,10 +47,7 @@ proc counter(lo: int, hi: int) {.cps:Iterator.} =
 
 var a = counter(3, 7)
 
-
 # Resume the iterator a bunch of times
-
-var v = a.produce()
 
 echo "produced ", a.produce()
 echo "produced ", a.produce()
