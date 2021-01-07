@@ -848,10 +848,10 @@ macro cpsMagic*(n: untyped): untyped =
   when false:
     m.addPragma newColonExpr(ident"error", msg.newLit)
     m.body.add nnkDiscardStmt.newNimNode(n).add newEmptyNode()
-  elif true:
+  elif defined(release) and not defined(cpsDebug):
     m.body.add nnkPragma.newNimNode(n).add newColonExpr(ident"warning",
                                                         msg.newLit)
-  else:
+  elif false:
     m.body.add nnkCall.newNimNode(n).newTree(ident"error", msg.newLit)
   # add it to our statement list result
   result.add m
