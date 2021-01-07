@@ -600,7 +600,8 @@ proc normalizingRewrites(n: NimNode): NimNode =
         of nnkIdentDefs:
           # a new section with a single rewritten identdefs within
           result.add:
-            newNimNode(n.kind, n).add(rewriteIdentDefs child)
+            newNimNode(n.kind, n).add:
+              rewriteIdentDefs child
         else:
           raise newException(Defect, treeRepr(child) & "\nunexpected")
 
