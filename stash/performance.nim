@@ -1,10 +1,11 @@
+import hashes
 
 #
 # This is an example implementation for a basic CPS-based iterator.
 #
 
 import cps, times
-  
+
 template howLong(what, code): float =
   let start = cpuTime()
   block:
@@ -14,6 +15,7 @@ template howLong(what, code): float =
   duration
 
 
+var h: Hash = 0
 
 let t1 = howLong "cps iterator":
 
@@ -21,21 +23,24 @@ let t1 = howLong "cps iterator":
     fn*: proc(c: Iterator): Iterator {.nimcall.}
     val: int
 
-  proc jield(c: Iterator, val: int): Iterator =
-    c.val = val
-    return c
+  proc jield(it: Iterator; val: int): Iterator {.cpsMagic.} =
+    it.val = val
+    return it
 
-  proc counter(lo: int, hi: int) {.cps:Iterator.} =
-    var i:int = lo
+  proc counter(lo: int, hi: int) {.cps: Iterator.} =
+    var i = lo
     while i <= hi:
-      cps jield(i)
+      jield i
       inc i
 
   var a = counter(1, 10000000)
   while a != nil and a.fn != nil:
+    h = h !& hash(a.val)
     a = a.fn(a)
 
 
+echo !$h
+h = 0
 
 let t2 = howLong "closure iterator":
 
@@ -47,7 +52,8 @@ let t2 = howLong "closure iterator":
 
   let f = counter
   while not finished(f):
-    discard f(1, 10000000)
+    h = h !& hash(f(1, 10000000))
 
+echo !$h
 
 echo "Nim closure iterators are ", t1 / t2, " times faster"
