@@ -286,7 +286,12 @@ proc makeType*(e: var Env): NimNode =
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
-proc firstDef*(e: Env): NimNode = newIdentDefs(e.first, e.via, newEmptyNode())
+proc firstDef*(e: Env): NimNode =
+  when cpsMoves:
+    newIdentDefs(e.first, newTree(nnkCommand, ident"sink", e.via),
+                 newEmptyNode())
+  else:
+    newIdentDefs(e.first, e.via, newEmptyNode())
 
 proc get*(e: Env): NimNode = newDotExpr(e.castToChild(e.first), e.rs)
 
@@ -556,7 +561,13 @@ proc defineLocals*(e: var Env; into: var NimNode; goto: NimNode): NimNode =
     into.add newAssignment(newDotExpr(e.first, e.fn), goto)
     when true:
       # FIXME: we currently cheat.
-      result = e.first
+      when cpsMoves:
+        into.add:
+          newAssignment ident"result":
+            newCall(ident"move", e.first)
+        result = newEmptyNode()
+      else:
+        result = e.first
     else:
       # TODO: this dead code is no longer accurate; don't enable it blindly!
       # this when statement returns an e.identity one way or another

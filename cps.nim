@@ -57,7 +57,10 @@ proc addReturn(p: var NimNode; n: NimNode) =
       elif not n.firstReturn.isNil:
         n
       else:
-        nnkReturnStmt.newNimNode(n).add n
+        when cpsMoves:
+          nnkReturnStmt.newNimNode(n).add newEmptyNode()
+        else:
+          nnkReturnStmt.newNimNode(n).add n
   else:
     p.doc "omitted a return of " & repr(n)
 

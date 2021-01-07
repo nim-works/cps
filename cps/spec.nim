@@ -14,7 +14,7 @@ const
   cpsDebug* {.booldefine.} = false       ## produce gratuitous output
   cpsMagicExists* {.booldefine.} = true  ## make use of .cpsMagic.
   cpsMutant* {.booldefine.} = false      ## mutate continuations
-  cpsZevv* {.booldefine.} = true         ## increment gensyms
+  cpsMoves* {.booldefine.} = false       ## try to =move versus =copy
   cpsCast* {.booldefine.} = false        ## use cast instead of conversion
   cpsTrace* {.booldefine.} = false       ## store "stack" traces
   cpsExcept* {.booldefine.} = false      ## also stash exceptions
