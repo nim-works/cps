@@ -576,8 +576,10 @@ proc normalizingRewrites(n: NimNode): NimNode =
   proc rewriteIdentDefs(n: NimNode): NimNode =
     ## Rewrite an identDefs to ensure it has three children.
     if n.kind == nnkIdentDefs:
-      if len(n) == 2:
+      if n.len == 2:
         n.add newEmptyNode()
+      elif n[1].isEmpty:          # add explicit type symbol
+        n[1] = getType n[2]
       result = n
 
   proc rewriteVarLet(n: NimNode): NimNode =
@@ -587,7 +589,8 @@ proc normalizingRewrites(n: NimNode): NimNode =
       result = newStmtList()
       for child in items(n):
         # a new section with a single rewritten identdefs within
-        result.add newNimNode(n.kind, n).add(child)
+        result.add:
+          newNimNode(n.kind, n).add(rewriteIdentDefs child)
 
   proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
     ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
