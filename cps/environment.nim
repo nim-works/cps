@@ -215,7 +215,7 @@ proc init(e: var Env) =
 
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
-    result = toSeq pairs(e.locals)
+    result = toSeq e.locals.pairs
     # most-recently-defined comes first
     reverse result
     # add any inherited types from the parent
@@ -231,8 +231,8 @@ iterator pairs(e: Env): Pair =
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
-  for name, section in pairs(e.locals):
-    for defs in items(section):
+  for name, section in e.locals.pairs:
+    for defs in section.items:
       if defs[1].isEmpty:
         # get the type of the assignment
         n.add newIdentDefs(name, getType(defs.last))
@@ -360,6 +360,8 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
   ## set [ident|sym] = let/var section
   assert key.kind in {nnkSym, nnkIdent}
   assert val.kind in {nnkVarSection, nnkLetSection}
+  assert val.len == 1, "too large a section"
+  assert val[0].len == 3, "too small an identdefs"
   if key in e.locals:
     result = e.storeType
   else:
