@@ -587,10 +587,22 @@ proc normalizingRewrites(n: NimNode): NimNode =
     ## into multiple such sections with well-formed identDefs
     if n.kind in {nnkLetSection, nnkVarSection}:
       result = newStmtList()
-      for child in items(n):
-        # a new section with a single rewritten identdefs within
-        result.add:
-          newNimNode(n.kind, n).add(rewriteIdentDefs child)
+      for child in n.items:
+        case child.kind
+        of nnkVarTuple:
+          # a new section with a single rewritten identdefs within
+          # for each symbol in the VarTuple statement
+          for i, value in child.last.pairs:
+            result.add:
+              newNimNode(n.kind, n).add:
+                rewriteIdentDefs:  # for consistency
+                  newIdentDefs(child[i], getType(value), value)
+        of nnkIdentDefs:
+          # a new section with a single rewritten identdefs within
+          result.add:
+            newNimNode(n.kind, n).add(rewriteIdentDefs child)
+        else:
+          raise newException(Defect, treeRepr(child) & "\nunexpected")
 
   proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
     ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
