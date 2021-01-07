@@ -1,10 +1,15 @@
-import hashes
+import std/[hashes, times]
 
 #
-# This is an example implementation for a basic CPS-based iterator.
+# This is a performance comparison between CPS and native closure iterators.
 #
+when not defined(danger):
+  {.error: "define danger for benchmark purposes".}
 
-import cps, times
+when not defined(gcArc):
+  {.warning: "cps is designed for --gc:arc".}
+
+import cps
 
 template howLong(what, code): float =
   let start = cpuTime()
