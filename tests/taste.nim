@@ -21,11 +21,11 @@ proc trampoline(c: Cont) =
     inc jumps
     check jumps < 1000, "Too many iterations on trampoline, looping?"
 
-testes:
-  var r = 0
+var r = 0
+proc adder(x: var int) =
+  inc x
 
-  proc adder(x: var int) =
-    inc x
+testes:
 
   block:
     ## noop is a primitive that merely sheds scope
@@ -292,35 +292,35 @@ testes:
         inc i
         check x < i
       r = i
-      check r == 2
+    check r == 2
     trampoline foo()
 
   block:
     ## while with break
     proc foo() {.cps: Cont.} =
-      var i: int = 0
+      var i = 0
       while true:
-        let x: int = i
+        let x = i
         adder(i)
         if i >= 2:
           break
         check x < i
       r = i
-      check r == 2
+    check r == 2
     trampoline foo()
 
   block:
     ## while with continue
     proc foo() {.cps: Cont.} =
-      var i: int = 0
+      var i = 0
       while i < 2:
-        let x: int = i
+        let x = i
         adder(i)
         if x == 0:
           continue
         check x > 0
       r = i
-      check r == 2
+    check r == 2
     trampoline foo()
 
   block:
