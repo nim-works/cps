@@ -78,11 +78,11 @@ testes:
     ## https://github.com/disruptek/cps/issues/22
     proc foo(a, b, c: int = 3) {.cps: Cont.} =
       ## a=1, b=2, c=3
-      var a: int = 5
+      var a = 5
       ## a=5, b=2, c=3
       noop()
       ## a=5, b=2, c=3
-      var b: int = b + a
+      var b = b + a
       ## a=5, b=7, c=3
       noop()
       ## a=5, b=7, c=3
@@ -117,13 +117,13 @@ testes:
     ## https://github.com/disruptek/cps/issues/16
     ## this is the test of `var i, j, k: int = 3`
     proc foo() {.cps: Cont.} =
-      var i, j, k: int = 3
+      var i, j, k = 3
       j = 5
       var p: int
-      var q: int = 0
-      var r: int = j
+      var q = 0
+      var r = j
       jield()
-      let s: int = 9
+      let s = 9
       inc i
       inc j
       inc k
@@ -327,11 +327,11 @@ testes:
     ## simple name shadowing test
     proc b(x: int) {.cps: Cont.} =
       check x > 0
-      let x: int = 3
+      let x = 3
       check x == 3
-      var y: int = 8
+      var y = 8
       block:
-        var x: int = 4
+        var x = 4
         inc x
         dec y
         check x == 5
@@ -342,7 +342,7 @@ testes:
     proc a(x: int) {.cps: Cont.} =
       check x > 0
       check x == 1
-      let x: int = 2
+      let x = 2
       check x == 2
       b(x)
       check x == 2
@@ -400,14 +400,14 @@ testes:
       noop()
       check x > 0
       noop()
-      let x: int = 3
+      let x = 3
       noop()
       check x == 3
       noop()
-      var y: int = 8
+      var y = 8
       block:
         noop()
-        var x: int = 4
+        var x = 4
         noop()
         inc x
         noop()
@@ -426,7 +426,7 @@ testes:
       noop()
       check x > 0
       noop()
-      var x: int = 2
+      var x = 2
       noop()
       check x == 2
       noop()
