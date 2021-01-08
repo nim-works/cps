@@ -510,8 +510,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
             discard env.popBreak
 
     of nnkWhileStmt:
-      let w = genSym(nskProc, "loop")
-      let bp = env.splitAt(n, i, "endWhile")
+      let w = genSym(nskProc, "whileLoop")
+      let bp = env.splitAt(n, i, "postWhile")
       env.addBreak bp
       # the goto is added here so that it won't appear in the break proc
       env.addGoto nc, w
@@ -533,7 +533,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       # if any `if` clause is a cps block, then every clause must be
       # if we've pushed any goto or breaks, then we're already in cps
       if nc.isCpsBlock:
-        withGoto env.splitAt(n, i, "ifClause"):
+        withGoto env.splitAt(n, i, "isCpsBlockIfClause"):
           result.doc "add if body"
           result.add env.saften(nc)
           return
@@ -542,7 +542,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.doc "if body inside cps"
         result.add env.saften(nc)
       else:
-        withGoto env.splitAt(n, i, "ifClause"):
+        withGoto env.splitAt(n, i, "boringIfClause"):
           result.doc "boring if clause"
           result.add env.saften(nc)
           return

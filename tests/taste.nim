@@ -68,7 +68,7 @@ testes:
       var i: int = 0
       while i < 3:
         sleep(i + 1)
-        adder(i)
+        adder i
       r = i
       check r == 3
     trampoline foo()
@@ -231,14 +231,14 @@ testes:
 
   block:
     ## break in a nested else (don't ask)
+    r = 1
     proc foo() {.cps: Cont.} =
-      r = 1
       while true:
         noop()
         if true:
           inc r
           if r > 2:
-            fail()
+            fail"unexpected clause"
           else:
             break
       inc r
@@ -247,8 +247,8 @@ testes:
 
   block:
     ## named breaks
+    r = 1
     proc foo() {.cps: Cont.} =
-      r = 1
       block found:
         while true:
           noop()
@@ -256,35 +256,38 @@ testes:
             break found
           noop()
           inc r
-        fail()
+        fail"unreachable"
       r = r * -1
     trampoline foo()
     check r == -3, "r was " & $r
 
   block:
     ## while statement L
+    r = 0
     proc foo() {.cps: Cont.} =
       var i = 0
       while i < 2:
         inc i
       check i == 2
       r = i
-    check r == 2
     trampoline foo()
+    check r == 2, "r was " & $r
 
   block:
     ## while statement Q
+    r = 0
     proc foo() {.cps: Cont.} =
       var i = 0
       while i < 2:
         noop()
         inc i
       r = i
-    check r == 2
     trampoline foo()
+    check r == 2, "r was " & $r
 
   block:
     ## while statement N
+    r = 0
     proc foo() {.cps: Cont.} =
       var i = 0
       while i < 2:
@@ -292,36 +295,38 @@ testes:
         inc i
         check x < i
       r = i
-    check r == 2
     trampoline foo()
+    check r == 2, "r was " & $r
 
   block:
     ## while with break
+    r = 0
     proc foo() {.cps: Cont.} =
       var i = 0
       while true:
         let x = i
-        adder(i)
+        adder i
         if i >= 2:
           break
         check x < i
       r = i
-    check r == 2
     trampoline foo()
+    check r == 2, "r was " & $r
 
   block:
     ## while with continue
+    r = 0
     proc foo() {.cps: Cont.} =
       var i = 0
       while i < 2:
         let x = i
-        adder(i)
+        adder i
         if x == 0:
           continue
         check x > 0
       r = i
-    check r == 2
     trampoline foo()
+    check r == 2, "r was " & $r
 
   block:
     ## simple name shadowing test
