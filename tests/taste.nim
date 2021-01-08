@@ -388,11 +388,12 @@ testes:
         check x == 5, "failed to update from lower scope"
         inc x
         check x == 6, "failed to update from lower scope"
-      check x == 3, "shadowed symbol corrupted"
+      check x == 3, "shadowed symbol corrupted to " & $x
 
     proc shadow2(x: int) {.cps: Cont.} =
       inc r
       var x = x + 2
+      check x == 3, "shadow1 is expecting x == 3"
       trampoline shadow1(x)
       check x == 3, "x mutated by cps call"
       inc x
@@ -413,7 +414,7 @@ testes:
             continue
           if i > 2:
             break
-          r = r + i
+          r.inc i
         inc r
         if r == 5:
           break
@@ -436,6 +437,7 @@ testes:
 
   block:
     ## the famous tock test
+    skip"lives in its own test now"
     proc foo(name: string; ms: int) {.cps: Cont.} =
       var count = 10
       while count > 0:
@@ -483,7 +485,7 @@ testes:
       noop()
       check x == 2
       noop()
-      spawn b(x)
+      trampoline b(x)
       noop()
       check x == 2
       noop()
