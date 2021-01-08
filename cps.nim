@@ -536,11 +536,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         withGoto env.splitAt(n, i, "ifClause"):
           result.doc "add if body"
           result.add env.saften(nc)
-          # the split is complete
           return
-        # if we didn't return, then this is the last block
         assert false, "unexpected"
-        result.add nc
       elif insideCps(env):
         result.doc "if body inside cps"
         result.add env.saften(nc)
@@ -548,6 +545,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         withGoto env.splitAt(n, i, "ifClause"):
           result.doc "boring if clause"
           result.add env.saften(nc)
+          return
+        assert false, "unexpected"
 
     # not a statement cps is interested in
     else:
