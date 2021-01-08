@@ -387,7 +387,7 @@ proc run*(interval: Duration = DurationZero) =
 
   # make sure the eventqueue is ready to run
   init()
-  assert eq.state == Stopped
+  assert eq.state in {Running, Stopped}, $eq.state
   if interval.inMilliseconds == 0:
     discard "the dispatcher returns after emptying the queue"
   else:
