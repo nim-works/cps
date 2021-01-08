@@ -135,6 +135,8 @@ run()
 
 ![tick-tock demonstration](docs/demo.svg "tick-tock demonstration")
 
+[The source to the tick-tock test.](https://github.com/disruptek/cps/blob/master/tests/tock.nim)
+
 ## Notes on the Example Dispatcher
 
 The included dispatcher is based upon
@@ -165,11 +167,11 @@ You can also jump to [the documentation for the included dispatcher](https://dis
 The tests provide the best examples of usage and are a great starting point for
 your experiments.
 
-Here are some tests that Zevv prepared:
+[Here are some tests that Zevv prepared:](https://github.com/disruptek/cps/blob/master/tests/tzevv.nim)
 
 ![zevv tests](docs/tzevv.svg "zevv tests")
 
-Here are more contrived tests of AST rewrites:
+[Here are more contrived tests of AST rewrites:](https://github.com/disruptek/cps/blob/master/tests/taste.nim)
 
 ![taste tests](docs/taste.svg "taste tests")
 
