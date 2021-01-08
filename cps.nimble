@@ -2,10 +2,9 @@ version = "0.0.13"
 author = "disruptek"
 description = "continuation-passing style"
 license = "MIT"
-requires "nim >= 1.5.1"
 
 when not defined(release):
-  requires "https://github.com/disruptek/testes >= 0.7.3 & < 1.0.0"
+  requires "https://github.com/disruptek/testes >= 1.0.0 & < 2.0.0"
   requires "https://github.com/disruptek/criterion < 1.0.0"
 
 task test, "run tests for ci":

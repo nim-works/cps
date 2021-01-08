@@ -44,7 +44,7 @@ testes:
       var (i, j, k) = (1, 2, 3)
       let (x, y, z) = (4, 5, 6)
       noop()
-      check:
+      check "declared variables":
         i == 1
         j == 2
         k == 3
@@ -78,7 +78,7 @@ testes:
       ## a=5, b=7, c=3
       noop()
       ## a=5, b=7, c=3
-      check:
+      check "proc parameters":
         a == 5
         b == 7
         c == 3
@@ -93,13 +93,13 @@ testes:
       noop()
       b = b + a
       noop()
-      check:
+      check "var param assignment":
         a == 5
         b == 7
         c == 3
     var (x, y, z) = (1, 2, 3)
     trampoline foo(x, y, z)
-    check:
+    check "var param assignment":
       x == 5
       y == 7
       z == 3
@@ -122,7 +122,7 @@ testes:
       inc p
       inc q
       inc r
-      check:
+      check "multiple variables":
         i == 4
         j == 6
         k == 4
@@ -383,6 +383,7 @@ testes:
     r = 0
     proc shadow1(x: int) {.cps: Cont.} =
       inc r
+      check x == 3, "unexpected input of " & $x
       block:
         var x = x + 2
         check x == 5, "failed to update from lower scope"
@@ -399,7 +400,6 @@ testes:
       inc x
       check x == 4, "shadowing symbol corrupted"
 
-    spawn shadow1(2)
     spawn shadow2(1)
     run()
     check r == 2
