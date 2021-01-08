@@ -637,18 +637,25 @@ proc setReturn*(e: var Env; n: NimNode) =
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
-  if n.len == 1 and n[0].kind == nnkAsgn:
-    # okay, it's a return: result = ...
-    result = newStmtList()
-    # ignore the result symbol and create a new assignment
-    result.add newAssignment(e.rs, n.last.last)
-    # and just issue an empty `return`
-    result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
-  elif n.len == 1 and n[0].kind == nnkEmpty:
-    # this is fine...
-    result = n
-  else:
-    raise newException(Defect, "unexpected return form\n" & treeRepr(n))
+  block:
+    if n.len == 1:
+      case n[0].kind
+      of nnkAsgn:
+        # okay, it's a return: result = ...
+        result = newStmtList()
+        # ignore the result symbol and create a new assignment
+        result.add newAssignment(e.rs, n.last.last)
+        # and just issue an empty `return`
+        result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
+      of nnkEmpty, nnkIdent:
+        # this is `return` or `return continuation`, so that's fine...
+        result = n
+      else:
+        # unexpected; break and raise
+        break
+      return
+
+  raise newException(Defect, "unexpected return form\n" & treeRepr(n))
 
 proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   ## swap symbols for those in the continuation

@@ -525,9 +525,15 @@ proc saften(parent: var Env; n: NimNode): NimNode =
           newStmtList [nc[1]]
         else:
           nc[1]
+      # we add the loop rewind to the body although it might confuse the
+      # saften call; this is deemed more correct than adding it in after
+      # the saften call, even though rewriteReturn() needs to know how to
+      # ignore `return continuation` as a result
+      body.add:
+        env.tailCall:
+          returnTo env.nextGoto
       loop.add newIfStmt((nc[0], env.saften body))
-      # the loop rewind gets read from the goto stack in the saften()
-      # above, so now we remove it from the stack; no other code will
+      # now we can remove the goto from the stack; no other code will
       # resume at this while proc
       discard env.popGoto
       # this is the bottom of the while loop's proc, where we failed
@@ -574,7 +580,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
   if result.kind == nnkStmtList and n.kind in returner:
     # let a for loop, uh, loop
-    if not env.insideFor:
+    if not env.insideFor and not env.insideWhile:
       if not result.firstReturn.isNil:
         result.doc "omit return call from " & $n.kind
       elif env.nextGoto.kind != nnkNilLit:
