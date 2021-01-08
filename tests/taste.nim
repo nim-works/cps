@@ -95,7 +95,7 @@ testes:
   block:
     ## reassignment of var proc params
     ## https://github.com/disruptek/cps/issues/47
-    skip"pending issue"
+    skip"pending issue #47"
     proc foo(a, b, c: var int) {.cps: Cont.} =
       a = 5
       noop()
@@ -441,7 +441,6 @@ testes:
 
   block:
     ## the sluggish yield test
-    skip"broken"
     when defined(release):
       skip"too slow for release mode"
     const
