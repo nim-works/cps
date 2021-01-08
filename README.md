@@ -12,7 +12,8 @@ All runtime functionality is implemented in a dispatcher which you can replace
 to completely change the type and behavior of your continuations.
 
 For a description of the origins of this concept, see the included papers
-and https://github.com/zevv/nimcsp.
+and https://github.com/nim-lang/RFCs/issues/295, where we write in more
+depth about why the implementation exists, what it aims to enable, etc.
 
 ## Why?
 
