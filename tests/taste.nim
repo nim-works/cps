@@ -20,18 +20,7 @@ proc adder(x: var int) =
 testes:
 
   block:
-    ## noop is a primitive that merely sheds scope
-    var j = 2
-    proc foo() {.cps: Cont.} =
-      var i = 3
-      j = 4
-      noop()
-      inc j
-      check i == 3
-    trampoline foo()
-    check j == 5, "expected 5, got " & $j
-
-  block trampoline:
+    ## the trampoline runs continuations, uh, continuously
     r = 0
     proc foo() {.cps: Cont.} =
       r = 1
@@ -39,31 +28,98 @@ testes:
     check r == 1
 
   block:
-    ## declaration via tuple deconstruction
+    ## noop magic smoke test
+    r = 0
     proc foo() {.cps: Cont.} =
-      var (i, j, k) = (1, 2, 3)
-      let (x, y, z) = (4, 5, 6)
+      inc r
+      noop()
+      inc r
+    trampoline foo()
+    check r == 2, "who let the smoke out?"
+
+  block:
+    ## noop is a primitive that merely sheds scope
+    r = 0
+    var j = 2
+    proc foo() {.cps: Cont.} =
+      inc r
+      check j == 2
+      j = 4
+      let i = 3
+      noop()
+      inc r
+      check i == 3, "i was " & $i
+      check j == 4, "j was " & $j
+      inc j
+    trampoline foo()
+    check r == 2
+    check j == 5
+
+  block:
+    ## yield is a primitive that enters the dispatcher
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      jield()
+      inc r
+    trampoline foo()
+    check r == 1
+    run()
+    check r == 2
+
+  block:
+    ## declaration via tuple deconstruction
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var (i, k) = (1, 3)
+      let (x, z) = (4, 6)
+      noop()
+      inc r
+      inc k
       noop()
       check "declared variables":
         i == 1
-        j == 2
-        k == 3
+        k == 4
+        x == 4
+        z == 6
     trampoline foo()
+    check r == 2
 
-  block yield_magic:
+  block:
+    ## multi-var declaration
+    r = 0
     proc foo() {.cps: Cont.} =
-      jield()
+      inc r
+      var i, k = 3
+      let x, z = 4
+      noop()
+      inc r
+      inc k
+      noop()
+      check "declared variables":
+        i == 3
+        k == 4
+        x == 4
+        z == 4
     trampoline foo()
+    check r == 2
 
-  block sleep_magic:
+  block:
+    ## sleep is a primitive that rests in the dispatcher
+    r = 0
+    const q = 3
     proc foo() {.cps: Cont.} =
-      var i: int = 0
-      while i < 3:
+      var i = 0
+      while i < q:
+        inc r
         sleep(i + 1)
-        adder i
-      r = i
-      check r == 3
-    trampoline foo()
+        inc r
+        inc i
+      check i == q
+    spawn foo()
+    run()
+    check r == q * 2
 
   block:
     ## shadowing and proc param defaults
@@ -88,11 +144,15 @@ testes:
     ## reassignment of var proc params
     ## https://github.com/disruptek/cps/issues/47
     skip"pending issue #47"
+    r = 0
     proc foo(a, b, c: var int) {.cps: Cont.} =
+      inc r
       a = 5
       noop()
+      inc r
       b = b + a
       noop()
+      inc r
       check "var param assignment":
         a == 5
         b == 7
@@ -103,73 +163,37 @@ testes:
       x == 5
       y == 7
       z == 3
-
-  block:
-    ## multiple variable declaration
-    ## https://github.com/disruptek/cps/issues/16
-    ## this is the test of `var i, j, k: int = 3`
-    proc foo() {.cps: Cont.} =
-      var i, j, k = 3
-      j = 5
-      var p: int
-      var q = 0
-      var r = j
-      jield()
-      let s = 9
-      inc i
-      inc j
-      inc k
-      inc p
-      inc q
-      inc r
-      check "multiple variables":
-        i == 4
-        j == 6
-        k == 4
-        p == 1
-        q == 1
-        r == 6
-        s == 9
-    trampoline foo()
-
-  block:
-    ## declaration without type
-    proc foo() {.cps: Cont.} =
-      var j = 2
-      noop()
-      check j == 2
-    trampoline foo()
+    check r == 3
 
   block:
     ## simple block with break
+    r = 0
     proc foo() {.cps: Cont.} =
-      r = 1
+      inc r
       block:
         if true:
           inc r
           break
-        fail()
+        fail"block break failed to break block"
       inc r
     trampoline foo()
-    if r != 3:
-      checkpoint "r wasn't 3: ", r
-      fail()
+    check r == 3
 
   block:
     ## block with break
+    r = 0
     proc foo() {.cps: Cont.} =
-      r = 1
+      inc r
       block:
         if true:
+          inc r
           noop()
           inc r
           break
-        fail()
+        fail"block break failed to break block"
       inc r
     trampoline foo()
-    if r != 3:
-      checkpoint "r wasn't 3: ", r
-      fail()
+    check r == 4
 
   block:
     ## semaphores
@@ -177,65 +201,72 @@ testes:
     var success = false
 
     proc signalSleeper(ms: int) {.cps: Cont.} =
-      sleep(ms)
-      signal(sem)
+      sleep ms
+      signal sem
 
     proc signalWaiter() {.cps: Cont.} =
-      wait(sem)
+      wait sem
       success = true
 
     trampoline signalSleeper(10)
     trampoline signalWaiter()
-
     run()
-
-    if not success:
-      raise newException(AssertionDefect, "signal failed")
+    check success, "signal failed"
 
   block:
     ## break statements without cps 🥴
+    r = 0
     proc foo() =
-      r = 1
-      check r == 1
+      inc r
       while true:
+        inc r
         if true:
+          inc r
           break
         inc r
-        check r <= 2
-        return
+        fail"block break failed to break block"
+      inc r
     foo()
-    check r == 1, "r was " & $r
+    check r == 4
 
   block:
     ## a fairly tame cps break
+    r = 0
     proc foo() {.cps: Cont.} =
-      r = 1
+      inc r
       while true:
-        jield()
+        inc r
+        noop()
+        inc r
         if true:
+          inc r
           break
         inc r
-        if r > 2:
-          fail()
-        return
+        fail"block break failed to break block"
+      inc r
     trampoline foo()
-    check r == 1, "r was " & $r
+    check r == 5
 
   block:
     ## break in a nested else (don't ask)
-    r = 1
+    r = 0
     proc foo() {.cps: Cont.} =
+      inc r
       while true:
+        inc r
         noop()
+        inc r
         if true:
           inc r
-          if r > 2:
+          check r == 4
+          if r != 4:
             fail"unexpected clause"
           else:
+            inc r
             break
       inc r
     trampoline foo()
-    check r == 3, "r was " & $r
+    check r == 6
 
   block:
     ## named breaks
@@ -527,17 +558,37 @@ testes:
 
     check count != tiny, "you're a terrible coder"
 
-  block assignment_shim:
+  block:
+    ## assignment shim with constant
     r = 0
     proc bar(a: int): int {.cps: Cont.} =
-      jield()
+      inc r
+      noop()
       return a * 2
 
     proc foo() {.cps: Cont.} =
-      let w = 4
-      let x = bar(w).int
-      let z = 5
-      discard x + z
+      inc r
+      let x = int bar(4)
+      inc r
+      check x == 8
 
     trampoline foo()
-    check r == 13
+    check r == 3
+
+  block:
+    ## assignment shim passing env var
+    r = 0
+    proc bar(a: int): int {.cps: Cont.} =
+      inc r
+      noop()
+      return a * 2
+
+    proc foo() {.cps: Cont.} =
+      inc r
+      let w = 4
+      let x = int bar(w)
+      inc r
+      check x == 8
+
+    trampoline foo()
+    check r == 3
