@@ -228,11 +228,4 @@ testes:
         break
         prim()
       prim()
-
-  test "type":
-    # Compile error
-    proc foo(c: C, a: int16): C {.cpsMagic.} =
-      echo "foo"
-    runCps:
-      foo(1'i16)
     
