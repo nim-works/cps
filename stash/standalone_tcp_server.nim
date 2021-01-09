@@ -38,7 +38,7 @@ let epfd = epoll_create(1)
 # CPS 'io' primitive, registers the fd with epoll and stashes the continuation.
 # Will be revived later by the main loop when the fd gets ready
 
-proc io(c: Cont, fd: SocketHandle, event: int): Cont =
+proc io(c: Cont, fd: SocketHandle, event: int): Cont {.cpsMagic.} =
   var epv = EpollEvent(events: event.uint32)
   epv.data.u64 = fd.uint
   discard epoll_ctl(epfd, EPOLL_CTL_ADD, fd.cint, epv.addr)
@@ -89,18 +89,18 @@ Hello, there!
 
 # CPS client hander
 
-var n = 0
-
-proc doClient(fdc: SocketHandle) {.cps:Cont} =
-
-  while true:
-    cps io(fdc, POLLIN)
-    let s: string = sockRecv(fdc)
-    if s.len == 0:
-      return
-    cps io(fdc, POLLOUT)
-    sockSend(fdc, response)
-    inc n
+#var n = 0
+#
+#proc doClient(fdc: SocketHandle) {.cps:Cont} =
+#
+#  while true:
+#    io(fdc, POLLIN)
+#    let s: string = sockRecv(fdc)
+#    if s.len == 0:
+#      return
+#    io(fdc, POLLOUT)
+#    sockSend(fdc, response)
+#    inc n
 
 
 # CPS server handler
@@ -108,10 +108,10 @@ proc doClient(fdc: SocketHandle) {.cps:Cont} =
 proc doServer(port: int) {.cps:Cont} =
   let fds: SocketHandle = sockBind(port)
   while true:
-    cps io(fds, POLLIN)
+    io(fds, 1.int16)
     let fdc: SocketHandle = sockAccept(fds)
     # Create new client and add to work queue
-    evq.work.addLast doClient(fdc)
+    #evq.work.addLast doClient(fdc)
 
 
 # Create new http server and add to work queue
