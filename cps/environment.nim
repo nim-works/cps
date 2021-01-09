@@ -383,14 +383,17 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
     if len(n) == 2:
       # ident: type; we'll add a default for numbering reasons
       n.add newEmptyNode()
-    # iterate over the identifier names (a, b, c)
-    for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
-      # create a new identifier for the object field
-      let field = genSym(nskField, name.strVal)
-      let value = newTree(kind,     # ident: <no var> type = default
-                          newIdentDefs(name, stripVar(n[^2]), n[^1]))
-      e = e.set(field, value)
-      yield (key: field, val: value)
+    if n[0].kind notin {nnkIdent, nnkSym}:
+      error "bad rewrite presented\n" & $kind & ": " & repr(n)
+    else:
+      # iterate over the identifier names (a, b, c)
+      for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
+        # create a new identifier for the object field
+        let field = genSym(nskField, name.strVal)
+        let value = newTree(kind,     # ident: <no var> type = default
+                            newIdentDefs(name, stripVar(n[^2]), n[^1]))
+        e = e.set(field, value)
+        yield (key: field, val: value)
   of nnkVarTuple:
     # transform tuple to section
     assert n.last.kind == nnkTupleConstr, "expected tuple: " & treeRepr(n)
