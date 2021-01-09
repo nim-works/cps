@@ -534,48 +534,59 @@ testes:
 
   block:
     ## shadow mission impossible
+    r = 0
     proc b(x: int) {.cps: Cont.} =
+      inc r
+      check x == 2, "unexpected input to cps call b()"
       noop()
-      check x > 0
+      inc r
+      let x = x + 1
       noop()
-      let x = 3
+      inc r
+      check x == 3, "let from proc param incorrect"
       noop()
-      check x == 3
-      noop()
+      inc r
       var y = 8
       block:
         noop()
+        inc r
         var x = 4
         noop()
+        inc r
         inc x
         noop()
+        inc r
         dec y
         noop()
-        check x == 5
-        check y == 7
+        inc r
+        check x == 5, "shadowed var x could not be mutated"
+        check y == 7, "y could not be mutated in lower scope"
       noop()
-      check x == 3
+      inc r
+      check x == 3, "lower scope mutated shadowed x"
       noop()
-      check y == 7
+      inc r
+      check y == 7, "lower scope could not mutate y"
 
     proc a(x: int) {.cps: Cont.} =
+      inc r
+      check x == 1, "unexpected into to cps call a()"
       noop()
-      check x > 0
-      noop()
-      check x > 0
-      noop()
+      inc r
+      check x == 1, "noop managed to erase x"
       var x = 2
       noop()
-      check x == 2
+      inc r
+      check x == 2, "could not shadow proc param x"
       noop()
+      inc r
       trampoline b(x)
       noop()
-      check x == 2
-      noop()
-      check x == 2
+      inc r
+      check x == 2, "x mutated by cps call"
 
-    spawn a(1)
-    run()
+    trampoline a(1)
+    check r == 15
 
   block:
     ## the sluggish yield test
