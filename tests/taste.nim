@@ -14,8 +14,6 @@ proc trampoline(c: Cont) =
     check jumps < 1000, "Too many iterations on trampoline, looping?"
 
 var r = 0
-proc adder(x: var int) =
-  inc x
 
 testes:
 
@@ -38,18 +36,28 @@ testes:
     check r == 2, "who let the smoke out?"
 
   block:
-    ## noop is a primitive that merely sheds scope
+    ## local variables migrating in/out of env
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      let i = 3
+      noop()
+      inc r
+      check i == 3
+    trampoline foo()
+    check r == 2
+
+  block:
+    ## out-of-scope variables operate correctly
     r = 0
     var j = 2
     proc foo() {.cps: Cont.} =
       inc r
       check j == 2
       j = 4
-      let i = 3
       noop()
       inc r
-      check i == 3, "i was " & $i
-      check j == 4, "j was " & $j
+      check j == 4
       inc j
     trampoline foo()
     check r == 2
@@ -124,21 +132,26 @@ testes:
   block:
     ## shadowing and proc param defaults
     ## https://github.com/disruptek/cps/issues/22
+    r = 0
     proc foo(a, b, c: int = 3) {.cps: Cont.} =
+      inc r
       ## a=1, b=2, c=3
       var a = 5
       ## a=5, b=2, c=3
       noop()
+      inc r
       ## a=5, b=2, c=3
       var b = b + a
       ## a=5, b=7, c=3
       noop()
+      inc r
       ## a=5, b=7, c=3
       check "proc parameters":
         a == 5
         b == 7
         c == 3
     trampoline foo(1, 2)
+    check r == 3
 
   block:
     ## reassignment of var proc params
@@ -166,25 +179,27 @@ testes:
     check r == 3
 
   block:
-    ## simple block with break
+    ## block with break under if
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
       block:
+        inc r
         if true:
           inc r
           break
         fail"block break failed to break block"
       inc r
     trampoline foo()
-    check r == 3
+    check r == 4
 
   block:
-    ## block with break
+    ## cps block with break
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
       block:
+        inc r
         if true:
           inc r
           noop()
@@ -193,7 +208,7 @@ testes:
         fail"block break failed to break block"
       inc r
     trampoline foo()
-    check r == 4
+    check r == 5
 
   block:
     ## semaphores
@@ -270,86 +285,122 @@ testes:
 
   block:
     ## named breaks
-    r = 1
+    r = 0
     proc foo() {.cps: Cont.} =
-      block found:
-        while true:
-          noop()
-          if r > 2:
+      inc r
+      block:
+        block found:
+          inc r
+          block:
+            inc r
+            break
+            inc r
+          block:
+            inc r
             break found
+          fail"A: should be unreachable"
+        inc r
+        break
+        fail"B: should be unreachable"
+      inc r
+    trampoline foo()
+    check r == 6
+
+  block:
+    ## named breaks from inside a while
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      block:
+        block found:
+          inc r
+          while true:
+            inc r
+            noop()
+            inc r
+            if true:
+              inc r
+              break found
+            fail"loop tail should be unreachable"
+          fail"post loop should be unreachable"
+        inc r
+        break
+        inc r
+    trampoline foo()
+    check r == 6
+
+  block:
+    ## while loops correctly
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var i = 0
+      while i < 2:
+        inc r
+        inc i
+      inc r
+      check i == 2
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## while statement with cps call inside
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var i = 0
+      while i < 2:
+        inc r
+        noop()
+        inc r
+        inc i
+      inc r
+      check i == 2
+    trampoline foo()
+    check r == 6
+
+  block:
+    ## while statement with local var inside
+    when true:
+      skip"crashes compiler"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        var i = 0
+        while i < 2:
+          inc r
+          let x = i
           noop()
           inc r
-        fail"unreachable"
-      r = r * -1
-    trampoline foo()
-    check r == -3, "r was " & $r
+          inc i
+          noop()
+          inc r
+          check x == i - 1
+        inc r
+      trampoline foo()
+      check r == 8
 
   block:
-    ## while statement L
-    r = 0
-    proc foo() {.cps: Cont.} =
-      var i = 0
-      while i < 2:
-        inc i
-      check i == 2
-      r = i
-    trampoline foo()
-    check r == 2, "r was " & $r
-
-  block:
-    ## while statement Q
-    r = 0
-    proc foo() {.cps: Cont.} =
-      var i = 0
-      while i < 2:
-        noop()
-        inc i
-      r = i
-    trampoline foo()
-    check r == 2, "r was " & $r
-
-  block:
-    ## while statement N
-    r = 0
-    proc foo() {.cps: Cont.} =
-      var i = 0
-      while i < 2:
-        let x = i
-        inc i
-        check x < i
-      r = i
-    trampoline foo()
-    check r == 2, "r was " & $r
-
-  block:
-    ## while with break
-    r = 0
-    proc foo() {.cps: Cont.} =
-      var i = 0
-      while true:
-        let x = i
-        adder i
-        if i >= 2:
-          break
-        check x < i
-      r = i
-    trampoline foo()
-    check r == 2, "r was " & $r
-
-  block:
-    ## while with continue
-    r = 0
-    proc foo() {.cps: Cont.} =
-      var i = 0
-      while i < 2:
-        let x = i
-        adder i
-        if x == 0:
-          continue
-        check x > 0
-      r = i
-    trampoline foo()
-    check r == 2, "r was " & $r
+    ## continue statement within while
+    when true:
+      skip"crashes compiler"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        var i = 0
+        while i < 3:
+          inc r
+          inc i
+          check i == r - 1
+          if i <= 1:
+            continue
+          check i == 2
+          inc r
+        inc r
+      trampoline foo()
+      check r == 5
 
   block:
     ## shadow test A
@@ -437,8 +488,9 @@ testes:
 
   block:
     ## for loop with continue, break
+    r = 0
     proc foo() {.cps: Cont.} =
-      r = 1
+      inc r
       while true:
         for i in 0 .. 3:
           if i == 0:
@@ -449,22 +501,22 @@ testes:
         inc r
         if r == 5:
           break
+        inc r
       inc r
     trampoline foo()
-    check r == 6, "r is " & $r
+    check r == 6
 
   block:
     ## fork
     when not defined(fork):
       skip"fork() not declared"
-    else:
-      proc foo() {.cps: Cont.} =
-        fork()
-        inc r
-
-      trampoline foo()
-      if r != 2:
-        raise newException(Defect, "uh oh")
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      fork()
+      inc r
+    trampoline foo()
+    check r == 3
 
   block:
     ## the famous tock test
