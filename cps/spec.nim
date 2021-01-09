@@ -76,14 +76,23 @@ proc unhide*(n: NimNode): NimNode =
   result = filter(n, unhidden)
 
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
-  #debugEcho "resym call on ", treeRepr(sym), " into ", repr(field)
-  if sym.kind == nnkSym:
-    proc resymify(n: NimNode): NimNode =
+  ## seems we only use this for rewriting local symbols into symbols
+  ## in the env, so we'll do custom handling of identDefs here also
+  expectKind(sym, nnkSym)
+  proc resymify(n: NimNode): NimNode =
+    case n.kind
+    of nnkIdentDefs:
+      # we want to skip the name and rewrite the other children
+      for i in 1 ..< n.len:
+        if n[i].kind != nnkEmpty:
+          n[i] = filter(n[i], resymify)
+      result = n
+    of nnkSym:
       if n == sym:
         result = field
-    result = filter(n, resymify)
-  else:
-    result = n
+    else:
+      discard
+  result = filter(n, resymify)
 
 proc replacedSymsWithIdents*(n: NimNode): NimNode =
   proc desymifier(n: NimNode): NimNode =
