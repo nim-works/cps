@@ -228,3 +228,10 @@ testes:
         break
         prim()
       prim()
+
+  test "type":
+    proc foo(c: C, a: int): C {.cpsMagic.} =
+      echo "foo"
+    runCps:
+      foo(1.int)
+    
