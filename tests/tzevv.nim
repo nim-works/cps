@@ -230,8 +230,9 @@ testes:
       prim()
 
   test "type":
-    proc foo(c: C, a: int): C {.cpsMagic.} =
+    # Compile error
+    proc foo(c: C, a: int16): C {.cpsMagic.} =
       echo "foo"
     runCps:
-      foo(1.int)
+      foo(1'i16)
     
