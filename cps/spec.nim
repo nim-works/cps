@@ -55,7 +55,7 @@ proc desym*(n: NimNode): NimNode =
   result = if n.kind == nnkSym: ident(repr n) else: n
 
 proc unhide*(n: NimNode): NimNode =
-  ## unwrap hidden nodes
+  ## unwrap hidden conversion nodes and erase their types
   proc unhidden(n: NimNode): NimNode =
     case n.kind
     of nnkHiddenCallConv:
@@ -63,14 +63,24 @@ proc unhide*(n: NimNode): NimNode =
       for child in n.items:
         result.add copyNimTree(unhide child)
     of CallNodes - {nnkHiddenCallConv}:
-      # FIXME: a nutty hack to rewrite varargs conversions
       if n.len > 1 and n.last.kind == nnkHiddenStdConv:
-        result = copyNimNode(n)
+        result = copyNimNode n
         for index in 0 ..< n.len - 1: # ie, omit last
           result.add copyNimTree(unhide n[index])
-        expectKind(n.last.last, nnkBracket)
-        for converted in n.last.last.items:
-          result.add copyNimTree(unhide converted)
+        # now deal with the hidden conversions
+        var c = n.last
+        # rewrite varargs conversions; perhaps can be replaced by
+        # nnkArgsList if it acquires some special cps call handling
+        if c.last.kind == nnkBracket:
+          for converted in c.last.items:
+            result.add copyNimTree(unhide converted)
+        # these are implicit conversions the compiler can handle
+        elif c.len > 1 and c[0].kind == nnkEmpty:
+          for converted in c[1 .. ^1]:
+            result.add copyNimTree(unhide converted)
+        else:
+          raise newException(Defect,
+            "unexpected conversion form:\n" & treeRepr(c))
     else:
       discard
   result = filter(n, unhidden)
