@@ -361,7 +361,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       # return to after itself, so we don't add it to the goto list...
       let after = splitAt(env, n, i, "afterCall")
       result.add:
-        tailCall(env, nc):
+        tailCall(env, env.saften nc):
           returnTo after
       # include the definition for the after proc
       if after.node.kind != nnkSym:
@@ -387,6 +387,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       # add a return statement with a potential result assignment
       # stored in the environment
       env.addReturn(result, nc)
+
+    of nnkConv:
+      result.add nnkCall.newTree(nc[0], nc[1])
 
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
