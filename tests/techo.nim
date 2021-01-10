@@ -12,7 +12,7 @@ import os
 testes:
   block:
     ## zevv's echo service
-    when false:
+    when true:
       skip"off for now"
     else:
       proc timerfd_create(clock_id: ClockId, flags: cint): cint
