@@ -1,7 +1,7 @@
 import testes
 
 import cps
-import cps/eventqueue except trampoline
+import cps/eventqueue
 
 import epoll
 import posix
@@ -12,7 +12,7 @@ import os
 testes:
   block:
     ## zevv's echo service
-    when true:
+    when false:
       skip"off for now"
     else:
       proc timerfd_create(clock_id: ClockId, flags: cint): cint
