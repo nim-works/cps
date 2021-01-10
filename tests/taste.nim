@@ -1,7 +1,14 @@
 import testes
 
 import cps
-import cps/eventqueue except trampoline
+
+type
+  InfiniteLoop = CatchableError
+  Cont* = ref object of RootObj
+    when cpsMutant:
+      fn*: proc(c: var Cont) {.nimcall.}
+    else:
+      fn*: proc(c: Cont): Cont {.nimcall.}
 
 var jumps: int
 
@@ -11,29 +18,36 @@ proc trampoline(c: Cont) =
   while c != nil and c.fn != nil:
     c = c.fn(c)
     inc jumps
-    check jumps < 1000, "Too many iterations on trampoline, looping?"
+    if jumps > 1000:
+      raise newException(InfiniteLoop, $jumps & " iterations")
 
-var r = 0
+proc noop*(c: Cont): Cont {.cpsMagic.} = c
 
-testes:
+suite "basic testing assumptions":
 
   block:
     ## the trampoline runs continuations, uh, continuously
-    r = 0
+    var r = 0
     proc foo() {.cps: Cont.} =
-      r = 1
-    trampoline foo()
-    check r == 1
+      while true:
+        inc r
+    expect InfiniteLoop:
+      trampoline foo()
+    check r > 1
 
   block:
     ## noop magic smoke test
-    r = 0
+    var r = 0
     proc foo() {.cps: Cont.} =
       inc r
       noop()
       inc r
     trampoline foo()
     check r == 2, "who let the smoke out?"
+
+testes:
+
+  var r = 0
 
   block:
     ## local variables migrating in/out of env
@@ -62,18 +76,6 @@ testes:
     trampoline foo()
     check r == 2
     check j == 5
-
-  block:
-    ## yield is a primitive that enters the dispatcher
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      jield()
-      inc r
-    trampoline foo()
-    check r == 1
-    run()
-    check r == 2
 
   block:
     ## declaration via tuple deconstruction
@@ -112,22 +114,6 @@ testes:
         z == 4
     trampoline foo()
     check r == 2
-
-  block:
-    ## sleep is a primitive that rests in the dispatcher
-    r = 0
-    const q = 3
-    proc foo() {.cps: Cont.} =
-      var i = 0
-      while i < q:
-        inc r
-        sleep(i + 1)
-        inc r
-        inc i
-      check i == q
-    spawn foo()
-    run()
-    check r == q * 2
 
   block:
     ## shadowing and proc param defaults
@@ -209,24 +195,6 @@ testes:
       inc r
     trampoline foo()
     check r == 5
-
-  block:
-    ## semaphores
-    var sem = newSemaphore()
-    var success = false
-
-    proc signalSleeper(ms: int) {.cps: Cont.} =
-      sleep ms
-      signal sem
-
-    proc signalWaiter() {.cps: Cont.} =
-      wait sem
-      success = true
-
-    trampoline signalSleeper(10)
-    trampoline signalWaiter()
-    run()
-    check success, "signal failed"
 
   block:
     ## break statements without cps 🥴
@@ -507,32 +475,6 @@ testes:
     check r == 6
 
   block:
-    ## fork
-    when not defined(fork):
-      skip"fork() not declared"
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      fork()
-      inc r
-    trampoline foo()
-    check r == 3
-
-  block:
-    ## the famous tock test
-    skip"lives in its own test now"
-    proc foo(name: string; ms: int) {.cps: Cont.} =
-      var count = 10
-      while count > 0:
-        dec count
-        sleep ms
-        checkpoint name, " ", count
-
-    spawn foo("tick", 3)
-    spawn foo("tock", 7)
-    run()
-
-  block:
     ## shadow mission impossible
     r = 0
     proc b(x: int) {.cps: Cont.} =
@@ -587,39 +529,6 @@ testes:
 
     trampoline a(1)
     check r == 15
-
-  block:
-    ## the sluggish yield test
-    when defined(release):
-      skip"too slow for release mode"
-    const
-      start = 2
-      tiny = 0
-      big = start * 2
-    var count = start
-
-    proc higher(ms: int) {.cps: Cont.} =
-      while count < big and count > tiny:
-        inc count
-        sleep(ms)
-        jield()
-        jield()
-        jield()
-        jield()
-        jield()
-        jield()
-
-    proc lower(ms: int) {.cps: Cont.} =
-      while count < big and count > tiny:
-        dec count
-        sleep(ms)
-        jield()
-
-    trampoline higher(1)
-    trampoline lower(1)
-    run()
-
-    check count != tiny, "you're a terrible coder"
 
   block:
     ## assignment shim with constant
