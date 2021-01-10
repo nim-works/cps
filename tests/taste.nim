@@ -570,7 +570,7 @@ testes:
 
     proc a(x: int) {.cps: Cont.} =
       inc r
-      check x == 1, "unexpected into to cps call a()"
+      check x == 1, "unexpected input to cps call a()"
       noop()
       inc r
       check x == 1, "noop managed to erase x"
