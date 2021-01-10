@@ -103,6 +103,7 @@ suite "eventqueue testes":
 
   block:
     ## the sluggish yield test
+    skip"low priority, since jield works fine"
     when defined(release):
       skip"too slow for release mode"
     const
