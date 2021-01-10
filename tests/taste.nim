@@ -450,8 +450,7 @@ testes:
       inc x
       check x == 4, "shadowing symbol corrupted"
 
-    spawn shadow2(1)
-    run()
+    trampoline shadow2(1)
     check r == 2
 
   block:
