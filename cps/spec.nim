@@ -263,3 +263,12 @@ when cpsDebug:
     $n.lineInfoObj.line & " of " & extractFilename($n.lineInfoObj.filename)
 else:
   template lineAndFile*(n: NimNode): string = "(no debug)"
+
+proc errorAst*(s: string): NimNode =
+  ## produce {.error: s.} in order to embed errors in the ast
+  nnkPragma.newTree:
+    ident"error".newColonExpr: newLit s
+
+proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
+  ## embed an error with a message
+  errorAst s & ":\n" & treeRepr(n) & "\n"

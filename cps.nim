@@ -257,7 +257,7 @@ proc callTail(env: var Env; scope: Scope): NimNode =
   var n = scope.node
   case n.kind
   of nnkEmpty:
-    raise newException(Defect, "unexpected")
+    result = n.errorAst "empty scope node in callTail()"
   of nnkProcDef:
     # if you already put it in a proc, we should just use it
     result = n
@@ -394,7 +394,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
         # our rewrite pass should prevent this guard from triggering
-        raise newException(Defect, "unexpected section size: " & repr(nc))
+        result.add nc.errorAst "unexpected section size"
+        return
 
       if isCpsCall(nc.last.last):
 
