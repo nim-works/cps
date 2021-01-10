@@ -246,3 +246,10 @@ proc isLiftable*(n: NimNode): bool =
 
 proc hasLiftableChild*(n: NimNode): bool =
   result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
+
+when cpsDebug:
+  import os
+  template lineAndFile*(n: NimNode): string =
+    $n.lineInfoObj.line & " of " & extractFilename($n.lineInfoObj.filename)
+else:
+  template lineAndFile*(n: NimNode): string = "(no debug)"

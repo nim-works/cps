@@ -348,7 +348,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
   # the result is a copy of the current node
   result = copyNimNode n
-  result.doc "saftening..."
+  result.doc "saften at " & n.lineAndFile
 
   # we're going to iterate over the (non-comment) children
   for i, nc in n.pairs:
