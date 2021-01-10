@@ -394,7 +394,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
         # our rewrite pass should prevent this guard from triggering
-        result.add nc.errorAst "unexpected section size"
+        result.add:
+          nc.errorAst "unexpected section size"
         return
 
       if isCpsCall(nc.last.last):
@@ -428,7 +429,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         for name, list in env.localSection(nc):
           # our rewrite pass should prevent this guard from triggering
           if not field.isNil:
-            raise newException(Defect, "too many variable names in section")
+            result.add:
+              nc.errorAst "too many variable names in section"
           field = name
 
         # XXX: probably should be i and not i+1
@@ -457,8 +459,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         return
 
       elif isCpsBlock(nc.last.last):
-        raise newException(Defect,
-          "only calls are supported here: " & repr(nc.last))
+        result.add:
+          errorAst(nc.last, "only calls are supported here")
       else:
         # add definitions into the environment
         for name, list in env.localSection(nc):
@@ -626,7 +628,8 @@ proc normalizingRewrites(n: NimNode): NimNode =
             newNimNode(n.kind, n).add:
               rewriteIdentDefs child
         else:
-          raise newException(Defect, treeRepr(child) & "\nunexpected")
+          result.add:
+            child.errorAst "unexpected"
 
   proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
     ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
@@ -676,7 +679,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
   var env: Env
-  var booty: NimNode
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
@@ -701,6 +703,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## as the "bootstrap" which performs alloc of the continuation before
   ## calling the cps version of the proc
 
+  var booty: NimNode
   block:
     let name = env.first      # ident"result" or ident"continuation", etc.
 

@@ -293,7 +293,9 @@ proc firstDef*(e: Env): NimNode =
   else:
     newIdentDefs(e.first, e.via, newEmptyNode())
 
-proc get*(e: Env): NimNode = newDotExpr(e.castToChild(e.first), e.rs)
+proc get*(e: Env): NimNode =
+  ## retrieve a continuation's result value from the env
+  newDotExpr(e.castToChild(e.first), e.rs)
 
 proc newEnv*(parent: var Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -494,14 +496,15 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
   try:
     case n.kind
     of nnkVarSection, nnkLetSection:
-      for defs in items(n):
+      for defs in n.items:
         for pair in e.addAssignment(n.kind, defs):
           yield pair
     of nnkIdentDefs:
       for pair in e.addAssignment(n.kind, n):
         yield pair
     else:
-      raise newException(Defect, "unrecognized input node " & repr(n))
+      e.store.add:
+        n.errorAst "localSection input"
   finally:
     e.setDirty
 
@@ -510,9 +513,9 @@ proc newContinuation*(e: Env; via: NimNode;
   ## else, perform the following alloc...
   result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
   for field, section in pairs(e):
-    # (not used yet)
-    #if repr(field) notin [repr(e.fn), repr(e.ex)]:
-    if true:
+    # omit special fields in the env that we use for holding
+    # custom functions, results, and exceptions, respectively
+    if field notin [e.fn, e.rs, e.ex]:
       let defs = section.last
       if defaults:
         # initialize the field with any default supplied in its declaration
@@ -617,26 +620,49 @@ template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
 
 proc setReturn*(e: var Env; n: NimNode) =
   ## Teach the Env that it should return the provided type.
-  let defs = newIdentDefs(e.rs, newEmptyNode(), n)
+
+  # forge an identDefs for the result variable to add it to the env
+  let defs =
+    when false:
+      # we use `result: T = default(T)` for completeness
+      newIdentDefs(e.rs, n, newCall(ident"default", n))
+    else:
+      # we use `result: T` because we are lazy and fearful (but mostly lazy)
+      newIdentDefs(e.rs, n, newEmptyNode())
+
   # verbose 'cause we want to use n to inherit the line info
   discard e.set(e.rs, newNimNode(nnkVarSection, n).add defs)
 
   when true:
     discard "actually, our dirty tests are currently smart enough 😉"
+    e.store.doc "omitted a store of the env type during setReturn"
   else:
     # we need to store the type so we can add a getter for its result
     e = storeType(e, force = true)
 
+  # now add a mechanism for the user to retrieve the result
+  #
+  # FIXME: the get() calls below should probably be replaced with a
+  #        simple trampoline which, maybe, raises in the event that
+  #        the continuation has not fully resolved (ie. fn != nil)
+
   when false:
-    # this getter has to get lifted 'cause it's a method
-    e.store.add newProc(ident"result", procType = nnkMethodDef,
-                        body = e.get, params = [n, e.firstDef],
-                        pragmas = nnkPragma.newTree bindSym"cpsLift")
+    # generate `method result(c: env_123): int` whatfer unwrapping the result
+    # FIXME: this getter has to get lifted 'cause it's a method but we cannot
+    # currently lift it high enough since methods need to reach top-level
+    e.store.add:
+      newProc(ident"result", procType = nnkMethodDef,
+              body = e.get, params = [n, e.firstDef],
+              pragmas = nnkPragma.newTree bindSym"cpsLift")
   else:
+    # generate `proc int(c: env_123): int` whatfer unwrapping the result
+    # via a simple type conversion hack such as `continuation.int`
     let via = newIdentDefs(e.first, e.identity, newEmptyNode())
-    e.store.add newProc(ident n.strVal, procType = nnkProcDef,
-                        body = e.get, params = [n, via],
-                        pragmas = nnkPragma.newTree bindSym"cpsLift")
+    e.store.add:
+      newProc(ident n.strVal, procType = nnkProcDef,
+              body = e.get,            # ie. env_123(c).result_123
+              params = [n, via],       # (c: env_123): int
+              pragmas = nnkPragma.newTree bindSym"cpsLift")
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
