@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="terminal" baseProfile="full" viewBox="0 0 687 285" width="687" version="1.1">
+    <defs>
+        <termtosvg:template_settings xmlns:termtosvg="https://github.com/nbedos/termtosvg">
+            <termtosvg:screen_geometry columns="80" rows="12"/>
+            <termtosvg:animation type="css"/>
+        </termtosvg:template_settings>
+        <style type="text/css" id="generated-style"><![CDATA[#screen {
+                font-family: 'DejaVu Sans Mono', monospace;
+                font-style: normal;
+                font-size: 14px;
+            }
+
+        text {
+            dominant-baseline: text-before-edge;
+            white-space: pre;
+        }
+    ]]></style>
+        <style type="text/css" id="user-style">
+            /* The colors defined below are the default 16 colors used for rendering text of the terminal. Adjust
+               them as needed.
+               PowerShell colors based on https://en.wikipedia.org/wiki/ANSI_escape_code#Colors */
+            .foreground {fill: #cccccc;}
+            .background {fill: #0c0c0c;}
+            .color0 {fill: #0c0c0c;}
+            .color1 {fill: #c50f1f;}
+            .color2 {fill: #13a10e;}
+            .color3 {fill: #c19c00;}
+            .color4 {fill: #0037da;}
+            .color5 {fill: #881798;}
+            .color6 {fill: #3a96dd;}
+            .color7 {fill: #cccccc;}
+            .color8 {fill: #767676;}
+            .color9 {fill: #e74856;}
+            .color10 {fill: #16c60c;}
+            .color11 {fill: #f9f1a5;}
+            .color12 {fill: #3b78ff;}
+            .color13 {fill: #b4009e;}
+            .color14 {fill: #61d6d6;}
+            .color15 {fill: #f2f2f2;}
+        </style>
+    </defs>
+    <rect id="terminalui" class="background" width="100%" height="100%" ry="4.5826941"/>
+    <circle cx="24" cy="23" r="7" class="color1"/>
+    <circle cx="44" cy="23" r="7" class="color3"/>
+    <circle cx="64" cy="23" r="7" class="color2"/>
+    <svg id="screen" width="640" height="204" x="23" y="50" viewBox="0 0 640 204" preserveAspectRatio="xMidYMin slice"><rect class="background" height="100%" width="100%" x="0" y="0"/><defs><g id="g1"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="408" class="color2">the trampoline runs continuations, uh, continuously</text></g><g id="g2"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="168" class="color2">noop magic smoke test</text></g><g id="g3"><text x="0" textLength="24" font-weight="bold" font-style="italic" class="color8">## </text><text x="24" textLength="72" font-weight="bold" font-style="italic" class="color15">2 tests  </text><text x="96" textLength="152" class="foreground">      &#128994;2          </text></g><g id="g4"><text x="0" textLength="96" class="foreground">   var r = 0</text></g><g id="g5"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="376" class="color2">yield is a primitive that enters the dispatcher</text></g><g id="g6"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="392" class="color2">sleep is a primitive that rests in the dispatcher</text></g><g id="g7"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="80" class="color2">semaphores</text></g><g id="g8"><text x="0" textLength="24" class="foreground">&#10068; </text><text x="24" textLength="32" text-decoration=" line-through" class="color5">fork</text><text x="56" textLength="16" class="foreground">: </text><text x="72" textLength="152" font-weight="bold" font-style="italic" class="color15">fork() not declared</text></g><g id="g9"><text x="0" textLength="24" class="foreground">&#10068; </text><text x="24" textLength="184" text-decoration=" line-through" class="color5">the sluggish yield test</text><text x="208" textLength="16" class="foreground">: </text><text x="224" textLength="288" font-weight="bold" font-style="italic" class="color15">low priority, since jield works fine</text></g><g id="g10"><text x="0" textLength="24" font-weight="bold" font-style="italic" class="color8">## </text><text x="24" textLength="72" font-weight="bold" font-style="italic" class="color15">7 tests  </text><text x="96" textLength="176" class="foreground">      &#128994;5  &#10068;2        </text></g><g id="g11"><text x="0" textLength="8" class="background"> </text></g></defs><g><use xlink:href="#g1" y="0"/><use xlink:href="#g2" y="17"/><use xlink:href="#g3" y="34"/><use xlink:href="#g4" y="51"/><use xlink:href="#g5" y="68"/><use xlink:href="#g6" y="85"/><use xlink:href="#g7" y="102"/><use xlink:href="#g8" y="119"/><use xlink:href="#g9" y="136"/><use xlink:href="#g10" y="153"/><rect x="0" y="170" width="8" height="17" class="foreground"/><use xlink:href="#g11" y="170"/></g></svg>
+</svg>

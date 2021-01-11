@@ -133,7 +133,7 @@ run()
 ```
 ...and when built with `--define:cpsDebug`, outputs something like...
 
-![tick-tock demonstration](docs/demo.svg "tick-tock demonstration")
+![tick-tock demonstration](docs/tock.svg "tick-tock demonstration")
 
 [The source to the tick-tock test.](https://github.com/disruptek/cps/blob/master/tests/tock.nim)
 
@@ -174,6 +174,18 @@ your experiments.
 [Here are more contrived tests of AST rewrites:](https://github.com/disruptek/cps/blob/master/tests/taste.nim)
 
 ![taste tests](docs/taste.svg "taste tests")
+
+[Here are a few tests of the included eventqueue dispatcher:](https://github.com/disruptek/cps/blob/master/tests/teventqueue.nim)
+
+![eventqueue tests](docs/teventqueue.svg "eventqueue tests")
+
+[Here's Zevv's echo server test:](https://github.com/disruptek/cps/blob/master/tests/techo.nim)
+
+![echo server tests](docs/techo.svg "echo server tests")
+
+[Finally, here are a few quick tests of type conversions:](https://github.com/disruptek/cps/blob/master/tests/ttypes.nim)
+
+![types tests](docs/ttypes.svg "types tests")
 
 ## License
 MIT
