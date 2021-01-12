@@ -139,24 +139,16 @@ proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
-  of nnkProcDef, nnkElse, nnkElifBranch:
-    result = isCpsBlock(n.last)
-  #of nnkBreakStmt:
-  #  result = insideCps()
-  of nnkIfStmt:
-    for child in n.children:
-      result = child.isCpsBlock
-      if result:
-        break
-  of nnkStmtList:
-    for i, nc in pairs(n):
-      # it's a CPS block if ANY call exists inside
-      #result = (i != n.len-1 and nc.isCpsCall) or nc.isCpsBlock
-      result = nc.isCpsCall or nc.isCpsBlock
-      if result:
-        break
+  of nnkElse, nnkElifBranch:
+    result = n.last.isCpsBlock
+  of nnkStmtList, nnkIfStmt:
+    for n in n.items:
+      if n.isCpsBlock:
+        return true
+  of callish:
+    result = n.isCpsCall
   else:
-    discard
+    result = false
 
 proc cmpKind(a, b: NimNode): int =
   if a.kind == b.kind:
@@ -565,11 +557,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.doc "if body inside cps"
         result.add env.saften(nc)
       else:
-        withGoto env.splitAt(n, i, "boringIfClause"):
-          result.doc "boring if clause"
-          result.add env.saften(nc)
-          return
-        assert false, "unexpected"
+        result.doc "boring if clause"
+        result.add env.saften(nc)
 
     # not a statement cps is interested in
     else:
