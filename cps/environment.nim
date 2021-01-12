@@ -235,10 +235,12 @@ proc populateType(e: Env; n: var NimNode) =
     for defs in section.items:
       if defs[1].isEmpty:
         # get the type of the assignment
-        n.add newIdentDefs(name, getType(defs.last))
+        n.add:
+          newIdentDefs(name, getTypeImpl(defs.last), newEmptyNode())
       else:
         # name is an ident or symbol
-        n.add newIdentDefs(name, defs[1])
+        n.add:
+          newIdentDefs(name, defs[1], newEmptyNode())
 
 proc contains*(e: Env; key: NimNode): bool =
   ## you're giving us a symbol|ident and we're telling you if we have it
