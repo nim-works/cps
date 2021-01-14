@@ -1,3 +1,4 @@
 [submodule "testes"]
 	path = testes
 	url = https://github.com/disruptek/testes
+  branch = 1.0.1
