@@ -328,49 +328,6 @@ testes:
     check r == 6
 
   block:
-    ## while statement with local var inside
-    when true:
-      skip"crashes compiler"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
-        inc r
-        var i = 0
-        while i < 2:
-          inc r
-          let x = i
-          noop()
-          inc r
-          inc i
-          noop()
-          inc r
-          check x == i - 1
-        inc r
-      trampoline foo()
-      check r == 8
-
-  block:
-    ## continue statement within while
-    when true:
-      skip"crashes compiler"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
-        inc r
-        var i = 0
-        while i < 3:
-          inc r
-          inc i
-          check i == r - 1
-          if i <= 1:
-            continue
-          check i == 2
-          inc r
-        inc r
-      trampoline foo()
-      check r == 5
-
-  block:
     ## shadow test A
     r = 0
     proc shadow(x: int) {.cps: Cont.} =
@@ -454,6 +411,23 @@ testes:
     check r == 2
 
   block:
+    ## continue statement within while
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var i = 0
+      while i < 3:
+        inc r
+        inc i
+        if i <= 2:
+          continue
+        check i == 3
+        inc r
+      inc r
+    trampoline foo()
+    check r == 6
+
+  block:
     ## for loop with continue, break
     r = 0
     proc foo() {.cps: Cont.} =
@@ -475,7 +449,7 @@ testes:
 
   block:
     ## shadow mission impossible
-    skip"does not work yet"
+    skip"pending nim-lang/Nim#16718"
     r = 0
     proc b(x: int) {.cps: Cont.} =
       inc r
@@ -533,7 +507,7 @@ testes:
   block:
     ## assignment shim with constant
     when true:
-      skip"also not working yet"
+      skip"pending discussion #28"
     else:
       r = 0
       proc bar(a: int): int {.cps: Cont.} =
@@ -549,3 +523,25 @@ testes:
 
       trampoline foo()
       check r == 3
+
+  block:
+    ## while statement with local var inside
+    when true:
+      skip"pending nim-lang/Nim#16719"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        var i = 0
+        while i < 2:
+          inc r
+          let x = i
+          noop()
+          inc r
+          inc i
+          noop()
+          inc r
+          check x == i - 1
+        inc r
+      trampoline foo()
+      check r == 8
