@@ -1,4 +1,0 @@
-[submodule "testes"]
-	path = testes
-	url = https://github.com/disruptek/testes
-  branch = noic

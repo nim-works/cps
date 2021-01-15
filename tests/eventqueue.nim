@@ -1,4 +1,4 @@
-import testes
+import balls
 
 import cps
 import cps/eventqueue except trampoline
@@ -39,7 +39,7 @@ suite "basic testing assumptions":
     trampoline foo()
     check r == 2, "who let the smoke out?"
 
-suite "eventqueue testes":
+suite "eventqueue ball pit":
 
   var r = 0
 

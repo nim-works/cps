@@ -1,4 +1,4 @@
-import testes
+import balls
 
 import cps
 import cps/eventqueue
@@ -9,7 +9,7 @@ import tables
 import deques
 import os
 
-testes:
+suite "echo service":
   block:
     ## zevv's echo service
     when true:
