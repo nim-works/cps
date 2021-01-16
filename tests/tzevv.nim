@@ -190,3 +190,72 @@ testes:
         echo "one ", n
         let s = len("")
         inc n
+
+  test "continue":
+    expPrims 8: runCps:
+      prim()
+      var i: int = 0
+      while i < 10:
+        inc i
+        if i < 5:
+          continue
+        prim()
+      prim()
+
+  test "for3":
+    expPrims 1: runCps:
+      var a: int = 0
+      for i in 0..3:
+        inc a, 1
+      check a == 4
+      prim()
+
+  test "defer":
+    expPrims 3: runCps:
+      prim()
+      defer:
+        prim()
+      prim()
+
+  test "nested while":
+    expPrims 100: runCps:
+      var i: int
+      var j: int
+      while i < 10:
+        inc i
+        j = 0
+        while j < 10:
+          inc j
+          prim()
+
+  test "paper example 1":
+    expPrims 2: runCps:
+      var t: bool = false
+      while not t:
+        prim()
+        break
+        prim()
+      prim()
+
+  proc foo(c: C, fd: int16): C {.cpsMagic.} =
+    discard
+
+  test "int":
+    proc test1() {.cps:C} =
+      foo(1)
+    discard test1()
+
+  test "'i16":
+    proc test1() {.cps:C} =
+      foo(1'i16)
+    discard test1()
+
+  test "int16()":
+    proc test1() {.cps:C} =
+      foo(int16(1))
+    discard test1()
+
+  test ".int16":
+    proc test1() {.cps:C} =
+      foo(1.int16)
+    discard test1()
