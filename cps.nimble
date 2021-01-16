@@ -4,7 +4,7 @@ description = "continuation-passing style"
 license = "MIT"
 
 when not defined(release):
-  requires "https://github.com/disruptek/testes >= 1.0.1 & < 1.1.0"
+  requires "https://github.com/disruptek/testes#noic"
   requires "https://github.com/disruptek/criterion < 1.0.0"
 
 task test, "run tests for ci":
