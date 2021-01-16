@@ -259,3 +259,10 @@ testes:
     proc test1() {.cps:C} =
       foo(1.int16)
     discard test1()
+   
+  test "type problem":
+    type Thing = distinct int
+    proc foo(): Thing = 1.Thing
+    runCps:
+      var a = foo()
+

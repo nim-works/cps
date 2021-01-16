@@ -593,7 +593,7 @@ proc normalizingRewrites(n: NimNode): NimNode =
       if n.len == 2:
         n.add newEmptyNode()
       elif n[1].isEmpty:          # add explicit type symbol
-        n[1] = getTypeImpl n[2]
+        n[1] = getTypeInst n[2]
       result = n
 
   proc rewriteVarLet(n: NimNode): NimNode =
