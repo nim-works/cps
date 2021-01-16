@@ -19,4 +19,3 @@ task demo, "generate the demos":
   exec """demo docs/taste.svg "nim c --out=\$1 tests/taste.nim""""
   exec """demo docs/teventqueue.svg "nim c --out=\$1 tests/eventqueue.nim""""
   exec """demo docs/techo.svg "nim c --out=\$1 tests/echo.nim""""
-  exec """demo docs/ttypes.svg "nim c --out=\$1 tests/ttypes.nim""""
