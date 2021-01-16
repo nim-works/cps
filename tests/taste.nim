@@ -411,6 +411,36 @@ testes:
     check r == 2
 
   block:
+    ## case statements
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var i = 0
+      while i < 3:
+        inc r
+        inc i
+        case i
+        of 1:
+          inc r
+          discard
+        of 2:
+          check r == 5
+          inc r
+          continue
+        of 3:
+          check r == 7
+          inc r
+          break
+        else:
+          fail"unexpected default case"
+        let q = r - 2  # work-around
+        check i == q, "bad control flow"
+        inc r
+      inc r
+    trampoline foo()
+    check r == 9
+
+  block:
     ## continue statement within while
     r = 0
     proc foo() {.cps: Cont.} =

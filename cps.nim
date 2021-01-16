@@ -20,7 +20,7 @@ const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes
   unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
   # if statements are not "returners"; it's elif branches we care about
-  returner = {nnkBlockStmt, nnkElifBranch, nnkElse}
+  returner = {nnkBlockStmt, nnkOfBranch, nnkElifBranch, nnkElse}
 
 when defined(yourdaywillcomelittleonecommayourdaywillcomedotdotdot):
   const
@@ -139,9 +139,9 @@ proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
-  of nnkElse, nnkElifBranch:
+  of nnkElse, nnkElifBranch, nnkOfBranch:
     result = n.last.isCpsBlock
-  of nnkStmtList, nnkIfStmt:
+  of nnkStmtList, nnkIfStmt, nnkCaseStmt:
     for n in n.items:
       if n.isCpsBlock:
         return true
@@ -544,20 +544,21 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       discard env.popBreak
       return
 
-    of nnkIfStmt:
-      # if any `if` clause is a cps block, then every clause must be
+    of nnkIfStmt, nnkCaseStmt:
+      # if any clause is a cps block, then every clause must be.
       # if we've pushed any goto or breaks, then we're already in cps
       if nc.isCpsBlock:
-        withGoto env.splitAt(n, i, "isCpsBlockIfClause"):
-          result.doc "add if body"
+        withGoto env.splitAt(n, i, "isCpsBlockClause"):
+          result.doc "add if/of body"
           result.add env.saften(nc)
           return
-        assert false, "unexpected"
+        result.add:
+          nc.errorAst "unexpected control flow from if/case"
       elif insideCps(env):
-        result.doc "if body inside cps"
+        result.doc "if/of body inside cps"
         result.add env.saften(nc)
       else:
-        result.doc "boring if clause"
+        result.doc "boring if/of clause"
         result.add env.saften(nc)
 
     # not a statement cps is interested in
@@ -575,16 +576,23 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
   if result.kind == nnkStmtList and n.kind in returner:
     # let a for loop, uh, loop
-    if not env.insideFor and not env.insideWhile:
+    if env.insideFor or env.insideWhile:
+      result.add:
+        n.errorAst "no remaining goto for " & $n.kind
+    else:
       if not result.firstReturn.isNil:
         result.doc "omit return call from " & $n.kind
+      elif env.nextGoto.isNil:
+        result.add:
+          n.errorAst "nil return; no remaining goto for " & $n.kind
       elif env.nextGoto.kind != nnkNilLit:
         result.doc "adding return call to " & $n.kind
         result.add:
           env.tailCall:
             returnTo env.nextGoto
       else:
-        discard "nil return; no remaining goto for " & $n.kind
+        result.add:
+          n.errorAst "super confused after " & $n.kind
 
 proc normalizingRewrites(n: NimNode): NimNode =
   proc rewriteIdentDefs(n: NimNode): NimNode =
