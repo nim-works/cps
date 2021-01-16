@@ -135,7 +135,7 @@ run()
 
 ![tick-tock demonstration](docs/tock.svg "tick-tock demonstration")
 
-[The source to the tick-tock test.](https://github.com/disruptek/cps/blob/master/tests/tock.nim)
+[The source to the tick-tock test.](https://github.com/disruptek/cps/blob/master/stash/tock.nim)
 
 ## Notes on the Example Dispatcher
 

@@ -14,9 +14,9 @@ task test, "run tests for ci":
     exec findExe"testes"
 
 task demo, "generate the demos":
-  exec """demo docs/tock.svg "nim c -d:danger -d:cpsDebug --out=\$1 tests/tock.nim""""
+  exec """demo docs/tock.svg "nim c -d:danger -d:cpsDebug --out=\$1 stash/tock.nim""""
   exec """demo docs/tzevv.svg "nim c --out=\$1 tests/tzevv.nim""""
   exec """demo docs/taste.svg "nim c --out=\$1 tests/taste.nim""""
-  exec """demo docs/teventqueue.svg "nim c --out=\$1 tests/teventqueue.nim""""
-  exec """demo docs/techo.svg "nim c --out=\$1 tests/techo.nim""""
+  exec """demo docs/teventqueue.svg "nim c --out=\$1 tests/eventqueue.nim""""
+  exec """demo docs/techo.svg "nim c --out=\$1 tests/echo.nim""""
   exec """demo docs/ttypes.svg "nim c --out=\$1 tests/ttypes.nim""""
