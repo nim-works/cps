@@ -89,18 +89,24 @@ Hello, there!
 
 # CPS client hander
 
-#var n = 0
-#
-#proc doClient(fdc: SocketHandle) {.cps:Cont} =
-#
-#  while true:
-#    io(fdc, POLLIN)
-#    let s: string = sockRecv(fdc)
-#    if s.len == 0:
-#      return
-#    io(fdc, POLLOUT)
-#    sockSend(fdc, response)
-#    inc n
+var clients = 0
+var requests = 0
+
+proc doClient(fdc: SocketHandle) {.cps:Cont} =
+
+  echo "Serving client ", clients
+  inc clients
+
+  while true:
+    io(fdc, POLLIN)
+    echo "  Serving request ", requests
+    let s: string = sockRecv(fdc)
+    if s.len == 0:
+      return
+    io(fdc, POLLOUT)
+    sockSend(fdc, response)
+    inc requests
+  echo "remove this line and the while breaks"
 
 
 # CPS server handler
@@ -111,7 +117,8 @@ proc doServer(port: int) {.cps:Cont} =
     io(fds, 1.int16)
     let fdc: SocketHandle = sockAccept(fds)
     # Create new client and add to work queue
-    #evq.work.addLast doClient(fdc)
+    evq.work.addLast doClient(fdc)
+  echo "remove this line and the while breaks"
 
 
 # Create new http server and add to work queue
