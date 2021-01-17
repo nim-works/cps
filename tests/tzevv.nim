@@ -266,3 +266,13 @@ testes:
     runCps:
       var a = foo()
 
+  test "compiler SIGSEGV":
+    runCps:
+      var s: string
+      while true:
+        let c = 'a'
+        case c
+          of '\b':
+            s.setLen(s.len + 1)
+          else:
+            discard
