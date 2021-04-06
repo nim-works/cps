@@ -556,22 +556,19 @@ testes:
 
   block:
     ## while statement with local var inside
-    when true:
-      skip"pending nim-lang/Nim#16719"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var i = 0
+      while i < 2:
         inc r
-        var i = 0
-        while i < 2:
-          inc r
-          let x = i
-          noop()
-          inc r
-          inc i
-          noop()
-          inc r
-          check x == i - 1
+        let x = i
+        noop()
         inc r
-      trampoline foo()
-      check r == 8
+        inc i
+        noop()
+        inc r
+        check x == i - 1
+      inc r
+    trampoline foo()
+    check r == 8
