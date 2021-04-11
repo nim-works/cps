@@ -128,7 +128,7 @@ func isReturnCall(n: NimNode): bool =
   else:
     discard
 
-func asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
+proc asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
   ## fill `r` with `return foo()` if that is a safe simplification
   var n = n.firstReturn
   result = not n.isNil
@@ -657,7 +657,7 @@ proc cloneProc(n: NimNode): NimNode =
     newEmptyNode(),
     copy n.body)
 
-proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
+proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # enhanced spam before it all goes to shit
@@ -827,7 +827,7 @@ proc workaroundRewrites(n: NimNode): NimNode =
 
   result = filter(n, workaroundSigmatchSkip)
 
-proc cpsXfrm*(T: NimNode, n: NimNode): NimNode =
+proc cpsXfrm(T: NimNode, n: NimNode): NimNode =
   # Perform CPS transformation on a NimNode. This can be a single
   # proc, or a top level stmtList.
   case n.kind

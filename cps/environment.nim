@@ -38,7 +38,7 @@ type
     fn: NimNode                     # the sym we use for the goto target
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
-
+  
 func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
 template searchScope(env: Env; x: untyped;
@@ -53,11 +53,11 @@ template searchScope(env: Env; x: untyped;
       break
   r
 
-func lastGotoLoop*(e: Env): Scope = searchScope(e, gotos, last)
-func lastBreakLoop*(e: Env): Scope = searchScope(e, breaks, last)
+proc lastGotoLoop*(e: Env): Scope = searchScope(e, gotos, last)
+proc lastBreakLoop*(e: Env): Scope = searchScope(e, breaks, last)
 
-func nextGoto*(e: Env): Scope = searchScope(e, gotos, next)
-func nextBreak*(e: Env): Scope = searchScope(e, breaks, next)
+proc nextGoto*(e: Env): Scope = searchScope(e, gotos, next)
+proc nextBreak*(e: Env): Scope = searchScope(e, breaks, next)
 
 proc addGoto*(e: var Env; scope: Scope) =
   ## it's nice when we can do this simply
