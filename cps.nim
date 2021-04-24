@@ -26,12 +26,28 @@ when defined(yourdaywillcomelittleonecommayourdaywillcomedotdotdot):
   const
     cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
 
+func getCallSym(n: NimNode): NimNode =
+  ## Get the symbol that is being called
+  expectKind n, callish
+  result = n[0]
+  while result != nil:
+    case result.kind
+    of nnkDotExpr:
+      result = result[1]
+    of nnkSym:
+      break
+    of nnkIdent:
+      raise newException(CatchableError, "This call is not typed")
+    else:
+      assert false, "unknown node type: " & $result.kind
+  assert not result.isNil
+
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   assert not n.isNil
   if len(n) > 0:
     if n.kind in callish:
-      let p = n[0].getImpl
+      let p = n.getCallSym.getImpl
       result = p.hasPragma("cpsCall")
 
 proc firstReturn(p: NimNode): NimNode =
