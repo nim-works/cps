@@ -572,3 +572,17 @@ testes:
       inc r
     trampoline foo()
     check r == 8
+
+  block:
+    ## running a function pointer inside an object
+    when true:
+      skip "pending nim-lang/Nim#17836"
+    else:
+      type Fn = object
+        fn: proc(i: int): int
+      let fn = Fn(fn: proc(i: int): int = i * 2)
+
+      proc foo() {.cps: Cont.} =
+        check fn.fn(10) == 20
+
+      trampoline foo()
