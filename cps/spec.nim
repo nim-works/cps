@@ -52,7 +52,10 @@ proc filter*(n: NimNode; f: NodeFilter): NimNode =
       result.add filter(kid, f)
 
 proc desym*(n: NimNode): NimNode =
-  result = if n.kind == nnkSym: ident(repr n) else: n
+  result = n
+  if n.kind == nnkSym:
+    result = ident(repr n)
+    result.copyLineInfo n
 
 proc unhide*(n: NimNode): NimNode =
   ## unwrap hidden conversion nodes and erase their types
