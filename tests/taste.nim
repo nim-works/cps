@@ -2,6 +2,8 @@ import testes
 
 import cps
 
+import foreign
+
 type
   InfiniteLoop = CatchableError
   Cont* = ref object of RootObj
@@ -586,3 +588,35 @@ testes:
         check fn.fn(10) == 20
 
       trampoline foo()
+
+  block:
+    ## call a macro that calls a foreign symbol
+    when true:
+      skip "not working yet, see #53"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        let i = 42
+        noop()
+        inc r
+        check jsonifyImplicit(i) == $i
+
+      trampoline foo()
+      check r == 2
+
+  block:
+    ## call a template with explicit bind
+    when true:
+      skip "not working yet, see #53"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        let i = 42
+        noop()
+        inc r
+        check jsonifyBind(i) == $i
+
+      trampoline foo()
+      check r == 2
