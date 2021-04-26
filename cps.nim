@@ -47,7 +47,11 @@ proc isCpsCall(n: NimNode): bool =
   assert not n.isNil
   if len(n) > 0:
     if n.kind in callish:
-      let p = n.getCallSym.getImpl
+      let p =
+        try:
+          n.getCallSym.getImpl
+        except:
+          newEmptyNode()
       result = p.hasPragma("cpsCall")
 
 proc firstReturn(p: NimNode): NimNode =
@@ -808,9 +812,9 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   env = env.storeType(force = off)
 
   # Araq: "learn how to desemantic your ast, knuckleheads"
-  n.body = replacedSymsWithIdents(n.body)
-  types = replacedSymsWithIdents(types)
-  booty = replacedSymsWithIdents(booty)
+  #n.body = replacedSymsWithIdents(n.body)
+  #types = replacedSymsWithIdents(types)
+  #booty = replacedSymsWithIdents(booty)
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)

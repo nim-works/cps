@@ -38,7 +38,7 @@ type
     fn: NimNode                     # the sym we use for the goto target
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
-  
+
 func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
 template searchScope(env: Env; x: untyped;
@@ -191,7 +191,7 @@ proc castToChild(e: Env; n: NimNode): NimNode =
   when cpsCast:
     result = newTree(nnkCast, e.identity, n)
   else:
-    result = newTree(nnkCall, e.identity, n)
+    result = newTree(nnkCall, desym e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -236,11 +236,11 @@ proc populateType(e: Env; n: var NimNode) =
       if defs[1].isEmpty:
         # get the type of the assignment
         n.add:
-          newIdentDefs(name, getTypeImpl(defs.last), newEmptyNode())
+          newIdentDefs(desym name, getTypeImpl(defs.last), newEmptyNode())
       else:
         # name is an ident or symbol
         n.add:
-          newIdentDefs(name, defs[1], newEmptyNode())
+          newIdentDefs(desym name, defs[1], newEmptyNode())
 
 proc contains*(e: Env; key: NimNode): bool =
   ## you're giving us a symbol|ident and we're telling you if we have it
@@ -285,7 +285,7 @@ proc makeType*(e: var Env): NimNode =
   # determine if a symbol clash necessitates pointing to a new parent
   #performReparent(e)
 
-  result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
+  result = nnkTypeDef.newTree(desym e.id, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
 proc firstDef*(e: Env): NimNode =
@@ -472,7 +472,7 @@ proc initialization(e: Env; kind: NimNodeKind;
     let defs = value[0]
     if len(defs) > 2 and not defs.last.isEmpty:
       # this is basically env2323(cont).foo34 = "some default"
-      result.add newAssignment(newDotExpr(child, field), defs.last)
+      result.add newAssignment(newDotExpr(child, desym field), defs.last)
 
 iterator addAssignment(e: var Env; kind: NimNodeKind;
                        defs: NimNode): Pair =
@@ -513,7 +513,7 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
 proc newContinuation*(e: Env; via: NimNode;
                       goto: NimNode; defaults = false): NimNode =
   ## else, perform the following alloc...
-  result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
+  result = nnkObjConstr.newTree(desym e.identity, newColonExpr(e.fn, goto))
   for field, section in pairs(e):
     # omit special fields in the env that we use for holding
     # custom functions, results, and exceptions, respectively
@@ -524,14 +524,14 @@ proc newContinuation*(e: Env; via: NimNode;
         if not defs.last.isEmpty:
           # only initialize a field that has a default
           # FIXME: this needs to only add requiresInit stuff
-          result.add newColonExpr(field, defs.last)
+          result.add newColonExpr(desym field, defs.last)
       else:
         # the name from identdefs is not gensym'd (usually!)
         let name = defs[0]
 
         # specify the gensym'd field name and the local name
         assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
-        result.add newColonExpr(field, name)
+        result.add newColonExpr(desym field, name)
 
 proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
   ## usually, `result = rootResult(ident"result")`
@@ -690,7 +690,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   result = n
   let child = e.castToChild(e.first)
   for field, section in pairs(e):
-    result = result.resym(section[0][0], newDotExpr(child, field))
+    result = result.resym(section[0][0], newDotExpr(child, desym field))
 
 proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   when cpsExcept:
