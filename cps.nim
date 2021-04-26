@@ -846,7 +846,9 @@ proc workaroundRewrites(n: NimNode): NimNode =
       for child in n.items:
         # The containers of direct children always has to be rewritten
         # since they also have a .typ attached from the previous sem pass
-        result.add rewriteContainer workaroundRewrites child
+        result.add:
+          rewriteContainer:
+            workaroundRewrites child
 
   result = filter(n, workaroundSigmatchSkip)
 
