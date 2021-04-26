@@ -833,13 +833,14 @@ proc workaroundRewrites(n: NimNode): NimNode =
       # so that sigmatch doesn't decide to skip it
       result = newNimNode(n.kind, n)
       for child in n.items:
+        var newChild = workaroundRewrites child
+        # The containers of direct children always has to be rewritten
         if child.kind notin AtomicNodes:
-          var newChild = newNimNode(child.kind, child)
-          for grandchild in child.items:
-            newChild.add workaroundRewrites grandchild
-          result.add newChild
-        else:
-          result.add child
+          let rewritten = newNimNode(newChild.kind, newChild)
+          for grandchild in newChild.items:
+            rewritten.add grandchild
+          newChild = rewritten
+        result.add newChild
 
   result = filter(n, workaroundSigmatchSkip)
 

@@ -617,3 +617,18 @@ testes:
 
       trampoline foo()
       check r == 2
+
+  block:
+    ## template call in nested call nodes
+    r = 0
+
+    template nestedStr(): string =
+      var s = "foo"
+      s
+
+    proc foo() {.cps: Cont.} =
+      inc r
+      check not(nestedStr != "foo")
+
+    trampoline foo()
+    check r == 1
