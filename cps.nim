@@ -835,6 +835,7 @@ proc workaroundRewrites(n: NimNode): NimNode =
       for child in n.items:
         var newChild = workaroundRewrites child
         # The containers of direct children always has to be rewritten
+        # since they also have a .typ attached from the previous sem pass
         if child.kind notin AtomicNodes:
           let rewritten = newNimNode(newChild.kind, newChild)
           for grandchild in newChild.items:
