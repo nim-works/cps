@@ -812,9 +812,11 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   env = env.storeType(force = off)
 
   # Araq: "learn how to desemantic your ast, knuckleheads"
-  #n.body = replacedSymsWithIdents(n.body)
-  #types = replacedSymsWithIdents(types)
-  #booty = replacedSymsWithIdents(booty)
+  # No longer necessary as we are desym-ing on a selective basis
+  when false:
+    n.body = replacedSymsWithIdents(n.body)
+    types = replacedSymsWithIdents(types)
+    booty = replacedSymsWithIdents(booty)
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)
