@@ -28,6 +28,7 @@ when defined(yourdaywillcomelittleonecommayourdaywillcomedotdotdot):
 
 func getCallSym(n: NimNode): NimNode =
   ## Get the symbol that is being called
+  ## Returns nil if there is no symbol
   expectKind n, callish
   result = n[0]
   while result != nil:
@@ -37,22 +38,19 @@ func getCallSym(n: NimNode): NimNode =
     of nnkSym:
       break
     of nnkIdent:
-      raise newException(CatchableError, "This call is not typed")
+      result = nil
+      break
     else:
       assert false, "unknown node type: " & $result.kind
-  assert not result.isNil
 
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   assert not n.isNil
   if len(n) > 0:
     if n.kind in callish:
-      let p =
-        try:
-          n.getCallSym.getImpl
-        except:
-          newEmptyNode()
-      result = p.hasPragma("cpsCall")
+      let callee = n.getCallSym
+      if not callee.isNil:
+        result = callee.getImpl.hasPragma("cpsCall")
 
 proc firstReturn(p: NimNode): NimNode =
   ## find the first return statement within statement lists, or nil
