@@ -827,19 +827,28 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
       debugEcho repr(result).numberedLines(info.line)
 
 proc workaroundRewrites(n: NimNode): NimNode =
+  proc rewriteContainer(n: NimNode): NimNode =
+    ## Helper function to recreate a container node while keeping all children
+    ## to discard semantic data attached to the container.
+    ##
+    ## Returns the same node if its not a container node.
+    result = n
+    if n.kind notin AtomicNodes:
+      result = newNimNode(n.kind, n)
+      for child in n:
+        result.add child
+
   proc workaroundSigmatchSkip(n: NimNode): NimNode =
     if n.kind in nnkCallKinds:
       # We recreate the nodes here, to set their .typ to nil
       # so that sigmatch doesn't decide to skip it
       result = newNimNode(n.kind, n)
       for child in n.items:
-        if child.kind notin AtomicNodes:
-          var newChild = newNimNode(child.kind, child)
-          for grandchild in child.items:
-            newChild.add workaroundRewrites grandchild
-          result.add newChild
-        else:
-          result.add child
+        # The containers of direct children always has to be rewritten
+        # since they also have a .typ attached from the previous sem pass
+        result.add:
+          rewriteContainer:
+            workaroundRewrites child
 
   result = filter(n, workaroundSigmatchSkip)
 

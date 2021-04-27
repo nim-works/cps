@@ -617,3 +617,33 @@ testes:
 
       trampoline foo()
       check r == 2
+
+  block:
+    ## template call in nested call nodes
+    r = 0
+
+    # It is crucial that none of these templates call any other templates/macros.
+    template negate(b: untyped): untyped =
+      not b
+
+    template isEmpty(s: untyped): untyped =
+      s == ""
+
+    template makeStr(s: untyped): untyped =
+      let r = $s
+      r
+
+    proc foo() {.cps: Cont.} =
+      inc r
+      # It has to have this exact amount of templates nesting or it won't
+      # reproduce the bug.
+      let chk =
+        negate:
+          negate:
+            negate:
+              isEmpty:
+                makeStr "foo"
+      check chk
+
+    trampoline foo()
+    check r == 1
