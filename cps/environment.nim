@@ -204,13 +204,13 @@ proc init(e: var Env) =
   e.seen = initHashSet[string]()
   if e.fn.isNil:
     when cpsFn:
-      e.fn = genSym(nskField, "fn")
+      e.fn = genField("fn")
     else:
       e.fn = ident"fn"
   if e.ex.isNil:
-    e.ex = genSym(nskField, "ex")
+    e.ex = genField("ex")
   if e.rs.isNil:
-    e.rs = genSym(nskField, "result")
+    e.rs = genField("result")
   e.id = genSym(nskType, "env")
 
 proc allPairs(e: Env): seq[Pair] =
@@ -236,11 +236,11 @@ proc populateType(e: Env; n: var NimNode) =
       if defs[1].isEmpty:
         # get the type of the assignment
         n.add:
-          newIdentDefs(desym name, getTypeImpl(defs.last), newEmptyNode())
+          newIdentDefs(name, getTypeImpl(defs.last), newEmptyNode())
       else:
         # name is an ident or symbol
         n.add:
-          newIdentDefs(desym name, defs[1], newEmptyNode())
+          newIdentDefs(name, defs[1], newEmptyNode())
 
 proc contains*(e: Env; key: NimNode): bool =
   ## you're giving us a symbol|ident and we're telling you if we have it
@@ -393,7 +393,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
       # iterate over the identifier names (a, b, c)
       for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
         # create a new identifier for the object field
-        let field = genSym(nskField, name.strVal)
+        let field = genField(name.strVal)
         let value = newTree(kind,     # ident: <no var> type = default
                             newIdentDefs(name, stripVar(n[^2]), n[^1]))
         e = e.set(field, value)
@@ -404,7 +404,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
     let tup = n.last
     for i in 0 ..< len(tup):
       let name = n[i]
-      let field = genSym(nskField, name.strVal)
+      let field = genField(name.strVal)
       let value = newTree(kind,
                           newIdentDefs(name, getTypeInst(tup[i]), tup[i]))
       e = e.set(field, value)
@@ -472,7 +472,7 @@ proc initialization(e: Env; kind: NimNodeKind;
     let defs = value[0]
     if len(defs) > 2 and not defs.last.isEmpty:
       # this is basically env2323(cont).foo34 = "some default"
-      result.add newAssignment(newDotExpr(child, desym field), defs.last)
+      result.add newAssignment(newDotExpr(child, field), defs.last)
 
 iterator addAssignment(e: var Env; kind: NimNodeKind;
                        defs: NimNode): Pair =
@@ -524,14 +524,14 @@ proc newContinuation*(e: Env; via: NimNode;
         if not defs.last.isEmpty:
           # only initialize a field that has a default
           # FIXME: this needs to only add requiresInit stuff
-          result.add newColonExpr(desym field, defs.last)
+          result.add newColonExpr(field, defs.last)
       else:
         # the name from identdefs is not gensym'd (usually!)
         let name = defs[0]
 
         # specify the gensym'd field name and the local name
         assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
-        result.add newColonExpr(desym field, name)
+        result.add newColonExpr(field, name)
 
 proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
   ## usually, `result = rootResult(ident"result")`
@@ -690,7 +690,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   result = n
   let child = e.castToChild(e.first)
   for field, section in pairs(e):
-    result = result.resym(section[0][0], newDotExpr(child, desym field))
+    result = result.resym(section[0][0], newDotExpr(child, field))
 
 proc prepProcBody*(e: var Env; n: NimNode): NimNode =
   when cpsExcept:
