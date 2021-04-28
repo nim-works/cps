@@ -39,9 +39,8 @@ func getCallSym(n: NimNode): NimNode =
       break
     of nnkIdent:
       result = nil
-      break
     else:
-      assert false, "unknown node type: " & $result.kind
+      raise newException(Defect, "unknown node type: " & $result.kind)
 
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
