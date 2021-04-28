@@ -191,7 +191,7 @@ proc castToChild(e: Env; n: NimNode): NimNode =
   when cpsCast:
     result = newTree(nnkCast, e.identity, n)
   else:
-    result = newTree(nnkCall, desym e.identity, n)
+    result = newTree(nnkCall, e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -285,7 +285,7 @@ proc makeType*(e: var Env): NimNode =
   # determine if a symbol clash necessitates pointing to a new parent
   #performReparent(e)
 
-  result = nnkTypeDef.newTree(desym e.id, newEmptyNode(), e.objectType)
+  result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
 proc firstDef*(e: Env): NimNode =
@@ -513,7 +513,7 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
 proc newContinuation*(e: Env; via: NimNode;
                       goto: NimNode; defaults = false): NimNode =
   ## else, perform the following alloc...
-  result = nnkObjConstr.newTree(desym e.identity, newColonExpr(e.fn, goto))
+  result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
   for field, section in pairs(e):
     # omit special fields in the env that we use for holding
     # custom functions, results, and exceptions, respectively
