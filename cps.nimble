@@ -1,4 +1,4 @@
-version = "0.0.18"
+version = "0.0.19"
 author = "disruptek"
 description = "continuation-passing style"
 license = "MIT"
