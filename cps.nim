@@ -28,6 +28,7 @@ when defined(yourdaywillcomelittleonecommayourdaywillcomedotdotdot):
 
 func getCallSym(n: NimNode): NimNode =
   ## Get the symbol that is being called
+  ## Returns nil if there is no symbol
   expectKind n, callish
   result = n[0]
   while result != nil:
@@ -37,18 +38,18 @@ func getCallSym(n: NimNode): NimNode =
     of nnkSym:
       break
     of nnkIdent:
-      raise newException(CatchableError, "This call is not typed")
+      result = nil
     else:
-      assert false, "unknown node type: " & $result.kind
-  assert not result.isNil
+      raise newException(Defect, "unknown node type: " & $result.kind)
 
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   assert not n.isNil
   if len(n) > 0:
     if n.kind in callish:
-      let p = n.getCallSym.getImpl
-      result = p.hasPragma("cpsCall")
+      let callee = n.getCallSym
+      if not callee.isNil:
+        result = callee.getImpl.hasPragma("cpsCall")
 
 proc firstReturn(p: NimNode): NimNode =
   ## find the first return statement within statement lists, or nil
@@ -808,9 +809,11 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   env = env.storeType(force = off)
 
   # Araq: "learn how to desemantic your ast, knuckleheads"
-  n.body = replacedSymsWithIdents(n.body)
-  types = replacedSymsWithIdents(types)
-  booty = replacedSymsWithIdents(booty)
+  # No longer necessary as we are desym-ing on a selective basis
+  when false:
+    n.body = replacedSymsWithIdents(n.body)
+    types = replacedSymsWithIdents(types)
+    booty = replacedSymsWithIdents(booty)
 
   # lifting the generated proc bodies
   result = lambdaLift(types, n)

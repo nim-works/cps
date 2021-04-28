@@ -38,7 +38,7 @@ type
     fn: NimNode                     # the sym we use for the goto target
     ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
-  
+
 func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
 template searchScope(env: Env; x: untyped;
@@ -204,13 +204,13 @@ proc init(e: var Env) =
   e.seen = initHashSet[string]()
   if e.fn.isNil:
     when cpsFn:
-      e.fn = genSym(nskField, "fn")
+      e.fn = genField("fn")
     else:
       e.fn = ident"fn"
   if e.ex.isNil:
-    e.ex = genSym(nskField, "ex")
+    e.ex = genField("ex")
   if e.rs.isNil:
-    e.rs = genSym(nskField, "result")
+    e.rs = genField("result")
   e.id = genSym(nskType, "env")
 
 proc allPairs(e: Env): seq[Pair] =
@@ -393,7 +393,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
       # iterate over the identifier names (a, b, c)
       for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
         # create a new identifier for the object field
-        let field = genSym(nskField, name.strVal)
+        let field = genField(name.strVal)
         let value = newTree(kind,     # ident: <no var> type = default
                             newIdentDefs(name, stripVar(n[^2]), n[^1]))
         e = e.set(field, value)
@@ -404,7 +404,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
     let tup = n.last
     for i in 0 ..< len(tup):
       let name = n[i]
-      let field = genSym(nskField, name.strVal)
+      let field = genField(name.strVal)
       let value = newTree(kind,
                           newIdentDefs(name, getTypeInst(tup[i]), tup[i]))
       e = e.set(field, value)
