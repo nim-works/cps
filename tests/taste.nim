@@ -656,3 +656,16 @@ testes:
       check i == 4
 
     trampoline foo()
+
+  block:
+    ## split inside block
+    r = 0
+    proc b() {.cps: Cont.} =
+      inc r
+      block:
+        noop()
+        inc r
+      inc r
+
+    trampoline b()
+    doAssert r == 3, "expected 3, got: " & $r

@@ -576,11 +576,12 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         # the split is complete
         return
 
-  if result.kind == nnkStmtList and n.kind in returner:
+  if result.kind == nnkStmtList and (n.kind in returner or insideCps(env)):
     # let a for loop, uh, loop
     if env.insideFor or env.insideWhile:
-      result.add:
-        n.errorAst "no remaining goto for " & $n.kind
+      discard
+      #result.add:
+      #  n.errorAst "no remaining goto for " & $n.kind
     else:
       if not result.firstReturn.isNil:
         result.doc "omit return call from " & $n.kind
