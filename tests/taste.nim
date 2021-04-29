@@ -641,3 +641,18 @@ testes:
 
     trampoline foo()
     check r == 1
+
+  block:
+    ## calling a function pointer produced by an expression
+    proc bar(i: int): proc(): int =
+      result = proc(): int =
+        i * 2
+
+    proc foo() {.cps: Cont.} =
+      var i = 2
+      noop()
+      i = bar(i)()
+      noop()
+      check i == 4
+
+    trampoline foo()
