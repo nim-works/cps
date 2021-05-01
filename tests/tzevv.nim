@@ -1,7 +1,7 @@
 const
   skippy {.booldefine.} = false
 
-import testes
+import balls
 import posix
 import std/macros
 #import std/unittest
@@ -58,7 +58,7 @@ template runCps(body: untyped) =
 
 var r: int
 
-testes:
+suite "suite, suite zevv":
 
   test "nocall":
     expPrims 0: runCps:
@@ -265,4 +265,3 @@ testes:
     proc foo(): Thing = 1.Thing
     runCps:
       var a = foo()
-
