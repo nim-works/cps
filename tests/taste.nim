@@ -770,3 +770,49 @@ suite "tasteful tests":
 
       trampoline foo()
       check r == 5
+
+  block:
+    ## block control flow after split
+    skip "not working, see #76"
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      block:
+        inc r
+        noop()
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## if control flow after split
+    skip "not working, see #76"
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      if true:
+        inc r
+        noop()
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## defer with split
+    skip "not working, see #80"
+    r = 0
+    proc foo() {.cps: Cont.} =
+      defer:
+        check r == 2, "defer run before end of scope"
+        inc r
+
+      inc r
+      noop()
+      inc r
+
+    trampoline foo()
+    check r == 2
