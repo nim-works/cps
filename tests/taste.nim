@@ -816,3 +816,38 @@ suite "tasteful tests":
 
     trampoline foo()
     check r == 2
+
+  block:
+    ## implicit generics
+    when true:
+      skip "not working, ref #51"
+    else:
+      proc foo(v: auto) {.cps: Cont.} =
+        discard $v
+        inc r
+
+      r = 0
+      trampoline foo(42)
+      check r == 1
+
+      r = 0
+      trampoline foo("string")
+      check r == 1
+
+  block:
+    ## explicit generics
+    when true:
+      skip "not working, ref #51"
+    else:
+      proc foo[T](v: T) {.cps: Cont.} =
+        discard $v
+        inc r
+
+      r = 0
+      trampoline foo(42)
+      check r == 1
+
+      r = 0
+      trampoline foo("string")
+      check r == 1
+
