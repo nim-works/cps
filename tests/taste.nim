@@ -656,3 +656,197 @@ suite "tasteful tests":
       check i == 4
 
     trampoline foo()
+
+  block:
+    ## simple if-else split
+    when true:
+      skip "not working, see #78"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        if true:
+          noop()
+          inc r
+        else:
+          fail "this branch should not run"
+        inc r
+
+      trampoline foo()
+      check r == 3
+
+  block:
+    ## case-statement splits
+    when true:
+      skip "not working, see #78"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        case true:
+        of true:
+          noop()
+          inc r
+        of false:
+          fail "this branch should not run"
+        inc r
+
+      trampoline foo()
+      check r == 3
+
+  block:
+    ## try-except-statement splits
+    when true:
+      skip "not working, see #78"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        try:
+          noop()
+          inc r
+        except:
+          fail "this branch should not run"
+        inc r
+
+      trampoline foo()
+      check r == 3
+
+  block:
+    ## try-except splits with raise
+    when true:
+      skip "not working, see #78"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        try:
+          noop()
+          inc r
+          raise newException(CatchableError, "")
+          fail "statement run after raise"
+        except:
+          inc r
+        inc r
+
+      trampoline foo()
+      check r == 4
+
+  block:
+    ## try-finally-statement splits
+    when true:
+      skip "not working, see #78"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        try:
+          noop()
+          inc r
+        finally:
+          inc r
+
+      trampoline foo()
+      check r == 3
+
+  block:
+    ## try-except-finally splits with raise
+    when true:
+      skip "not working, see #78"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        try:
+          noop()
+          inc r
+          raise newException(CatchableError, "")
+          fail "statement run after raise"
+        except:
+          inc r
+        finally:
+          inc r
+        inc r
+
+      trampoline foo()
+      check r == 5
+
+  block:
+    ## block control flow after split
+    skip "not working, see #76"
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      block:
+        inc r
+        noop()
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## if control flow after split
+    skip "not working, see #76"
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      if true:
+        inc r
+        noop()
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## defer with split
+    skip "not working, see #80"
+    r = 0
+    proc foo() {.cps: Cont.} =
+      defer:
+        check r == 2, "defer run before end of scope"
+        inc r
+
+      inc r
+      noop()
+      inc r
+
+    trampoline foo()
+    check r == 3
+
+  block:
+    ## implicit generics
+    when true:
+      skip "not working, ref #51"
+    else:
+      proc foo(v: auto) {.cps: Cont.} =
+        discard $v
+        inc r
+
+      r = 0
+      trampoline foo(42)
+      check r == 1
+
+      r = 0
+      trampoline foo("string")
+      check r == 1
+
+  block:
+    ## explicit generics
+    when true:
+      skip "not working, ref #51"
+    else:
+      proc foo[T](v: T) {.cps: Cont.} =
+        discard $v
+        inc r
+
+      r = 0
+      trampoline foo(42)
+      check r == 1
+
+      r = 0
+      trampoline foo("string")
+      check r == 1
