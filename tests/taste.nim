@@ -815,7 +815,7 @@ suite "tasteful tests":
       inc r
 
     trampoline foo()
-    check r == 2
+    check r == 3
 
   block:
     ## implicit generics
@@ -850,4 +850,3 @@ suite "tasteful tests":
       r = 0
       trampoline foo("string")
       check r == 1
-
