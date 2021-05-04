@@ -382,9 +382,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       # stored in the environment
       env.addReturn(result, nc)
 
-    of nnkConv:
-      result.add nnkCall.newTree(nc[0], nc[1])
-
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
         # our rewrite pass should prevent this guard from triggering
@@ -637,6 +634,14 @@ proc normalizingRewrites(n: NimNode): NimNode =
       result = n[0]
     else: discard
 
+  proc rewriteConv(n: NimNode): NimNode =
+    ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
+    ## This is because nnkConv nodes are only valid if produced by sem.
+    case n.kind
+    of nnkConv:
+      result = newNimNode(nnkCall, n).add(n[0]).add(n[1])
+    else: discard
+
   case n.kind
   of nnkIdentDefs:
     rewriteIdentDefs n
@@ -644,6 +649,8 @@ proc normalizingRewrites(n: NimNode): NimNode =
     rewriteVarLet n
   of nnkHiddenAddr, nnkHiddenDeref:
     rewriteHiddenAddrDeref n
+  of nnkConv:
+    rewriteConv(n)
   else:
     nil
 
