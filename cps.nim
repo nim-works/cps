@@ -6,7 +6,7 @@ import cps/spec
 import cps/scopes
 import cps/environment
 export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace, cpsMutant
+export cpsDebug, cpsTrace, cpsMutant, cpsLift
 
 template installLocal(id, env, field) =
   when cpsMutant:
@@ -327,6 +327,33 @@ proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
     # going to just return the next goto (this might be empty)
     result = env.nextGoto
 
+type
+  CpsJumpBlock = object
+
+macro cpsJump(call, n: typed): untyped =
+  ## Signify that a jump via `call` must be done to enter `n`
+  result = newTree(
+    nnkBlockStmt,
+    genSym(nskLabel, "cpsJump"),
+    newStmtList(
+      newTree(
+        nnkDiscardStmt,
+        newTree(
+          nnkObjConstr,
+          bindSym"CpsJumpBlock"
+        )
+      ),
+      call,
+      n
+    )
+  )
+
+func isCpsJump(n: NimNode): bool =
+  ## check whether the node is a cpsJump
+  n.kind == nnkBlockStmt and n[1].kind == nnkStmtList and
+  n[1].len >= 2 and n[1][0].kind == nnkDiscardStmt and
+  n[1][0][0].kind == nnkObjConstr and n[1][0][0].sameType(bindSym"CpsJumpBlock")
+
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
 
@@ -351,20 +378,27 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       continue
     # if it's a cps call,
     if nc.isCpsCall:
-      # we want to make sure that a pop inside the after body doesn't
-      # return to after itself, so we don't add it to the goto list...
-      let after = splitAt(env, n, i, "afterCall")
-      result.add:
-        tailCall(env, env.saften nc):
-          returnTo after
-      # include the definition for the after proc
-      if after.node.kind != nnkSym:
-        # add the proc definition and declaration without the return
-        for child in after.node.items:
-          if child.kind == nnkProcDef:
-            result.add child
-      # done!
-      return
+      when true:
+        result.add:
+          newCall(bindSym"cpsJump").add(nc).add:
+            env.saften newStmtList(n[i + 1 .. ^1])
+        return
+      else:
+        # we want to make sure that a pop inside the after body doesn't
+        # return to after itself, so we don't add it to the goto list...
+
+        let after = splitAt(env, n, i, "afterCall")
+        result.add:
+          tailCall(env, env.saften nc):
+            returnTo after
+        # include the definition for the after proc
+        if after.node.kind != nnkSym:
+          # add the proc definition and declaration without the return
+          for child in after.node.items:
+            if child.kind == nnkProcDef:
+              result.add child
+        # done!
+        return
 
     if i < n.len-1:
       # if the child is a cps block (not a call), then push a tailcall
@@ -666,6 +700,111 @@ proc cloneProc(n: NimNode): NimNode =
     newEmptyNode(),
     copy n.body)
 
+
+proc xfrmJumps(e: var Env, n: NimNode): NimNode
+
+proc jumpPoint(env: var Env, n: NimNode, idx: int, prefix = "splat"): NimNode =
+  ## rewrite n[idx] into a tail call to the rest of the list
+  if idx < n.len - 1:
+    let jumper = n[idx]
+    doAssert jumper.kind == nnkCall
+    jumper[0] = desym(jumper[0])
+    jumper.insert(1, env.first)
+    let
+      body = env.xfrmJumps newStmtList(n[idx + 1 .. ^1])
+      prcSym = genSym(nskProc, prefix)
+      prc = newProc(prcSym, [env.root, newIdentDefs(env.first, env.root)], body, nnkProcDef)
+    prc.addPragma ident"cpsLift"
+    result = newStmtList()
+    result.add prc
+    result.add:
+      newAssignment(
+        newDotExpr(env.first, ident"fn"),
+        prcSym
+      )
+    result.add:
+      newTree(
+        nnkReturnStmt,
+        jumper
+      )
+
+proc xfrmJumps(e: var Env, n: NimNode): NimNode =
+  ## rewrite jumps within a code block into tail calls
+  var env = e
+  proc jumpify(n: NimNode): NimNode =
+    if n.kind == nnkStmtList:
+      result = copyNimNode n
+      for idx, child in n.pairs:
+        if child.isCpsJump:
+          result.add env.jumpPoint(child[1], 1, "afterCall")
+          return
+        else:
+          result.add:
+            env.xfrmJumps child
+
+  result = filter(n, jumpify)
+  e = env
+
+macro cpsJumper(T, n: typed): untyped =
+  ## rewrite cpsJumps into tail calls
+  expectKind n, nnkProcDef
+  when cpsDebug:
+    let info = lineInfoObj(n)
+    debugEcho "=== .cpsJumper. on " & $n.name & "(original)  === " & $info
+    when defined(cpsTree):
+      debugEcho treeRepr(n)
+    else:
+      debugEcho repr(n).numberedLines(info.line)
+
+  var
+    types = newStmtList()
+    env = newEnv(ident"continuation", types, T)
+  var n = copyNimTree n
+  n.body = env.xfrmJumps(n.body)
+  result = n
+  #result = lambdaLift(types, n)
+
+  when cpsDebug:
+    debugEcho "=== .cpsJumper. on " & $n.name & "(transformed)  === " & $info
+    when defined(cpsTree):
+      debugEcho treeRepr(n)
+    else:
+      debugEcho repr(n).numberedLines(info.line)
+
+proc xfrmFloat(n: NimNode): NimNode =
+  var floats = newStmtList()
+
+  proc float(n: NimNode): NimNode =
+    if not n.isNil and n.hasPragma("cpsLift"):
+      var n = n.stripPragma("cpsLift")
+      floats.add xfrmFloat n
+      result = newEmptyNode()
+
+  let cleaned = filter(n, float)
+  result = floats
+  result.add cleaned
+
+macro cpsFloater(n: typed): untyped =
+  ## float all `{.cpsLift.}` to top-level
+  expectKind n, nnkProcDef
+  when cpsDebug:
+    let info = lineInfoObj(n)
+    debugEcho "=== .cpsFloater. on " & $n.name & "(original)  === " & $info
+    when defined(cpsTree):
+      debugEcho treeRepr(n)
+    else:
+      debugEcho repr(n).numberedLines(info.line)
+
+  var n = copyNimTree n
+  result = xfrmFloat n
+
+  when cpsDebug:
+    debugEcho "=== .cpsFloater. on " & $n.name & "(transformed)  === " & $info
+    when defined(cpsTree):
+      debugEcho treeRepr(result)
+    else:
+      debugEcho repr(result).numberedLines(info.line)
+
 proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
@@ -796,6 +935,10 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # add in a pragma so other cps macros can identify this as a cps call
   n.addPragma ident"cpsCall"
+
+  # run other stages
+  n.addPragma bindSym"cpsFloater"
+  n.addPragma newColonExpr(bindSym"cpsJumper", T)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
