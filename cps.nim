@@ -788,7 +788,7 @@ proc replacePending(n, replacement: NimNode): NimNode =
         if replacement.isNil:
           result = newEmptyNode()
         else:
-        result = replacement
+          result = replacement
     else: discard
 
   result = filter(n, resolved)
@@ -804,7 +804,7 @@ macro cpsStripPending(n: typed): untyped =
     else:
       debugEcho repr(n).numberedLines(info.line)
 
-  result = filterPending n
+  result = replacePending(n, nil)
 
   when cpsDebug:
     debugEcho "=== .cpsStripPending. on " & $result.name & "(transformed)  === " & $info
