@@ -143,6 +143,14 @@ when cpsDebug:
     result &= "\n" & n.repr.numberedLines(n.lineInfoObj.line) & "\n"
     result &= "----8<---- " & name & "\t" & "^^^"
 
+proc getPragmaName(n: NimNode): NimNode =
+  ## retrieve the symbol/identifier from the child node of a nnkPragma
+  case n.kind
+  of nnkCall, nnkExprColonExpr:
+    n[0]
+  else:
+    n
+
 proc hasPragma*(n: NimNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
   assert not n.isNil
@@ -150,8 +158,7 @@ proc hasPragma*(n: NimNode; s: static[string]): bool =
   of nnkPragma:
     for p in n:
       # just skip ColonExprs, etc.
-      if p.kind in {nnkSym, nnkIdent}:
-        result = p.strVal == s
+      result = p.getPragmaName.eqIdent s
   of RoutineNodes:
     result = hasPragma(n.pragma, s)
   of nnkObjectTy:
@@ -169,7 +176,7 @@ proc hasPragma*(n: NimNode; s: static[string]): bool =
 proc filterPragma*(ns: seq[NimNode], liftee: NimNode): NimNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
   var pragmas = nnkPragma.newNimNode
-  for p in filterIt(ns, it != liftee):
+  for p in filterIt(ns, it.getPragmaName != liftee):
     pragmas.add p
     copyLineInfo(pragmas, p)
   if len(pragmas) > 0:
