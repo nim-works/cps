@@ -38,4 +38,4 @@ proc foo() {.cps: Cont.} =
   inc r
 
 trampoline foo()
-check r == 2
+check r == 3

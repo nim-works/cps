@@ -25,6 +25,7 @@ const
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
 template cpsCall*(n: typed) {.pragma.}  ## redirection
+template cpsPending*() {.pragma.}       ## this is the last continuation
 
 type
   NodeFilter* = proc(n: NimNode): NimNode

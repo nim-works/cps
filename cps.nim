@@ -6,7 +6,7 @@ import cps/spec
 import cps/scopes
 import cps/environment
 export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace, cpsMutant, cpsLift
+export cpsDebug, cpsTrace, cpsMutant
 
 template installLocal(id, env, field) =
   when cpsMutant:
@@ -327,32 +327,81 @@ proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
     # going to just return the next goto (this might be empty)
     result = env.nextGoto
 
-type
-  CpsJumpBlock = object
+func hasContinuation(n: NimNode): bool =
+  ## determine whether `n` will continue into an another control flow
+  ## this is only valid in the body of a continuation
+  doAssert n.kind == nnkStmtList
+  case n.last.kind
+  of nnkReturnStmt:
+    true
+  of nnkStmtList:
+    n.last.hasContinuation
+  else:
+    false
 
-macro cpsJump(call, n: typed): untyped =
-  ## Signify that a jump via `call` must be done to enter `n`
-  result = newTree(
-    nnkBlockStmt,
-    genSym(nskLabel, "cpsJump"),
-    newStmtList(
-      newTree(
-        nnkDiscardStmt,
-        newTree(
-          nnkObjConstr,
-          bindSym"CpsJumpBlock"
-        )
-      ),
-      call,
-      n
+proc normalizingRewrites(n: NimNode): NimNode
+
+macro cpsJump(cont, call, n: typed): untyped =
+  ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
+  ## continuation and `fn` is the identifier/symbol of the function field.
+  ##
+  ## all AST rewritten by cpsJump should end in a control flow statement.
+  expectKind cont, nnkSym
+  expectKind call, nnkCallKinds
+  expectKind n, nnkStmtList
+
+  when cpsDebug:
+    let info = lineInfoObj(n)
+    debugEcho "=== cpsJump (original) === " & $info
+    when defined(cpsTree):
+      debugEcho treeRepr(n)
+    else:
+      debugEcho repr(n).numberedLines(info.line)
+
+  result = newStmtList()
+
+  let
+    contParam = desym cont
+    contType = getTypeInst cont
+
+  let prc = newProc(genSym(nskProc, "afterCall"), [contType, newIdentDefs(contParam, contType)])
+  # make it something that we can consume and modify
+  prc.body = filter(n, normalizingRewrites)
+  # replace any `cont` within the body with the parameter of the newly made proc
+  prc.body = resym(prc.body, cont, contParam)
+  # if this body don't have any continuing control-flow
+  if not prc.body.hasContinuation:
+    # annotate it so that outer macros can fill in as needed
+    prc.body.add newTree(
+      nnkPragma,
+      bindSym"cpsPending"
     )
-  )
+  # tell cpsFloater that we want this to be lifted to the top-level
+  prc.addPragma bindSym"cpsLift"
 
-func isCpsJump(n: NimNode): bool =
-  ## check whether the node is a cpsJump
-  n.kind == nnkBlockStmt and n[1].kind == nnkStmtList and
-  n[1].len >= 2 and n[1][0].kind == nnkDiscardStmt and
-  n[1][0][0].kind == nnkObjConstr and n[1][0][0].sameType(bindSym"CpsJumpBlock")
+  let jump = copyNimTree call
+  # desym the jumper, it is currently sem-ed to the variant that
+  # doesn't take a continuation
+  jump[0] = desym jump[0]
+  # insert our continuation as the first parameter
+  jump.insert(1, cont)
+
+  result.add prc
+  # TODO: this part feels like a hack
+  result.add:
+    newAssignment(newDotExpr(cont, ident"fn"), prc.name)
+  result.add:
+    newTree(
+      nnkReturnStmt,
+      jump
+    )
+
+  when cpsDebug:
+    debugEcho "=== cpsJump (transformed) === " & $info
+    when defined(cpsTree):
+      debugEcho treeRepr(result)
+    else:
+      debugEcho repr(result).numberedLines(info.line)
 
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -379,9 +428,12 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     # if it's a cps call,
     if nc.isCpsCall:
       when true:
-        result.add:
-          newCall(bindSym"cpsJump").add(nc).add:
+        let jumpCall = newCall(bindSym"cpsJump")
+        jumpCall.add(env.first)
+        jumpCall.add(nc)
+        jumpCall.add:
             env.saften newStmtList(n[i + 1 .. ^1])
+        result.add jumpCall
         return
       else:
         # we want to make sure that a pop inside the after body doesn't
@@ -706,7 +758,7 @@ proc normalizingRewrites(n: NimNode): NimNode =
   of nnkHiddenAddr, nnkHiddenDeref:
     rewriteHiddenAddrDeref n
   of nnkConv:
-    rewriteConv(n)
+    rewriteConv n
   of nnkReturnStmt:
     rewriteReturn n
   else:
@@ -724,76 +776,42 @@ proc cloneProc(n: NimNode): NimNode =
     newEmptyNode(),
     copy n.body)
 
-
-proc xfrmJumps(e: var Env, n: NimNode): NimNode
-
-proc jumpPoint(env: var Env, n: NimNode, idx: int, prefix = "splat"): NimNode =
-  ## rewrite n[idx] into a tail call to the rest of the list
-  if idx < n.len - 1:
-    let jumper = n[idx]
-    doAssert jumper.kind == nnkCall
-    jumper[0] = desym(jumper[0])
-    jumper.insert(1, env.first)
-    let
-      body = env.xfrmJumps newStmtList(n[idx + 1 .. ^1])
-      prcSym = genSym(nskProc, prefix)
-      prc = newProc(prcSym, [env.root, newIdentDefs(env.first, env.root)], body, nnkProcDef)
-    prc.addPragma ident"cpsLift"
-    result = newStmtList()
-    result.add prc
-    result.add:
-      newAssignment(
-        newDotExpr(env.first, ident"fn"),
-        prcSym
-      )
-    result.add:
-      newTree(
-        nnkReturnStmt,
-        jumper
-      )
-
-proc xfrmJumps(e: var Env, n: NimNode): NimNode =
-  ## rewrite jumps within a code block into tail calls
-  var env = e
-  proc jumpify(n: NimNode): NimNode =
-    if n.kind == nnkStmtList:
-      result = copyNimNode n
-      for idx, child in n.pairs:
-        if child.isCpsJump:
-          result.add env.jumpPoint(child[1], 1, "afterCall")
-          return
+proc replacePending(n, replacement: NimNode): NimNode =
+  ## Replace cpsPending annotations with something else, usually
+  ## a jump to an another location. If `replacement` is nil, remove
+  ## the annotation.
+  proc resolved(n: NimNode): NimNode =
+    case n.kind
+    of nnkPragma:
+      # a {.cpsPending.} annotation is a standalone pragma statement
+      if n.len == 1 and n.hasPragma("cpsPending"):
+        if replacement.isNil:
+          result = newEmptyNode()
         else:
-          result.add:
-            env.xfrmJumps child
+        result = replacement
+    else: discard
 
-  result = filter(n, jumpify)
-  e = env
+  result = filter(n, resolved)
 
-macro cpsJumper(T, n: typed): untyped =
+macro cpsStripPending(n: typed): untyped =
   ## rewrite cpsJumps into tail calls
   expectKind n, nnkProcDef
   when cpsDebug:
     let info = lineInfoObj(n)
-    debugEcho "=== .cpsJumper. on " & $n.name & "(original)  === " & $info
+    debugEcho "=== .cpsStripPending. on " & $n.name & "(original)  === " & $info
     when defined(cpsTree):
       debugEcho treeRepr(n)
     else:
       debugEcho repr(n).numberedLines(info.line)
 
-  var
-    types = newStmtList()
-    env = newEnv(ident"continuation", types, T)
-  var n = copyNimTree n
-  n.body = env.xfrmJumps(n.body)
-  result = n
-  #result = lambdaLift(types, n)
+  result = filterPending n
 
   when cpsDebug:
-    debugEcho "=== .cpsJumper. on " & $n.name & "(transformed)  === " & $info
+    debugEcho "=== .cpsStripPending. on " & $result.name & "(transformed)  === " & $info
     when defined(cpsTree):
-      debugEcho treeRepr(n)
+      debugEcho treeRepr(result)
     else:
-      debugEcho repr(n).numberedLines(info.line)
+      debugEcho repr(result).numberedLines(info.line)
 
 proc xfrmFloat(n: NimNode): NimNode =
   var floats = newStmtList()
@@ -962,7 +980,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # run other stages
   n.addPragma bindSym"cpsFloater"
-  n.addPragma newColonExpr(bindSym"cpsJumper", T)
+  n.addPragma bindSym"cpsStripPending"
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
