@@ -676,6 +676,28 @@ proc normalizingRewrites(n: NimNode): NimNode =
       result = newNimNode(nnkCall, n).add(n[0]).add(n[1])
     else: discard
 
+  proc rewriteReturn(n: NimNode): NimNode =
+    ## Inside procs, the compiler might produce an AST structure like this:
+    ##
+    ## ```
+    ## ReturnStmt
+    ##   Asgn
+    ##     Sym "result"
+    ##     Sym "continuation"
+    ## ```
+    ##
+    ## for `return continuation`.
+    ##
+    ## This structure is not valid if modified.
+    case n.kind
+    of nnkReturnStmt:
+      if n[0].kind != nnkAsgn:
+        return n
+      result = copyNimNode(n)
+      doAssert repr(n[0][0]) == "result", "unexpected AST"
+      result.add n[0][1]
+    else: discard
+
   case n.kind
   of nnkIdentDefs:
     rewriteIdentDefs n
@@ -685,6 +707,8 @@ proc normalizingRewrites(n: NimNode): NimNode =
     rewriteHiddenAddrDeref n
   of nnkConv:
     rewriteConv(n)
+  of nnkReturnStmt:
+    rewriteReturn n
   else:
     nil
 
