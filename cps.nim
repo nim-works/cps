@@ -391,10 +391,8 @@ macro cpsJump(cont, call, n: typed): untyped =
   result.add:
     newAssignment(newDotExpr(cont, ident"fn"), prc.name)
   result.add:
-    newTree(
-      nnkReturnStmt,
+    nnkReturnStmt.newTree:
       jump
-    )
 
   when cpsDebug:
     debugEcho "=== cpsJump (transformed) === " & $info
@@ -794,7 +792,10 @@ proc replacePending(n, replacement: NimNode): NimNode =
   result = filter(n, resolved)
 
 macro cpsStripPending(n: typed): untyped =
-  ## rewrite cpsJumps into tail calls
+  ## remove any remaining {.cpsPending().}
+  ##
+  ## this is not needed, but it's here so we can change this to
+  ## a sanity check pass later.
   expectKind n, nnkProcDef
   when cpsDebug:
     let info = lineInfoObj(n)
@@ -819,7 +820,8 @@ proc xfrmFloat(n: NimNode): NimNode =
   proc float(n: NimNode): NimNode =
     if not n.isNil and n.hasPragma("cpsLift"):
       var n = n.stripPragma("cpsLift")
-      floats.add xfrmFloat n
+      floats.add:
+        xfrmFloat n
       result = newEmptyNode()
 
   let cleaned = filter(n, float)
