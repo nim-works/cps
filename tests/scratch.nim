@@ -32,10 +32,12 @@ var r = 0
 
 proc foo() {.cps: Cont.} =
   inc r
-  noop()
-  inc r
-  noop()
+  if true:
+    noop()
+    inc r
+    noop()
+    inc r
   inc r
 
 trampoline foo()
-check r == 3
+check r == 4

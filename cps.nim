@@ -340,6 +340,29 @@ func hasContinuation(n: NimNode): bool =
     false
 
 proc normalizingRewrites(n: NimNode): NimNode
+proc replacePending(n, replacement: NimNode): NimNode
+
+proc makeContProc(name, cont, body: NimNode): NimNode =
+  ## creates a continuation proc from with `name` using continuation `cont`
+  ## with the given body.
+  let
+    contParam = desym cont
+    contType = getTypeInst cont
+
+  result = newProc(name, [contType, newIdentDefs(contParam, contType)])
+  # make it something that we can consume and modify
+  result.body = filter(body, normalizingRewrites)
+  # replace any `cont` within the body with the parameter of the newly made proc
+  result.body = resym(result.body, cont, contParam)
+  # if this body don't have any continuing control-flow
+  if not result.body.hasContinuation:
+    # annotate it so that outer macros can fill in as needed
+    result.body.add newTree(
+      nnkPragma,
+      bindSym"cpsPending"
+    )
+  # tell cpsFloater that we want this to be lifted to the top-level
+  result.addPragma bindSym"cpsLift"
 
 macro cpsJump(cont, call, n: typed): untyped =
   ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
@@ -358,22 +381,9 @@ macro cpsJump(cont, call, n: typed): untyped =
     contParam = desym cont
     contType = getTypeInst cont
 
-  let prc = newProc(genSym(nskProc, "afterCall"), [contType, newIdentDefs(contParam, contType)])
-  # make it something that we can consume and modify
-  prc.body = filter(n, normalizingRewrites)
-  # replace any `cont` within the body with the parameter of the newly made proc
-  prc.body = resym(prc.body, cont, contParam)
-  # if this body don't have any continuing control-flow
-  if not prc.body.hasContinuation:
-    # annotate it so that outer macros can fill in as needed
-    prc.body.add newTree(
-      nnkPragma,
-      bindSym"cpsPending"
-    )
-  # tell cpsFloater that we want this to be lifted to the top-level
-  prc.addPragma bindSym"cpsLift"
-
-  let jump = copyNimTree call
+  let
+    prc = makeContProc(genSym(nskProc, "afterCall"), cont, n)
+    jump = copyNimTree call
   # desym the jumper, it is currently sem-ed to the variant that
   # doesn't take a continuation
   jump[0] = desym jump[0]
@@ -389,6 +399,39 @@ macro cpsJump(cont, call, n: typed): untyped =
       jump
 
   debug("cpsJump", result, akOriginal, n)
+
+macro cpsMayJump(cont, n, after: typed): untyped =
+  ## the block in `n` is tained by a `cpsJump` and may require a jump to enter `after`.
+  ##
+  ## this macro evaluate `n` and replace all `{.cpsPending.}` in `n` with tail calls
+  ## to `after`.
+  expectKind cont, nnkSym
+  expectKind n, nnkStmtList
+  expectKind after, nnkStmtList
+
+  debug("cpsMayJump", n, akOriginal)
+  debug("cpsMayJump", after, akOriginal)
+
+  let
+    afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
+    afterTail =
+      newStmtList(
+        newAssignment(newDotExpr(desym cont, ident"fn"), afterProc.name),
+        nnkReturnStmt.newTree(desym cont)
+      )
+
+    # make `n` safe to modify
+    n = filter(n, normalizingRewrites)
+    resolvedBody = replacePending(n, afterTail)
+
+  if not resolvedBody.hasContinuation:
+    resolvedBody.add afterTail
+
+  result = newStmtList()
+  result.add afterProc
+  result.add resolvedBody
+
+  debug("cpsMayJump", result, akTransformed, n)
 
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -417,9 +460,10 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       when true:
         let jumpCall = newCall(bindSym"cpsJump")
         jumpCall.add(env.first)
-        jumpCall.add(nc)
         jumpCall.add:
-            env.saften newStmtList(n[i + 1 .. ^1])
+          env.saften nc
+        jumpCall.add:
+          env.saften newStmtList(n[i + 1 .. ^1])
         result.add jumpCall
         return
       else:
@@ -440,14 +484,32 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         return
 
     if i < n.len-1:
-      # if the child is a cps block (not a call), then push a tailcall
-      # onto the stack during the saftening of the child
-      if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
-        withGoto env.splitAt(n, i, "done"):
-          result.doc "saftening during done"
-          result.add env.saften(nc)
-          # we've completed the split, so we're done here
-          return
+      when false:
+        # if the child is a cps block (not a call), then push a tailcall
+        # onto the stack during the saftening of the child
+        if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
+          withGoto env.splitAt(n, i, "done"):
+            result.doc "saftening during done"
+            result.add env.saften(nc)
+            # we've completed the split, so we're done here
+            return
+      else:
+        if nc.isCpsBlock and not nc.isCpsCall:
+          case nc.kind
+          of nnkWhileStmt, nnkBlockStmt:
+            doAssert false, "not supported yet"
+          of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
+            discard "these require their outer structure to be captured"
+          else:
+            let jumpCall = newCall(bindSym"cpsMayJump")
+            jumpCall.add(env.first)
+            jumpCall.add:
+              env.saften:
+                newStmtList nc
+            jumpCall.add:
+                env.saften newStmtList(n[i + 1 .. ^1])
+            result.add jumpCall
+            return
 
     case nc.kind
     of nnkReturnStmt:
@@ -788,6 +850,8 @@ macro cpsStripPending(n: typed): untyped =
   expectKind n, nnkProcDef
   debug(".cpsStripPending.", n, akOriginal)
 
+  # make `n` safe for modification
+  let n = filter(n, normalizingRewrites)
   result = replacePending(n, nil)
 
   debug(".cpsStripPending.", result, akOriginal, n)
