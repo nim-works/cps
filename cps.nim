@@ -398,7 +398,7 @@ macro cpsJump(cont, call, n: typed): untyped =
     nnkReturnStmt.newTree:
       jump
 
-  debug("cpsJump", result, akOriginal, n)
+  debug("cpsJump", result, akTransformed, n)
 
 macro cpsMayJump(cont, n, after: typed): untyped =
   ## the block in `n` is tained by a `cpsJump` and may require a jump to enter `after`.
