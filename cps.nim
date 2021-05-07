@@ -837,7 +837,7 @@ proc replacePending(n, replacement: NimNode): NimNode =
         if replacement.isNil:
           result = newEmptyNode()
         else:
-          result = replacement
+          result = copyNimTree replacement
     else: discard
 
   result = filter(n, resolved)
