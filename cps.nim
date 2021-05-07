@@ -351,8 +351,8 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
 
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   # make it something that we can consume and modify
-  result.body = unhide result.body
-  result.body = filter(body, normalizingRewrites)
+  result.body = unhide body
+  result.body = filter(result.body, normalizingRewrites)
   # replace any `cont` within the body with the parameter of the newly made proc
   result.body = resym(result.body, cont, contParam)
   # if this body don't have any continuing control-flow
