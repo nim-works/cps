@@ -351,6 +351,7 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
 
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   # make it something that we can consume and modify
+  result.body = unhide result.body
   result.body = filter(body, normalizingRewrites)
   # replace any `cont` within the body with the parameter of the newly made proc
   result.body = resym(result.body, cont, contParam)
@@ -363,6 +364,8 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
     )
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
+
+proc workaroundRewrites(n: NimNode): NimNode
 
 macro cpsJump(cont, call, n: typed): untyped =
   ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
@@ -397,6 +400,8 @@ macro cpsJump(cont, call, n: typed): untyped =
   result.add:
     nnkReturnStmt.newTree:
       jump
+
+  result = workaroundRewrites(result)
 
   debug("cpsJump", result, akTransformed, n)
 
