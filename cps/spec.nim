@@ -41,6 +41,11 @@ type
     key: NimNode
     val: NimNode
 
+  AstKind* = enum
+    ## The type of the passed AST
+    akOriginal = "original"
+    akTransformed = "transformed"
+
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
   result = not n.isNil and n.kind == nnkEmpty
@@ -143,6 +148,39 @@ when cpsDebug:
     result &= "----8<---- " & name & "\t" & "vvv"
     result &= "\n" & n.repr.numberedLines(n.lineInfoObj.line) & "\n"
     result &= "----8<---- " & name & "\t" & "^^^"
+
+func debug*(id: string, n: NimNode, kind: AstKind, info: NimNode = nil) =
+  ## Debug print the given node `n`, with `id` is a string identifying the
+  ## caller and `info` specifies the node to retrieve the line information
+  ## from.
+  ##
+  ## If `info` is `nil`, the line information will be retrieved from `n`.
+  when cpsDebug:
+    let
+      info =
+        if info.isNil:
+          n
+        else:
+          info
+      lineInfo = info.lineInfoObj
+      procName =
+        if info.kind in RoutineNodes:
+          repr info.name
+        else:
+          ""
+
+    debugEcho "=== $1 $2($3) === $4" % [
+      id,
+      if procName.len > 0: "on " & procName else: "",
+      $kind,
+      $lineInfo
+    ]
+    when defined(cpsTree):
+      debugEcho treeRepr(n)
+    else:
+      debugEcho repr(n).numberedLines(lineInfo.line)
+  else:
+    discard "no-op when cpsDebug is not set"
 
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma

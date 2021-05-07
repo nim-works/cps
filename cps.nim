@@ -350,13 +350,7 @@ macro cpsJump(cont, call, n: typed): untyped =
   expectKind call, nnkCallKinds
   expectKind n, nnkStmtList
 
-  when cpsDebug:
-    let info = lineInfoObj(n)
-    debugEcho "=== cpsJump (original) === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(n)
-    else:
-      debugEcho repr(n).numberedLines(info.line)
+  debug("cpsJump", n, akOriginal)
 
   result = newStmtList()
 
@@ -394,12 +388,7 @@ macro cpsJump(cont, call, n: typed): untyped =
     nnkReturnStmt.newTree:
       jump
 
-  when cpsDebug:
-    debugEcho "=== cpsJump (transformed) === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(result)
-    else:
-      debugEcho repr(result).numberedLines(info.line)
+  debug("cpsJump", result, akOriginal, n)
 
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -797,22 +786,11 @@ macro cpsStripPending(n: typed): untyped =
   ## this is not needed, but it's here so we can change this to
   ## a sanity check pass later.
   expectKind n, nnkProcDef
-  when cpsDebug:
-    let info = lineInfoObj(n)
-    debugEcho "=== .cpsStripPending. on " & $n.name & "(original)  === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(n)
-    else:
-      debugEcho repr(n).numberedLines(info.line)
+  debug(".cpsStripPending.", n, akOriginal)
 
   result = replacePending(n, nil)
 
-  when cpsDebug:
-    debugEcho "=== .cpsStripPending. on " & $result.name & "(transformed)  === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(result)
-    else:
-      debugEcho repr(result).numberedLines(info.line)
+  debug(".cpsStripPending.", result, akOriginal, n)
 
 proc xfrmFloat(n: NimNode): NimNode =
   var floats = newStmtList()
@@ -831,35 +809,18 @@ proc xfrmFloat(n: NimNode): NimNode =
 macro cpsFloater(n: typed): untyped =
   ## float all `{.cpsLift.}` to top-level
   expectKind n, nnkProcDef
-  when cpsDebug:
-    let info = lineInfoObj(n)
-    debugEcho "=== .cpsFloater. on " & $n.name & "(original)  === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(n)
-    else:
-      debugEcho repr(n).numberedLines(info.line)
+  debug(".cpsFloater.", n, akOriginal)
 
   var n = copyNimTree n
   result = xfrmFloat n
 
-  when cpsDebug:
-    debugEcho "=== .cpsFloater. on " & $n.name & "(transformed)  === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(result)
-    else:
-      debugEcho repr(result).numberedLines(info.line)
+  debug(".cpsFloater.", result, akOriginal, n)
 
 proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # enhanced spam before it all goes to shit
-  when cpsDebug:
-    let info = lineInfoObj(n)
-    debugEcho "=== .cps. on " & $n.name & "(original)  === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(n)
-    else:
-      debugEcho repr(n).numberedLines(info.line)
+  debug(".cps.", n, akOriginal)
 
   # strip hidden converters early
   var n = unhide n
@@ -1001,12 +962,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   result.add booty
 
   # spamming the developers
-  when cpsDebug:
-    debugEcho "=== .cps. on " & $n.name & "(transform) === " & $info
-    when defined(cpsTree):
-      debugEcho treeRepr(result)
-    else:
-      debugEcho repr(result).numberedLines(info.line)
+  debug(".cps.", result, akOriginal, n)
 
 proc workaroundRewrites(n: NimNode): NimNode =
   proc rewriteContainer(n: NimNode): NimNode =
