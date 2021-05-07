@@ -339,7 +339,6 @@ func hasContinuation(n: NimNode): bool =
   else:
     false
 
-proc normalizingRewrites(n: NimNode): NimNode
 proc replacePending(n, replacement: NimNode): NimNode
 
 proc makeContProc(name, cont, body: NimNode): NimNode =
@@ -351,8 +350,7 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
 
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   # make it something that we can consume and modify
-  result.body = unhide body
-  result.body = filter(result.body, normalizingRewrites)
+  result.body = normalizingRewrites body
   # replace any `cont` within the body with the parameter of the newly made proc
   result.body = resym(result.body, cont, contParam)
   # if this body don't have any continuing control-flow
@@ -426,7 +424,7 @@ macro cpsMayJump(cont, n, after: typed): untyped =
       )
 
     # make `n` safe to modify
-    n = filter(n, normalizingRewrites)
+    n = normalizingRewrites n
     resolvedBody = replacePending(n, afterTail)
 
   if not resolvedBody.hasContinuation:
@@ -733,91 +731,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.add:
           n.errorAst "super confused after " & $n.kind
 
-proc normalizingRewrites(n: NimNode): NimNode =
-  proc rewriteIdentDefs(n: NimNode): NimNode =
-    ## Rewrite an identDefs to ensure it has three children.
-    if n.kind == nnkIdentDefs:
-      if n.len == 2:
-        n.add newEmptyNode()
-      elif n[1].isEmpty:          # add explicit type symbol
-        n[1] = getTypeInst n[2]
-      result = n
-
-  proc rewriteVarLet(n: NimNode): NimNode =
-    ## Rewrite a var|let section of multiple identDefs
-    ## into multiple such sections with well-formed identDefs
-    if n.kind in {nnkLetSection, nnkVarSection}:
-      result = newStmtList()
-      for child in n.items:
-        case child.kind
-        of nnkVarTuple:
-          # a new section with a single rewritten identdefs within
-          # for each symbol in the VarTuple statement
-          for i, value in child.last.pairs:
-            result.add:
-              newNimNode(n.kind, n).add:
-                rewriteIdentDefs:  # for consistency
-                  newIdentDefs(child[i], getType(value), value)
-        of nnkIdentDefs:
-          # a new section with a single rewritten identdefs within
-          result.add:
-            newNimNode(n.kind, n).add:
-              rewriteIdentDefs child
-        else:
-          result.add:
-            child.errorAst "unexpected"
-
-  proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
-    ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
-    case n.kind
-    of nnkHiddenAddr, nnkHiddenDeref:
-      result = n[0]
-    else: discard
-
-  proc rewriteConv(n: NimNode): NimNode =
-    ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
-    ## This is because nnkConv nodes are only valid if produced by sem.
-    case n.kind
-    of nnkConv:
-      result = newNimNode(nnkCall, n).add(n[0]).add(n[1])
-    else: discard
-
-  proc rewriteReturn(n: NimNode): NimNode =
-    ## Inside procs, the compiler might produce an AST structure like this:
-    ##
-    ## ```
-    ## ReturnStmt
-    ##   Asgn
-    ##     Sym "result"
-    ##     Sym "continuation"
-    ## ```
-    ##
-    ## for `return continuation`.
-    ##
-    ## This structure is not valid if modified.
-    case n.kind
-    of nnkReturnStmt:
-      if n[0].kind != nnkAsgn:
-        return n
-      result = copyNimNode(n)
-      doAssert repr(n[0][0]) == "result", "unexpected AST"
-      result.add n[0][1]
-    else: discard
-
-  case n.kind
-  of nnkIdentDefs:
-    rewriteIdentDefs n
-  of nnkLetSection, nnkVarSection:
-    rewriteVarLet n
-  of nnkHiddenAddr, nnkHiddenDeref:
-    rewriteHiddenAddrDeref n
-  of nnkConv:
-    rewriteConv n
-  of nnkReturnStmt:
-    rewriteReturn n
-  else:
-    nil
-
 proc cloneProc(n: NimNode): NimNode =
   ## create a copy of a typed proc which satisfies the compiler
   assert n.kind == nnkProcDef
@@ -856,7 +769,7 @@ macro cpsStripPending(n: typed): untyped =
   debug(".cpsStripPending.", n, akOriginal)
 
   # make `n` safe for modification
-  let n = filter(n, normalizingRewrites)
+  let n = normalizingRewrites n
   result = replacePending(n, nil)
 
   debug(".cpsStripPending.", result, akOriginal, n)
@@ -891,9 +804,8 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   # enhanced spam before it all goes to shit
   debug(".cps.", n, akOriginal)
 
-  # strip hidden converters early
-  var n = unhide n
-
+  # make the ast easier for us to consume
+  var n = normalizingRewrites n
   # establish a new environment with the supplied continuation type;
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
@@ -993,9 +905,6 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   # now remove any other arguments (for now)
   while len(n.params) > 2:
     del(n.params, 2)
-
-  # make the body easier for us to consume
-  n.body = filter(n.body, normalizingRewrites)
 
   # perform sym substitutions (or whatever)
   n.body = env.prepProcBody(newStmtList n.body)

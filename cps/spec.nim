@@ -63,37 +63,6 @@ proc desym*(n: NimNode): NimNode =
     result = ident(repr n)
     result.copyLineInfo n
 
-proc unhide*(n: NimNode): NimNode =
-  ## unwrap hidden conversion nodes and erase their types
-  proc unhidden(n: NimNode): NimNode =
-    case n.kind
-    of nnkHiddenCallConv:
-      result = nnkCall.newNimNode(n)
-      for child in n.items:
-        result.add copyNimTree(unhide child)
-    of CallNodes - {nnkHiddenCallConv}:
-      if n.len > 1 and n.last.kind == nnkHiddenStdConv:
-        result = copyNimNode n
-        for index in 0 ..< n.len - 1: # ie, omit last
-          result.add copyNimTree(unhide n[index])
-        # now deal with the hidden conversions
-        var c = n.last
-        # rewrite varargs conversions; perhaps can be replaced by
-        # nnkArgsList if it acquires some special cps call handling
-        if c.last.kind == nnkBracket:
-          for converted in c.last.items:
-            result.add copyNimTree(unhide converted)
-        # these are implicit conversions the compiler can handle
-        elif c.len > 1 and c[0].kind == nnkEmpty:
-          for converted in c[1 .. ^1]:
-            result.add copyNimTree(unhide converted)
-        else:
-          raise newException(Defect,
-            "unexpected conversion form:\n" & treeRepr(c))
-    else:
-      discard
-  result = filter(n, unhidden)
-
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## seems we only use this for rewriting local symbols into symbols
   ## in the env, so we'll do custom handling of identDefs here also
@@ -327,3 +296,136 @@ proc genField*(ident = ""): NimNode =
   ##
   ## made as a workaround for [nim-lang/Nim#17851](https://github.com/nim-lang/Nim/issues/17851)
   desym genSym(nskField, ident)
+
+proc normalizingRewrites*(n: NimNode): NimNode =
+  ## Rewrite AST into a safe form for manipulation
+  proc rewriter(n: NimNode): NimNode =
+    proc rewriteIdentDefs(n: NimNode): NimNode =
+      ## Rewrite an identDefs to ensure it has three children.
+      if n.kind == nnkIdentDefs:
+        if n.len == 2:
+          n.add newEmptyNode()
+        elif n[1].isEmpty:          # add explicit type symbol
+          n[1] = getTypeInst n[2]
+        n[2] = normalizingRewrites n[2]
+        result = n
+
+    proc rewriteVarLet(n: NimNode): NimNode =
+      ## Rewrite a var|let section of multiple identDefs
+      ## into multiple such sections with well-formed identDefs
+      if n.kind in {nnkLetSection, nnkVarSection}:
+        result = newStmtList()
+        for child in n.items:
+          case child.kind
+          of nnkVarTuple:
+            # a new section with a single rewritten identdefs within
+            # for each symbol in the VarTuple statement
+            for i, value in child.last.pairs:
+              result.add:
+                newNimNode(n.kind, n).add:
+                  rewriteIdentDefs:  # for consistency
+                    newIdentDefs(child[i], getType(value), value)
+          of nnkIdentDefs:
+            # a new section with a single rewritten identdefs within
+            result.add:
+              newNimNode(n.kind, n).add:
+                rewriteIdentDefs child
+          else:
+            result.add:
+              child.errorAst "unexpected"
+
+    proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
+      ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
+      case n.kind
+      of nnkHiddenAddr, nnkHiddenDeref:
+        result = normalizingRewrites n[0]
+      else: discard
+
+    proc rewriteConv(n: NimNode): NimNode =
+      ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
+      ## This is because nnkConv nodes are only valid if produced by sem.
+      case n.kind
+      of nnkConv:
+        result = newNimNode(nnkCall, n)
+        result.add:
+          normalizingRewrites n[0]
+        result.add:
+          normalizingRewrites n[1]
+      else: discard
+
+    proc rewriteReturn(n: NimNode): NimNode =
+      ## Inside procs, the compiler might produce an AST structure like this:
+      ##
+      ## ```
+      ## ReturnStmt
+      ##   Asgn
+      ##     Sym "result"
+      ##     Sym "continuation"
+      ## ```
+      ##
+      ## for `return continuation`.
+      ##
+      ## This structure is not valid if modified.
+      ##
+      ## Rewrite this back to `return expr`.
+      case n.kind
+      of nnkReturnStmt:
+        if n[0].kind == nnkAsgn:
+          result = copyNimNode(n)
+          doAssert repr(n[0][0]) == "result", "unexpected AST"
+          result.add:
+            normalizingRewrites n[0][1]
+        else:
+          result = n
+      else: discard
+
+    proc rewriteHidden(n: NimNode): NimNode =
+      ## Unwrap hidden conversion nodes
+      case n.kind
+      of nnkHiddenCallConv:
+        result = nnkCall.newNimNode(n)
+        for child in n.items:
+          result.add:
+            normalizingRewrites child
+      of CallNodes - {nnkHiddenCallConv}:
+        if n.len > 1 and n.last.kind == nnkHiddenStdConv:
+          result = copyNimNode n
+          for index in 0 ..< n.len - 1: # ie, omit last
+            result.add:
+              normalizingRewrites n[index]
+          # now deal with the hidden conversions
+          var c = n.last
+          # rewrite varargs conversions; perhaps can be replaced by
+          # nnkArgsList if it acquires some special cps call handling
+          if c.last.kind == nnkBracket:
+            for converted in c.last.items:
+              result.add:
+                normalizingRewrites converted
+          # these are implicit conversions the compiler can handle
+          elif c.len > 1 and c[0].kind == nnkEmpty:
+            for converted in c[1 .. ^1]:
+              result.add:
+                normalizingRewrites converted
+          else:
+            raise newException(Defect,
+              "unexpected conversion form:\n" & treeRepr(c))
+      else:
+        discard
+
+    case n.kind
+    of nnkIdentDefs:
+      rewriteIdentDefs n
+    of nnkLetSection, nnkVarSection:
+      rewriteVarLet n
+    of nnkHiddenAddr, nnkHiddenDeref:
+      rewriteHiddenAddrDeref n
+    of nnkConv:
+      rewriteConv n
+    of nnkReturnStmt:
+      rewriteReturn n
+    of CallNodes:
+      rewriteHidden n
+    else:
+      nil
+
+  filter(n, rewriter)
