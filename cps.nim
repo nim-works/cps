@@ -434,6 +434,8 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   result.add afterProc
   result.add resolvedBody
 
+  result = workaroundRewrites result
+
   debug("cpsMayJump", result, akTransformed, n)
 
 proc saften(parent: var Env; n: NimNode): NimNode =
@@ -771,6 +773,7 @@ macro cpsStripPending(n: typed): untyped =
   # make `n` safe for modification
   let n = normalizingRewrites n
   result = replacePending(n, nil)
+  result = workaroundRewrites result
 
   debug(".cpsStripPending.", result, akOriginal, n)
 
