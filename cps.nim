@@ -693,14 +693,15 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     else:
       result.add env.saften(nc)
 
-    # if the child isn't last,
-    if i < n.len-1:
-      # and it's a cps call,
-      if nc.isCpsCall or nc.isCpsBlock:
-        let x = env.splitAt(n, i, "procTail")
-        env.optimizeSimpleReturn(result, x.node)
-        # the split is complete
-        return
+    when false:
+      # if the child isn't last,
+      if i < n.len-1:
+        # and it's a cps call,
+        if nc.isCpsCall or nc.isCpsBlock:
+          let x = env.splitAt(n, i, "procTail")
+          env.optimizeSimpleReturn(result, x.node)
+          # the split is complete
+          return
 
   if result.kind == nnkStmtList and n.kind in returner:
     # let a for loop, uh, loop
