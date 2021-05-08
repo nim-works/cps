@@ -333,6 +333,12 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation `cont`
   ## with the given body.
   let
+    body =
+      if body.kind != nnkStmtList:
+        newStmtList body
+      else:
+        body
+
     contParam = desym cont
     contType = getTypeInst cont
 
@@ -395,7 +401,6 @@ macro cpsJump(cont, call, n: typed): untyped =
   ## all AST rewritten by cpsJump should end in a control flow statement.
   expectKind cont, nnkSym
   expectKind call, nnkCallKinds
-  expectKind n, nnkStmtList
 
   debug("cpsJump", n, akOriginal)
 
@@ -424,22 +429,23 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ## this macro evaluate `n` and replace all `{.cpsPending.}` in `n` with tail calls
   ## to `after`.
   expectKind cont, nnkSym
-  expectKind n, nnkStmtList
-  expectKind after, nnkStmtList
 
   debug("cpsMayJump", n, akOriginal)
   debug("cpsMayJump", after, akOriginal)
 
+  var n =
+    if n.kind != nnkStmtList:
+      newStmtList n
+    else:
+      n
+
+  # make `n` safe to modify
+  n = normalizingRewrites n
+
   let
     afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
-    afterTail =
-      newStmtList(
-        newAssignment(newDotExpr(desym cont, ident"fn"), afterProc.name),
-        nnkReturnStmt.newTree(desym cont)
-      )
+    afterTail = tailCall(desym cont, afterProc.name)
 
-    # make `n` safe to modify
-    n = normalizingRewrites n
     resolvedBody = replacePending(n, afterTail)
 
   if resolvedBody.firstReturn.isNil:
