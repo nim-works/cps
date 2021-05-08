@@ -327,21 +327,6 @@ proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
     # going to just return the next goto (this might be empty)
     result = env.nextGoto
 
-func hasContinuation(n: NimNode): bool =
-  ## determine whether `n` will continue into an another control flow
-  ## this is only valid in the body of a continuation
-  doAssert n.kind == nnkStmtList
-  if n.len > 0:
-    case n.last.kind
-    of nnkReturnStmt:
-      true
-    of nnkStmtList:
-      n.last.hasContinuation
-    else:
-      false
-  else:
-    false
-
 proc replacePending(n, replacement: NimNode): NimNode
 
 proc makeContProc(name, cont, body: NimNode): NimNode =
@@ -357,7 +342,7 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
   # replace any `cont` within the body with the parameter of the newly made proc
   result.body = resym(result.body, cont, contParam)
   # if this body don't have any continuing control-flow
-  if not result.body.hasContinuation:
+  if result.body.firstReturn.isNil:
     # annotate it so that outer macros can fill in as needed
     result.body.add newTree(
       nnkPragma,
@@ -457,7 +442,7 @@ macro cpsMayJump(cont, n, after: typed): untyped =
     n = normalizingRewrites n
     resolvedBody = replacePending(n, afterTail)
 
-  if not resolvedBody.hasContinuation:
+  if resolvedBody.firstReturn.isNil:
     resolvedBody.add afterTail
 
   result = newStmtList()
