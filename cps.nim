@@ -332,12 +332,8 @@ proc replacePending(n, replacement: NimNode): NimNode
 proc makeContProc(name, cont, body: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation `cont`
   ## with the given body.
-  let
-    body =
-      if body.kind != nnkStmtList:
-        newStmtList body
-      else:
-        body
+  # we always wrap the body because there's no reason not to
+  let body = newStmtList body
 
     contParam = desym cont
     contType = getTypeInst cont
@@ -433,11 +429,8 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   debug("cpsMayJump", n, akOriginal)
   debug("cpsMayJump", after, akOriginal)
 
-  var n =
-    if n.kind != nnkStmtList:
-      newStmtList n
-    else:
-      n
+  # we always wrap the input because there's no reason not to
+  var n = newStmtList n
 
   # make `n` safe to modify
   n = normalizingRewrites n
