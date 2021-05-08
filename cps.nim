@@ -141,7 +141,7 @@ proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
-  of nnkElse, nnkElifBranch, nnkOfBranch:
+  of nnkBlockStmt, nnkWhileStmt, nnkElse, nnkElifBranch, nnkOfBranch:
     result = n.last.isCpsBlock
   of nnkStmtList, nnkIfStmt, nnkCaseStmt:
     for n in n.items:
