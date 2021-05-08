@@ -26,6 +26,7 @@ template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
 template cpsCall*(n: typed) {.pragma.}  ## redirection
 template cpsPending*() {.pragma.}       ## this is the last continuation
+template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement in a cps block
 
 type
   NodeFilter* = proc(n: NimNode): NimNode
