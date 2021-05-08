@@ -477,60 +477,33 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       continue
     # if it's a cps call,
     if nc.isCpsCall:
-      when true:
-        let jumpCall = newCall(bindSym"cpsJump")
-        jumpCall.add(env.first)
+      let jumpCall = newCall(bindSym"cpsJump")
+      jumpCall.add(env.first)
+      jumpCall.add:
+        env.saften nc
+      if i < n.len - 1:
         jumpCall.add:
-          env.saften nc
-        if i < n.len - 1:
-          jumpCall.add:
-            env.saften newStmtList(n[i + 1 .. ^1])
-        result.add jumpCall
-        return
-      else:
-        # we want to make sure that a pop inside the after body doesn't
-        # return to after itself, so we don't add it to the goto list...
-
-        let after = splitAt(env, n, i, "afterCall")
-        result.add:
-          tailCall(env, env.saften nc):
-            returnTo after
-        # include the definition for the after proc
-        if after.node.kind != nnkSym:
-          # add the proc definition and declaration without the return
-          for child in after.node.items:
-            if child.kind == nnkProcDef:
-              result.add child
-        # done!
-        return
+          env.saften newStmtList(n[i + 1 .. ^1])
+      result.add jumpCall
+      return
 
     if i < n.len-1:
-      when false:
-        # if the child is a cps block (not a call), then push a tailcall
-        # onto the stack during the saftening of the child
-        if nc.kind notin unexiter and nc.isCpsBlock and not nc.isCpsCall:
-          withGoto env.splitAt(n, i, "done"):
-            result.doc "saftening during done"
-            result.add env.saften(nc)
-            # we've completed the split, so we're done here
-            return
-      else:
-        if nc.isCpsBlock and not nc.isCpsCall:
-          case nc.kind
-          of nnkWhileStmt, nnkBlockStmt:
-            doAssert false, "not supported yet"
-          of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
-            discard "these require their outer structure to be captured"
-          else:
-            let jumpCall = newCall(bindSym"cpsMayJump")
-            jumpCall.add(env.first)
-            jumpCall.add:
-              env.saften:
-                newStmtList nc
-            jumpCall.add:
-                env.saften newStmtList(n[i + 1 .. ^1])
-            result.add jumpCall
-            return
+      if nc.isCpsBlock and not nc.isCpsCall:
+        case nc.kind
+        of nnkWhileStmt, nnkBlockStmt:
+          doAssert false, "not supported yet"
+        of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
+          discard "these require their outer structure to be captured"
+        else:
+          let jumpCall = newCall(bindSym"cpsMayJump")
+          jumpCall.add(env.first)
+          jumpCall.add:
+            env.saften:
+              newStmtList nc
+          jumpCall.add:
+              env.saften newStmtList(n[i + 1 .. ^1])
+          result.add jumpCall
+          return
 
     case nc.kind
     of nnkReturnStmt:
