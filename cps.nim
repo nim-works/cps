@@ -331,11 +331,14 @@ func hasContinuation(n: NimNode): bool =
   ## determine whether `n` will continue into an another control flow
   ## this is only valid in the body of a continuation
   doAssert n.kind == nnkStmtList
-  case n.last.kind
-  of nnkReturnStmt:
-    true
-  of nnkStmtList:
-    n.last.hasContinuation
+  if n.len > 0:
+    case n.last.kind
+    of nnkReturnStmt:
+      true
+    of nnkStmtList:
+      n.last.hasContinuation
+    else:
+      false
   else:
     false
 
@@ -363,6 +366,41 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
 
+func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
+  ## Produce a tail call to `to` with `cont` as the continuation
+  ##
+  ## If `to` is nil, this is the last continuation and will be
+  ## set to nil.
+  ##
+  ## If `via` is not nil, it is expected to be a cps jumper call
+  if not via.isNil:
+    doAssert via.kind == nnkCall
+
+  result = newStmtList()
+
+  # if `to` is nil, this should be the last leg and the next continuation
+  # should be nil.
+  let cont = if to.isNil: newNilLit() else: cont
+  if not to.isNil:
+    # progress to the next function in the continuation
+    result.add:
+      newAssignment(newDotExpr(cont, ident"fn"), to)
+
+  if via.isNil:
+    result.add:
+      nnkReturnStmt.newTree:
+        cont
+  else:
+    let jump = copyNimTree via
+    # desym the jumper, it is currently sem-ed to the variant that
+    # doesn't take a continuation
+    jump[0] = desym jump[0]
+    # insert our continuation as the first parameter
+    jump.insert(1, cont)
+    result.add:
+      nnkReturnStmt.newTree:
+        jump
+
 proc workaroundRewrites(n: NimNode): NimNode
 
 macro cpsJump(cont, call, n: typed): untyped =
@@ -378,30 +416,22 @@ macro cpsJump(cont, call, n: typed): untyped =
 
   result = newStmtList()
 
-  let
-    contParam = desym cont
-    contType = getTypeInst cont
+  let prc = makeContProc(genSym(nskProc, "afterCall"), cont, n)
 
-  let
-    prc = makeContProc(genSym(nskProc, "afterCall"), cont, n)
-    jump = copyNimTree call
-  # desym the jumper, it is currently sem-ed to the variant that
-  # doesn't take a continuation
-  jump[0] = desym jump[0]
-  # insert our continuation as the first parameter
-  jump.insert(1, cont)
-
+  # make the call safe to modify
+  var call = normalizingRewrites call
   result.add prc
-  # TODO: this part feels like a hack
   result.add:
-    newAssignment(newDotExpr(cont, ident"fn"), prc.name)
-  result.add:
-    nnkReturnStmt.newTree:
-      jump
+    cont.tailCall prc.name:
+      call
 
   result = workaroundRewrites(result)
 
   debug("cpsJump", result, akTransformed, n)
+
+macro cpsJump(cont, call: typed): untyped =
+  ## a version of cpsJump that doesn't take a continuing body.
+  result = getAst(cpsJump(cont, call, newStmtList()))
 
 macro cpsMayJump(cont, n, after: typed): untyped =
   ## the block in `n` is tained by a `cpsJump` and may require a jump to enter `after`.
@@ -467,8 +497,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         jumpCall.add(env.first)
         jumpCall.add:
           env.saften nc
-        jumpCall.add:
-          env.saften newStmtList(n[i + 1 .. ^1])
+        if i < n.len - 1:
+          jumpCall.add:
+            env.saften newStmtList(n[i + 1 .. ^1])
         result.add jumpCall
         return
       else:
@@ -772,7 +803,8 @@ macro cpsStripPending(n: typed): untyped =
 
   # make `n` safe for modification
   let n = normalizingRewrites n
-  result = replacePending(n, nil)
+  # replace all `pending` with `return nil`, signifying end of continuations
+  result = replacePending(n, tailCall(nil, nil))
   result = workaroundRewrites result
 
   debug(".cpsStripPending.", result, akOriginal, n)
