@@ -490,7 +490,39 @@ proc restoreBreak(n: NimNode): NimNode =
           result.add n[0][1]
         else:
           result.add newEmptyNode()
+      else:
+        result = n
     else: discard
+
+  filter(n, restorer)
+
+proc replaceContinue(n, tail: NimNode): NimNode =
+  ## replace all {.cpsContinue.} with `tail`
+  proc proceed(n: NimNode): NimNode =
+    case n.kind
+    of nnkPragma:
+      # all {.cpsContinue.} are standalone
+      if n.len == 1 and n.hasPragma("cpsContinue"):
+        tail
+      else:
+        # not a {.cpsContinue.}
+        nil
+    else:
+      nil
+
+  filter(n, proceed)
+
+proc restoreContinue(n: NimNode): NimNode =
+  ## restore {.cpsContinue.} into continue statements
+  proc restorer(n: NimNode): NimNode =
+    case n.kind
+    of nnkPragma:
+      if n.len == 1 and n.hasPragma("cpsContinue"):
+        newNimNode(nnkContinueStmt, n).add:
+          newEmptyNode()
+      else:
+        n
+    else: nil
 
   filter(n, restorer)
 
@@ -535,6 +567,49 @@ macro cpsBlock(cont, n, after: typed): untyped =
   ## this is just an alias to cpsBlock with an empty label
   result = getAst(cpsBlock(cont, newEmptyNode(), n, after))
 
+macro cpsWhile(cont, cond, n, after: typed): untyped =
+  ## a while statement tainted by a `cpsJump` and may require a jump to enter `after`.
+  ##
+  ## this macros evaluate `n` and replace all `{.cpsPending.}` with jump to loop condition
+  ## and `{.cpsBreak.}` with tail calls to `after`.
+  expectKind cont, nnkSym
+
+  debug("cpsWhile", newTree(nnkWhileStmt, cond, n), akOriginal, cond)
+
+  result = newStmtList()
+
+  let
+    afterProc = makeContProc(genSym(nskProc, "whileBreak"), cont, after)
+    afterTail = tailCall(desym cont, afterProc.name)
+
+  result.add afterProc
+
+  let loopBody = newStmtList:
+    newIfStmt((cond, n)).add:
+      nnkElse.newTree:
+        afterTail
+
+  let
+    whileLoop = makeContProc(genSym(nskProc, "whileLoop"), cont, loopBody)
+    whileTail = tailCall(desym cont, whileLoop.name)
+
+  whileLoop.body = whileLoop.body.replacePending(whileTail)
+  whileLoop.body = whileLoop.body.replaceContinue(whileTail)
+  whileLoop.body = whileLoop.body.replaceBreak(afterTail)
+
+  result.add whileLoop
+  result.add whileTail
+
+  result = workaroundRewrites result
+
+  debug("cpsWhile", result, akTransformed, cond)
+
+macro cpsWhile(cont, cond, n: typed): untyped =
+  ## a while statement tainted by a `cpsJump` with no continuing body
+  ##
+  ## alias to cpsWhile with an empty StmtList as `after`
+  result = getAst(cpsWhile(cont, cond, n, newStmtList()))
+
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
 
@@ -572,20 +647,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     if i < n.len-1:
       if nc.isCpsBlock and not nc.isCpsCall:
         case nc.kind
-        of nnkWhileStmt:
-          doAssert false, "not supported yet"
-        of nnkBlockStmt:
-          let jumpCall = newCall(bindSym"cpsBlock")
-          jumpCall.add env.first
-          if nc[0].kind != nnkEmpty:
-            # add label if it exists
-            jumpCall.add nc[0]
-          jumpCall.add:
-            env.saften newStmtList(nc[1])
-          jumpCall.add:
-            env.saften newStmtList(n[i + 1 .. ^1])
-          result.add jumpCall
-          return
+        of nnkWhileStmt, nnkBlockStmt:
+          discard "they are handled below"
         of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
           discard "these require their outer structure to be captured"
         else:
@@ -686,14 +749,10 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.add nc
 
     of nnkContinueStmt:
-      if env.insideFor:
-        # if we are inside a for loop, just continue
-        result.add nc
-      else:
-        # else, goto the top of the loop
-        result.add:
-          tailCall env:
-            returnTo env.topOfWhile
+      result.add:
+        nnkPragma.newTree:
+          bindSym"cpsContinue"
+      result[^1].copyLineInfo nc
 
     of nnkBreakStmt:
       if nc[0].kind != nnkEmpty:
@@ -706,42 +765,52 @@ proc saften(parent: var Env; n: NimNode): NimNode =
             bindSym"cpsBreak"
       result[^1].copyLineInfo(nc)
 
-    of nnkWhileStmt:
-      let name = genSym(nskProc, "whileLoop")
-      let bp = env.splitAt(n, i, "postWhile")
-      env.addBreak bp
-      # the goto is added here so that it won't appear in the break proc
-      env.addGoto nc, name
-      var loop = newStmtList()
-      result.doc "add tail call for while loop with body " & $nc[1].kind
-      # we find that the body of the loop may be optimized to not be a
-      # statement list, but this will blow saften's little mind, so we
-      # recompose it here
-      var body =
-        if nc[1].kind != nnkStmtList:
-          newStmtList [nc[1]]
+    of nnkBlockStmt:
+      if nc.isCpsBlock:
+        let jumpCall = newCall(bindSym"cpsBlock")
+        jumpCall.copyLineInfo nc
+        jumpCall.add env.first
+        if nc[0].kind != nnkEmpty:
+          # add label if it exists
+          jumpCall.add nc[0]
+        jumpCall.add:
+          env.saften newStmtList(nc[1])
+        if i < n.len - 1:
+          jumpCall.add:
+            env.saften newStmtList(n[i + 1 .. ^1])
         else:
-          nc[1]
-      # we add the loop rewind to the body although it might confuse the
-      # saften call; this is deemed more correct than adding it in after
-      # the saften call, even though rewriteReturn() needs to know how to
-      # ignore `return continuation` as a result
-      body.add:
-        env.tailCall:
-          returnTo env.nextGoto
-      loop.add newIfStmt((nc[0], env.saften body))
-      # now we can remove the goto from the stack; no other code will
-      # resume at this while proc
-      discard env.popGoto
-      # this is the bottom of the while loop's proc, where we failed
-      # the loop's predicate; the same place a `break` will jump to,
-      # so we need to call the same break/post-while proc here as well
-      loop.doc "add tail call for break proc: " & repr(bp.name)
-      loop.add env.callTail(bp)
-      # this will rewrite the loop using filter, so...  it's destructive
-      result.add env.makeTail(name, loop)
-      discard env.popBreak
-      return
+          # not the best, but we can't have three overloads with 3 parameters
+          #
+          # unless they are named, but then they look hideous in renders
+          jumpCall.add newStmtList()
+        result.add jumpCall
+        return
+      else:
+        var transformed = env.saften(nc)
+        # this is not a cps block, so all the break should be preserved
+        transformed = restoreBreak transformed
+        result.add transformed
+
+    of nnkWhileStmt:
+      if nc.isCpsBlock:
+        let jumpCall = newCall(bindSym"cpsWhile")
+        jumpCall.copyLineInfo nc
+        jumpCall.add env.first
+        for child in nc:
+          jumpCall.add:
+            env.saften child
+        if i < n.len - 1:
+          jumpCall.add:
+            env.saften:
+              newStmtList(n[i + 1 .. ^1])
+        result.add jumpCall
+        return
+      else:
+        var transformed = env.saften(nc)
+        # this is not a cps block, so all the break and continue should be preserved
+        transformed = restoreBreak transformed
+        transformed = restoreContinue transformed
+        result.add transformed
 
     # not a statement cps is interested in
     else:
@@ -757,25 +826,26 @@ proc saften(parent: var Env; n: NimNode): NimNode =
           # the split is complete
           return
 
-  if result.kind == nnkStmtList and n.kind in returner:
-    # let a for loop, uh, loop
-    if env.insideFor or env.insideWhile:
-      result.add:
-        n.errorAst "no remaining goto for " & $n.kind
-    else:
-      if not result.firstReturn.isNil:
-        result.doc "omit return call from " & $n.kind
-      elif env.nextGoto.isNil:
+  when false:
+    if result.kind == nnkStmtList and n.kind in returner:
+      # let a for loop, uh, loop
+      if env.insideFor or env.insideWhile:
         result.add:
-          n.errorAst "nil return; no remaining goto for " & $n.kind
-      elif env.nextGoto.kind != nnkNilLit:
-        result.doc "adding return call to " & $n.kind
-        result.add:
-          env.tailCall:
-            returnTo env.nextGoto
+          n.errorAst "no remaining goto for " & $n.kind
       else:
-        result.add:
-          n.errorAst "super confused after " & $n.kind
+        if not result.firstReturn.isNil:
+          result.doc "omit return call from " & $n.kind
+        elif env.nextGoto.isNil:
+          result.add:
+            n.errorAst "nil return; no remaining goto for " & $n.kind
+        elif env.nextGoto.kind != nnkNilLit:
+          result.doc "adding return call to " & $n.kind
+          result.add:
+            env.tailCall:
+              returnTo env.nextGoto
+        else:
+          result.add:
+            n.errorAst "super confused after " & $n.kind
 
 proc cloneProc(n: NimNode): NimNode =
   ## create a copy of a typed proc which satisfies the compiler
@@ -806,6 +876,19 @@ proc replacePending(n, replacement: NimNode): NimNode =
 
   result = filter(n, resolved)
 
+proc danglingCheck(n: NimNode): NimNode =
+  ## look for un-rewritten control-flow then replace them with errors
+  proc dangle(n: NimNode): NimNode =
+    case n.kind
+    of nnkPragma:
+      result = n
+      if n.len == 1:
+        if n.hasPragma("cpsContinue") or n.hasPragma("cpsBreak") or n.hasPragma("cpsPending"):
+          result = errorAst(n, "cps error: un-rewritten cps control-flow")
+    else: discard
+
+  filter(n, dangle)
+
 macro cpsResolver(n: typed): untyped =
   ## resolve any left over cps control-flow annotations
   ##
@@ -818,7 +901,7 @@ macro cpsResolver(n: typed): untyped =
   let n = normalizingRewrites n
   # replace all `pending` with `return nil`, signifying end of continuations
   result = replacePending(n, tailCall(nil, nil))
-  result = restoreBreak(result)
+  result = danglingCheck(result)
   result = workaroundRewrites result
 
   debug(".cpsResolver.", result, akOriginal, n)
@@ -989,7 +1072,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   result.add booty
 
   # spamming the developers
-  debug(".cps.", result, akOriginal, n)
+  debug(".cps.", result, akTransformed)
 
 proc workaroundRewrites(n: NimNode): NimNode =
   proc rewriteContainer(n: NimNode): NimNode =

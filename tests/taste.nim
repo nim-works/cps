@@ -32,6 +32,7 @@ suite "basic testing assumptions":
     var r = 0
     proc foo() {.cps: Cont.} =
       while true:
+        noop()
         inc r
     expect InfiniteLoop:
       trampoline foo()
