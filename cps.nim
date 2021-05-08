@@ -333,7 +333,8 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation `cont`
   ## with the given body.
   # we always wrap the body because there's no reason not to
-  let body = newStmtList body
+  let
+    body = newStmtList body
 
     contParam = desym cont
     contType = getTypeInst cont
