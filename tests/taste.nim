@@ -481,7 +481,6 @@ suite "tasteful tests":
 
   block:
     ## shadow mission impossible
-    skip"pending nim-lang/Nim#16718"
     r = 0
     proc b(x: int) {.cps: Cont.} =
       inc r
@@ -659,40 +658,34 @@ suite "tasteful tests":
 
   block:
     ## simple if-else split
-    when true:
-      skip "not working, see #78"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      if true:
+        noop()
         inc r
-        if true:
-          noop()
-          inc r
-        else:
-          fail "this branch should not run"
-        inc r
+      else:
+        fail "this branch should not run"
+      inc r
 
-      trampoline foo()
-      check r == 3
+    trampoline foo()
+    check r == 3
 
   block:
-    ## case-statement splits
-    when true:
-      skip "not working, see #78"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
+    ## simple case statement split
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      case true:
+      of true:
+        noop()
         inc r
-        case true:
-        of true:
-          noop()
-          inc r
-        of false:
-          fail "this branch should not run"
-        inc r
+      of false:
+        fail "this branch should not run"
+      inc r
 
-      trampoline foo()
-      check r == 3
+    trampoline foo()
+    check r == 3
 
   block:
     ## try-except-statement splits
@@ -773,7 +766,6 @@ suite "tasteful tests":
 
   block:
     ## block control flow after split
-    skip "not working, see #76"
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -788,7 +780,6 @@ suite "tasteful tests":
 
   block:
     ## if control flow after split
-    skip "not working, see #76"
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
