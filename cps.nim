@@ -732,37 +732,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     else:
       result.add env.saften(nc)
 
-    when false:
-      # if the child isn't last,
-      if i < n.len-1:
-        # and it's a cps call,
-        if nc.isCpsCall or nc.isCpsBlock:
-          let x = env.splitAt(n, i, "procTail")
-          env.optimizeSimpleReturn(result, x.node)
-          # the split is complete
-          return
-
-  when false:
-    if result.kind == nnkStmtList and n.kind in returner:
-      # let a for loop, uh, loop
-      if env.insideFor or env.insideWhile:
-        result.add:
-          n.errorAst "no remaining goto for " & $n.kind
-      else:
-        if not result.firstReturn.isNil:
-          result.doc "omit return call from " & $n.kind
-        elif env.nextGoto.isNil:
-          result.add:
-            n.errorAst "nil return; no remaining goto for " & $n.kind
-        elif env.nextGoto.kind != nnkNilLit:
-          result.doc "adding return call to " & $n.kind
-          result.add:
-            env.tailCall:
-              returnTo env.nextGoto
-        else:
-          result.add:
-            n.errorAst "super confused after " & $n.kind
-
 proc cloneProc(n: NimNode): NimNode =
   ## create a copy of a typed proc which satisfies the compiler
   assert n.kind == nnkProcDef
