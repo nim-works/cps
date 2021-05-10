@@ -25,6 +25,9 @@ const
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
 template cpsCall*(n: typed) {.pragma.}  ## redirection
+template cpsPending*() {.pragma.}       ## this is the last continuation
+template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement in a cps block
+template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps block
 
 type
   NodeFilter* = proc(n: NimNode): NimNode
@@ -39,6 +42,14 @@ type
   Pair* = tuple
     key: NimNode
     val: NimNode
+
+  AstKind* {.pure.} = enum
+    ## The type of the passed AST
+    Original = "original"
+    Transformed = "transformed"
+
+  Matcher* = proc(n: NimNode): bool
+    ## A proc that returns whether a NimNode should be replaced
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
@@ -56,37 +67,6 @@ proc desym*(n: NimNode): NimNode =
   if n.kind == nnkSym:
     result = ident(repr n)
     result.copyLineInfo n
-
-proc unhide*(n: NimNode): NimNode =
-  ## unwrap hidden conversion nodes and erase their types
-  proc unhidden(n: NimNode): NimNode =
-    case n.kind
-    of nnkHiddenCallConv:
-      result = nnkCall.newNimNode(n)
-      for child in n.items:
-        result.add copyNimTree(unhide child)
-    of CallNodes - {nnkHiddenCallConv}:
-      if n.len > 1 and n.last.kind == nnkHiddenStdConv:
-        result = copyNimNode n
-        for index in 0 ..< n.len - 1: # ie, omit last
-          result.add copyNimTree(unhide n[index])
-        # now deal with the hidden conversions
-        var c = n.last
-        # rewrite varargs conversions; perhaps can be replaced by
-        # nnkArgsList if it acquires some special cps call handling
-        if c.last.kind == nnkBracket:
-          for converted in c.last.items:
-            result.add copyNimTree(unhide converted)
-        # these are implicit conversions the compiler can handle
-        elif c.len > 1 and c[0].kind == nnkEmpty:
-          for converted in c[1 .. ^1]:
-            result.add copyNimTree(unhide converted)
-        else:
-          raise newException(Defect,
-            "unexpected conversion form:\n" & treeRepr(c))
-    else:
-      discard
-  result = filter(n, unhidden)
 
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## seems we only use this for rewriting local symbols into symbols
@@ -143,6 +123,48 @@ when cpsDebug:
     result &= "\n" & n.repr.numberedLines(n.lineInfoObj.line) & "\n"
     result &= "----8<---- " & name & "\t" & "^^^"
 
+func debug*(id: string, n: NimNode, kind: AstKind, info: NimNode = nil) =
+  ## Debug print the given node `n`, with `id` is a string identifying the
+  ## caller and `info` specifies the node to retrieve the line information
+  ## from.
+  ##
+  ## If `info` is `nil`, the line information will be retrieved from `n`.
+  when cpsDebug:
+    let info =
+      if info.isNil:
+        n
+      else:
+        info
+    
+    let lineInfo = info.lineInfoObj
+
+    let procName =
+      if info.kind in RoutineNodes:
+        repr info.name
+      else:
+        ""
+
+    debugEcho "=== $1 $2($3) === $4" % [
+      id,
+      if procName.len > 0: "on " & procName else: "",
+      $kind,
+      $lineInfo
+    ]
+    when defined(cpsTree):
+      debugEcho treeRepr(n)
+    else:
+      debugEcho repr(n).numberedLines(lineInfo.line)
+  else:
+    discard "no-op when cpsDebug is not set"
+
+proc getPragmaName(n: NimNode): NimNode =
+  ## retrieve the symbol/identifier from the child node of a nnkPragma
+  case n.kind
+  of nnkCall, nnkExprColonExpr:
+    n[0]
+  else:
+    n
+
 proc hasPragma*(n: NimNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
   assert not n.isNil
@@ -150,8 +172,7 @@ proc hasPragma*(n: NimNode; s: static[string]): bool =
   of nnkPragma:
     for p in n:
       # just skip ColonExprs, etc.
-      if p.kind in {nnkSym, nnkIdent}:
-        result = p.strVal == s
+      result = p.getPragmaName.eqIdent s
   of RoutineNodes:
     result = hasPragma(n.pragma, s)
   of nnkObjectTy:
@@ -169,7 +190,7 @@ proc hasPragma*(n: NimNode; s: static[string]): bool =
 proc filterPragma*(ns: seq[NimNode], liftee: NimNode): NimNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
   var pragmas = nnkPragma.newNimNode
-  for p in filterIt(ns, it != liftee):
+  for p in filterIt(ns, it.getPragmaName != liftee):
     pragmas.add p
     copyLineInfo(pragmas, p)
   if len(pragmas) > 0:
@@ -281,3 +302,235 @@ proc genField*(ident = ""): NimNode =
   ##
   ## made as a workaround for [nim-lang/Nim#17851](https://github.com/nim-lang/Nim/issues/17851)
   desym genSym(nskField, ident)
+
+proc normalizingRewrites*(n: NimNode): NimNode =
+  ## Rewrite AST into a safe form for manipulation
+  proc rewriter(n: NimNode): NimNode =
+    proc rewriteIdentDefs(n: NimNode): NimNode =
+      ## Rewrite an identDefs to ensure it has three children.
+      if n.kind == nnkIdentDefs:
+        if n.len == 2:
+          n.add newEmptyNode()
+        elif n[1].isEmpty:          # add explicit type symbol
+          n[1] = getTypeInst n[2]
+        n[2] = normalizingRewrites n[2]
+        result = n
+
+    proc rewriteVarLet(n: NimNode): NimNode =
+      ## Rewrite a var|let section of multiple identDefs
+      ## into multiple such sections with well-formed identDefs
+      if n.kind in {nnkLetSection, nnkVarSection}:
+        result = newStmtList()
+        for child in n.items:
+          case child.kind
+          of nnkVarTuple:
+            # a new section with a single rewritten identdefs within
+            # for each symbol in the VarTuple statement
+            for i, value in child.last.pairs:
+              result.add:
+                newNimNode(n.kind, n).add:
+                  rewriteIdentDefs:  # for consistency
+                    newIdentDefs(child[i], getType(value), value)
+          of nnkIdentDefs:
+            # a new section with a single rewritten identdefs within
+            result.add:
+              newNimNode(n.kind, n).add:
+                rewriteIdentDefs child
+          else:
+            result.add:
+              child.errorAst "unexpected"
+
+    proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
+      ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
+      case n.kind
+      of nnkHiddenAddr, nnkHiddenDeref:
+        result = normalizingRewrites n[0]
+      else: discard
+
+    proc rewriteConv(n: NimNode): NimNode =
+      ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
+      ## This is because nnkConv nodes are only valid if produced by sem.
+      case n.kind
+      of nnkConv:
+        result = newNimNode(nnkCall, n)
+        result.add:
+          normalizingRewrites n[0]
+        result.add:
+          normalizingRewrites n[1]
+      else: discard
+
+    proc rewriteReturn(n: NimNode): NimNode =
+      ## Inside procs, the compiler might produce an AST structure like this:
+      ##
+      ## ```
+      ## ReturnStmt
+      ##   Asgn
+      ##     Sym "result"
+      ##     Sym "continuation"
+      ## ```
+      ##
+      ## for `return continuation`.
+      ##
+      ## This structure is not valid if modified.
+      ##
+      ## Rewrite this back to `return expr`.
+      case n.kind
+      of nnkReturnStmt:
+        if n[0].kind == nnkAsgn:
+          result = copyNimNode(n)
+          doAssert repr(n[0][0]) == "result", "unexpected AST"
+          result.add:
+            normalizingRewrites n[0][1]
+        else:
+          result = n
+      else: discard
+
+    proc rewriteHidden(n: NimNode): NimNode =
+      ## Unwrap hidden conversion nodes
+      case n.kind
+      of nnkHiddenCallConv:
+        result = nnkCall.newNimNode(n)
+        for child in n.items:
+          result.add:
+            normalizingRewrites child
+      of CallNodes - {nnkHiddenCallConv}:
+        if n.len > 1 and n.last.kind == nnkHiddenStdConv:
+          result = copyNimNode n
+          for index in 0 ..< n.len - 1: # ie, omit last
+            result.add:
+              normalizingRewrites n[index]
+          # now deal with the hidden conversions
+          var c = n.last
+          # rewrite varargs conversions; perhaps can be replaced by
+          # nnkArgsList if it acquires some special cps call handling
+          if c.last.kind == nnkBracket:
+            for converted in c.last.items:
+              result.add:
+                normalizingRewrites converted
+          # these are implicit conversions the compiler can handle
+          elif c.len > 1 and c[0].kind == nnkEmpty:
+            for converted in c[1 .. ^1]:
+              result.add:
+                normalizingRewrites converted
+          else:
+            raise newException(Defect,
+              "unexpected conversion form:\n" & treeRepr(c))
+      else:
+        discard
+
+    case n.kind
+    of nnkIdentDefs:
+      rewriteIdentDefs n
+    of nnkLetSection, nnkVarSection:
+      rewriteVarLet n
+    of nnkHiddenAddr, nnkHiddenDeref:
+      rewriteHiddenAddrDeref n
+    of nnkConv:
+      rewriteConv n
+    of nnkReturnStmt:
+      rewriteReturn n
+    of CallNodes:
+      rewriteHidden n
+    else:
+      nil
+
+  filter(n, rewriter)
+
+proc workaroundRewrites*(n: NimNode): NimNode =
+  ## Rewrite AST after modification to ensure that sem doesn't
+  ## skip any nodes we introduced.
+  proc rewriteContainer(n: NimNode): NimNode =
+    ## Helper function to recreate a container node while keeping all children
+    ## to discard semantic data attached to the container.
+    ##
+    ## Returns the same node if its not a container node.
+    result = n
+    if n.kind notin AtomicNodes:
+      result = newNimNode(n.kind, n)
+      for child in n:
+        result.add child
+
+  proc workaroundSigmatchSkip(n: NimNode): NimNode =
+    if n.kind in nnkCallKinds:
+      # We recreate the nodes here, to set their .typ to nil
+      # so that sigmatch doesn't decide to skip it
+      result = newNimNode(n.kind, n)
+      for child in n.items:
+        # The containers of direct children always has to be rewritten
+        # since they also have a .typ attached from the previous sem pass
+        result.add:
+          rewriteContainer:
+            workaroundRewrites child
+
+  result = filter(n, workaroundSigmatchSkip)
+
+func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
+  ## Replace any node in `n` that is matched by `match` with a copy of
+  ## `replacement`
+  proc replacer(n: NimNode): NimNode =
+    if match(n):
+      copyNimTree replacement
+    else:
+      nil
+
+  filter(n, replacer)
+
+proc multiReplace*(n: NimNode, replacements: varargs[(Matcher, NimNode)]): NimNode =
+  ## Replace any node in `n` that is matched by a matcher in replacements with
+  ## a copy of the accompanying NimNode.
+  # Nim's closure capture algo strikes again
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    result = nil
+    for (match, replacement) in replacements:
+      if match(n):
+        result = copyNimTree replacement
+        break
+
+  filter(n, replacer)
+
+func newCpsPending*(): NimNode =
+  ## Produce a {.cpsPending.} annotation
+  nnkPragma.newTree:
+    bindSym"cpsPending"
+
+func isCpsPending*(n: NimNode): bool =
+  ## Return whether a node is a {.cpsPending.} annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
+
+func newCpsBreak*(label: NimNode = newNilLit()): NimNode =
+  ## Produce a {.cpsPending.} annotation with the given label
+  doAssert not label.isNil
+  let label =
+    if label.kind == nnkEmpty:
+      newNilLit()
+    else:
+      label
+
+  nnkPragma.newTree:
+    newColonExpr(bindSym"cpsBreak", label)
+
+func isCpsBreak*(n: NimNode): bool =
+  ## Return whether a node is a {.cpsBreak.} annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
+
+func newCpsContinue*(): NimNode =
+  ## Produce a {.cpsContinue.} annotation
+  nnkPragma.newTree:
+    bindSym"cpsContinue"
+
+func isCpsContinue*(n: NimNode): bool =
+  ## Return whether a node is a {.cpsContinue.} annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
+
+func breakLabel*(n: NimNode): NimNode =
+  ## Return the break label of a `break` statement or a `cpsBreak` annotation
+  if n.isCpsBreak():
+    if n[0].len > 1 and n[0][1].kind != nnkNilLit:
+      n[0][1]
+    else:
+      newEmptyNode()
+  elif n.kind == nnkBreakStmt:
+    n[0]
+  else:
+    raise newException(Defect, "this node is not a break: " & $n.kind)
