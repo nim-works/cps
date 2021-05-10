@@ -398,7 +398,7 @@ macro cpsJump(cont, call, n: typed): untyped =
   expectKind cont, nnkSym
   expectKind call, nnkCallKinds
 
-  debug("cpsJump", n, akOriginal)
+  debug("cpsJump", n, Original)
 
   result = newStmtList()
 
@@ -413,7 +413,7 @@ macro cpsJump(cont, call, n: typed): untyped =
 
   result = workaroundRewrites(result)
 
-  debug("cpsJump", result, akTransformed, n)
+  debug("cpsJump", result, Transformed, n)
 
 macro cpsJump(cont, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
@@ -426,8 +426,8 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ## to `after`.
   expectKind cont, nnkSym
 
-  debug("cpsMayJump", n, akOriginal)
-  debug("cpsMayJump", after, akOriginal)
+  debug("cpsMayJump", n, Original)
+  debug("cpsMayJump", after, Original)
 
   # we always wrap the input because there's no reason not to
   var n = newStmtList n
@@ -452,7 +452,7 @@ macro cpsMayJump(cont, n, after: typed): untyped =
 
   result = workaroundRewrites result
 
-  debug("cpsMayJump", result, akTransformed, n)
+  debug("cpsMayJump", result, Transformed, n)
 
 func matchCpsBreak(label: NimNode): Matcher =
   ## create a matcher matching cpsBreak with the given label
@@ -496,8 +496,8 @@ macro cpsBlock(cont, label, n, after: typed): untyped =
   expectKind cont, nnkSym
   expectKind label, {nnkSym, nnkEmpty}
 
-  debug("cpsBlock", n, akOriginal)
-  debug("cpsBlock", after, akOriginal)
+  debug("cpsBlock", n, Original)
+  debug("cpsBlock", after, Original)
 
   # we always wrap the input because there's no reason not to
   var n = newStmtList n
@@ -523,7 +523,7 @@ macro cpsBlock(cont, label, n, after: typed): untyped =
 
   result = workaroundRewrites result
 
-  debug("cpsBlock", result, akTransformed, n)
+  debug("cpsBlock", result, Transformed, n)
 
 macro cpsBlock(cont, n, after: typed): untyped =
   ## a block statement tained by a `cpsJump` and may require a jump to enter `after`.
@@ -538,7 +538,7 @@ macro cpsWhile(cont, cond, n, after: typed): untyped =
   ## and `{.cpsBreak.}` with tail calls to `after`.
   expectKind cont, nnkSym
 
-  debug("cpsWhile", newTree(nnkWhileStmt, cond, n), akOriginal, cond)
+  debug("cpsWhile", newTree(nnkWhileStmt, cond, n), Original, cond)
 
   result = newStmtList()
 
@@ -568,7 +568,7 @@ macro cpsWhile(cont, cond, n, after: typed): untyped =
 
   result = workaroundRewrites result
 
-  debug("cpsWhile", result, akTransformed, cond)
+  debug("cpsWhile", result, Transformed, cond)
 
 macro cpsWhile(cont, cond, n: typed): untyped =
   ## a while statement tainted by a `cpsJump` with no continuing body
@@ -857,7 +857,7 @@ macro cpsResolver(n: typed): untyped =
   ## this is not needed, but it's here so we can change this to
   ## a sanity check pass later.
   expectKind n, nnkProcDef
-  debug(".cpsResolver.", n, akOriginal)
+  debug(".cpsResolver.", n, Original)
 
   # make `n` safe for modification
   let n = normalizingRewrites n
@@ -866,7 +866,7 @@ macro cpsResolver(n: typed): untyped =
   result = danglingCheck(result)
   result = workaroundRewrites(result)
 
-  debug(".cpsResolver.", result, akTransformed, n)
+  debug(".cpsResolver.", result, Transformed, n)
 
 proc xfrmFloat(n: NimNode): NimNode =
   var floats = newStmtList()
@@ -885,18 +885,18 @@ proc xfrmFloat(n: NimNode): NimNode =
 macro cpsFloater(n: typed): untyped =
   ## float all `{.cpsLift.}` to top-level
   expectKind n, nnkProcDef
-  debug(".cpsFloater.", n, akOriginal)
+  debug(".cpsFloater.", n, Original)
 
   var n = copyNimTree n
   result = xfrmFloat n
 
-  debug(".cpsFloater.", result, akOriginal, n)
+  debug(".cpsFloater.", result, Transformed, n)
 
 proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # enhanced spam before it all goes to shit
-  debug(".cps.", n, akOriginal)
+  debug(".cps.", n, Original)
 
   # make the ast easier for us to consume
   var n = normalizingRewrites n
@@ -1034,7 +1034,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   result.add booty
 
   # spamming the developers
-  debug(".cps.", result, akTransformed)
+  debug(".cps.", result, Transformed)
 
 proc cpsXfrm(T: NimNode, n: NimNode): NimNode =
   # Perform CPS transformation on a NimNode. This can be a single

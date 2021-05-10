@@ -43,10 +43,10 @@ type
     key: NimNode
     val: NimNode
 
-  AstKind* = enum
+  AstKind* {.pure.} = enum
     ## The type of the passed AST
-    akOriginal = "original"
-    akTransformed = "transformed"
+    Original = "original"
+    Transformed = "transformed"
 
   Matcher* = proc(n: NimNode): bool
     ## A proc that returns whether a NimNode should be replaced
@@ -130,18 +130,19 @@ func debug*(id: string, n: NimNode, kind: AstKind, info: NimNode = nil) =
   ##
   ## If `info` is `nil`, the line information will be retrieved from `n`.
   when cpsDebug:
-    let
-      info =
-        if info.isNil:
-          n
-        else:
-          info
-      lineInfo = info.lineInfoObj
-      procName =
-        if info.kind in RoutineNodes:
-          repr info.name
-        else:
-          ""
+    let info =
+      if info.isNil:
+        n
+      else:
+        info
+    
+    let lineInfo = info.lineInfoObj
+
+    let procName =
+      if info.kind in RoutineNodes:
+        repr info.name
+      else:
+        ""
 
     debugEcho "=== $1 $2($3) === $4" % [
       id,
