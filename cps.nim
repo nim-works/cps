@@ -361,8 +361,6 @@ func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
   ## If `via` is not nil, it is expected to be a cps jumper call
   doAssert not cont.isNil
   doAssert not to.isNil
-  if not via.isNil:
-    doAssert via.kind == nnkCall
 
   result = newStmtList()
 
@@ -375,6 +373,8 @@ func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
       nnkReturnStmt.newTree:
         cont
   else:
+    doAssert via.kind in CallNodes
+
     let jump = copyNimTree via
     # desym the jumper, it is currently sem-ed to the variant that
     # doesn't take a continuation
