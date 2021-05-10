@@ -25,6 +25,7 @@ suite "basic testing assumptions":
     proc foo() {.cps: Cont.} =
       while true:
         inc r
+        noop()
     expect InfiniteLoop:
       trampoline foo()
     check r > 1
