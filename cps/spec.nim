@@ -48,6 +48,9 @@ type
     akOriginal = "original"
     akTransformed = "transformed"
 
+  Matcher* = proc(n: NimNode): bool
+    ## A proc that returns whether a NimNode should be replaced
+
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
   result = not n.isNil and n.kind == nnkEmpty
@@ -460,4 +463,51 @@ proc workaroundRewrites*(n: NimNode): NimNode =
 
   result = filter(n, workaroundSigmatchSkip)
 
+func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
+  ## Replace any node in `n` that is matched by `match` with a copy of
+  ## `replacement`
+  proc replacer(n: NimNode): NimNode =
+    if match(n):
+      copyNimTree replacement
+    else:
+      nil
 
+  filter(n, replacer)
+
+proc multiReplace*(n: NimNode, replacements: varargs[(Matcher, NimNode)]): NimNode =
+  ## Replace any node in `n` that is matched by a matcher in replacements with
+  ## a copy of the accompanying NimNode.
+  # Nim's closure capture algo strikes again
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    result = nil
+    for (match, replacement) in replacements:
+      if match(n):
+        result = copyNimTree replacement
+        break
+
+  filter(n, replacer)
+
+func isCpsPending*(n: NimNode): bool =
+  ## Return whether a node is a {.cpsPending.} annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
+
+func isCpsBreak*(n: NimNode): bool =
+  ## Return whether a node is a {.cpsBreak.} annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
+
+func isCpsContinue*(n: NimNode): bool =
+  ## Return whether a node is a {.cpsContinue.} annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
+
+func breakLabel*(n: NimNode): NimNode =
+  ## Return the break label of a `break` statement or a `cpsBreak` annotation
+  if n.isCpsBreak():
+    if n[0].len > 1 and n[0][1].kind != nnkNilLit:
+      n[0][1]
+    else:
+      newEmptyNode()
+  elif n.kind == nnkBreakStmt:
+    n[0]
+  else:
+    raise newException(Defect, "this node is not a break: " & $n.kind)

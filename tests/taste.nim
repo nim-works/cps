@@ -842,3 +842,22 @@ suite "tasteful tests":
       r = 0
       trampoline foo("string")
       check r == 1
+
+  block:
+    ## nested block breaks with one containing split and one doesn't
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      block a:
+        inc r
+        block:
+          inc r
+          break a
+          fail "inner block continued"
+
+        noop()
+        fail "block was not broken out"
+      inc r
+
+    trampoline foo()
+    check r == 4

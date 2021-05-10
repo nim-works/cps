@@ -327,8 +327,6 @@ proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
     # going to just return the next goto (this might be empty)
     result = env.nextGoto
 
-proc replacePending(n, replacement: NimNode): NimNode
-
 proc makeContProc(name, cont, body: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation `cont`
   ## with the given body.
@@ -438,7 +436,9 @@ macro cpsMayJump(cont, n, after: typed): untyped =
     afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
     afterTail = tailCall(desym cont, afterProc.name)
 
-    resolvedBody = replacePending(n, afterTail)
+    resolvedBody =
+      n.replace(isCpsPending):
+        afterTail
 
   if resolvedBody.firstReturn.isNil:
     resolvedBody.add afterTail
@@ -451,76 +451,37 @@ macro cpsMayJump(cont, n, after: typed): untyped =
 
   debug("cpsMayJump", result, akTransformed, n)
 
-proc replaceBreak(n, tail: NimNode, label = newEmptyNode()): NimNode =
-  ## replace all {.cpsBreak.} and/or {.cpsBreak: label.} with `tail`
-  proc stopped(n: NimNode): NimNode =
-    case n.kind
-    of nnkPragma:
-      # all {.cpsBreak.} are standalone
-      if n.len == 1 and n.hasPragma("cpsBreak"):
-        if n[0].len > 1:
-          if n[0][1] == label or n[0][1].kind == nnkNilLit:
-            # {.cpsBreak: label.} or {.cpsBreak(nil).}
-            tail
-          else:
-            # {.cpsBreak: not-our-label.}
-            nil
-        else:
-          # {.cpsBreak.}
-          tail
+func matchCpsBreak(label: NimNode): Matcher =
+  ## create a matcher matching cpsBreak with the given label
+  ## and cpsBreak without any label
+  result =
+    func (n: NimNode): bool =
+      if n.isCpsBreak:
+        let breakLabel = n.breakLabel
+        breakLabel.kind == nnkEmpty or breakLabel == label
       else:
-        # not a {.cpsBreak.}
-        nil
+        false
+
+func restoreBreak(n: NimNode, label: NimNode = newEmptyNode()): NimNode =
+  ## restore {.cpsBreak: label.} into break statements
+  let match = matchCpsBreak(label)
+  proc restorer(n: NimNode): NimNode =
+    if match(n):
+      newNimNode(nnkBreakStmt, n).add:
+        n.breakLabel
     else:
       nil
-
-  filter(n, stopped)
-
-proc restoreBreak(n: NimNode): NimNode =
-  ## restore {.cpsBreak.} into break statements
-  proc restorer(n: NimNode): NimNode =
-    case n.kind
-    of nnkPragma:
-      if n.len == 1 and n.hasPragma("cpsBreak"):
-        result = newNimNode(nnkBreakStmt, n)
-        if n[0].len > 1 and n[0][1].kind != nnkNilLit:
-          # this should be our label
-          result.add n[0][1]
-        else:
-          result.add newEmptyNode()
-      else:
-        result = n
-    else: discard
 
   filter(n, restorer)
 
-proc replaceContinue(n, tail: NimNode): NimNode =
-  ## replace all {.cpsContinue.} with `tail`
-  proc proceed(n: NimNode): NimNode =
-    case n.kind
-    of nnkPragma:
-      # all {.cpsContinue.} are standalone
-      if n.len == 1 and n.hasPragma("cpsContinue"):
-        tail
-      else:
-        # not a {.cpsContinue.}
-        nil
-    else:
-      nil
-
-  filter(n, proceed)
-
-proc restoreContinue(n: NimNode): NimNode =
+func restoreContinue(n: NimNode): NimNode =
   ## restore {.cpsContinue.} into continue statements
   proc restorer(n: NimNode): NimNode =
-    case n.kind
-    of nnkPragma:
-      if n.len == 1 and n.hasPragma("cpsContinue"):
-        newNimNode(nnkContinueStmt, n).add:
-          newEmptyNode()
-      else:
-        n
-    else: nil
+    if n.isCpsContinue:
+      newNimNode(nnkContinueStmt, n).add:
+        newEmptyNode()
+    else:
+      nil
 
   filter(n, restorer)
 
@@ -545,8 +506,10 @@ macro cpsBlock(cont, label, n, after: typed): untyped =
     afterProc = makeContProc(genSym(nskProc, "blockBreak"), cont, after)
     afterTail = tailCall(desym cont, afterProc.name)
 
-  var resolvedBody = replacePending(n, afterTail)
-  resolvedBody = replaceBreak(resolvedBody, afterTail, label)
+  var resolvedBody = n.multiReplace(
+    (isCpsPending.Matcher, afterTail),
+    (matchCpsBreak(label), afterTail)
+  )
 
   if resolvedBody.firstReturn.isNil:
     resolvedBody.add afterTail
@@ -591,9 +554,11 @@ macro cpsWhile(cont, cond, n, after: typed): untyped =
     whileLoop = makeContProc(genSym(nskProc, "whileLoop"), cont, loopBody)
     whileTail = tailCall(desym cont, whileLoop.name)
 
-  whileLoop.body = whileLoop.body.replacePending(whileTail)
-  whileLoop.body = whileLoop.body.replaceContinue(whileTail)
-  whileLoop.body = whileLoop.body.replaceBreak(afterTail)
+  whileLoop.body = whileLoop.body.multiReplace(
+    (isCpsPending.Matcher, whileTail),
+    (isCpsContinue.Matcher, whileTail),
+    (matchCpsBreak(newEmptyNode()), afterTail)
+  )
 
   result.add whileLoop
   result.add whileTail
@@ -786,7 +751,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       else:
         var transformed = env.saften(nc)
         # this is not a cps block, so all the break should be preserved
-        transformed = restoreBreak transformed
+        transformed = transformed.restoreBreak(nc[0])
         result.add transformed
 
     of nnkWhileStmt:
@@ -862,15 +827,11 @@ proc replacePending(n, replacement: NimNode): NimNode =
   ## a jump to an another location. If `replacement` is nil, remove
   ## the annotation.
   proc resolved(n: NimNode): NimNode =
-    case n.kind
-    of nnkPragma:
-      # a {.cpsPending.} annotation is a standalone pragma statement
-      if n.len == 1 and n.hasPragma("cpsPending"):
-        if replacement.isNil:
-          result = newEmptyNode()
-        else:
-          result = copyNimTree replacement
-    else: discard
+    if n.isCpsPending:
+      if replacement.isNil:
+        result = newEmptyNode()
+      else:
+        result = copyNimTree replacement
 
   result = filter(n, resolved)
 
