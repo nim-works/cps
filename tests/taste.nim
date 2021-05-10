@@ -7,10 +7,7 @@ import foreign
 type
   InfiniteLoop = CatchableError
   Cont* = ref object of RootObj
-    when cpsMutant:
-      fn*: proc(c: var Cont) {.nimcall.}
-    else:
-      fn*: proc(c: Cont): Cont {.nimcall.}
+    fn*: proc(c: Cont): Cont {.nimcall.}
 
 var jumps: int
 

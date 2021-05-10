@@ -178,20 +178,14 @@ when cpsTrace:
                      info.column.newLit)
 
 proc castToRoot(e: Env; n: NimNode): NimNode =
-  when cpsCast:
-    result = newTree(nnkCast, e.root, n)
-  else:
-    result = newTree(nnkCall, e.root, n)
+  result = newTree(nnkCall, e.root, n)
   when cpsTrace:
     result = e.addTrace(result)
 
 proc castToChild(e: Env; n: NimNode): NimNode =
   when cpsTrace:
     var n = e.addTrace(n)
-  when cpsCast:
-    result = newTree(nnkCast, e.identity, n)
-  else:
-    result = newTree(nnkCall, e.identity, n)
+  result = newTree(nnkCall, e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
