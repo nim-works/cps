@@ -20,6 +20,7 @@ template howLong(what, code): float =
   duration
 
 
+const iterations = 1_000_000_000
 var h: Hash = 0
 
 let t1 = howLong "cps iterator":
@@ -38,8 +39,10 @@ let t1 = howLong "cps iterator":
       jield i
       inc i
 
-  var a = counter(1, 10000000)
-  while a != nil and a.fn != nil:
+  template finished(x: ref): bool = x == nil or x.fn == nil
+
+  var a = counter(1, iterations)
+  while not finished(a):
     h = h !& hash(a.val)
     a = a.fn(a)
 
@@ -53,11 +56,12 @@ let t2 = howLong "closure iterator":
     var i = lo
     while i <= hi:
       yield i
+      yield i
       inc i
 
   let f = counter
   while not finished(f):
-    h = h !& hash(f(1, 10000000))
+    h = h !& hash(f(1, iterations))
 
 echo !$h
 
