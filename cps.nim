@@ -359,18 +359,16 @@ func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
   ## set to nil.
   ##
   ## If `via` is not nil, it is expected to be a cps jumper call
+  doAssert not cont.isNil
+  doAssert not to.isNil
   if not via.isNil:
     doAssert via.kind == nnkCall
 
   result = newStmtList()
 
-  # if `to` is nil, this should be the last leg and the next continuation
-  # should be nil.
-  let cont = if to.isNil: newNilLit() else: cont
-  if not to.isNil:
-    # progress to the next function in the continuation
-    result.add:
-      newAssignment(newDotExpr(cont, ident"fn"), to)
+  # progress to the next function in the continuation
+  result.add:
+    newAssignment(newDotExpr(cont, ident"fn"), to)
 
   if via.isNil:
     result.add:
@@ -386,6 +384,11 @@ func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
     result.add:
       nnkReturnStmt.newTree:
         jump
+
+func endContinuation(): NimNode =
+  ## Produce a tail signifying the end of the continuation
+  nnkReturnStmt.newTree:
+    newNilLit()
 
 macro cpsJump(cont, call, n: typed): untyped =
   ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
@@ -858,12 +861,12 @@ macro cpsResolver(n: typed): untyped =
 
   # make `n` safe for modification
   let n = normalizingRewrites n
-  # replace all `pending` with `return nil`, signifying end of continuations
-  result = replacePending(n, tailCall(nil, nil))
+  # replace all `pending` with the end of continuation
+  result = replacePending(n, endContinuation())
   result = danglingCheck(result)
-  result = workaroundRewrites result
+  result = workaroundRewrites(result)
 
-  debug(".cpsResolver.", result, akOriginal, n)
+  debug(".cpsResolver.", result, akTransformed, n)
 
 proc xfrmFloat(n: NimNode): NimNode =
   var floats = newStmtList()
