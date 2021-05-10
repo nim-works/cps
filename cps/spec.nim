@@ -489,13 +489,35 @@ proc multiReplace*(n: NimNode, replacements: varargs[(Matcher, NimNode)]): NimNo
 
   filter(n, replacer)
 
+func newCpsPending*(): NimNode =
+  ## Produce a {.cpsPending.} annotation
+  nnkPragma.newTree:
+    bindSym"cpsPending"
+
 func isCpsPending*(n: NimNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
+func newCpsBreak*(label: NimNode = newNilLit()): NimNode =
+  ## Produce a {.cpsPending.} annotation with the given label
+  doAssert not label.isNil
+  let label =
+    if label.kind == nnkEmpty:
+      newNilLit()
+    else:
+      label
+
+  nnkPragma.newTree:
+    newColonExpr(bindSym"cpsBreak", label)
+
 func isCpsBreak*(n: NimNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
+
+func newCpsContinue*(): NimNode =
+  ## Produce a {.cpsContinue.} annotation
+  nnkPragma.newTree:
+    bindSym"cpsContinue"
 
 func isCpsContinue*(n: NimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation

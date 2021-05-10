@@ -345,10 +345,7 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
   # if this body don't have any continuing control-flow
   if result.body.firstReturn.isNil:
     # annotate it so that outer macros can fill in as needed
-    result.body.add newTree(
-      nnkPragma,
-      bindSym"cpsPending"
-    )
+    result.body.add newCpsPending()
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
 
@@ -488,16 +485,16 @@ func restoreContinue(n: NimNode): NimNode =
 
   filter(n, restorer)
 
-macro cpsBlock(cont, label, n, after: typed): untyped =
-  ## the block with `label` is tained by a `cpsJump` and may require a jump to enter `after`.
+macro cpsBlock(cont, label, n: typed): untyped =
+  ## the block with `label` is tained by a `cpsJump` and may require a jump to
+  ## break out of the block.
   ##
-  ## this macro evaluate `n` and replace all `{.cpsPending.}` and corresponding
-  ## `{.cpsBreak.}` in `n` with tail calls to `after`.
+  ## this macro evaluate `n` and replace all `{.cpsBreak.}` in `n` with
+  ## `{.cpsPending.}`.
   expectKind cont, nnkSym
   expectKind label, {nnkSym, nnkEmpty}
 
   debug("cpsBlock", n, Original)
-  debug("cpsBlock", after, Original)
 
   # we always wrap the input because there's no reason not to
   var n = newStmtList n
@@ -505,53 +502,35 @@ macro cpsBlock(cont, label, n, after: typed): untyped =
   # make `n` safe to modify
   n = normalizingRewrites n
 
-  let
-    afterProc = makeContProc(genSym(nskProc, "blockBreak"), cont, after)
-    afterTail = tailCall(desym cont, afterProc.name)
-
-  var resolvedBody = n.multiReplace(
-    (isCpsPending.Matcher, afterTail),
-    (matchCpsBreak(label), afterTail)
-  )
-
-  if resolvedBody.firstReturn.isNil:
-    resolvedBody.add afterTail
-
-  result = newStmtList()
-  result.add afterProc
-  result.add resolvedBody
+  result = n.replace(matchCpsBreak(label), newCpsPending())
 
   result = workaroundRewrites result
 
   debug("cpsBlock", result, Transformed, n)
 
-macro cpsBlock(cont, n, after: typed): untyped =
+macro cpsBlock(cont, n: typed): untyped =
   ## a block statement tained by a `cpsJump` and may require a jump to enter `after`.
   ##
   ## this is just an alias to cpsBlock with an empty label
-  result = getAst(cpsBlock(cont, newEmptyNode(), n, after))
+  result = getAst(cpsBlock(cont, newEmptyNode(), n))
 
-macro cpsWhile(cont, cond, n, after: typed): untyped =
-  ## a while statement tainted by a `cpsJump` and may require a jump to enter `after`.
+macro cpsWhile(cont, cond, n: typed): untyped =
+  ## a while statement tainted by a `cpsJump` and may require a jump to exit
+  ## the loop.
   ##
-  ## this macros evaluate `n` and replace all `{.cpsPending.}` with jump to loop condition
-  ## and `{.cpsBreak.}` with tail calls to `after`.
+  ## this macros evaluate `n` and replace all `{.cpsPending.}` with jump to
+  ## loop condition and `{.cpsBreak.}` with `{.cpsPending.}` to next
+  ## control-flow.
   expectKind cont, nnkSym
 
   debug("cpsWhile", newTree(nnkWhileStmt, cond, n), Original, cond)
 
   result = newStmtList()
 
-  let
-    afterProc = makeContProc(genSym(nskProc, "whileBreak"), cont, after)
-    afterTail = tailCall(desym cont, afterProc.name)
-
-  result.add afterProc
-
   let loopBody = newStmtList:
     newIfStmt((cond, n)).add:
       nnkElse.newTree:
-        afterTail
+        newCpsBreak()
 
   let
     whileLoop = makeContProc(genSym(nskProc, "whileLoop"), cont, loopBody)
@@ -560,7 +539,7 @@ macro cpsWhile(cont, cond, n, after: typed): untyped =
   whileLoop.body = whileLoop.body.multiReplace(
     (isCpsPending.Matcher, whileTail),
     (isCpsContinue.Matcher, whileTail),
-    (matchCpsBreak(newEmptyNode()), afterTail)
+    (matchCpsBreak(newEmptyNode()), newCpsPending())
   )
 
   result.add whileLoop
@@ -569,12 +548,6 @@ macro cpsWhile(cont, cond, n, after: typed): untyped =
   result = workaroundRewrites result
 
   debug("cpsWhile", result, Transformed, cond)
-
-macro cpsWhile(cont, cond, n: typed): untyped =
-  ## a while statement tainted by a `cpsJump` with no continuing body
-  ##
-  ## alias to cpsWhile with an empty StmtList as `after`
-  result = getAst(cpsWhile(cont, cond, n, newStmtList()))
 
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -613,8 +586,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     if i < n.len-1:
       if nc.isCpsBlock and not nc.isCpsCall:
         case nc.kind
-        of nnkWhileStmt, nnkBlockStmt:
-          discard "they are handled below"
         of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
           discard "these require their outer structure to be captured"
         else:
@@ -715,20 +686,11 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.add nc
 
     of nnkContinueStmt:
-      result.add:
-        nnkPragma.newTree:
-          bindSym"cpsContinue"
+      result.add newCpsContinue()
       result[^1].copyLineInfo nc
 
     of nnkBreakStmt:
-      if nc[0].kind != nnkEmpty:
-        result.add:
-          nnkPragma.newTree:
-            newColonExpr(bindSym"cpsBreak", nc[0])
-      else:
-        result.add:
-          nnkPragma.newTree:
-            bindSym"cpsBreak"
+      result.add newCpsBreak(nc.breakLabel)
       result[^1].copyLineInfo(nc)
 
     of nnkBlockStmt:
@@ -741,14 +703,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
           jumpCall.add nc[0]
         jumpCall.add:
           env.saften newStmtList(nc[1])
-        if i < n.len - 1:
-          jumpCall.add:
-            env.saften newStmtList(n[i + 1 .. ^1])
-        else:
-          # not the best, but we can't have three overloads with 3 parameters
-          #
-          # unless they are named, but then they look hideous in renders
-          jumpCall.add newStmtList()
         result.add jumpCall
         return
       else:
@@ -765,10 +719,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         for child in nc:
           jumpCall.add:
             env.saften child
-        if i < n.len - 1:
-          jumpCall.add:
-            env.saften:
-              newStmtList(n[i + 1 .. ^1])
         result.add jumpCall
         return
       else:
