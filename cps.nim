@@ -6,13 +6,10 @@ import cps/spec
 import cps/scopes
 import cps/environment
 export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace, cpsMutant
+export cpsDebug, cpsTrace
 
 template installLocal(id, env, field) =
-  when cpsMutant:
-    template id(): untyped = (env(result).field)
-  else:
-    template id(): untyped = (env(continuation).field)
+  template id(): untyped = (env(continuation).field)
 
 when not defined(nimdoc): export installLocal # omit from docs
 
@@ -80,11 +77,7 @@ proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
   let locals = e.defineLocals(result, n)
   p[0] = desym(p[0])              # de-sym the proc target
   p.insert(1, locals)
-  when cpsMutant:
-    result.add newAssignment(e.first, p)
-    result.addReturn newEmptyNode()
-  else:
-    result.addReturn p
+  result.addReturn p
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
@@ -95,23 +88,14 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
     if false and insideCps(e):
       result = tailCall(e, returnTo(e.nextGoto))
     else:
-      when cpsMutant:
-        ret.add newEmptyNode()
-        result = nnkStmtList.newNimNode(n).add n
-        result.addReturn newEmptyNode()
-      else:
-        ret.add n
-        result = ret
+      ret.add n
+      result = ret
   else:
     # return a statement list including the setup for the locals
     # and the return statement casting those locals to the root type
     result = newStmtList()
     let locals = e.defineLocals(result, n)
-    when cpsMutant:
-      ret.add newEmptyNode()
-      result.add newAssignment(e.first, locals)
-    else:
-      ret.add locals
+    ret.add locals
     result.add ret
 
 func isReturnCall(n: NimNode): bool =
@@ -208,31 +192,15 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     # setup the proc body with whatever locals it still needs
     var body = env.prepProcBody(n)
 
-    when cpsMutant:
-      #result.doc "creating a new proc: " & name.repr
-      # add the declaration
-      procs.add newProc(name = name, pragmas = pragmas,
-                        body = newEmptyNode(),
-                        params = [newEmptyNode(),
-                                  newIdentDefs(locals,
-                                               newTree(nnkVarTy,
-                                                       env.root))])
-      # add the implementation
-      procs.add newProc(name = name, pragmas = pragmas, body = body,
-                        params = [newEmptyNode(),
-                                  newIdentDefs(locals,
-                                               newTree(nnkVarTy,
-                                                       env.root))])
-    else:
-      # add the declaration
-      procs.add newProc(name = name, pragmas = pragmas,
-                        body = newEmptyNode(),
-                        params = [env.root, newIdentDefs(locals,
-                                                         env.root)])
-      # add the implementation
-      procs.add newProc(name = name, pragmas = pragmas, body = body,
-                        params = [env.root, newIdentDefs(locals,
-                                                         env.root)])
+    # add the declaration
+    procs.add newProc(name = name, pragmas = pragmas,
+                      body = newEmptyNode(),
+                      params = [env.root, newIdentDefs(locals,
+                                                       env.root)])
+    # add the implementation
+    procs.add newProc(name = name, pragmas = pragmas, body = body,
+                      params = [env.root, newIdentDefs(locals,
+                                                       env.root)])
 
     when true:
       # immediately push these definitions into the store and just
@@ -264,10 +232,7 @@ proc callTail(env: var Env; scope: Scope): NimNode =
     if stripComments(n).len == 0:
       result = nnkReturnStmt.newNimNode(n).add:
         # no code to run means we just `return Cont()`
-        when cpsMutant:
-          newEmptyNode()          # return
-        else:
-          newCall env.root        # return Cont()
+        newCall env.root
     # FIXME: removed because it broke endWhile
     #elif asSimpleReturnCall(n, result):
     #  discard "the call was stuffed into result"
@@ -827,10 +792,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   # creating the env with the continuation type,
   # and adding proc parameters to the env
   var first = 1 # index of first param to add to locals
-  when cpsMutant:
-    env = newEnv(ident"result", types, T)
-  else:
-    env = newEnv(ident"continuation", types, T)
+  env = newEnv(ident"continuation", types, T)
 
   # assign the return type if necessary
   if not n.params[0].isEmpty:
@@ -862,41 +824,40 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
     # XXX: let the user supply the trampoline?
     # add a trampoline to resolve the continuation
-    when not cpsMutant:
-      when cpsTrampBooty:
-        # if we're not storing to result, we need a variable
-        booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
-                                                          newEmptyNode())
-        # XXX: this may fail if requires-init
-        # now we can insert our `result =`, which includes the proc params
-        booty.body.add env.rootResult(name, booty.name)
+    when cpsTrampBooty:
+      # if we're not storing to result, we need a variable
+      booty.body.add nnkVarSection.newTree newIdentDefs(name, T,
+                                                        newEmptyNode())
+      # XXX: this may fail if requires-init
+      # now we can insert our `result =`, which includes the proc params
+      booty.body.add env.rootResult(name, booty.name)
 
-        let fn = newDotExpr(name, ident"fn")
+      let fn = newDotExpr(name, ident"fn")
 
-        # we'll construct the while statement's body first
-        var wh = newStmtList()
-        when cpsDebug:
-          wh.add nnkCommand.newTree(ident"echo", "bootstrap trampoline".newLit)
-        wh.add newAssignment(name, newCall(fn, name))
+      # we'll construct the while statement's body first
+      var wh = newStmtList()
+      when cpsDebug:
+        wh.add nnkCommand.newTree(ident"echo", "bootstrap trampoline".newLit)
+      wh.add newAssignment(name, newCall(fn, name))
 
-        # if a result is expected, copy it out when only the fn is nil
-        if not n.params[0].isEmpty:
-          wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
-                            infix(fn, "==", newNilLit())),
-                           newAssignment(ident"result", env.get)))
+      # if a result is expected, copy it out when only the fn is nil
+      if not n.params[0].isEmpty:
+        wh.add newIfStmt((infix( infix(name, "!=", newNilLit()), "and",
+                          infix(fn, "==", newNilLit())),
+                         newAssignment(ident"result", env.get)))
 
-        # compose the complete trampoline with the while and its guards
-        wh = nnkWhileStmt.newTree(
-          infix( infix(name, "!=", newNilLit()), "and",
-                 infix(fn, "!=", newNilLit())), wh)
+      # compose the complete trampoline with the while and its guards
+      wh = nnkWhileStmt.newTree(
+        infix( infix(name, "!=", newNilLit()), "and",
+               infix(fn, "!=", newNilLit())), wh)
 
-        # add the trampoline to the bootstrap
-        booty.body.add wh
-      else:
-        booty.params[0] = T
-        # XXX: this may fail if requires-init
-        # now we can insert our `result =`, which includes the proc params
-        booty.body.add env.rootResult(ident"result", booty.name)
+      # add the trampoline to the bootstrap
+      booty.body.add wh
+    else:
+      booty.params[0] = T
+      # XXX: this may fail if requires-init
+      # now we can insert our `result =`, which includes the proc params
+      booty.body.add env.rootResult(ident"result", booty.name)
 
   # we can't mutate typed nodes, so copy ourselves
   n = cloneProc n
