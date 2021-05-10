@@ -431,3 +431,33 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       nil
 
   filter(n, rewriter)
+
+proc workaroundRewrites*(n: NimNode): NimNode =
+  ## Rewrite AST after modification to ensure that sem doesn't
+  ## skip any nodes we introduced.
+  proc rewriteContainer(n: NimNode): NimNode =
+    ## Helper function to recreate a container node while keeping all children
+    ## to discard semantic data attached to the container.
+    ##
+    ## Returns the same node if its not a container node.
+    result = n
+    if n.kind notin AtomicNodes:
+      result = newNimNode(n.kind, n)
+      for child in n:
+        result.add child
+
+  proc workaroundSigmatchSkip(n: NimNode): NimNode =
+    if n.kind in nnkCallKinds:
+      # We recreate the nodes here, to set their .typ to nil
+      # so that sigmatch doesn't decide to skip it
+      result = newNimNode(n.kind, n)
+      for child in n.items:
+        # The containers of direct children always has to be rewritten
+        # since they also have a .typ attached from the previous sem pass
+        result.add:
+          rewriteContainer:
+            workaroundRewrites child
+
+  result = filter(n, workaroundSigmatchSkip)
+
+

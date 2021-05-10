@@ -389,8 +389,6 @@ func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
       nnkReturnStmt.newTree:
         jump
 
-proc workaroundRewrites(n: NimNode): NimNode
-
 macro cpsJump(cont, call, n: typed): untyped =
   ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
   ## continuation and `fn` is the identifier/symbol of the function field.
@@ -1073,32 +1071,6 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # spamming the developers
   debug(".cps.", result, akTransformed)
-
-proc workaroundRewrites(n: NimNode): NimNode =
-  proc rewriteContainer(n: NimNode): NimNode =
-    ## Helper function to recreate a container node while keeping all children
-    ## to discard semantic data attached to the container.
-    ##
-    ## Returns the same node if its not a container node.
-    result = n
-    if n.kind notin AtomicNodes:
-      result = newNimNode(n.kind, n)
-      for child in n:
-        result.add child
-
-  proc workaroundSigmatchSkip(n: NimNode): NimNode =
-    if n.kind in nnkCallKinds:
-      # We recreate the nodes here, to set their .typ to nil
-      # so that sigmatch doesn't decide to skip it
-      result = newNimNode(n.kind, n)
-      for child in n.items:
-        # The containers of direct children always has to be rewritten
-        # since they also have a .typ attached from the previous sem pass
-        result.add:
-          rewriteContainer:
-            workaroundRewrites child
-
-  result = filter(n, workaroundSigmatchSkip)
 
 proc cpsXfrm(T: NimNode, n: NimNode): NimNode =
   # Perform CPS transformation on a NimNode. This can be a single
