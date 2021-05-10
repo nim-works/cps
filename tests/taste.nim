@@ -858,3 +858,39 @@ suite "tasteful tests":
 
     trampoline foo()
     check r == 4
+
+  block:
+    ## basic defer rewrite
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      defer:
+        check r == 4
+        inc r
+      inc r
+      defer:
+        check r == 3
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 5
+
+  block:
+    ## defer in nested stmtlist rewrite
+    r = 0
+
+    template deferChk(i: int) =
+      inc r
+      defer:
+        check r == i
+        inc r
+
+    proc foo() {.cps: Cont.} =
+      deferChk(5)
+      inc r
+      deferChk(4)
+      inc r
+
+    trampoline foo()
+    check r == 6

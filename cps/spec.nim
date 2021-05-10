@@ -539,3 +539,15 @@ func breakLabel*(n: NimNode): NimNode =
     n[0]
   else:
     raise newException(Defect, "this node is not a break: " & $n.kind)
+
+func flattenStmtList*(n: NimNode): NimNode =
+  ## Flatten all StmtList nested in `n`
+  doAssert n.kind in {nnkStmtList, nnkStmtListExpr}
+  result = copyNimNode n
+
+  for child in n:
+    if child.kind in {nnkStmtList, nnkStmtListExpr}:
+      for grandchild in flattenStmtList(child):
+        result.add grandchild
+    else:
+      result.add child

@@ -527,6 +527,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
   # first, rewrite any symbols that have been moved to the env
   var n = rewriteSymbolsIntoEnvDotField(parent, n)
 
+  if n.kind in {nnkStmtList, nnkStmtListExpr}:
+    n = flattenStmtList(n)
+
   # the result is a copy of the current node
   result = copyNimNode n
   result.doc "saften at " & n.lineAndFile
@@ -692,6 +695,25 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         transformed = restoreBreak transformed
         transformed = restoreContinue transformed
         result.add transformed
+
+    of nnkDefer:
+      let
+        tryBody =
+          if i < n.len - 1:
+            nnkTryStmt.newTree:
+              env.saften newStmtList(n[i + 1 .. ^1])
+          else:
+            nnkTryStmt.newTree:
+              newStmtList():
+                nnkDiscardStmt.newTree:
+                  newEmptyNode()
+
+      tryBody.add:
+        newNimNode(nnkFinally, nc).add:
+          env.saften nc[0]
+
+      result.add tryBody
+      return
 
     # not a statement cps is interested in
     else:
