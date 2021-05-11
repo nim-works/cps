@@ -114,7 +114,9 @@ func stripComments*(n: NimNode): NimNode =
     if child.kind != nnkCommentStmt:
       result.add stripComments(child)
 
-when cpsDebug:
+when not cpsDebug:
+  template debug*(ignore: varargs[untyped]) = discard
+else:
   import std/strutils
 
   proc `$`(p: Pair): string {.used.} =
@@ -129,37 +131,36 @@ when cpsDebug:
     result &= "\n" & n.repr.numberedLines(n.lineInfoObj.line) & "\n"
     result &= "----8<---- " & name & "\t" & "^^^"
 
-func debug*(id: string, n: NimNode, kind: AstKind, info: NimNode = nil) =
-  ## Debug print the given node `n`, with `id` is a string identifying the
-  ## caller and `info` specifies the node to retrieve the line information
-  ## from.
-  ##
-  ## If `info` is `nil`, the line information will be retrieved from `n`.
-  when not cpsDebug: return
-  let info =
-    if info.isNil:
-      n
+  func debug*(id: string, n: NimNode, kind: AstKind, info: NimNode = nil) =
+    ## Debug print the given node `n`, with `id` is a string identifying the
+    ## caller and `info` specifies the node to retrieve the line information
+    ## from.
+    ##
+    ## If `info` is `nil`, the line information will be retrieved from `n`.
+    let info =
+      if info.isNil:
+        n
+      else:
+        info
+
+    let lineInfo = info.lineInfoObj
+
+    let procName =
+      if info.kind in RoutineNodes:
+        repr info.name
+      else:
+        ""
+
+    debugEcho "=== $1 $2($3) === $4" % [
+      id,
+      if procName.len > 0: "on " & procName else: "",
+      $kind,
+      $lineInfo
+    ]
+    when defined(cpsTree):
+      debugEcho treeRepr(n)
     else:
-      info
-
-  let lineInfo = info.lineInfoObj
-
-  let procName =
-    if info.kind in RoutineNodes:
-      repr info.name
-    else:
-      ""
-
-  debugEcho "=== $1 $2($3) === $4" % [
-    id,
-    if procName.len > 0: "on " & procName else: "",
-    $kind,
-    $lineInfo
-  ]
-  when defined(cpsTree):
-    debugEcho treeRepr(n)
-  else:
-    debugEcho repr(n).numberedLines(lineInfo.line)
+      debugEcho repr(n).numberedLines(lineInfo.line)
 
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
