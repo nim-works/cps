@@ -540,14 +540,37 @@ func breakLabel*(n: NimNode): NimNode =
   else:
     raise newException(Defect, "this node is not a break: " & $n.kind)
 
-func flattenStmtList*(n: NimNode): NimNode =
-  ## Flatten all StmtList nested in `n`
-  doAssert n.kind in {nnkStmtList, nnkStmtListExpr}
-  result = copyNimNode n
+func xfrmDefer*(n: NimNode): NimNode =
+  ## Rewrite the AST of `n` so that all `defer` nodes are
+  ## transformed into try-finally
+  # closure capture sucks
+  var transformed = newStmtList()
+  result = transformed
 
-  for child in n:
-    if child.kind in {nnkStmtList, nnkStmtListExpr}:
-      for grandchild in flattenStmtList(child):
-        result.add grandchild
+  var
+    deferNode: NimNode
+    tryBody = newStmtList()
+
+  proc accumulate(n: NimNode) =
+    case n.kind
+    of nnkDefer:
+      deferNode = n
+    of nnkStmtList, nnkStmtListExpr:
+      for idx, child in n:
+        if deferNode.isNil:
+          accumulate(child)
+        else:
+          tryBody.add:
+            xfrmDefer newStmtList(n[idx .. ^1])
+          return
     else:
-      result.add child
+      transformed.add n
+
+  accumulate(n)
+  if not deferNode.isNil:
+    let tryStmt = newNimNode(nnkTryStmt)
+    tryStmt.add tryBody
+    tryStmt.add:
+      newNimNode(nnkFinally, deferNode).add:
+        deferNode[0]
+    result.add tryStmt
