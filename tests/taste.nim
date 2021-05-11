@@ -894,3 +894,21 @@ suite "tasteful tests":
 
     trampoline foo()
     check r == 6
+
+  block:
+    ## defer in block rewrite
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      block:
+        defer:
+          check r == 2
+          inc r
+        inc r
+      defer:
+        check r == 4
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 5

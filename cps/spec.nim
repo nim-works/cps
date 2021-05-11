@@ -540,37 +540,62 @@ func breakLabel*(n: NimNode): NimNode =
   else:
     raise newException(Defect, "this node is not a break: " & $n.kind)
 
-func xfrmDefer*(n: NimNode): NimNode =
+func hasDefer*(n: NimNode): bool =
+  ## Return whether there is a `defer` within the given node
+  ## that might cause it to be rewritten.
+  case n.kind
+  of nnkDefer:
+    result = true
+  of nnkStmtList, nnkStmtListExpr:
+    for child in n:
+      result = hasDefer(child)
+      if result:
+        break
+  else:
+    result = false
+
+proc xfrmDefer*(n: NimNode): NimNode =
   ## Rewrite the AST of `n` so that all `defer` nodes are
   ## transformed into try-finally
-  # closure capture sucks
-  var transformed = newStmtList()
-  result = transformed
 
-  var
-    deferNode: NimNode
-    tryBody = newStmtList()
-
-  proc accumulate(n: NimNode) =
+  proc collect(n: NimNode): tuple[before, `defer`, affected: NimNode] =
+    ## collect all nodes leading to the defer node and nodes affected by the defer node
     case n.kind
     of nnkDefer:
-      deferNode = n
+      result.defer = n
     of nnkStmtList, nnkStmtListExpr:
+      result.before = copyNimNode(n)
+      result.affected = newNimNode(n.kind)
       for idx, child in n:
-        if deferNode.isNil:
-          accumulate(child)
+        if child.hasDefer:
+          let collected = collect(child)
+          result.defer = collected.defer
+          if not collected.before.isNil:
+            result.before.add collected.before
+          if not collected.affected.isNil:
+            result.affected.add collected.affected
+          if idx < n.len - 1:
+            result.affected.add n[idx + 1 .. ^1]
+          break
         else:
-          tryBody.add:
-            xfrmDefer newStmtList(n[idx .. ^1])
-          return
-    else:
-      transformed.add n
+          result.before.add child
+    else: discard
 
-  accumulate(n)
-  if not deferNode.isNil:
+  result = copyNimNode n
+  if n.hasDefer:
+    let (before, deferNode, affected) = collect(n)
+    result = before
+    # construct the try-finally tree
     let tryStmt = newNimNode(nnkTryStmt)
-    tryStmt.add tryBody
+
+    tryStmt.add affected
     tryStmt.add:
       newNimNode(nnkFinally, deferNode).add:
         deferNode[0]
-    result.add tryStmt
+
+    result.add:
+      xfrmDefer tryStmt
+  else:
+    for child in n:
+      result.add:
+        xfrmDefer child
