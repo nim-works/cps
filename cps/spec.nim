@@ -135,33 +135,31 @@ func debug*(id: string, n: NimNode, kind: AstKind, info: NimNode = nil) =
   ## from.
   ##
   ## If `info` is `nil`, the line information will be retrieved from `n`.
-  when cpsDebug:
-    let info =
-      if info.isNil:
-        n
-      else:
-        info
-
-    let lineInfo = info.lineInfoObj
-
-    let procName =
-      if info.kind in RoutineNodes:
-        repr info.name
-      else:
-        ""
-
-    debugEcho "=== $1 $2($3) === $4" % [
-      id,
-      if procName.len > 0: "on " & procName else: "",
-      $kind,
-      $lineInfo
-    ]
-    when defined(cpsTree):
-      debugEcho treeRepr(n)
+  when not cpsDebug: return
+  let info =
+    if info.isNil:
+      n
     else:
-      debugEcho repr(n).numberedLines(lineInfo.line)
+      info
+
+  let lineInfo = info.lineInfoObj
+
+  let procName =
+    if info.kind in RoutineNodes:
+      repr info.name
+    else:
+      ""
+
+  debugEcho "=== $1 $2($3) === $4" % [
+    id,
+    if procName.len > 0: "on " & procName else: "",
+    $kind,
+    $lineInfo
+  ]
+  when defined(cpsTree):
+    debugEcho treeRepr(n)
   else:
-    discard "no-op when cpsDebug is not set"
+    debugEcho repr(n).numberedLines(lineInfo.line)
 
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
