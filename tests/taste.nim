@@ -922,3 +922,61 @@ suite "tasteful tests":
 
     trampoline foo()
     check r == 1
+
+  block:
+    ## varargs rewrites
+    # various forms of concat
+    func concatConv(parts: varargs[string, `$`]): string =
+      for i in parts:
+        result.add i
+
+    func concat(parts: varargs[string]): string =
+      for i in parts:
+        result.add i
+
+    func concatDuo(a, b: varargs[string]): string =
+      for i in a:
+        result.add i
+      for i in b:
+        result.add i
+
+    func `&!`(parts: varargs[string]): string =
+      for i in parts:
+        result.add i
+
+    func `&`(s: string, parts: varargs[string]): string =
+      result = s
+      for i in parts:
+        result.add i
+
+    func `%&`(parts: varargs[string], s: string): string =
+      for i in parts:
+        result.add i
+      result.add s
+
+    func `%&%`(a, b: varargs[string]): string =
+      for i in a:
+        result.add i
+      for i in b:
+        result.add i
+
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      check concatConv("foo ", 42, 0) == "foo 420"
+      check concat("foo ", $42, $0) == "foo 420"
+      check concatDuo(["f", "o", "o "], $42, $0) == "foo 420"
+      check &!["foo ", $42, $0] == "foo 420"
+      check "foo " & [$42, $0] == "foo 420"
+      check ["f", "o", "o "] %& "420" == "foo 420"
+      check ["foo "] %&% [$42, $0] == "foo 420"
+      check concatConv(@["foo ", $42, $0]) == "foo 420"
+      check concat(@["foo ", $42, $0]) == "foo 420"
+      check concatDuo(@["f", "o", "o "], @[$42, $0]) == "foo 420"
+      check &!(@["foo ", $42, $0]) == "foo 420"
+      check "foo " & @[$42, $0] == "foo 420"
+      check @["f", "o", "o "] %& "420" == "foo 420"
+      check @["foo "] %&% @[$42, $0] == "foo 420"
+
+    trampoline foo()
+    check r == 1
