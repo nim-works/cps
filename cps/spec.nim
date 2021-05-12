@@ -499,7 +499,7 @@ func newCpsPending*(): NimNode =
   nnkPragma.newTree:
     bindSym"cpsPending"
 
-func isCpsPending*(n: NimNode): bool =
+proc isCpsPending*(n: NimNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
@@ -515,7 +515,7 @@ func newCpsBreak*(label: NimNode = newNilLit()): NimNode =
   nnkPragma.newTree:
     newColonExpr(bindSym"cpsBreak", label)
 
-func isCpsBreak*(n: NimNode): bool =
+proc isCpsBreak*(n: NimNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
 
@@ -524,11 +524,11 @@ func newCpsContinue*(): NimNode =
   nnkPragma.newTree:
     bindSym"cpsContinue"
 
-func isCpsContinue*(n: NimNode): bool =
+proc isCpsContinue*(n: NimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
 
-func breakLabel*(n: NimNode): NimNode =
+proc breakLabel*(n: NimNode): NimNode =
   ## Return the break label of a `break` statement or a `cpsBreak` annotation
   if n.isCpsBreak():
     if n[0].len > 1 and n[0][1].kind != nnkNilLit:
