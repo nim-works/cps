@@ -886,7 +886,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   n.body = env.prepProcBody(newStmtList n.body)
 
   # transform defers
-  n.body = xfrmDefer n.body
+  n.body = rewriteDefer n.body
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)

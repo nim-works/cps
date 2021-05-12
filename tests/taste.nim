@@ -912,3 +912,23 @@ suite "tasteful tests":
 
     trampoline foo()
     check r == 5
+
+  block:
+    ## there is only defer rewrite
+    r = 0
+    proc foo() {.cps: Cont.} =
+      defer:
+        inc r
+
+    trampoline foo()
+    check r == 1
+
+  block:
+    ## there is only defer rewrite
+    r = 0
+    proc foo() {.cps: Cont.} =
+      defer:
+        inc r
+
+    trampoline foo()
+    check r == 1
