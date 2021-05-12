@@ -580,13 +580,12 @@ proc rewriteDefer*(n: NimNode): NimNode =
 
       # Look for the defer in the child nodes
       for idx, child in n:
-        let collected = splitDefer(child)
-        result.defer = collected.defer
-        if not collected.before.isNil:
-          result.before.add collected.before
+        if child.hasDefer:
+          let collected = splitDefer(child)
+          result.defer = collected.defer
+          if not collected.before.isNil:
+            result.before.add collected.before
 
-        # If the defer node is found
-        if not result.defer.isNil:
           # Add nodes coming after the defer to the list of affected nodes
           if not collected.affected.isNil:
             result.affected.add collected.affected
@@ -594,6 +593,9 @@ proc rewriteDefer*(n: NimNode): NimNode =
             result.affected.add n[idx + 1 .. ^1]
           # We are done here
           break
+
+        # If there are no defer in the child node, add as-is
+        result.before.add child
     else:
       # This node doesn't contain any defer, return as-is
       result.before = n
