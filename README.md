@@ -27,6 +27,7 @@ These continuations...
 - may be moved between threads to parallelize execution
 - require no `{.gcsafe.}` for global/local accesses
 - are faster and lighter than async/await futures
+- have nearly no overhead compared to closure iterators
 
 ## Work In Progress
 
