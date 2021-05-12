@@ -549,7 +549,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       return
 
     if i < n.len-1:
-      if nc.isCpsBlock and not nc.isCpsCall:
+      if n.kind == nnkTryStmt:
+        discard "children of this node are separated execution branches"
+      elif nc.isCpsBlock and not nc.isCpsCall:
         case nc.kind
         of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
           discard "these require their outer structure to be captured"
@@ -882,6 +884,9 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # perform sym substitutions (or whatever)
   n.body = env.prepProcBody(newStmtList n.body)
+
+  # transform defers
+  n.body = rewriteDefer n.body
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)

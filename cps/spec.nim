@@ -539,3 +539,94 @@ func breakLabel*(n: NimNode): NimNode =
     n[0]
   else:
     raise newException(Defect, "this node is not a break: " & $n.kind)
+
+func hasDefer*(n: NimNode): bool =
+  ## Return whether there is a `defer` within the given node
+  ## that might cause it to be rewritten.
+  case n.kind
+  of nnkDefer:
+    result = true
+  of nnkStmtList, nnkStmtListExpr:
+    for child in n:
+      result = hasDefer(child)
+      if result:
+        break
+  else:
+    result = false
+
+proc rewriteDefer*(n: NimNode): NimNode =
+  ## Rewrite the AST of `n` so that all `defer` nodes are
+  ## transformed into try-finally
+
+  # TODO: This could be made simpler
+
+  proc splitDefer(n: NimNode): tuple[before, `defer`, affected: NimNode] =
+    ## Cut the AST into three parts:
+    ## - One contains all nodes before the defer that could affect `n`
+    ## - The defer node itself
+    ## - All nodes that comes after the defer node (affected by the defer)
+    ##
+    ## If there are no defer in the AST, all nodes are left as-is in
+    ## `before`.
+    case n.kind
+    of nnkDefer:
+      # Got the defer
+      result.defer = n
+    of nnkStmtList, nnkStmtListExpr:
+      # Make a copy of our node to the part before defer
+      result.before = copyNimNode(n)
+      # The rest of the split stays in a new node of the same kind
+      result.affected = newNimNode(n.kind)
+
+      # Look for the defer in the child nodes
+      for idx, child in n:
+        if child.hasDefer:
+          let collected = splitDefer(child)
+          result.defer = collected.defer
+          if not collected.before.isNil:
+            result.before.add collected.before
+
+          # Add nodes coming after the defer to the list of affected nodes
+          if not collected.affected.isNil:
+            result.affected.add collected.affected
+          if idx < n.len - 1:
+            result.affected.add n[idx + 1 .. ^1]
+          # We are done here
+          break
+
+        # If there are no defer in the child node, add as-is
+        result.before.add child
+    else:
+      # This node doesn't contain any defer, return as-is
+      result.before = n
+
+  if n.hasDefer and n.kind != nnkDefer:
+    let (before, deferNode, affected) = splitDefer(n)
+    result = before
+
+    # Construct the try-finally statement
+    let tryStmt = newNimNode(nnkTryStmt)
+
+    if not affected.isNil:
+      # Wrap the affected body with the try statement
+      tryStmt.add affected
+    else:
+      # If this doesn't exist, use an empty StmtList
+      tryStmt.add newStmtList()
+    # Convert the defer node into a finally node
+    tryStmt.add:
+      newNimNode(nnkFinally, deferNode).add:
+        deferNode[0]
+
+    result.add tryStmt
+    # Run the transform on the result to cover any
+    # nodes nested within this node
+    result = rewriteDefer result
+
+  else:
+    # This node doesn't have any `defer` that will cause it to be rewritten
+    result = copyNimNode(n)
+    # Process its children instead
+    for child in n:
+      result.add:
+        rewriteDefer child
