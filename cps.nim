@@ -420,14 +420,14 @@ func matchCpsBreak(label: NimNode): Matcher =
   ## create a matcher matching cpsBreak with the given label
   ## and cpsBreak without any label
   result =
-    func (n: NimNode): bool =
+    proc (n: NimNode): bool =
       if n.isCpsBreak:
         let breakLabel = n.breakLabel
         breakLabel.kind == nnkEmpty or breakLabel == label
       else:
         false
 
-func restoreBreak(n: NimNode, label: NimNode = newEmptyNode()): NimNode =
+proc restoreBreak(n: NimNode, label: NimNode = newEmptyNode()): NimNode =
   ## restore {.cpsBreak: label.} into break statements
   let match = matchCpsBreak(label)
   proc restorer(n: NimNode): NimNode =
@@ -439,7 +439,7 @@ func restoreBreak(n: NimNode, label: NimNode = newEmptyNode()): NimNode =
 
   filter(n, restorer)
 
-func restoreContinue(n: NimNode): NimNode =
+proc restoreContinue(n: NimNode): NimNode =
   ## restore {.cpsContinue.} into continue statements
   proc restorer(n: NimNode): NimNode =
     if n.isCpsContinue:
