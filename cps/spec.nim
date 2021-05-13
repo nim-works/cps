@@ -21,6 +21,7 @@ template cpsCall*(n: typed) {.pragma.}  ## redirection
 template cpsPending*() {.pragma.}       ## this is the last continuation
 template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement in a cps block
 template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps block
+template cpsContinuation*() {.pragma.}  ## this proc is a continuation leg
 
 type
   NodeFilter* = proc(n: NimNode): NimNode
@@ -643,3 +644,26 @@ proc rewriteDefer*(n: NimNode): NimNode =
     for child in n:
       result.add:
         rewriteDefer child
+
+template findNode*(n: NimNode, cond: untyped): NimNode =
+  ## Find the first node reachable from `n` matching `cond`.
+  ##
+  ## `cond` should be a boolean expression. The node being evaluated will be
+  ## accessible via the `it` symbol.
+  ##
+  ## Unlike `findChild`, this template recurse into the tree structure until
+  ## a node matching `cond` is found.
+  ##
+  ## If there are no node matching `cond`, nil is returned.
+  proc finder(x: NimNode): NimNode {.gensym.} =
+    for it in x.items:
+      let it {.inject.} = it
+      if cond:
+        result = it
+        break
+
+      result = finder(it)
+      if not result.isNil:
+        break
+
+  finder(n)

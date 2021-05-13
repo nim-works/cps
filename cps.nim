@@ -130,9 +130,10 @@ proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
-  of nnkForStmt, nnkBlockStmt, nnkWhileStmt, nnkElse, nnkElifBranch, nnkOfBranch:
+  of nnkForStmt, nnkBlockStmt, nnkWhileStmt, nnkElse, nnkElifBranch,
+     nnkOfBranch, nnkExceptBranch, nnkFinally:
     result = n.last.isCpsBlock
-  of nnkStmtList, nnkIfStmt, nnkCaseStmt:
+  of nnkStmtList, nnkIfStmt, nnkCaseStmt, nnkTryStmt:
     for n in n.items:
       if n.isCpsBlock:
         return true
@@ -318,6 +319,7 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
     result.body.add newCpsPending()
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
+  result.addPragma bindSym"cpsContinuation"
 
 func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
   ## Produce a tail call to `to` with `cont` as the continuation
@@ -520,6 +522,101 @@ macro cpsWhile(cont, cond, n: typed): untyped =
 
   #debug("cpsWhile", result, Transformed, cond)
 
+macro cpsTry(cont, n: typed): untyped =
+  ## a try statement tainted by a `cpsJump` and will require exception handling
+  ## and resource cleanup to be copied into all continuation legs
+  expectKind cont, nnkSym
+
+  result = newStmtList()
+
+  var n =
+    if n.kind != nnkTryStmt:
+      n.findNode(it.kind == nnkTryStmt)
+    else:
+      n
+
+  debug("cpsTry", n, Original)
+
+  n = normalizingRewrites n
+
+  let
+    bodyParam = genSym(nskParam, "body")
+    okSym = desym genSym(nskParam, "ok")
+    handlerWrapperBody = newStmtList()
+
+  # mixin `cont`
+  handlerWrapperBody.add:
+    nnkMixinStmt.newTree:
+      desym cont
+
+  # var ok {.inject.} = false
+  handlerWrapperBody.add newVarStmt(
+    nnkPragmaExpr.newTree(okSym, nnkPragma.newTree(ident"inject")),
+    newLit false
+  )
+
+  # build
+  # try:
+  #   body
+  #   ok = true
+  # <except and finally branches>
+  let tryWrapper = nnkTryStmt.newTree:
+    newStmtList(bodyParam):
+      newAssignment(okSym, newLit true)
+
+  for idx in 1 ..< n.len:
+    if n[idx].kind == nnkFinally:
+      let wrappedFinal = copyNimNode n[idx]
+      wrappedFinal.add newIfStmt((newCall(bindSym"not", okSym), n[idx][0]))
+      tryWrapper.add wrappedFinal.resym(cont, desym cont)
+    else:
+      if n[idx][0].kind == nnkInfix:
+        n[idx] = n[idx].resym(n[idx][0].last, desym n[idx][0].last)
+      tryWrapper.add n[idx].resym(cont, desym cont)
+
+  handlerWrapperBody.add tryWrapper
+  handlerWrapperBody.add newCpsPending()
+
+  let handlerWrapper = newProc(genSym(nskTemplate, "tryWrapper"),
+                               [bindSym"untyped", newIdentDefs(bodyParam, bindSym"untyped")],
+                               handlerWrapperBody, nnkTemplateDef)
+
+  result.add handlerWrapper
+
+  proc wrapCont(n: NimNode): NimNode =
+    ## Wrap continuation proc body with the tryWrapper
+    case n.kind
+    of nnkProcDef:
+      if n.hasPragma("cpsContinuation"):
+        result = n
+        result.body = newStmtList():
+          newCall(handlerWrapper.name, result.body.filter(wrapCont))
+    else: discard
+
+  proc annotateOk(n: NimNode): NimNode =
+    ## Add `ok = true` before any control flow that stays in the current scope
+    ##
+    ## Control flow exiting the current scope should be unresolved at this
+    ## stage and we shouldn't have to care about them
+    case n.kind
+    of nnkProcDef:
+      if not n.hasPragma("cpsContinuation"):
+        result = n
+    of nnkReturnStmt, nnkBreakStmt, nnkContinueStmt:
+      result = newStmtList()
+      result.add newAssignment(okSym, newLit true)
+      result.add n
+    else: discard
+
+  n = n[0].filter(wrapCont)
+  n = n.filter(annotateOk)
+
+  n = newCall(handlerWrapper.name, n)
+
+  result.add n
+
+  debug("cpsTry", result, Transformed, n)
+
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
 
@@ -703,6 +800,27 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         transformed = restoreBreak transformed
         transformed = restoreContinue transformed
         result.add transformed
+
+    of nnkTryStmt:
+      if nc.isCpsBlock:
+        let jumpCall = newCall(bindSym"cpsTry")
+        jumpCall.add env.first
+        jumpCall.add newStmtList(env.saften(nc))
+        result.add jumpCall
+      else:
+        result.add env.saften(nc)
+
+    of nnkExceptBranch, nnkFinally:
+      if nc.isCpsBlock:
+        result.add copyNimTree(nc)
+        result[^1].last.insert(0):
+          nc.errorAst(
+            "calling a cps proc from an except or finally branch is " &
+            "not supported as it is not possible to guarantee the semantics " &
+            "of the exception/cleanup handler"
+          )
+      else:
+        result.add env.saften(nc)
 
     # not a statement cps is interested in
     else:
