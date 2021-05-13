@@ -125,7 +125,7 @@ proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
-  of nnkBlockStmt, nnkWhileStmt, nnkElse, nnkElifBranch, nnkOfBranch:
+  of nnkForStmt, nnkBlockStmt, nnkWhileStmt, nnkElse, nnkElifBranch, nnkOfBranch:
     result = n.last.isCpsBlock
   of nnkStmtList, nnkIfStmt, nnkCaseStmt:
     for n in n.items:
@@ -648,9 +648,15 @@ proc saften(parent: var Env; n: NimNode): NimNode =
           result.add list
 
     of nnkForStmt:
-      withBreak env.splitAt(n, i, "forBreak"):
-        nc[^1] = env.saften(nc[^1])
-        result.add nc
+      if nc.isCpsBlock:
+        result.add:
+          errorAst("for loop with a cps call inside is not supported", nc)
+      else:
+        var transformed = env.saften(nc)
+        # this is not a cps block, so all the break and continue should be preserved
+        transformed = restoreBreak transformed
+        transformed = restoreContinue transformed
+        result.add transformed
 
     of nnkContinueStmt:
       result.add newCpsContinue()
