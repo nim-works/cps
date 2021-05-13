@@ -296,7 +296,7 @@ else:
 proc errorAst*(s: string, info: NimNode = nil): NimNode =
   ## produce {.error: s.} in order to embed errors in the ast
   ##
-  ## optionally take a node to set the error line information to
+  ## optionally take a node to set the error line information
   result = nnkPragma.newTree:
     ident"error".newColonExpr: newLit s
   if not info.isNil:
@@ -305,6 +305,8 @@ proc errorAst*(s: string, info: NimNode = nil): NimNode =
 proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
   ## embed an error with a message, the line info is copied from the node
   ## too
+  # TODO: we might no longer need this now that the other version can
+  #       get the line info
   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
 
 proc genField*(ident = ""): NimNode =
