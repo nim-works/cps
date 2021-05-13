@@ -293,14 +293,19 @@ when cpsDebug:
 else:
   template lineAndFile*(n: NimNode): string = "(no debug)"
 
-proc errorAst*(s: string): NimNode =
+proc errorAst*(s: string, info: NimNode = nil): NimNode =
   ## produce {.error: s.} in order to embed errors in the ast
-  nnkPragma.newTree:
+  ##
+  ## optionally take a node to set the error line information to
+  result = nnkPragma.newTree:
     ident"error".newColonExpr: newLit s
+  if not info.isNil:
+    result[0].copyLineInfo info
 
 proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
-  ## embed an error with a message
-  errorAst s & ":\n" & treeRepr(n) & "\n"
+  ## embed an error with a message, the line info is copied from the node
+  ## too
+  errorAst(s & ":\n" & treeRepr(n) & "\n", n)
 
 proc genField*(ident = ""): NimNode =
   ## generate a unique field to put inside an object definition
