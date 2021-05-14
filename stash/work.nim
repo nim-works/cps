@@ -25,16 +25,13 @@ proc work(pool: Pool) =
       pool.work.addLast c
 
 proc push(pool: Pool, c: Cont) =
-  echo "pushing ", c.id
   pool.work.addLast(c)
 
-proc setPool(c: Cont, pool: Pool, id: string): Cont {.cpsMagic.} =
+proc setPool(c: Cont, pool: Pool): Cont {.cpsMagic.} =
   c.pool = pool
-  c.id = id
   return c
 
 proc jield(c: Cont): Cont {.cpsMagic.} =
-  echo "jield ", c.id
   assert(c.pool != nil)
   if c != nil:
     c.pool.work.addLast(c)
@@ -44,7 +41,7 @@ proc jield(c: Cont): Cont {.cpsMagic.} =
 ###########################################################################
 
 proc job(p: Pool, id: string, n: int) {.cps:Cont.} =
-  setPool(p, id)
+  setPool(p)
   var i = 0
   while i < n:
     echo id, ": ", i
