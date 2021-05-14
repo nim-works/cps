@@ -324,7 +324,12 @@ proc normalizingRewrites*(n: NimNode): NimNode =
         if n.len == 2:
           n.add newEmptyNode()
         elif n[1].isEmpty:          # add explicit type symbol
-          n[1] = getTypeInst n[2]
+          if not n[2].isEmpty:
+            n[1] = getTypeInst n[2]
+          else:
+            # get the type from the symbol as the last resort.
+            # walkaround for #48.
+            n[1] = getTypeInst n[0]
         n[2] = normalizingRewrites n[2]
         result = n
 
@@ -439,6 +444,15 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       else:
         discard
 
+    proc rewriteFastAsgn(n: NimNode): NimNode =
+      ## Rewrite nnkFastAsgn into nnkAsgn because sem don't like them
+      case n.kind
+      of nnkFastAsgn:
+        result = newNimNode(nnkAsgn, n)
+        for child in n.items:
+          result.add child
+      else: discard
+
     case n.kind
     of nnkIdentDefs:
       rewriteIdentDefs n
@@ -452,6 +466,8 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       rewriteReturn n
     of CallNodes:
       rewriteHidden n
+    of nnkFastAsgn:
+      rewriteFastAsgn n
     else:
       nil
 

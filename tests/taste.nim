@@ -998,19 +998,16 @@ suite "tasteful tests":
 
   block:
     ## for loops with continue, break and a split
-    when true:
-      skip"pending #48"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
-        inc r
-        for i in 0 .. 3:
-          noop()
-          if i == 0:
-            continue
-          if i > 2:
-            break
-          r.inc i
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      for i in 0 .. 3:
+        noop()
+        if i == 0:
+          continue
+        if i > 2:
+          break
+        r.inc i
 
-      trampoline foo()
-      check r == 4
+    trampoline foo()
+    check r == 4
