@@ -3,6 +3,8 @@
 # Simple test of a naive threadpool for scheduling CPS threads. This demo
 # creates 1 million 'threads' scheduled on all available CPUs in the system
 #
+# nim r --gc:arc --threads:on --threadanalysis:off stash/threadpool.nim 
+#
 
 import cps, math, std/locks, deques, cpuinfo
 
