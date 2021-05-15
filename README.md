@@ -5,18 +5,22 @@
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.5.1%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/disruptek/cps?style=flat)](#license)
 
-This project provides a macro `cps` which you can apply to a procedure to
-rewrite it to use continuations for control-flow.  A substantial effort to
-demystify this style of programming lives at https://github.com/zevv/cpsdoc.
+This project provides a `cps` pragma which you can add to a procedure to
+automatically rewrite it to use continuations for control-flow. This provides
+the benefits of CPS while abstracting away the verbosity of continuations.
 
-All runtime functionality is implemented in a dispatcher which you can replace
-to completely change the type and behavior of your continuations.
+The `cps` pragma performs only the control-flow rewrite; you implement or
+import a dispatcher to define both the type and behavior of your continuations,
+so there is virtually no API and no limitations on composition.
 
-For a description of the origins of this concept, see the included papers
-and https://github.com/nim-lang/RFCs/issues/295, where we write in more
-depth about why the implementation exists, what it aims to enable, etc.
+A substantial effort to demystify this style of programming, and what it may
+enable, lives at https://github.com/zevv/cpsdoc.
 
-## What Are Continuations For?
+For a description of the origins of our approach, see the included papers and
+https://github.com/nim-lang/RFCs/issues/295, where we write in more depth about
+why the implementation exists, goals for future development, etc.
+
+## What Are These Continuations Good For?
 
 The continuations produced by this macro...
 
@@ -28,6 +32,7 @@ The continuations produced by this macro...
 - may be moved between threads to parallelize execution
 - are faster and lighter than async/await futures
 - have nearly zero overhead versus closure iterators
+- exploit no unsafe features of the language (`cast`, `ptr`, `addr`, `emit`)
 
 ## This is Work In Progress!
 
@@ -96,10 +101,9 @@ run()
 
 An example dispatcher was included in the past, but demonstrating dispatch
 conflated the purpose of the `cps` macro and made misconceptions about the role
-of continuation-versus-dispatcher common. An example dispatcher can now be
+of continuation-versus-dispatcher common. The reference dispatcher can now be
 found at https://github.com/disruptek/eventqueue and you can also jump directly
-to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html)
-if it helps.
+to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
 
 ## Hacking
 
