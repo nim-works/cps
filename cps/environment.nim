@@ -148,12 +148,6 @@ proc isDirty*(e: Env): bool =
   else:
     result = not(e.isWritten) or (not(e.parent.isNil) and e.parent.isDirty)
 
-proc setDirty(e: var Env) =
-  when false:
-    assert not e.isNil
-    e.id = newEmptyNode()
-    assert e.isDirty
-
 proc root*(e: Env): NimNode =
   var r = e
   while not r.parent.isNil:
@@ -197,10 +191,7 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
 proc init(e: var Env) =
   e.seen = initHashSet[string]()
   if e.fn.isNil:
-    when cpsFn:
-      e.fn = genField("fn")
-    else:
-      e.fn = ident"fn"
+    e.fn = ident"fn"
   if e.ex.isNil:
     e.ex = genField("ex")
   if e.rs.isNil:
@@ -245,11 +236,7 @@ proc contains*(e: Env; key: NimNode): bool =
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
-  when false:
-    # i'm tried of looking at these gratuitous pragmas
-    var pragma = nnkPragma.newTree bindSym"cpsLift"
-  else:
-    var pragma = newEmptyNode()
+  var pragma = newEmptyNode()
   var record = nnkRecList.newNimNode(e.identity)
   populateType(e, record)
   var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
@@ -282,12 +269,9 @@ proc makeType*(e: var Env): NimNode =
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
+
 proc firstDef*(e: Env): NimNode =
-  when cpsMoves:
-    newIdentDefs(e.first, newTree(nnkCommand, ident"sink", e.via),
-                 newEmptyNode())
-  else:
-    newIdentDefs(e.first, e.via, newEmptyNode())
+  newIdentDefs(e.first, e.via, newEmptyNode())
 
 proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
@@ -346,8 +330,6 @@ proc storeType*(e: var Env; force = off): Env =
       assert e.via == e.parent.id
       e.parent = e.parent.storeType
     e.store.add nnkTypeSection.newTree e.makeType
-    when cpsFn:
-      e.store.add e.makeFnGetter
     when cpsDebug:
       echo "storing type ", repr(e.identity)
     # clearly, if we ever write again, we want it to be a new type
@@ -371,7 +353,6 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
     result = e
   result.locals[key] = val
   result.seen.incl key.strVal
-  setDirty result
 
 iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ## add `a, b, c: type = default` to the env;
@@ -415,11 +396,6 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   result.seen = initHashSet[string]()
   result.scope = newScope()
   init result
-  when cpsFn:
-    result.add newIdentDefs(result.fn, makeFnType(result))
-  when cpsExcept:
-    result.add newIdentDefs(result.ex,
-                            nnkRefTy.newTree(ident"CatchableError"))
 
 proc identity*(e: var Env): NimNode =
   assert not e.isNil
@@ -489,20 +465,17 @@ iterator localSection*(e: var Env; n: NimNode): Pair =
   ## templates in the current incarnation...
 
   ## add a let/var section or proc param to the env
-  try:
-    case n.kind
-    of nnkVarSection, nnkLetSection:
-      for defs in n.items:
-        for pair in e.addAssignment(n.kind, defs):
-          yield pair
-    of nnkIdentDefs:
-      for pair in e.addAssignment(n.kind, n):
+  case n.kind
+  of nnkVarSection, nnkLetSection:
+    for defs in n.items:
+      for pair in e.addAssignment(n.kind, defs):
         yield pair
-    else:
-      e.store.add:
-        n.errorAst "localSection input"
-  finally:
-    e.setDirty
+  of nnkIdentDefs:
+    for pair in e.addAssignment(n.kind, n):
+      yield pair
+  else:
+    e.store.add:
+      n.errorAst "localSection input"
 
 proc newContinuation*(e: Env; via: NimNode;
                       goto: NimNode; defaults = false): NimNode =
@@ -527,27 +500,11 @@ proc newContinuation*(e: Env; via: NimNode;
         assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
         result.add newColonExpr(field, name)
 
-proc rootResult*(e: Env; name: NimNode; goto: NimNode = newNilLit()): NimNode =
-  ## usually, `result = rootResult(ident"result")`
-  ##      or, `result = rootResult(ident"result", )`
-  result = newAssignment(name, e.newContinuation(e.first, goto, defaults = false))
-
 proc defineLocals*(e: var Env; into: var NimNode; goto: NimNode): NimNode =
   # we store the type whenever we define locals, because the next code that
   # executes may need to cut a new type.  to put this another way, a later
   # scope may add a name that clashes with a scope ancestor of ours that is
   # only a peer of the later scope...
-
-  when false:
-    # actually, we don't store it here because it might not be necessary;
-    # but if we were to store it, which we aren't, we'd want to do it up
-    # here (but we're not) because this may precede a read from a cps proc.
-    #
-    # reasons to put this back in or remove it entirely:
-    # - we no longer maintain refs to the identity node,
-    # - we change the order by which we rewrite blocks,
-    # - we no longer use inheritance, use unions, etc.
-    e = e.storeType
 
   # setup the continuation for a tail call to a possibly new environment;
   # this ctor variable is used in the bottom leg of the `when` below...
@@ -561,104 +518,11 @@ proc defineLocals*(e: var Env; into: var NimNode; goto: NimNode): NimNode =
     assert into.kind == nnkStmtList
     into.doc "re-use the local continuation by setting the fn"
     into.add newAssignment(newDotExpr(e.first, e.fn), goto)
-    when true:
-      # FIXME: we currently cheat.
-      when cpsMoves:
-        into.add:
-          newAssignment ident"result":
-            newCall(ident"move", e.first)
-        result = newEmptyNode()
-      else:
-        result = e.first
-    else:
-      # TODO: this dead code is no longer accurate; don't enable it blindly!
-      # this when statement returns an e.identity one way or another
-      result = nnkWhenStmt.newNimNode
-      result.add nnkElifBranch.newTree(
-        newCall(ident"compiles", e.first),
-        # compare e.first to e.identity; if the types are the same, then we
-        # can reuse the existing type and not create a new object.
-        newStmtList(
-          newTree(nnkCommand, ident"echo",
-            newTree(nnkCall, ident"typeof", ident"continuation")),
-          newTree(nnkWhenStmt,
-                  newTree(nnkElifBranch, infix(e.first, "is", e.identity), reuse),
-                  newTree(nnkElse, ctor)),
-        )
-      )
-      # else, use the ctor we just built
-      result.add nnkElse.newTree(ctor)
+    result = e.first
 
   # record the last-rendered scope for use in trace composition
   e.camefrom = newScope(result, goto, result)
 
-template withGoto*(f: Scope; body: untyped): untyped {.dirty.} =
-  ## run a body with a longer gotos stack
-  if len(stripComments f.node) > 0:
-    env.gotos.add(f)
-    try:
-      body
-    finally:
-      result.add pop(env.gotos).node
-  else:
-    body
-
-template withBreak*(s: Scope; body: untyped): untyped {.dirty.} =
-  ## run a body with a longer breaks stack
-  if len(stripComments s.node) > 0:
-    env.breaks.add(s)
-    try:
-      body
-    finally:
-      result.add pop(env.breaks).node
-  else:
-    body
-
-proc setReturn*(e: var Env; n: NimNode) =
-  ## Teach the Env that it should return the provided type.
-
-  # forge an identDefs for the result variable to add it to the env
-  let defs =
-    when false:
-      # we use `result: T = default(T)` for completeness
-      newIdentDefs(e.rs, n, newCall(ident"default", n))
-    else:
-      # we use `result: T` because we are lazy and fearful (but mostly lazy)
-      newIdentDefs(e.rs, n, newEmptyNode())
-
-  # verbose 'cause we want to use n to inherit the line info
-  discard e.set(e.rs, newNimNode(nnkVarSection, n).add defs)
-
-  when true:
-    discard "actually, our dirty tests are currently smart enough 😉"
-    e.store.doc "omitted a store of the env type during setReturn"
-  else:
-    # we need to store the type so we can add a getter for its result
-    e = storeType(e, force = true)
-
-  # now add a mechanism for the user to retrieve the result
-  #
-  # FIXME: the get() calls below should probably be replaced with a
-  #        simple trampoline which, maybe, raises in the event that
-  #        the continuation has not fully resolved (ie. fn != nil)
-
-  when false:
-    # generate `method result(c: env_123): int` whatfer unwrapping the result
-    # FIXME: this getter has to get lifted 'cause it's a method but we cannot
-    # currently lift it high enough since methods need to reach top-level
-    e.store.add:
-      newProc(ident"result", procType = nnkMethodDef,
-              body = e.get, params = [n, e.firstDef],
-              pragmas = nnkPragma.newTree bindSym"cpsLift")
-  else:
-    # generate `proc int(c: env_123): int` whatfer unwrapping the result
-    # via a simple type conversion hack such as `continuation.int`
-    let via = newIdentDefs(e.first, e.identity, newEmptyNode())
-    e.store.add:
-      newProc(ident n.strVal, procType = nnkProcDef,
-              body = e.get,            # ie. env_123(c).result_123
-              params = [n, via],       # (c: env_123): int
-              pragmas = nnkPragma.newTree bindSym"cpsLift")
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
@@ -687,29 +551,6 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
     result = result.resym(section[0][0], newDotExpr(child, field))
 
 proc prepProcBody*(e: var Env; n: NimNode): NimNode =
-  when cpsExcept:
-    var wrap = nnkTryStmt.newNimNode(n)
-
-    # add the body to the try/finally
-    wrap.add n
-    wrap.add newTree(nnkExceptBranch, ident"CatchableError")
-        .add newTree(nnkStmtList,
-                     doc"we probably want to do this in the finally below",
-                     # stash the current exception
-                     newAssignment(newDotExpr(ident"result", e.ex),
-                                   newCall(ident"getCurrentException")),
-                     # raise (re-raise) the exception
-                     nnkRaiseStmt.newNimNode(n).add newEmptyNode())
-
-    # add a finally clause that merely issues an empty discard
-    # XXX: we'll hook cpsTrace here...
-    wrap.add nnkFinally.newNimNode(n)
-        .add nnkDiscardStmt.newNimNode(n)
-        .add newEmptyNode()
-    result = wrap
-  else:
-    result = n
-
   result = rewriteSymbolsIntoEnvDotField(e, n)
 
 proc defineProc*(e: var Env; p: NimNode) =
@@ -718,46 +559,3 @@ proc defineProc*(e: var Env; p: NimNode) =
   assert p.kind == nnkProcDef
   e.store.add p
 
-when false:
-  # we don't do local retrievals anymore because now we just substitute
-  # the symbols directly, so localRetrievals() and wrapProcBody() are dead
-
-  iterator localRetrievals(e: Env; locals: NimNode): Pair {.deprecated.} =
-    ## read locals out of an env
-    let locals = e.castToChild(locals)
-    for field, value in pairs(e):
-      # (unused for now)
-      #if repr(field) notin [repr(e.fn), repr(e.ex)]:
-      if true:
-        # the name of this local is the first field of the only val
-        assert len(value) == 1
-
-        # recreate the name to cast a field symbol into a local value
-        let name = definedName(value)
-
-        when true:
-          when defined(release):
-            yield (key: name, val: e.makeTemplate(name, field))
-          else:
-            yield (key: name, val: nnkCall.newTree(ident"installLocal", name,
-                                                   e.identity, field))
-        else:
-          # remake the section; we use locals here only for line info
-          let section = newNimNode(value.kind, locals)
-          section.add newIdentDefs(name, value[0][1],
-                                   # basically, `name: int = locals.field`
-                                   newDotExpr(locals, field))
-          yield (key: name, val: section)
-
-  proc wrapProcBody*(e: var Env; locals: NimNode; n: NimNode): NimNode =
-    # return a proc body that defines the locals in a scope above the
-    # original body; this lets the lower scope shadow existing locals or
-    # proc parameters.
-    #
-    # except that we don't use multiple scopes anymore.  we just use templates.
-    # we'll use a statement list as the body
-    result = newStmtList(doc("done locals for " & $e.identity), result)
-    # into that list, we will insert the local variables in scope
-    for name, asgn in localRetrievals(e, locals):
-      result.insert(0, asgn)
-    result.insert(0, doc "installing locals for " & $e.identity)

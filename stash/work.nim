@@ -14,9 +14,6 @@ type
   Pool = ref object
     work: Deque[Cont]
 
-proc newPool(): Pool =
-  result = Pool()
-
 proc work(pool: Pool) =
   while pool.work.len > 0:
     var c = pool.work.popFirst

@@ -12,20 +12,8 @@ when (NimMajor, NimMinor) < (1, 3):
 
 const
   cpsDebug* {.booldefine.} = false       ## produce gratuitous output
-  cpsMagicExists* {.booldefine.} = true  ## make use of .cpsMagic.
-  cpsMutant {.booldefine.} = false       ## mutate continuations
-  cpsMoves* {.booldefine.} = false       ## try to =move versus =copy
-  cpsCast {.booldefine.} = false         ## use cast instead of conversion
   cpsTrace* {.booldefine.} = false       ## store "stack" traces
-  cpsExcept* {.booldefine.} = false      ## also stash exceptions
-  cpsFn* {.booldefine.} = false          ## multiple fns in continuations
   comments* = cpsDebug         ## embed comments within the transformation
-
-when cpsMutant:
-  {.fatal: "cpsMutant is no longer a thing".}
-
-when cpsCast:
-  {.fatal: "cpsCast is no longer a thing".}
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
