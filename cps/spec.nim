@@ -283,6 +283,7 @@ proc isLiftable*(n: NimNode): bool =
   result = n.kind in {nnkProcDef, nnkTypeSection} and n.hasPragma "cpsLift"
 
 proc hasLiftableChild*(n: NimNode): bool =
+  ## does this node contain liftable nodes?
   result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
 
 when cpsDebug:
