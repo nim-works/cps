@@ -860,6 +860,7 @@ macro cps*(T: typed, n: typed): untyped =
     result = n
   else:
     result = cpsXfrmProc(T, n)
+    result = workaroundRewrites(result)
 
 macro cpsMagic*(n: untyped): untyped =
   ## upgrade cps primitives to generate errors out of context
