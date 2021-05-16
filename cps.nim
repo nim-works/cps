@@ -541,28 +541,18 @@ macro cpsTry(cont, n: typed): untyped =
 
   let
     bodyParam = genSym(nskParam, "body")
-    okSym = desym genSym(nskParam, "ok")
+    okSym = desym genSym(nskVar, "ok")
     handlerWrapperBody = newStmtList()
 
-  # mixin `cont`
-  handlerWrapperBody.add:
-    nnkMixinStmt.newTree:
-      desym cont
-
-  # var ok {.inject.} = false
-  handlerWrapperBody.add newVarStmt(
-    nnkPragmaExpr.newTree(okSym, nnkPragma.newTree(ident"inject")),
-    newLit false
-  )
+  # var ok = false
+  let declOk = newVarStmt(okSym, newLit false)
 
   # build
   # try:
   #   body
-  #   ok = true
   # <except and finally branches>
   let tryWrapper = nnkTryStmt.newTree:
-    newStmtList(bodyParam):
-      newAssignment(okSym, newLit true)
+    newStmtList(bodyParam)
 
   for idx in 1 ..< n.len:
     if n[idx].kind == nnkFinally:
@@ -578,7 +568,7 @@ macro cpsTry(cont, n: typed): untyped =
   handlerWrapperBody.add newCpsPending()
 
   let handlerWrapper = newProc(genSym(nskTemplate, "tryWrapper"),
-                               [bindSym"untyped", newIdentDefs(bodyParam, bindSym"untyped")],
+                               [bindSym"untyped", newIdentDefs(bodyParam, bindSym"typed")],
                                handlerWrapperBody, nnkTemplateDef)
 
   result.add handlerWrapper
@@ -589,8 +579,10 @@ macro cpsTry(cont, n: typed): untyped =
     of nnkProcDef:
       if n.hasPragma("cpsContinuation"):
         result = n
-        result.body = newStmtList():
+        result.body = newStmtList(
+          copyNimTree declOk,
           newCall(handlerWrapper.name, result.body.filter(wrapCont))
+        )
     else: discard
 
   proc annotateOk(n: NimNode): NimNode =
@@ -602,7 +594,7 @@ macro cpsTry(cont, n: typed): untyped =
     of nnkProcDef:
       if not n.hasPragma("cpsContinuation"):
         result = n
-    of nnkReturnStmt, nnkBreakStmt, nnkContinueStmt:
+    of nnkReturnStmt:
       result = newStmtList()
       result.add newAssignment(okSym, newLit true)
       result.add n
@@ -613,7 +605,9 @@ macro cpsTry(cont, n: typed): untyped =
 
   n = newCall(handlerWrapper.name, n)
 
+  result.add declOk
   result.add n
+  result = workaroundRewrites result
 
   debug("cpsTry", result, Transformed, n)
 
