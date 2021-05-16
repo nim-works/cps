@@ -344,10 +344,11 @@ func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
       nnkReturnStmt.newTree:
         jump
 
-func endContinuation(): NimNode =
-  ## Produce a tail signifying the end of the continuation
-  nnkReturnStmt.newTree:
-    newNilLit()
+func endContinuation(T: NimNode): NimNode =
+  result = newStmtList(
+    newAssignment(newDotExpr(ident"continuation", ident"fn"), newNilLit()),
+    nnkReturnStmt.newTree(ident"continuation")
+  )
 
 macro cpsJump(cont, call, n: typed): untyped =
   ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
@@ -740,7 +741,7 @@ proc danglingCheck(n: NimNode): NimNode =
 
   filter(n, dangle)
 
-macro cpsResolver(n: typed): untyped =
+macro cpsResolver(T: typed, n: typed): untyped =
   ## resolve any left over cps control-flow annotations
   ##
   ## this is not needed, but it's here so we can change this to
@@ -751,7 +752,7 @@ macro cpsResolver(n: typed): untyped =
   # make `n` safe for modification
   let n = normalizingRewrites n
   # replace all `pending` with the end of continuation
-  result = replacePending(n, endContinuation())
+  result = replacePending(n, endContinuation(T))
   result = danglingCheck(result)
   result = workaroundRewrites(result)
 
@@ -840,7 +841,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # run other stages
   n.addPragma bindSym"cpsFloater"
-  n.addPragma bindSym"cpsResolver"
+  n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", T)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
