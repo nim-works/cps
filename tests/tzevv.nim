@@ -265,3 +265,40 @@ suite "suite, suite zevv":
     proc foo(): Thing = 1.Thing
     runCps:
       var a = foo()
+
+  test "Running -> Lampable -> Done":
+
+    proc isRunning(c: C): bool = c != nil and c.fn != nil
+    proc isLampable(c: C): bool = c == nil
+    proc isDone(c: C): bool = c != nil and c.fn == nil
+    
+    var save: C
+
+    proc jield(c: C): C {.cpsMagic.} =
+      save = c
+
+    proc count() {.cps:C.} =
+      var i = 0
+      while i < 2:
+        jield()
+        echo i
+        inc i
+
+    var c = count()
+    c = c.fn(c) # boot
+    check c.isRunning() == true
+    c = c.fn(c) # first jield
+    check c.isLampable() == true
+    c = save
+    check c.isRunning() == true
+    c = c.fn(c) # echo
+    check c.isRunning() == true
+    c = c.fn(c) # second jield
+    check c.isLampable() == true
+    c = save
+    check c.isRunning() == true
+    c = c.fn(c) # echo
+    check c.isRunning() == true
+    c = c.fn(c) # done
+    check c.isDone() == true
+
