@@ -366,7 +366,7 @@ macro cpsJump(cont, call, n: typed): untyped =
   expectKind cont, nnkSym
   expectKind call, nnkCallKinds
 
-  debug("cpsJump", n, Original)
+  #debug("cpsJump", n, Original)
 
   result = newStmtList()
 
@@ -381,7 +381,7 @@ macro cpsJump(cont, call, n: typed): untyped =
 
   result = workaroundRewrites(result)
 
-  debug("cpsJump", result, Transformed, n)
+  #debug("cpsJump", result, Transformed, n)
 
 macro cpsJump(cont, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
@@ -394,8 +394,8 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ## to `after`.
   expectKind cont, nnkSym
 
-  debug("cpsMayJump", n, Original)
-  debug("cpsMayJump", after, Original)
+  #debug("cpsMayJump", n, Original)
+  #debug("cpsMayJump", after, Original)
 
   # we always wrap the input because there's no reason not to
   var n = newStmtList n
@@ -420,7 +420,7 @@ macro cpsMayJump(cont, n, after: typed): untyped =
 
   result = workaroundRewrites result
 
-  debug("cpsMayJump", result, Transformed, n)
+  #debug("cpsMayJump", result, Transformed, n)
 
 func matchCpsBreak(label: NimNode): Matcher =
   ## create a matcher matching cpsBreak with the given label
@@ -465,7 +465,7 @@ macro cpsBlock(cont, label, n: typed): untyped =
   expectKind cont, nnkSym
   expectKind label, {nnkSym, nnkEmpty}
 
-  debug("cpsBlock", n, Original)
+  #debug("cpsBlock", n, Original)
 
   # we always wrap the input because there's no reason not to
   var n = newStmtList n
@@ -477,7 +477,7 @@ macro cpsBlock(cont, label, n: typed): untyped =
 
   result = workaroundRewrites result
 
-  debug("cpsBlock", result, Transformed, n)
+  #debug("cpsBlock", result, Transformed, n)
 
 macro cpsBlock(cont, n: typed): untyped =
   ## a block statement tained by a `cpsJump` and may require a jump to enter `after`.
@@ -494,7 +494,7 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   ## control-flow.
   expectKind cont, nnkSym
 
-  debug("cpsWhile", newTree(nnkWhileStmt, cond, n), Original, cond)
+  #debug("cpsWhile", newTree(nnkWhileStmt, cond, n), Original, cond)
 
   result = newStmtList()
 
@@ -518,7 +518,7 @@ macro cpsWhile(cont, cond, n: typed): untyped =
 
   result = workaroundRewrites result
 
-  debug("cpsWhile", result, Transformed, cond)
+  #debug("cpsWhile", result, Transformed, cond)
 
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
@@ -755,7 +755,7 @@ macro cpsResolver(T: typed, n: typed): untyped =
   ## this is not needed, but it's here so we can change this to
   ## a sanity check pass later.
   expectKind n, nnkProcDef
-  debug(".cpsResolver.", n, Original)
+  #debug(".cpsResolver.", n, Original)
 
   # make `n` safe for modification
   let n = normalizingRewrites n
@@ -764,7 +764,7 @@ macro cpsResolver(T: typed, n: typed): untyped =
   result = danglingCheck(result)
   result = workaroundRewrites(result)
 
-  debug(".cpsResolver.", result, Transformed, n)
+  #debug(".cpsResolver.", result, Transformed, n)
 
 proc xfrmFloat(n: NimNode): NimNode =
   var floats = newStmtList()
@@ -783,12 +783,12 @@ proc xfrmFloat(n: NimNode): NimNode =
 macro cpsFloater(n: typed): untyped =
   ## float all `{.cpsLift.}` to top-level
   expectKind n, nnkProcDef
-  debug(".cpsFloater.", n, Original)
+  #debug(".cpsFloater.", n, Original)
 
   var n = copyNimTree n
   result = xfrmFloat n
 
-  debug(".cpsFloater.", result, Transformed, n)
+  #debug(".cpsFloater.", result, Transformed, n)
 
 proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
