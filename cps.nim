@@ -8,6 +8,14 @@ import cps/environment
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug, cpsTrace
 
+type
+
+  State* {.pure.} = enum
+    ## Representation of the state of a continuation.
+    Running,   ## The continuation is active and running and can be resumed
+    Dismissed, ## The continuation is currently somewhere else
+    Finished,  ## The continuation is finished and can no longer be resumed
+
 template installLocal(id, env, field) =
   template id(): untyped = (env(continuation).field)
 
@@ -854,9 +862,18 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # spamming the developers
   debug(".cps.", result, Transformed)
+    
+proc state*(c: Continuation): State =
+  ## Get the current state of a continuation
+  if c == nil:
+    Dismissed
+  elif c.fn == nil:
+    Finished
+  else:
+    Running
 
 macro cps*(T: typed, n: typed): untyped =
-  # This is the .cps. macro performing the proc transformation
+  ## This is the .cps. macro performing the proc transformation
   when defined(nimdoc):
     result = n
   else:
