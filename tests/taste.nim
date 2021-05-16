@@ -78,6 +78,41 @@ suite "tasteful tests":
     check j == 5
 
   block:
+    ## deconstruction with a call source
+    r = 0
+    proc bar(): (int, float) = (4, 7.0)
+
+    proc foo() {.cps: Cont.} =
+      inc r
+      let (i, k) = bar()
+      noop()
+      inc r
+      noop()
+      check "declared variables":
+        i == 4
+        k == 7.0
+    trampoline foo()
+    check r == 2
+
+  block:
+    ## deconstruction with distinct types
+    type
+      Goats = distinct int
+      Pigs = distinct float
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      let (i, k) = (Goats 4, Pigs 7.0)
+      noop()
+      inc r
+      noop()
+      check "declared variables":
+        i == 4
+        k == 7.0
+    trampoline foo()
+    check r == 2
+
+  block:
     ## declaration via tuple deconstruction
     r = 0
     proc foo() {.cps: Cont.} =
