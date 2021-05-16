@@ -612,13 +612,11 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         ]#
 
         # add the local into the env so we can install the field
-        var field: NimNode
-        for name, list in env.localSection(nc):
-          # our rewrite pass should prevent this guard from triggering
-          if not field.isNil:
-            result.add:
-              nc.errorAst "too many variable names in section"
-          field = name
+        env.localSection(nc, result)
+        var field = env.findJustOneAssignmentName(nc)
+        if field.isNil:
+          result.add:
+            nc.errorAst "unable to find a single identifier for shimming"
 
         # XXX: probably should be i and not i+1
         # skip this node by passing i + 1 to the split
@@ -650,8 +648,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
           errorAst(nc.last, "only calls are supported here")
       else:
         # add definitions into the environment
-        for name, list in env.localSection(nc):
-          result.add list
+        env.localSection(nc, result)
 
     of nnkForStmt:
       if nc.isCpsBlock:
@@ -813,10 +810,9 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # add parameters into the environment
   for defs in n.params[1 .. ^1]:
-    if defs[1].kind == nnkVarTy: 
-      error "cps does not support var parameters", n 
-    for _, _ in env.localSection(defs):
-      discard
+    if defs[1].kind == nnkVarTy:
+      error "cps does not support var parameters", n
+    env.localSection(defs)
 
   ## Generate the bootstrap
   var booty = cloneProc(n, newStmtList())
@@ -864,7 +860,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # spamming the developers
   debug(".cps.", result, Transformed)
-    
+
 proc state*(c: Continuation): State =
   ## Get the current state of a continuation
   if c == nil:

@@ -416,22 +416,6 @@ proc initialization(e: Env; kind: NimNodeKind;
   assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
 
   result = newStmtList()
-  when true:
-    # prepare to perform symbol substitution!
-    discard
-  else:
-    # the defined name is composed from the let|var section
-    let name = definedName(value)
-
-    # add a template to install locals
-    when defined(release):
-      let locals = e.castToChild(e.first)
-      result.add nnkTemplateDef.newTree(name, newEmptyNode(),
-                                        newEmptyNode(), newEmptyNode(),
-                                        newEmptyNode(), newEmptyNode(),
-                                        newDotExpr(locals, field))
-    else:
-      result.add nnkCall.newTree(ident"installLocal", name, e.identity, field)
 
   # this is our continuation type, fully cast
   let child = e.castToChild(e.first)
@@ -444,9 +428,8 @@ proc initialization(e: Env; kind: NimNodeKind;
       # this is basically env2323(cont).foo34 = "some default"
       result.add newAssignment(newDotExpr(child, field), defs.last)
 
-iterator addAssignment(e: var Env; kind: NimNodeKind;
-                       defs: NimNode): Pair =
-  ## compose template and assignment during addition of identDefs to env
+iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
+  ## compose an assignment during addition of identDefs to env
   assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
   let section =
     if kind in {nnkVarSection, nnkLetSection}:
@@ -457,22 +440,61 @@ iterator addAssignment(e: var Env; kind: NimNodeKind;
     let name = definedName(value)
     when cpsDebug:
       echo $kind, "\t", repr(defs)
-    yield (key: name, val: e.initialization(kind, field, value))
+    yield e.initialization(kind, field, value)
 
-iterator localSection*(e: var Env; n: NimNode): Pair =
-  ## consume a var|let section and yield name, node pairs
-  ## representing assignments to local scope; these are
-  ## templates in the current incarnation...
-
-  ## add a let/var section or proc param to the env
+proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode =
   case n.kind
   of nnkVarSection, nnkLetSection:
-    for defs in n.items:
-      for pair in e.addAssignment(n.kind, defs):
-        yield pair
+    if n.len != 1:
+      n.errorAst "only one assignment per section is supported"
+    else:
+      e.findJustOneAssignmentName n[0]
   of nnkIdentDefs:
-    for pair in e.addAssignment(n.kind, n):
-      yield pair
+    if n[0].kind notin {nnkIdent, nnkSym}:
+      n.errorAst "bad rewrite presented bogus input"
+    elif n.len != 3:
+      n.errorAst "only one identifier per assignment is supported"
+    else:
+      e.locals[n[0]]
+  of nnkVarTuple:
+    n.errorAst "tuples not supported yet"
+  else:
+    n.errorAst "unrecognized input"
+
+proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
+  ## consume a var|let section and yield name, node pairs
+  ## representing assignments to local scope
+  template maybeAdd(x) =
+    if not into.isNil:
+      into.add x
+
+  case n.kind
+  of nnkVarSection, nnkLetSection:
+    if n.len != 1:
+      e.store.add:
+        n.errorAst "expected only one var/let section member"
+    else:
+      for defs in n.items:
+        if defs.kind == nnkVarTuple:
+          # deconstruct the RHS types into multiple assignments
+          # let (a, b, c) = foo() -> (env.a, env.b, env.c) = foo()
+          let child = e.castToChild(e.first)
+          let rhs = getTypeInst defs.last
+          var tups = nnkTupleConstr.newTree
+          for index, name in defs[0 ..< defs.len-2].pairs:
+            let entry = newIdentDefs(name, rhs[index], newEmptyNode())
+            # we need to insert the variable and then write a new
+            # accessor that plucks the field from the env
+            for field, value in e.addIdentDef(n.kind, entry):
+              tups.add newDotExpr(child, field)
+          maybeAdd newAssignment(tups, defs.last)
+        else:
+          # an iterator handles `var a, b, c = 3` appropriately
+          for assignment in e.addAssignment(n.kind, defs):
+            maybeAdd assignment
+  of nnkIdentDefs:
+    for assignment in e.addAssignment(n.kind, n):
+      maybeAdd assignment
   else:
     e.store.add:
       n.errorAst "localSection input"
