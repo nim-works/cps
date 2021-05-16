@@ -99,6 +99,8 @@ suite "tasteful tests":
     type
       Goats = distinct int
       Pigs = distinct float
+    proc `==`(a, b: Goats): bool {.borrow.}
+    proc `==`(a, b: Pigs): bool {.borrow.}
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -107,8 +109,8 @@ suite "tasteful tests":
       inc r
       noop()
       check "declared variables":
-        i == 4
-        k == 7.0
+        i == 4.Goats
+        k == Pigs 7.0
     trampoline foo()
     check r == 2
 
