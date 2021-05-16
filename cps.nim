@@ -813,6 +813,8 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # add parameters into the environment
   for defs in n.params[1 .. ^1]:
+    if defs[1].kind == nnkVarTy: 
+      error "cps does not support var parameters", n 
     for _, _ in env.localSection(defs):
       discard
 
