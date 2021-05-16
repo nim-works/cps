@@ -29,187 +29,73 @@ type
     n: int
 
 proc `=destroy`(k: var Killer) =
-  if k.x == k.n:
-    system.`=destroy`(k)
-  else:
-    raise Defect.newException:
+  if k.x != k.n:
+    fail:
       case k.n
-      of 0: "destroy on uninitialized"
-      of 1: "destroy on unused"
-      else: "destroy on overused"
+      of 0: "uninitialized"
+      of 1: "unused"
+      else: "misused; " & $(k.n - 1) & " uses, expected " & $(k.x - 1)
 
-proc newKiller(x = 2): Killer =
-  Killer(n: 1, x: x)
+proc newKiller(x = 1): Killer =
+  Killer(n: 1, x: x + 1)
 
 suite "breaking deterministic memory managers":
   block:
     ## try-except-statement splits
     proc foo() {.cps: Cont.} =
-      var k = newKiller()
+      var k = newKiller(2)
+      inc k.n
       try:
         noop()
         inc k.n
       except:
-        fail"just no"
+        fail "this branch should not run"
 
     trampoline foo()
-
-when false:
-  var r: int
 
   block:
     ## try-except splits with raise
-    r = 0
     proc foo() {.cps: Cont.} =
-      inc r
+      var k = newKiller(4)
+      inc k.n
       try:
         noop()
-        inc r
+        inc k.n
         raise newException(CatchableError, "")
         fail "statement run after raise"
       except:
-        inc r
-      inc r
+        inc k.n
+      inc k.n
 
     trampoline foo()
-    check r == 4
 
   block:
     ## try-finally-statement splits
-    r = 0
     proc foo() {.cps: Cont.} =
-      inc r
+      var k = newKiller(3)
+      inc k.n
       try:
         noop()
-        inc r
+        inc k.n
       finally:
-        inc r
+        inc k.n
 
     trampoline foo()
-    check r == 3
 
   block:
     ## try-except-finally splits with raise
-    r = 0
     proc foo() {.cps: Cont.} =
-      inc r
+      var k = newKiller(5)
+      inc k.n
       try:
         noop()
-        inc r
+        inc k.n
         raise newException(CatchableError, "")
         fail "statement run after raise"
       except:
-        inc r
+        inc k.n
       finally:
-        inc r
-      inc r
+        inc k.n
+      inc k.n
 
     trampoline foo()
-    check r == 5
-
-  block:
-    ## block control flow after split
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      block:
-        inc r
-        noop()
-        inc r
-      inc r
-
-    trampoline foo()
-    check r == 4
-
-  block:
-    ## if control flow after split
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      if true:
-        inc r
-        noop()
-        inc r
-      inc r
-
-    trampoline foo()
-    check r == 4
-
-  block:
-    ## defer before split
-    r = 0
-    proc foo() {.cps: Cont.} =
-      defer:
-        check r == 2, "defer run before end of scope"
-        inc r
-
-      inc r
-      noop()
-      inc r
-
-    trampoline foo()
-    check r == 3
-
-  block:
-    ## basic defer rewrite
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      defer:
-        check r == 4
-        inc r
-      inc r
-      defer:
-        check r == 3
-        inc r
-      inc r
-
-    trampoline foo()
-    check r == 5
-
-  block:
-    ## defer in nested stmtlist rewrite
-    r = 0
-
-    template deferChk(i: int) =
-      inc r
-      defer:
-        check r == i
-        inc r
-
-    proc foo() {.cps: Cont.} =
-      deferChk(5)
-      inc r
-      deferChk(4)
-      inc r
-
-    trampoline foo()
-    check r == 6
-
-  block:
-    ## defer in block rewrite
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      block:
-        defer:
-          check r == 2
-          inc r
-        inc r
-      defer:
-        check r == 4
-        inc r
-      inc r
-
-    trampoline foo()
-    check r == 5
-
-  block:
-    ## there is only defer rewrite
-    r = 0
-    proc foo() {.cps: Cont.} =
-      defer:
-        inc r
-
-    trampoline foo()
-    check r == 1
