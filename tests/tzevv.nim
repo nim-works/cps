@@ -268,9 +268,9 @@ suite "suite, suite zevv":
 
   test "Running -> Lampable -> Done":
 
-    proc isRunning(c: C): bool = c != nil and c.fn != nil
-    proc isLampable(c: C): bool = c == nil
-    proc isDone(c: C): bool = c != nil and c.fn == nil
+    proc running(c: C): bool = c != nil and c.fn != nil
+    proc dismissed(c: C): bool = c == nil
+    proc done(c: C): bool = c != nil and c.fn == nil
     
     var save: C
 
@@ -286,19 +286,19 @@ suite "suite, suite zevv":
 
     var c = count()
     c = c.fn(c) # boot
-    check c.isRunning() == true
+    check c.state == Running
     c = c.fn(c) # first jield
-    check c.isLampable() == true
+    check c.state == Dismissed
     c = save
-    check c.isRunning() == true
+    check c.state == Running
     c = c.fn(c) # echo
-    check c.isRunning() == true
+    check c.state == Running
     c = c.fn(c) # second jield
-    check c.isLampable() == true
+    check c.state == Dismissed
     c = save
-    check c.isRunning() == true
+    check c.state == Running
     c = c.fn(c) # echo
-    check c.isRunning() == true
+    check c.state == Running
     c = c.fn(c) # done
-    check c.isDone() == true
+    check c.state == Finished
 
