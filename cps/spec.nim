@@ -324,13 +324,22 @@ proc normalizingRewrites*(n: NimNode): NimNode =
         for child in n.items:
           case child.kind
           of nnkVarTuple:
-            # a new section with a single rewritten identdefs within
-            # for each symbol in the VarTuple statement
-            for i, value in child.last.pairs:
+            # we used to rewrite these, but the rewrite is only safe for
+            # very trivial deconstructions.  now we rewrite the symbols
+            # into the env during the saften pass as necessary.
+            when false:
+              # a new section with a single rewritten identdefs within
+              # for each symbol in the VarTuple statement
+              for i, value in child.last.pairs:
+                result.add:
+                  newNimNode(n.kind, n).add:
+                    rewriteIdentDefs:  # for consistency
+                      newIdentDefs(child[i], getTypeInst value, value)
+            else:
+              # a new section with a single VarTuple statement
               result.add:
                 newNimNode(n.kind, n).add:
-                  rewriteIdentDefs:  # for consistency
-                    newIdentDefs(child[i], getType(value), value)
+                  child
           of nnkIdentDefs:
             # a new section with a single rewritten identdefs within
             result.add:
