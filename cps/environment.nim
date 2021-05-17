@@ -442,6 +442,15 @@ iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
       echo $kind, "\t", repr(defs)
     yield e.initialization(kind, field, value)
 
+proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
+  ## get a field from the env using a local symbol as input
+  for field, sym in e.locals.pairs:
+    if sym == n:
+      result = field
+      break
+  if result.isNil:
+    result = n.errorAst "unable to find field for symbol " & n.repr
+
 proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode =
   case n.kind
   of nnkVarSection, nnkLetSection:
@@ -455,7 +464,7 @@ proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode =
     elif n.len != 3:
       n.errorAst "only one identifier per assignment is supported"
     else:
-      e.locals[n[0]]
+      e.getFieldViaLocal n
   of nnkVarTuple:
     n.errorAst "tuples not supported yet"
   else:
