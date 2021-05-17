@@ -459,10 +459,10 @@ proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode =
     else:
       e.findJustOneAssignmentName n[0]
   of nnkIdentDefs:
-    if n[0].kind notin {nnkIdent, nnkSym}:
-      n.errorAst "bad rewrite presented bogus input"
-    elif n.len != 3:
+    if n.len != 3:
       n.errorAst "only one identifier per assignment is supported"
+    elif n[0].kind notin {nnkIdent, nnkSym}:
+      n.errorAst "bad rewrite presented bogus input"
     else:
       e.getFieldViaLocal n
   of nnkVarTuple:
