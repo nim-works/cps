@@ -541,7 +541,12 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
       # this is `return` or `return continuation`, so that's fine...
       result = n
     else:
-      result = n.errorAst "malformed return"
+      result = newStmtList(
+        newAssignment(newDotExpr(e.castToChild(e.first), e.rs), n[0]),
+        nnkReturnStmt.newNimNode(n).add newEmptyNode()
+      )
+      echo e.repr
+      echo result.repr
 
 proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   ## swap symbols for those in the continuation

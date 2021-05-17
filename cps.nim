@@ -795,8 +795,6 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
 
   # Some sanity checks
   n.expectKind nnkProcdef
-  if not n.params[0].isEmpty:
-    error "cps functions can not have a return type", n
 
   # enhanced spam before it all goes to shit
   debug(".cps.", n, Original)
