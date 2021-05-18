@@ -220,7 +220,7 @@ func doc*(s: string): NimNode =
   else:
     newEmptyNode()
 
-proc doc*(n: var NimNode; s: string) =
+proc doc*(n: NimNode; s: string) =
   ## add a doc statement to the ast for debugging
   when comments:
     if n.kind == nnkStmtList:
