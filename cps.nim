@@ -1,15 +1,10 @@
-import std/macros
-import std/sequtils
-import std/algorithm
+import std/[macros, sequtils, algorithm]
 
-import cps/spec
-import cps/scopes
-import cps/environment
+import cps/[spec, scopes, environment]
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug, cpsTrace
 
 type
-
   State* {.pure.} = enum
     ## Representation of the state of a continuation.
     Running    ## The continuation is active and running and can be resumed
