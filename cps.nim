@@ -17,7 +17,7 @@ const
   # if statements are not "returners"; it's elif branches we care about
   returner = {nnkBlockStmt, nnkOfBranch, nnkElifBranch, nnkElse}
 
-when defined(yourdaywillcomelittleonecommayourdaywillcomedotdotdot):
+when defined(yourdaywillcomecommalittleonecommayourdaywillcomedotdotdot):
   const
     cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
 
