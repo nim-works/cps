@@ -692,9 +692,12 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         let jumpCall = newCall(bindSym"cpsWhile")
         jumpCall.copyLineInfo nc
         jumpCall.add env.first
-        for child in nc:
-          jumpCall.add:
-            env.saften child
+        # add condition
+        jumpCall.add:
+          env.saften nc[0]
+        # add body
+        jumpCall.add:
+          env.saften newStmtList(nc[1])
         result.add jumpCall
         return
       else:
