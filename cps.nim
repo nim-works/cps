@@ -882,17 +882,15 @@ macro cps*(T: typed, n: typed): untyped =
     result = workaroundRewrites(result)
 
 macro cpsMagic*(n: untyped): untyped =
-  ## upgrade cps primitives to generate errors out of context
-  ## and take continuations as input inside {.cps.} blocks
+  ## Upgrades a procedure to serve as a CPS primitive, generating
+  ## errors out of `.cps.` context and taking continuations as input.
   expectKind(n, nnkProcDef)
 
   # Add .cpsCall. pragma to the proc
   n.addPragma ident"cpsCall"
 
   # create a Nim-land version of the proc that throws an exception when called
-  # from outside of CPS-land. XXX We also need this to keep the nim compiler
-  # happy, otherwise we get a type mismatch on call. Do we need a special name
-  # for this type of proc?
+  # from outside of CPS-land.
   var m = copyNimTree n
   m.params[0] = newEmptyNode()
   del(m.params, 1)
@@ -909,3 +907,14 @@ macro cpsMagic*(n: untyped): untyped =
     result.add n
   result.add m
 
+template running*(c: Continuation): bool =
+  ## `true` if the continuation is running.
+  c.state == Running
+
+template finished*(c: Continuation): bool =
+  ## `true` if the continuation is finished.
+  c.state == Finished
+
+template dismissed*(c: Continuation): bool =
+  ## `true` if the continuation was dimissed.
+  c.state == Dismissed
