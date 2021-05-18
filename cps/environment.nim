@@ -36,10 +36,7 @@ type
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
-    ex: NimNode                     # the sym we use for stored exception
     rs: NimNode                     # the sym we use for "yielded" result
-
-func insideCps*(e: Env): bool = len(e.gotos) > 0 or len(e.breaks) > 0
 
 template searchScope(env: Env; x: untyped;
                      p: proc(ns: Scopes): Scope): Scope =
@@ -52,9 +49,6 @@ template searchScope(env: Env; x: untyped;
     else:
       break
   r
-
-proc lastGotoLoop*(e: Env): Scope = searchScope(e, gotos, last)
-proc lastBreakLoop*(e: Env): Scope = searchScope(e, breaks, last)
 
 proc nextGoto*(e: Env): Scope = searchScope(e, gotos, next)
 proc nextBreak*(e: Env): Scope = searchScope(e, breaks, next)
@@ -70,46 +64,9 @@ proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
   ## while loop
   e.gotos.add(k, n)
 
-proc addBreak*(e: var Env; scope: Scope) =
-  ## it's nice when we can do this simply
-  e.breaks.add scope
-
-proc popGoto*(e: var Env): NimNode =
-  ## pop a goto proc off the stack; return its node
-  pop(e.gotos).node
-
-proc popBreak*(e: var Env): NimNode =
-  ## same thing, but for breaks
-  pop(e.breaks).node
-
-proc insideFor*(e: Env): bool =
-  ## does what it says on the tin, and does it well, i might add
-  lastBreakLoop(e).kind == nnkForStmt
-
 proc insideWhile*(e: Env): bool =
   ## actually, this is the better one.
-  lastBreakLoop(e).kind == nnkWhileStmt
-
-proc topOfWhile*(e: Env): Scope =
-  ## fetch the goto target in order to `continue` inside `while:`
-  assert e.insideWhile, "i thought i was in a while loop"
-  result = lastGotoLoop(e)
-  assert result.kind == nnkWhileStmt, "goto doesn't match break"
-
-proc namedBreak*(e: Env; n: NimNode): Scope =
-  ## fetch the goto target in order to `break foo`
-  assert n.kind == nnkBreakStmt
-  if len(n) == 0:
-    result = e.nextBreak
-  else:
-    proc match(ns: Scopes): Scope =
-      ## find the loop matching the requested named break
-      result = newScope()
-      for i in countDown(ns.high, ns.low):
-        if ns[i].kind in {nnkBlockStmt} and eqIdent(ns[i].label, n[0]):
-          result = ns[i]
-          break
-    result = searchScope(e, breaks, match)
+  searchScope(e, breaks, last).kind == nnkWhileStmt
 
 proc len*(e: Env): int =
   if not e.isNil:
@@ -140,13 +97,7 @@ proc isWritten(e: Env): bool =
 
 proc isDirty*(e: Env): bool =
   ## the type hasn't been written since an add occurred
-  when false:
-    assert not e.isNil
-    result = if e.parent.isNil: len(e) > 0 else: e.id != e.parent.id
-    # a dirty parent yields a dirty child
-    result = result or (not e.parent.isNil and e.parent.isDirty)
-  else:
-    result = not(e.isWritten) or (not(e.parent.isNil) and e.parent.isDirty)
+  not(e.isWritten) or (not(e.parent.isNil) and e.parent.isDirty)
 
 proc root*(e: Env): NimNode =
   var r = e
@@ -192,8 +143,6 @@ proc init(e: var Env) =
   e.seen = initHashSet[string]()
   if e.fn.isNil:
     e.fn = ident"fn"
-  if e.ex.isNil:
-    e.ex = genField("ex")
   if e.rs.isNil:
     e.rs = genField("result")
   e.id = genSym(nskType, "env")
@@ -290,7 +239,6 @@ proc newEnv*(parent: var Env; copy = off): Env =
                  seen: parent.seen,
                  locals: initOrderedTable[NimNode, NimNode](),
                  c: parent.c,
-                 ex: parent.ex,
                  rs: parent.rs,
                  fn: parent.fn,
                  gotos: parent.gotos,
@@ -386,13 +334,6 @@ proc identity*(e: var Env): NimNode =
   assert not e.id.isNil
   assert not e.id.isEmpty
   result = e.id
-
-proc rootTemplate*(e: Env): NimNode =
-  ## the template used to rename `result` in .cps. procs
-  result = nnkTemplateDef.newTree(e.first, newEmptyNode(),
-                                  newEmptyNode(), newEmptyNode(),
-                                  newEmptyNode(), newEmptyNode(),
-                                  ident"result")
 
 proc initialization(e: Env; kind: NimNodeKind;
                     field: NimNode; value: NimNode): NimNode =
@@ -499,7 +440,7 @@ proc newContinuation*(e: Env; via: NimNode;
   for field, section in pairs(e):
     # omit special fields in the env that we use for holding
     # custom functions, results, and exceptions, respectively
-    if field notin [e.fn, e.rs, e.ex]:
+    if field notin [e.fn, e.rs]:
       let defs = section.last
       if defaults:
         # initialize the field with any default supplied in its declaration

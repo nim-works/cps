@@ -84,12 +84,8 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
   assert not n.isCpsCall
   var ret = nnkReturnStmt.newNimNode(n)
   if n.kind == nnkNilLit:
-    # we don't want to "fall back" to goto here
-    if false and insideCps(e):
-      result = tailCall(e, returnTo(e.nextGoto))
-    else:
-      ret.add n
-      result = ret
+    ret.add n
+    result = ret
   else:
     # return a statement list including the setup for the locals
     # and the return statement casting those locals to the root type
@@ -241,15 +237,15 @@ proc saften(parent: var Env; n: NimNode): NimNode
 
 proc procScope(env: var Env; parent: NimNode;
               body: NimNode, name = "scope"): Scope =
-    var body = env.prepProcBody(body)
-    # ensure the proc body is rewritten
-    body = env.saften(body)
-    # generate a new name for this proc
-    var procName = genSym(nskProc, name)
-    # we'll return a scope holding the tail call to the proc
-    result = newScope(parent, procName, env.makeTail(procName, body))
-    result.goto = env.nextGoto
-    result.brake = env.nextBreak
+  var body = env.prepProcBody(body)
+  # ensure the proc body is rewritten
+  body = env.saften(body)
+  # generate a new name for this proc
+  var procName = genSym(nskProc, name)
+  # we'll return a scope holding the tail call to the proc
+  result = newScope(parent, procName, env.makeTail(procName, body))
+  result.goto = env.nextGoto
+  result.brake = env.nextBreak
 
 proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
   ## split a statement list to create a tail call given
