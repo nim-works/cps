@@ -13,9 +13,6 @@ type
 
 const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes
-  unexiter = {nnkWhileStmt, nnkBreakStmt, nnkContinueStmt}
-  # if statements are not "returners"; it's elif branches we care about
-  returner = {nnkBlockStmt, nnkOfBranch, nnkElifBranch, nnkElse}
 
 when defined(yourdaywillcomecommalittleonecommayourdaywillcomedotdotdot):
   const

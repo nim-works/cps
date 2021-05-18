@@ -327,19 +327,11 @@ proc normalizingRewrites*(n: NimNode): NimNode =
             # we used to rewrite these, but the rewrite is only safe for
             # very trivial deconstructions.  now we rewrite the symbols
             # into the env during the saften pass as necessary.
-            when false:
-              # a new section with a single rewritten identdefs within
-              # for each symbol in the VarTuple statement
-              for i, value in child.last.pairs:
-                result.add:
-                  newNimNode(n.kind, n).add:
-                    rewriteIdentDefs:  # for consistency
-                      newIdentDefs(child[i], getTypeInst value, value)
-            else:
-              # a new section with a single VarTuple statement
-              result.add:
-                newNimNode(n.kind, n).add:
-                  child
+            #
+            # a new section with a single VarTuple statement
+            result.add:
+              newNimNode(n.kind, n).add:
+                child
           of nnkIdentDefs:
             # a new section with a single rewritten identdefs within
             result.add:
@@ -387,7 +379,9 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       of nnkReturnStmt:
         if n[0].kind == nnkAsgn:
           result = copyNimNode(n)
-          doAssert repr(n[0][0]) == "result", "unexpected AST"
+          if repr(n[0][0]) != "result":
+            result.add:
+              n.errorAst "unexpected return assignment form"
           result.add:
             normalizingRewrites n[0][1]
         else:

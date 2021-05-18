@@ -362,7 +362,7 @@ iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
     else:
       letOrVar(defs)
   for field, value in e.addIdentDef(section, defs):
-    let name = definedName(value)
+    #let name = definedName(value)
     when cpsDebug:
       echo $kind, "\t", repr(defs)
     yield e.initialization(kind, field, value)
