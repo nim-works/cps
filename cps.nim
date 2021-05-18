@@ -556,14 +556,35 @@ macro cpsTry(cont, n: typed): untyped =
 
   for idx in 1 ..< n.len:
     if n[idx].kind == nnkFinally:
+      # build
+      # finally:
+      # if not ok:
+      #   <finally body>
       let wrappedFinal = copyNimNode n[idx]
       wrappedFinal.add newIfStmt((newCall(bindSym"not", okSym), n[idx][0]))
+      # access to the continuation in the finally body has to be
+      # desym-ed since the template is wrapping different scopes
       tryWrapper.add wrappedFinal.resym(cont, desym cont)
     else:
       if n[idx][0].kind == nnkInfix:
+        # this is a `Exception as e` node.
+        # we desym `e` so that it is turned into a gensym in the template
         n[idx] = n[idx].resym(n[idx][0].last, desym n[idx][0].last)
+      # access to the continuation in the except body has to be
+      # desym-ed since the template is wrapping different scopes
       tryWrapper.add n[idx].resym(cont, desym cont)
 
+  # put the try wrapper together:
+  #
+  # try:
+  #   <body>
+  # <except and finally branches>
+  #
+  # {.cpsPending.}
+  #
+  # the idea is that any issue in `body` that is handled to an
+  # except branch will naturally cause finally to be triggered
+  # and flow into {.cpsPending.}
   handlerWrapperBody.add tryWrapper
   handlerWrapperBody.add newCpsPending()
 
@@ -575,6 +596,8 @@ macro cpsTry(cont, n: typed): untyped =
 
   proc wrapCont(n: NimNode): NimNode =
     ## Wrap continuation proc body with the tryWrapper
+    ##
+    ## We also declare the `var ok = false` too
     case n.kind
     of nnkProcDef:
       if n.hasPragma("cpsContinuation"):
@@ -595,6 +618,7 @@ macro cpsTry(cont, n: typed): untyped =
       if not n.hasPragma("cpsContinuation"):
         result = n
     of nnkReturnStmt:
+      # TODO: detect early end-of-continuation
       result = newStmtList()
       result.add newAssignment(okSym, newLit true)
       result.add n
