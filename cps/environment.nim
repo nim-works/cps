@@ -4,17 +4,9 @@ The Env(ironment) tracks continuation types and the variables of which
 they are comprised.
 
 ]##
-import std/sets
-import std/sequtils
-import std/hashes
-import std/tables
-import std/macros
-import std/algorithm
 
-{.experimental: "dynamicBindSym".}
-
-import cps/spec
-import cps/scopes
+import std/[sets, sequtils ,hashes, tables, macros, algorithm]
+import cps/[spec, scopes]
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery

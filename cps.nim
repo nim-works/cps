@@ -1,5 +1,4 @@
 import std/[macros, sequtils, algorithm]
-
 import cps/[spec, scopes, environment]
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug, cpsTrace

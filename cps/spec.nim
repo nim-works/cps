@@ -3,9 +3,8 @@
 boring utilities likely useful to multiple pieces of cps machinery
 
 ]##
-import std/hashes
-import std/sequtils
-import std/macros
+
+import std/[hashes, sequtils, macros]
 
 when (NimMajor, NimMinor) < (1, 3):
   {.fatal: "requires nim-1.3".}

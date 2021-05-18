@@ -4,9 +4,8 @@
   continues, returns, flow-through, that sort of thing.
 
 ]##
-import std/strutils
-import std/macros
 
+import std/[strutils, macros]
 import cps/spec
 
 const
