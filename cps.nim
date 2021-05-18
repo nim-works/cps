@@ -252,20 +252,6 @@ proc callTail(env: var Env; scope: Scope): NimNode =
     result = env.callTail newScope(newStmtList(n))
     warning "another weirdo"
 
-proc optimizeSimpleReturn(env: var Env; into: var NimNode; n: NimNode) =
-  ## experimental optimization
-  var simple: NimNode
-  if asSimpleReturnCall(n.last.last, simple):
-    into.doc "possibly unsafe optimization: " & n.repr
-    env.optimizeSimpleReturn(into, simple)
-  else:
-    into.doc "add an unoptimized tail call"
-    let call = env.callTail newScope(n)
-    if call.isReturnCall:
-      into.addReturn call
-    else:
-      into.add call
-
 proc saften(parent: var Env; n: NimNode): NimNode
 
 proc procScope(env: var Env; parent: NimNode;
