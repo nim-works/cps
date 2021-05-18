@@ -1051,3 +1051,21 @@ suite "tasteful tests":
 
       trampoline foo()
       check r == 4
+
+  block:
+    ## while loop with only one cpsCall
+    proc jield(c: Cont): Cont {.cpsMagic.} =
+      discard
+
+    r = 0
+    proc count() {.cps: Cont.} =
+      inc r
+      var i = 0
+
+      while i < 2:
+        jield()
+
+      fail "this statement should not run"
+
+    trampoline count()
+    check r == 1
