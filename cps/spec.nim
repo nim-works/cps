@@ -6,6 +6,7 @@ boring utilities likely useful to multiple pieces of cps machinery
 import std/hashes
 import std/sequtils
 import std/macros
+import std/locks
 
 when (NimMajor, NimMinor) < (1, 3):
   {.fatal: "requires nim-1.3".}
@@ -27,6 +28,7 @@ type
 
   Continuation* = concept c
     c.fn is ContinuationProc[Continuation]
+    c.lock is Lock
     c is ref object
     c of RootObj
 
