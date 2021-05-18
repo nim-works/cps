@@ -301,22 +301,6 @@ proc newEnv*(parent: var Env; copy = off): Env =
   else:
     result = parent
 
-when defined(whenyouwishuponastarmakesnodifferencewhoyouare):
-  proc makeFnType(e: Env): NimNode =
-    # ensure that the continuation type is not nillable
-    var continuation = e.firstDef
-    continuation[^1] = newEmptyNode()
-    result = newTree(nnkProcTy,
-                     newTree(nnkFormalParams,
-                             e.via, continuation), newEmptyNode())
-
-  proc makeFnGetter(e: Env): NimNode =
-    result = newProc(ident"fn",
-                     params = [e.makeFnType, newIdentDefs(ident"c",
-                                                          e.identity)],
-                     pragmas = nnkPragma.newTree bindSym"cpsLift",
-                     body = newDotExpr(ident"c", e.fn))
-
 proc storeType*(e: var Env; force = off): Env =
   ## turn an env into a complete typedef in a type section
   assert not e.isNil

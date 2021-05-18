@@ -12,14 +12,9 @@ type
 
   State* {.pure.} = enum
     ## Representation of the state of a continuation.
-    Running,   ## The continuation is active and running and can be resumed
-    Dismissed, ## The continuation is currently somewhere else
-    Finished,  ## The continuation is finished and can no longer be resumed
-
-template installLocal(id, env, field) =
-  template id(): untyped = (env(continuation).field)
-
-when not defined(nimdoc): export installLocal # omit from docs
+    Running    ## The continuation is active and running and can be resumed
+    Dismissed  ## The continuation is currently somewhere else
+    Finished   ## The continuation is finished and can no longer be resumed
 
 const
   callish = {nnkCall, nnkCommand}           ## all cps call nodes
@@ -118,13 +113,6 @@ func isReturnCall(n: NimNode): bool =
     result = n.firstReturn.isReturnCall
   else:
     discard
-
-proc asSimpleReturnCall(n: NimNode; r: var NimNode): bool =
-  ## fill `r` with `return foo()` if that is a safe simplification
-  var n = n.firstReturn
-  result = not n.isNil
-  if result:
-    r = n
 
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -238,9 +226,6 @@ proc callTail(env: var Env; scope: Scope): NimNode =
       result = nnkReturnStmt.newNimNode(n).add:
         # no code to run means we just `return Cont()`
         newCall env.root
-    # FIXME: removed because it broke endWhile
-    #elif asSimpleReturnCall(n, result):
-    #  discard "the call was stuffed into result"
     elif not n.firstReturn.isNil:
       # just copy the call
       result = newStmtList([doc"verbatim tail call", n])
