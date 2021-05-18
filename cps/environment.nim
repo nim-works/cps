@@ -433,52 +433,31 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
     e.store.add:
       n.errorAst "localSection input"
 
-proc newContinuation*(e: Env; via: NimNode;
-                      goto: NimNode; defaults = false): NimNode =
+proc newContinuation*(e: Env; goto: NimNode = nil): NimNode =
   ## else, perform the following alloc...
-  result = nnkObjConstr.newTree(e.identity, newColonExpr(e.fn, goto))
-  for field, section in pairs(e):
+  result = nnkObjConstr.newTree e.identity
+  for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, and exceptions, respectively
     if field notin [e.fn, e.rs]:
-      let defs = section.last
-      if defaults:
-        # initialize the field with any default supplied in its declaration
-        if not defs.last.isEmpty:
-          # only initialize a field that has a default
-          # FIXME: this needs to only add requiresInit stuff
-          result.add newColonExpr(field, defs.last)
-      else:
-        # the name from identdefs is not gensym'd (usually!)
-        let name = defs[0]
+      # the name from identdefs is not gensym'd (usually!)
+      result.add newColonExpr(field, section.last[0])
+  if not goto.isNil:
+    result.add newColonExpr(e.fn, goto)
 
-        # specify the gensym'd field name and the local name
-        assert name.kind == nnkSym, "expecting a symbol for " & repr(name)
-        result.add newColonExpr(field, name)
-
-proc defineLocals*(e: var Env; into: var NimNode; goto: NimNode): NimNode =
-  # we store the type whenever we define locals, because the next code that
-  # executes may need to cut a new type.  to put this another way, a later
-  # scope may add a name that clashes with a scope ancestor of ours that is
-  # only a peer of the later scope...
-
-  # setup the continuation for a tail call to a possibly new environment;
-  # this ctor variable is used in the bottom leg of the `when` below...
-  var ctor = e.newContinuation(e.identity, goto)
-
+proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
+  ## returns the appropriate target of a `return` statement in a CPS
+  ## procedure that may (and may not) have a continuation instantiated yet.
   if e.first.isNil or e.first.isEmpty:
-    # we don't have a local continuation; just use the ctor we built
-    result = e.maybeConvertToRoot(ctor)
+    result = e.maybeConvertToRoot:
+      e.newContinuation goto
   else:
-    # when we can reuse the continuation, we'll merely set the fn pointer
-    assert into.kind == nnkStmtList
-    into.doc "re-use the local continuation by setting the fn"
-    into.add newAssignment(newDotExpr(e.first, e.fn), goto)
-    result = e.first
+    result = newStmtList()
+    result.add newAssignment(newDotExpr(e.first, e.fn), goto)
+    result.add e.first
 
   # record the last-rendered scope for use in trace composition
   e.camefrom = newScope(result, goto, result)
-
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.

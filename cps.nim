@@ -18,6 +18,11 @@ when defined(yourdaywillcomecommalittleonecommayourdaywillcomedotdotdot):
   const
     cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
 
+template coop() {.used.} =
+  ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
+  ## a cooperative yield at appropriate continuation exit points.
+  discard
+
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   assert not n.isNil
@@ -60,31 +65,24 @@ template addReturn(e: var Env; p: NimNode; n: untyped) =
   ## this means performing an appropriate rewriteReturn
   addReturn(p, e.rewriteReturn n)
 
-proc tailCall(e: var Env; p: NimNode; n: NimNode): NimNode =
+proc tailCall(e: var Env; p: NimNode; goto: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
   assert p.isCpsCall, "does not appear to be a cps call"
   result = newStmtList()
-  # goto supplied identifier, not nextGoto!
-  let locals = e.defineLocals(result, n)
-  p[0] = desym(p[0])              # de-sym the proc target
-  p.insert(1, locals)
-  result.addReturn p
+  p.insert(1, e.continuationReturnValue goto)
+  addReturn result: p
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
   assert not n.isCpsCall
-  var ret = nnkReturnStmt.newNimNode(n)
-  if n.kind == nnkNilLit:
-    ret.add n
-    result = ret
-  else:
-    # return a statement list including the setup for the locals
-    # and the return statement casting those locals to the root type
-    result = newStmtList()
-    let locals = e.defineLocals(result, n)
-    ret.add locals
-    result.add ret
+  result = newStmtList()
+  addReturn result:
+    nnkReturnStmt.newNimNode(n).add:
+      if n.kind == nnkNilLit:
+        n                                   # return nil
+      else:
+        e.continuationReturnValue n         # return continuation
 
 func isReturnCall(n: NimNode): bool =
   ## true if the node looks like a tail call
@@ -779,8 +777,9 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   ## Generate the bootstrap
   var booty = cloneProc(n, newStmtList())
   booty.params[0] = T
-  booty.body.add doc "This is the bootstrap to go from Nim-land to CPS-land"
-  booty.body.add newAssignment(ident"result", env.newContinuation(env.first, booty.name))
+  booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
+  booty.body.add:
+    newAssignment(ident"result", env.newContinuation booty.name)
 
   # we can't mutate typed nodes, so copy ourselves
   n = cloneProc n
