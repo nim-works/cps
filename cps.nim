@@ -86,18 +86,17 @@ proc tailCall(e: var Env; n: NimNode): NimNode =
 func isReturnCall(n: NimNode): bool =
   ## true if the node looks like a tail call
   if n.isNil:
-    return false
-  case n.kind
-  # simple `return foo()`
-  of nnkReturnStmt:
-    if n.len > 0:
-      if n[0].kind == nnkCall:
-        result = true
-  # `return foo(); proc foo() = ...`
-  of nnkStmtList:
-    result = n.firstReturn.isReturnCall
+    false
   else:
-    discard
+    case n.kind
+    # simple `return foo()`
+    of nnkReturnStmt:
+      n.len > 0 and n[0].kind == nnkCall
+    # `return foo(); proc foo() = ...`
+    of nnkStmtList:
+      n.firstReturn.isReturnCall
+    else:
+      false
 
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -155,8 +154,7 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   let pragmas = nnkPragma.newTree bindSym"cpsLift"
   result = newStmtList()
   result.doc "new tail call: " & name.repr
-  result.add:
-    tailCall(env, name)
+  result.add tailCall(env, name)
 
   var procs = newStmtList()
   if n.kind == nnkProcDef:
@@ -240,18 +238,16 @@ proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
   ## split a statement list to create a tail call given
   ## a label prefix and an index at which to split
 
-  block:
-    # if a tail remains after this crap
-    if i < n.len-1:
-      # select the remaining lines
-      var body = newStmtList(n[i+1 ..< n.len])
-      if stripComments(body).len > 0:
-        # they aren't merely comments, so put them into a proc
-        result = procScope(env, n[i], body, name)
-        break
-    # there's nothing left to do in this scope; we're
-    # going to just return the next goto (this might be empty)
-    result = env.nextGoto
+  # if a tail remains after this crap
+  if i < n.len-1:
+    # select the remaining lines
+    var body = newStmtList(n[i+1 ..< n.len])
+    if stripComments(body).len > 0:
+      # they aren't merely comments, so put them into a proc
+      return procScope(env, n[i], body, name)
+  # there's nothing left to do in this scope; we're
+  # going to just return the next goto (this might be empty)
+  result = env.nextGoto
 
 proc makeContProc(name, cont, body: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation `cont`
@@ -695,13 +691,10 @@ proc replacePending(n, replacement: NimNode): NimNode =
 proc danglingCheck(n: NimNode): NimNode =
   ## look for un-rewritten control-flow then replace them with errors
   proc dangle(n: NimNode): NimNode =
-    case n.kind
-    of nnkPragma:
-      result = n
-      if n.len == 1:
-        if n.hasPragma("cpsContinue") or n.hasPragma("cpsBreak") or n.hasPragma("cpsPending"):
-          result = errorAst(n, "cps error: un-rewritten cps control-flow")
-    else: discard
+    if n.kind == nnkPragma and n.len == 1 and
+      (n.hasPragma("cpsContinue") or n.hasPragma("cpsBreak") or n.hasPragma("cpsPending")):
+      errorAst(n, "cps error: un-rewritten cps control-flow")
+    else: n
 
   filter(n, dangle)
 
