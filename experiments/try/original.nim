@@ -1,4 +1,4 @@
-proc noop() = discard
+proc noop() = echo "noop"
 
 var r = 0
 proc foo() =

@@ -8,7 +8,9 @@ type
     x2: ref CatchableError
   CpsException = CatchableError
 
-proc noop(c: C): C = c
+proc noop(c: C): C =
+  echo "noop"
+  c
 
 proc f2(c: C): C =
   ## finally from the "toplevel" try
@@ -35,6 +37,40 @@ proc f2(c: C): C =
     raise
   return c
 
+proc b2(c: C): C =
+  # we look for non-nil exceptions
+  if not c.x1.isNil:
+    # it's code that's inside a try
+    setCurrentException c.x1 # added boilerplate
+  elif not c.e.isNil:
+    # finally when exception was thrown
+    setCurrentException c.e # added boilerplate
+
+  # it's in a try so we need to catch it
+  try:
+    inc r
+    doAssert getCurrentExceptionMsg() == "something"
+
+    if getCurrentException().isNil:
+
+      # proceed into the toplevel try body
+      doAssert false, "this should not run"
+
+    # go to toplevel finally
+    c.fn = f2
+
+  except CpsException as x2:
+    # we catch exceptions here for (at least) two reasons:
+    # - we know we may have a finally to execute,
+    # - we need to set the exception correctly,
+    c.x2 = (ref CatchableError)(x2)
+    # go to toplevel finally
+    c.fn = f2
+
+  if c.fn.isNil and not getCurrentException().isNil:
+    raise
+  return c
+
 proc f1(c: C): C =
   ## finally from the "middle" try
 
@@ -48,14 +84,9 @@ proc f1(c: C): C =
 
   # it's in a try so we need to catch it
   try:
-    # finally body
-    inc r
-    doAssert getCurrentExceptionMsg() == "something"
-
-    if getCurrentException().isNil:
-
-      # proceed into the toplevel try body
-      doAssert false, "this should not run"
+    # finally body starts with a noop, so ...
+    c.fn = b2
+    return noop c
 
   except CpsException as x2:
     # we catch exceptions here for (at least) two reasons:
@@ -63,29 +94,12 @@ proc f1(c: C): C =
     # - we need to set the exception correctly,
     c.x2 = (ref CatchableError)(x2)
 
-  finally:
     # go to toplevel finally
     c.fn = f2
 
   if c.fn.isNil and not getCurrentException().isNil:
     raise
   return c
-
-proc b2(c: C): C =
-  # after the deepest try
-  try:
-
-    raise newException(ValueError, "something")
-
-  except CpsException as x1:
-    # we catch exceptions here for (at least) two reasons:
-    # - we know we may have a finally to execute,
-    # - we need to set the exception correctly,
-    c.x1 = (ref CatchableError)(x1)
-
-  finally:
-    c.fn = f1
-    return c
 
 proc b(c: C): C =
   ## inner-most try body successful; this is the code
@@ -99,20 +113,25 @@ proc b(c: C): C =
     # user code for body after the try
     raise newException(ValueError, "something")
 
+    # we will definitely travel to the "middle" finally now
+    c.fn = f1
+
   except CpsException as x1:
     # we catch exceptions here for (at least) two reasons:
     # - we know we may have a finally to execute,
     # - we need to set the exception correctly,
     c.x1 = (ref CatchableError)(x1)
-
-  finally:
     # we will definitely travel to the "middle" finally now
     c.fn = f1
-    return noop c
+
+  if c.fn.isNil and not getCurrentException().isNil:
+    raise
+  return c
 
 proc b1(c: C): C =
   # interior of clause
-  setCurrentException c.e  # added boilerplate
+  if not c.e.isNil:
+    setCurrentException c.e  # added boilerplate
 
   # we know we're in a try, which means /we/ have to catch
   # any exceptions for those clauses, or any finally
@@ -125,13 +144,13 @@ proc b1(c: C): C =
     # after the try
     raise newException(ValueError, "something")
 
+    # we will definitely travel to the "middle" finally now
+    c.fn = f1
   except CpsException as x1:
     # we catch exceptions here for (at least) two reasons:
     # - we know we may have a finally to execute,
     # - we need to set the exception correctly,
     c.x1 = (ref CatchableError)(x1)
-
-  finally:
     # we will definitely travel to the "middle" finally now
     c.fn = f1
 
