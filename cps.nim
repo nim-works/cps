@@ -219,12 +219,6 @@ func tailCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
     jump.insert(1, cont)
     jump
 
-func endContinuation(T: NimNode): NimNode =
-  result = newStmtList(
-    newAssignment(newDotExpr(ident"continuation", ident"fn"), newNilLit()),
-    nnkReturnStmt.newTree(ident"continuation")
-  )
-
 macro cpsJump(cont, call, n: typed): untyped =
   ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
   ## continuation and `fn` is the identifier/symbol of the function field.
@@ -557,12 +551,16 @@ macro cpsResolver(T: typed, n: typed): untyped =
   expectKind n, nnkProcDef
   #debug(".cpsResolver.", n, Original)
 
+  # grabbing the first argument to the proc as an identifier
+  let cont = desym n.params[1][0]
+
   # make `n` safe for modification
   let n = normalizingRewrites n
   # replace all `pending` with the end of continuation
-  result = replacePending(n, endContinuation(T))
-  result = danglingCheck(result)
-  result = workaroundRewrites(result)
+  result = replacePending n:
+    tailCall(cont, newNilLit())
+  result = danglingCheck result
+  result = workaroundRewrites result
 
   #debug(".cpsResolver.", result, Transformed, n)
 
