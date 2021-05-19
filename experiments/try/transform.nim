@@ -25,10 +25,10 @@ template sensitive_exit {.dirty.} =
 template catch_and_go(ex: untyped; goto: typed; body: untyped) {.dirty.} =
   try:
     body
-    c.fn = goto
   except CpsException as `ex`:
     c.`ex` = (ref CatchableError)(`ex`)
-    c.fn = goto
+  c.fn = goto
+  sensitive_exit()
 
 proc f2(c: C): C =
   ## finally from the "toplevel" try
@@ -70,8 +70,6 @@ proc b2(c: C): C =
       # proceed into the toplevel try body
       doAssert false, "this should not run"
 
-  sensitive_exit()
-
 proc f1(c: C): C =
   ## finally from the "middle" try
 
@@ -88,8 +86,6 @@ proc f1(c: C): C =
     c.fn = b2
     return noop c
 
-  sensitive_exit()
-
 proc b(c: C): C =
   ## inner-most try body successful; this is the code
   ## after that try statement
@@ -97,8 +93,6 @@ proc b(c: C): C =
   catch_and_go x1, f1:
     # user code for body after the try
     raise newException(ValueError, "something")
-
-  sensitive_exit()
 
 proc b1(c: C): C =
   # interior of clause
@@ -112,8 +106,6 @@ proc b1(c: C): C =
 
     # after the try
     raise newException(ValueError, "something")
-
-  sensitive_exit()
 
 proc foo(): C =
   var c = C()
