@@ -45,43 +45,38 @@ proc firstReturn(p: NimNode): NimNode =
   else:
     result = nil
 
-proc addReturn(p: var NimNode; n: NimNode) =
-  ## adds a return statement if none exists; can consume nnkReturnStmt
-  ## or wrap other nodes as necessary
-  if p.firstReturn.isNil:
-    p.add:
-      if n.isNil:
-        newEmptyNode()
-      elif not n.firstReturn.isNil:
-        n
-      else:
-        nnkReturnStmt.newNimNode(n).add n
+proc makeReturn(n: NimNode): NimNode =
+  ## generate a `return` of the node if it doesn't already contain a return
+  assert not n.isNil, "we no longer permit nil nodes"
+  if n.firstReturn.isNil:
+    nnkReturnStmt.newNimNode(n).add n
   else:
-    p.doc "omitted a return of " & repr(n)
+    n
 
-template addReturn(e: var Env; p: NimNode; n: untyped) =
-  ## adds a return statement with consideration of the env;
-  ## this means performing an appropriate rewriteReturn
-  addReturn(p, e.rewriteReturn n)
+proc makeReturn(pre: NimNode; n: NimNode): NimNode =
+  ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
+  result = newStmtList pre
+  result.add:
+    if pre.firstReturn.isNil:
+      makeReturn n
+    else:
+      doc "omitted a return of " & repr(n)
 
 proc tailCall(e: var Env; p: NimNode; goto: NimNode): NimNode =
   ## compose a tail call from the environment `e` via cps call `p`
   # install locals as the 1st argument
   assert p.isCpsCall, "does not appear to be a cps call"
-  result = newStmtList()
   p.insert(1, e.continuationReturnValue goto)
-  addReturn result: p
+  makeReturn p
 
 proc tailCall(e: var Env; n: NimNode): NimNode =
   ## compose a tail call from the environment `e` to ident (or nil) `n`
   assert not n.isCpsCall
-  result = newStmtList()
-  addReturn result:
-    nnkReturnStmt.newNimNode(n).add:
-      if n.kind == nnkNilLit:
-        n                                   # return nil
-      else:
-        e.continuationReturnValue n         # return continuation
+  makeReturn:
+    if n.kind == nnkNilLit:
+      n                                   # return nil
+    else:
+      e.continuationReturnValue n         # return continuation
 
 func isReturnCall(n: NimNode): bool =
   ## true if the node looks like a tail call
@@ -363,9 +358,7 @@ macro cpsBlock(cont, label, n: typed): untyped =
 
   # make `n` safe to modify
   n = normalizingRewrites n
-
   result = n.replace(matchCpsBreak(label), newCpsPending())
-
   result = workaroundRewrites result
 
   #debug("cpsBlock", result, Transformed, n)
@@ -467,7 +460,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     of nnkReturnStmt:
       # add a return statement with a potential result assignment
       # stored in the environment
-      env.addReturn(result, nc)
+      result.add:
+        makeReturn(env.rewriteReturn nc)
+      return
 
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
