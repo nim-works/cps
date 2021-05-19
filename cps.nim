@@ -538,66 +538,11 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         return
 
       if isCpsCall(nc.last.last):
-
-        #[
-
-        this is a little tricky, so here's a sketch of the transform:
-
-        let foo = cpsProcedure(bar)
-        echo foo
-
-        #     ...turns into...
-
-        return Cont(fn: shim, bar: bar)
-
-        proc shim(c: Cont): Cont =
-          # we use a new proc here for easier type transition
-          cpsProcedure(env(c).bar)
-
-          # this result field was created by cpsProcedure
-          return Cont(fh: after, foo: env(c).result)
-
-        proc after(c: Cont): Cont =
-          # now we have foo in our env and we continue on...
-          echo env(c).foo
-
-        ]#
-
-        # add the local into the env so we can install the field
-        env.localSection(nc, result)
-        var field = env.findJustOneAssignmentName(nc)
-        if field.isNil:
-          result.add:
-            nc.errorAst "unable to find a single identifier for shimming"
-
-        # XXX: probably should be i and not i+1
-        # skip this node by passing i + 1 to the split
-        let after = env.splitAt(n, i + 1, "afterShim")
-        # we add it to the goto stack as usual
-        env.addGoto(after)
-
-        let call = nc.last[^1]
-        let variable = nc.last[0]
-        # our field is gensym'd but the strVal should match
-        assert variable.strVal == field.strVal
-
-        var body = newStmtList()
-        # add the call to the cps proc and let it get saftened as per usual
-        body.add call
-        let shim = procScope(env, nc, body, "shim")
-        assert shim.name != nil
-
-        # now we'll add a tail call to the shim; gratuitous returnTo?
         result.add:
-          tailCall(env, shim.name):
-            returnTo after
-
-        # let's get the hell outta here before things get any uglier
-        return
-
+          nc.last.errorAst "shim is not yet supported"
       elif isCpsBlock(nc.last.last):
         result.add:
-          errorAst(nc.last, "only calls are supported here")
+          nc.last.errorAst "only calls are supported here"
       else:
         # add definitions into the environment
         env.localSection(nc, result)

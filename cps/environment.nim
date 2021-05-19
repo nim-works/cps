@@ -368,7 +368,8 @@ proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
   if result.isNil:
     result = n.errorAst "unable to find field for symbol " & n.repr
 
-proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode =
+proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
+  {.deprecated: "not used yet".} =
   case n.kind
   of nnkVarSection, nnkLetSection:
     if n.len != 1:
