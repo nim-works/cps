@@ -10,7 +10,7 @@ proc foo() =
         echo "e"
         noop()
         inc r
-        doAssert e.msg != "some error"
+        doAssert e.msg == "some error"
 
       raise newException(ValueError, "something")
     finally:

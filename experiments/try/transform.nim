@@ -4,9 +4,8 @@ type
   C = ref object
     fn: proc (c: C): C {.nimcall.}
     e: ref CatchableError
-    x1: ref CpsException
-    x2: ref CpsException
-  CpsException = Exception
+    x1: ref Exception
+    x2: ref Exception
 
 proc noop(c: C): C =
   echo "noop"
@@ -25,8 +24,8 @@ template sensitive_exit {.dirty.} =
 template catch_and_go(ex: untyped; goto: typed; body: untyped) {.dirty.} =
   try:
     body
-  except CpsException as `ex`:
-    c.`ex` = (ref CpsException)(`ex`)
+  except Exception as `ex`:
+    c.`ex` = `ex`
   c.fn = goto
   sensitive_exit()
 
@@ -104,7 +103,7 @@ proc b1(c: C): C =
   catch_and_go x1, f1:
     # user code for clause
     inc r
-    doAssert c.e.msg != "some error"
+    doAssert c.e.msg == "some error"
 
     # after the try
     raise newException(ValueError, "something")
