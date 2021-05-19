@@ -93,13 +93,6 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
       discard
   result = filter(n, desymifier)
 
-func stripComments*(n: NimNode): NimNode =
-  ## remove doc statements because that was a stupid idea
-  result = copyNimNode n
-  for child in items(n):
-    if child.kind != nnkCommentStmt:
-      result.add stripComments(child)
-
 when not cpsDebug:
   template debug*(ignore: varargs[untyped]) = discard
 else:
@@ -225,13 +218,6 @@ proc doc*(n: NimNode; s: string) =
   when comments:
     if n.kind == nnkStmtList:
       n.add doc(s)
-
-template twice*(body: untyped): untyped =
-  ## an exercise in futility, apparently
-  block twice:
-    once:
-      break twice
-    body
 
 proc hash*(n: NimNode): Hash =
   var h: Hash = 0

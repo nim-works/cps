@@ -6,7 +6,7 @@ they are comprised.
 ]##
 
 import std/[sets, sequtils ,hashes, tables, macros, algorithm]
-import cps/[spec, scopes]
+import cps/spec
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
@@ -17,48 +17,13 @@ type
     via: NimNode                    # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
     locals: LocalCache              # locals and their typedefs|generics
-    gotos: Scopes                   # identifiers of scope gotos
-    breaks: Scopes                  # identifiers of scope breaks
     store: NimNode                  # where to put typedefs, a stmtlist
-    camefrom: Scope                 # the last tailcall (goto)
     seen: HashSet[string]           # count/measure idents/syms by string
-
-    scope: Scope                    # current scope
 
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
     rs: NimNode                     # the sym we use for "yielded" result
-
-template searchScope(env: Env; x: untyped;
-                     p: proc(ns: Scopes): Scope): Scope =
-  var e = env
-  var r = newScope()
-  while not e.isNil:
-    r = p(e.`x`)
-    if r.kind == nnkNilLit:
-      e = e.parent
-    else:
-      break
-  r
-
-proc nextGoto*(e: Env): Scope = searchScope(e, gotos, next)
-proc nextBreak*(e: Env): Scope = searchScope(e, breaks, next)
-
-proc addGoto*(e: var Env; scope: Scope) =
-  ## it's nice when we can do this simply
-  e.gotos.add scope
-
-proc addGoto*(e: var Env; k: NimNode; n: NimNode) =
-  ## add to a stack of gotos, which are normal exits from control flow.
-  ##
-  ## think of things like `return` and `if: discard` and the end of a
-  ## while loop
-  e.gotos.add(k, n)
-
-proc insideWhile*(e: Env): bool =
-  ## actually, this is the better one.
-  searchScope(e, breaks, last).kind == nnkWhileStmt
 
 proc len*(e: Env): int =
   if not e.isNil:
@@ -223,9 +188,6 @@ proc newEnv*(parent: var Env; copy = off): Env =
   ## or on-demand in the back-end (with copy = on)
   assert not parent.isNil
   if copy:
-    var scope = newScope()
-    scope.goto = parent.scope
-    scope.brake = parent.scope
     result = Env(store: parent.store,
                  via: parent.identity,
                  seen: parent.seen,
@@ -233,9 +195,6 @@ proc newEnv*(parent: var Env; copy = off): Env =
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
-                 gotos: parent.gotos,
-                 breaks: parent.breaks,
-                 scope: scope,
                  parent: parent)
     init result
   else:
@@ -318,7 +277,6 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   var c = if c.isNil or c.isEmpty: ident"continuation" else: c
   result = Env(c: c, store: store, via: via, id: via)
   result.seen = initHashSet[string]()
-  result.scope = newScope()
   init result
 
 proc identity*(e: var Env): NimNode =
@@ -449,9 +407,6 @@ proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
     result.add newAssignment(newDotExpr(e.first, e.fn), goto)
     result.add e.first
 
-  # record the last-rendered scope for use in trace composition
-  e.camefrom = newScope(result, goto, result)
-
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
   if n.len != 1:
@@ -478,12 +433,8 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   for field, section in pairs(e):
     result = result.resym(section[0][0], newDotExpr(child, field))
 
-proc prepProcBody*(e: var Env; n: NimNode): NimNode =
-  result = rewriteSymbolsIntoEnvDotField(e, n)
-
 proc defineProc*(e: var Env; p: NimNode) =
   ## add a proc definition, eg. as part of makeTail()
   assert not p.isNil
   assert p.kind == nnkProcDef
   e.store.add p
-

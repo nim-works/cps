@@ -1,5 +1,5 @@
 import std/[macros, sequtils, algorithm]
-import cps/[spec, scopes, environment]
+import cps/[spec, environment]
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug, cpsTrace
 
@@ -166,7 +166,7 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     var locals = env.first
 
     # setup the proc body with whatever locals it still needs
-    var body = env.prepProcBody(n)
+    var body = env.rewriteSymbolsIntoEnvDotField(n)
 
     # add the declaration
     procs.add newProc(name = name, pragmas = pragmas,
@@ -186,68 +186,7 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
     else:
       result.add procs
 
-proc callTail(env: var Env; scope: Scope): NimNode =
-  ## given a node, either turn it into a
-  ## `return call(); proc call() = ...`
-  ## or optimize it into a `return subcall()`
-  if scope.isNil:
-    return nnkReturnStmt.newTree newNilLit()
-  var n = scope.node
-  case n.kind
-  of nnkEmpty:
-    result = n.errorAst "empty scope node in callTail()"
-  of nnkProcDef:
-    # if you already put it in a proc, we should just use it
-    result = n
-    warning "weirdo"
-  of nnkIdent, nnkSym, nnkNilLit:
-    # it's an identifier, symbol, or nil; just issue a call of it
-    result = tailCall(env, n)
-  of nnkStmtList:
-    # maybe we can optimize it out
-    if stripComments(n).len == 0:
-      result = nnkReturnStmt.newNimNode(n).add:
-        # no code to run means we just `return Cont()`
-        newCall env.root
-    elif not n.firstReturn.isNil:
-      # just copy the call
-      result = newStmtList([doc"verbatim tail call", n])
-    else:
-      # create a tail call with the given body
-      result = env.makeTail(genSym(nskProc, "tail"), n)
-  else:
-    # wrap whatever it is and recurse on it
-    result = env.callTail newScope(newStmtList(n))
-    warning "another weirdo"
-
 proc saften(parent: var Env; n: NimNode): NimNode
-
-proc procScope(env: var Env; parent: NimNode;
-              body: NimNode, name = "scope"): Scope =
-  var body = env.prepProcBody(body)
-  # ensure the proc body is rewritten
-  body = env.saften(body)
-  # generate a new name for this proc
-  var procName = genSym(nskProc, name)
-  # we'll return a scope holding the tail call to the proc
-  result = newScope(parent, procName, env.makeTail(procName, body))
-  result.goto = env.nextGoto
-  result.brake = env.nextBreak
-
-proc splitAt(env: var Env; n: NimNode; i: int; name = "splat"): Scope =
-  ## split a statement list to create a tail call given
-  ## a label prefix and an index at which to split
-
-  # if a tail remains after this crap
-  if i < n.len-1:
-    # select the remaining lines
-    var body = newStmtList(n[i+1 ..< n.len])
-    if stripComments(body).len > 0:
-      # they aren't merely comments, so put them into a proc
-      return procScope(env, n[i], body, name)
-  # there's nothing left to do in this scope; we're
-  # going to just return the next goto (this might be empty)
-  result = env.nextGoto
 
 proc makeContProc(name, cont, body: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation `cont`
@@ -732,7 +671,7 @@ proc cpsXfrmProc(T: NimNode, n: NimNode): NimNode =
   n.params = nnkFormalParams.newTree(T, env.firstDef)
 
   # perform sym substitutions (or whatever)
-  n.body = env.prepProcBody(newStmtList n.body)
+  n.body = env.rewriteSymbolsIntoEnvDotField(newStmtList n.body)
 
   # transform defers
   n.body = rewriteDefer n.body
