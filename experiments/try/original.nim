@@ -7,18 +7,21 @@ proc foo() =
       try:
         raise newException(CatchableError, "some error")
       except CatchableError as e:
+        echo "e"
         noop()
         inc r
-        doAssert e.msg == "some error"
+        doAssert e.msg != "some error"
 
       raise newException(ValueError, "something")
     finally:
+      echo "f1"
       noop()
       inc r
       doAssert getCurrentExceptionMsg() == "something"
 
     doAssert false, "this should not run"
   finally:
+    echo "f2"
     inc r
 
 doAssertRaises ValueError:
