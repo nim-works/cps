@@ -546,7 +546,7 @@ proc cloneProc(n: NimNode, body: NimNode = nil): NimNode =
   ## create a copy of a typed proc which satisfies the compiler
   assert n.kind == nnkProcDef
   result = nnkProcDef.newTree(
-    ident($n.name),
+    ident(repr n.name),           # repr to handle gensymbols
     newEmptyNode(),
     newEmptyNode(),
     n.params,
