@@ -62,22 +62,6 @@ proc makeReturn(pre: NimNode; n: NimNode): NimNode =
     else:
       doc "omitted a return of " & repr(n)
 
-proc tailCall(e: var Env; p: NimNode; goto: NimNode): NimNode =
-  ## compose a tail call from the environment `e` via cps call `p`
-  # install locals as the 1st argument
-  assert p.isCpsCall, "does not appear to be a cps call"
-  p.insert(1, e.continuationReturnValue goto)
-  makeReturn p
-
-proc tailCall(e: var Env; n: NimNode): NimNode =
-  ## compose a tail call from the environment `e` to ident (or nil) `n`
-  assert not n.isCpsCall
-  makeReturn:
-    if n.kind == nnkNilLit:
-      n                                   # return nil
-    else:
-      e.continuationReturnValue n         # return continuation
-
 func isReturnCall(n: NimNode): bool =
   ## true if the node looks like a tail call
   if n.isNil:
@@ -149,7 +133,12 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
   let pragmas = nnkPragma.newTree bindSym"cpsLift"
   result = newStmtList()
   result.doc "new tail call: " & name.repr
-  result.add tailCall(env, name)
+  result.add:
+    makeReturn:
+      if name.kind == nnkNilLit:
+        name                                   # return nil
+      else:
+        env.continuationReturnValue name       # return continuation
 
   var procs = newStmtList()
   if n.kind == nnkProcDef:
@@ -205,27 +194,21 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
 
-func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
-  ## Produce a tail call to `to` with `cont` as the continuation
-  ##
-  ## If `to` is nil, this is the last continuation and will be
-  ## set to nil.
-  ##
-  ## If `via` is not nil, it is expected to be a cps jumper call
-  doAssert not cont.isNil
-  doAssert not to.isNil
+func tailCall(cont: NimNode; to: NimNode): NimNode =
+  ## a tail call to `to` with `cont` as the continuation
+  result = newStmtList:
+    newAssignment(newDotExpr(cont, ident"fn"), to)
+  result = makeReturn(result, cont)
 
-  result = newStmtList()
+func tailCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
+  ## Produce a tail call to `to` with `cont` as the continuation
+  ## The `via` argument is expected to be a cps jumper call.
+  assert not via.isNil
 
   # progress to the next function in the continuation
-  result.add:
+  result = newStmtList:
     newAssignment(newDotExpr(cont, ident"fn"), to)
-
-  if via.isNil:
-    result.add:
-      nnkReturnStmt.newTree:
-        cont
-  else:
+  result = makeReturn result:
     doAssert via.kind in CallNodes
 
     let jump = copyNimTree via
@@ -234,9 +217,7 @@ func tailCall(cont, to: NimNode, via: NimNode = nil): NimNode =
     jump[0] = desym jump[0]
     # insert our continuation as the first parameter
     jump.insert(1, cont)
-    result.add:
-      nnkReturnStmt.newTree:
-        jump
+    jump
 
 func endContinuation(T: NimNode): NimNode =
   result = newStmtList(
@@ -254,18 +235,12 @@ macro cpsJump(cont, call, n: typed): untyped =
 
   #debug("cpsJump", n, Original)
 
-  result = newStmtList()
-
-  let prc = makeContProc(genSym(nskProc, "afterCall"), cont, n)
-
-  # make the call safe to modify
-  var call = normalizingRewrites call
-  result.add prc
+  let name = nskProc.genSym"afterCall"
+  result = newStmtList: makeContProc(name, cont, n)
   result.add:
-    cont.tailCall prc.name:
-      call
-
-  result = workaroundRewrites(result)
+    cont.tailCall name:
+      normalizingRewrites call
+  result = workaroundRewrites result
 
   #debug("cpsJump", result, Transformed, n)
 
@@ -274,20 +249,20 @@ macro cpsJump(cont, call: typed): untyped =
   result = getAst(cpsJump(cont, call, newStmtList()))
 
 macro cpsMayJump(cont, n, after: typed): untyped =
-  ## the block in `n` is tained by a `cpsJump` and may require a jump to enter `after`.
+  ## The block in `n` is tainted by a `cpsJump` and may require a jump
+  ## to enter `after`.
   ##
-  ## this macro evaluate `n` and replace all `{.cpsPending.}` in `n` with tail calls
-  ## to `after`.
+  ## This macro evaluates `n` and replaces all `{.cpsPending.}` in `n`
+  ## with tail calls to `after`.
   expectKind cont, nnkSym
 
   #debug("cpsMayJump", n, Original)
   #debug("cpsMayJump", after, Original)
 
-  # we always wrap the input because there's no reason not to
-  var n = newStmtList n
-
   # make `n` safe to modify
-  n = normalizingRewrites n
+  var n = normalizingRewrites:
+    # we always wrap the input because there's no reason not to
+    newStmtList n
 
   let
     afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
@@ -303,7 +278,6 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   result = newStmtList()
   result.add afterProc
   result.add resolvedBody
-
   result = workaroundRewrites result
 
   #debug("cpsMayJump", result, Transformed, n)
@@ -353,11 +327,11 @@ macro cpsBlock(cont, label, n: typed): untyped =
 
   #debug("cpsBlock", n, Original)
 
-  # we always wrap the input because there's no reason not to
-  var n = newStmtList n
-
   # make `n` safe to modify
-  n = normalizingRewrites n
+  var n = normalizingRewrites:
+    # we always wrap the input because there's no reason not to
+    newStmtList n
+
   result = n.replace(matchCpsBreak(label), newCpsPending())
   result = workaroundRewrites result
 
@@ -399,7 +373,6 @@ macro cpsWhile(cont, cond, n: typed): untyped =
 
   result.add whileLoop
   result.add whileTail
-
   result = workaroundRewrites result
 
   #debug("cpsWhile", result, Transformed, cond)
@@ -460,9 +433,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     of nnkReturnStmt:
       # add a return statement with a potential result assignment
       # stored in the environment
-      result.add:
-        makeReturn(env.rewriteReturn nc)
-      return
+      return makeReturn result:
+        env.rewriteReturn nc
 
     of nnkVarSection, nnkLetSection:
       if nc.len != 1:
