@@ -14,7 +14,7 @@ var jumps: int
 proc trampoline(c: Cont) =
   jumps = 0
   var c = c
-  while c != nil and c.fn != nil:
+  while c.running:
     c = c.fn(c)
     inc jumps
     if jumps > 1000:
@@ -1069,3 +1069,24 @@ suite "tasteful tests":
 
     trampoline count()
     check r == 1
+
+  block:
+    ## cooperative yield
+    proc coop(c: Cont): Cont {.cpsMagic.} =
+      inc r
+      result = c
+
+    r = 0
+    proc foo() {.cps: Cont.} =
+      var i = 0
+      while i < 3:
+        inc r
+        noop()
+        inc i
+        if i == 0:
+          continue
+        if i > 2:
+          break
+
+    trampoline foo()
+    check r == 7
