@@ -33,10 +33,10 @@ proc makeReturn(n: NimNode): NimNode =
   ## generate a `return` of the node if it doesn't already contain a return
   assert not n.isNil, "we no longer permit nil nodes"
   if n.firstReturn.isNil:
-    if n.kind in nnkCallKinds:
-      nnkReturnStmt.newNimNode(n).add n
-    else:
-      nnkReturnStmt.newNimNode(n).add:
+    nnkReturnStmt.newNimNode(n).add:
+      if n.kind in nnkCallKinds:
+        n
+      else:
         newCall(ident"coop", n)
   else:
     n
