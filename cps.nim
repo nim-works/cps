@@ -64,3 +64,8 @@ template finished*(c: Continuation): bool =
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
   c.state == Dismissed
+
+template coop*(c: Continuation): Continuation {.used.} =
+  ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
+  ## a cooperative yield at appropriate continuation exit points.
+  c

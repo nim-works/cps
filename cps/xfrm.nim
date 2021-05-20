@@ -3,23 +3,14 @@ import cps/[spec, environment]
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug, cpsTrace
 
-const
-  callish = {nnkCall, nnkCommand}           ## all cps call nodes
-
-when defined(yourdaywillcomecommalittleonecommayourdaywillcomedotdotdot):
-  const
-    cpsish = {nnkYieldStmt, nnkContinueStmt}  ## precede cps calls
-
-template coop() {.used.} =
-  ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
-  ## a cooperative yield at appropriate continuation exit points.
-  discard
+when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
+  {.error: "i'm afraid of what you may have become".}
 
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   assert not n.isNil
   if len(n) > 0:
-    if n.kind in callish:
+    if n.kind in nnkCallKinds:
       let callee = n[0]
       # all cpsCall are normal functions called via a generated symbol
       if not callee.isNil and callee.kind == nnkSym:
@@ -42,7 +33,11 @@ proc makeReturn(n: NimNode): NimNode =
   ## generate a `return` of the node if it doesn't already contain a return
   assert not n.isNil, "we no longer permit nil nodes"
   if n.firstReturn.isNil:
-    nnkReturnStmt.newNimNode(n).add n
+    if n.kind in nnkCallKinds:
+      nnkReturnStmt.newNimNode(n).add n
+    else:
+      nnkReturnStmt.newNimNode(n).add:
+        newCall(ident"coop", n)
   else:
     n
 
@@ -55,35 +50,22 @@ proc makeReturn(pre: NimNode; n: NimNode): NimNode =
     else:
       doc "omitted a return of " & repr(n)
 
-func isReturnCall(n: NimNode): bool =
-  ## true if the node looks like a tail call
-  if n.isNil:
-    false
-  else:
-    case n.kind
-    # simple `return foo()`
-    of nnkReturnStmt:
-      n.len > 0 and n[0].kind == nnkCall
-    # `return foo(); proc foo() = ...`
-    of nnkStmtList:
-      n.firstReturn.isReturnCall
-    else:
-      false
-
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
-  of nnkForStmt, nnkBlockStmt, nnkWhileStmt, nnkElse, nnkElifBranch, nnkOfBranch:
-    result = n.last.isCpsBlock
+  of nnkWhileStmt, nnkElifBranch:
+    return n[0].isCpsCall or n[1].isCpsBlock
+  of nnkForStmt, nnkBlockStmt, nnkElse, nnkOfBranch:
+    return n.last.isCpsBlock
   of nnkStmtList, nnkIfStmt, nnkCaseStmt:
     for n in n.items:
       if n.isCpsBlock:
         return true
-  of callish:
-    result = n.isCpsCall
+  of nnkCallKinds:
+    return n.isCpsCall
   else:
-    result = false
+    return false
 
 proc cmpKind(a, b: NimNode): int =
   if a.kind == b.kind:
@@ -155,25 +137,24 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
                       params = [env.root, newIdentDefs(locals,
                                                        env.root)])
 
-    when true:
-      # immediately push these definitions into the store and just
-      # return the tail call
-      for p in procs.items:
-        env.defineProc p
-    else:
-      result.add procs
+    # immediately push these definitions into the store and just
+    # return the tail call
+    for p in procs.items:
+      env.defineProc p
 
 proc saften(parent: var Env; n: NimNode): NimNode
 
 proc makeContProc(name, cont, body: NimNode): NimNode =
-  ## creates a continuation proc from with `name` using continuation `cont`
-  ## with the given body.
-  # we always wrap the body because there's no reason not to
+  ## creates a continuation proc from with `name` using continuation
+  ## `cont` with the given body.
   let
+    # we always wrap the body because there's no reason not to
     body = newStmtList body
-
     contParam = desym cont
     contType = getTypeInst cont
+
+  # mix the coop symbol into any continuation proc
+  body.insert(0, nnkMixinStmt.newTree ident"coop")
 
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   # make it something that we can consume and modify
@@ -187,45 +168,43 @@ proc makeContProc(name, cont, body: NimNode): NimNode =
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
 
-func tailCall(cont: NimNode; to: NimNode): NimNode =
-  ## a tail call to `to` with `cont` as the continuation
+func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
+  ## a tail call to `to` with `cont` as the continuation; if the `jump`
+  ## is supplied, return that call instead of the continuation itself
   result = newStmtList:
     newAssignment(newDotExpr(cont, ident"fn"), to)
-  result = makeReturn(result, cont)
+  let jump = if jump.isNil: cont else: jump
+  result = makeReturn(result, jump)
 
-func tailCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
+func jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   assert not via.isNil
+  assert via.kind in nnkCallKinds
 
-  # progress to the next function in the continuation
-  result = newStmtList:
-    newAssignment(newDotExpr(cont, ident"fn"), to)
-  result = makeReturn result:
-    doAssert via.kind in CallNodes
-
-    let jump = copyNimTree via
-    # desym the jumper, it is currently sem-ed to the variant that
-    # doesn't take a continuation
-    jump[0] = desym jump[0]
-    # insert our continuation as the first parameter
-    jump.insert(1, cont)
-    jump
+  let jump = copyNimTree via
+  # desym the jumper, it is currently sem-ed to the variant that
+  # doesn't take a continuation
+  jump[0] = desym jump[0]
+  # insert our continuation as the first parameter
+  jump.insert(1, cont)
+  result = tailCall(cont, to, jump)
 
 macro cpsJump(cont, call, n: typed): untyped =
-  ## rewrite `n` into a tail call via `call` where `cont` is the symbol of the
-  ## continuation and `fn` is the identifier/symbol of the function field.
+  ## Rewrite `n` into a tail call via `call` where `cont` is the symbol of
+  ## the continuation and `fn` is the identifier/symbol of the function
+  ## field.
   ##
-  ## all AST rewritten by cpsJump should end in a control flow statement.
+  ## All AST rewritten by cpsJump should end in a control-flow statement.
   expectKind cont, nnkSym
   expectKind call, nnkCallKinds
 
   #debug("cpsJump", n, Original)
 
   let name = nskProc.genSym"afterCall"
-  result = newStmtList: makeContProc(name, cont, n)
+  result = newStmtList makeContProc(name, cont, n)
   result.add:
-    cont.tailCall name:
+    cont.jumperCall name:
       normalizingRewrites call
   result = workaroundRewrites result
 
@@ -304,10 +283,10 @@ proc restoreContinue(n: NimNode): NimNode =
   filter(n, restorer)
 
 macro cpsBlock(cont, label, n: typed): untyped =
-  ## the block with `label` is tained by a `cpsJump` and may require a jump to
-  ## break out of the block.
+  ## The block with `label` is tainted by a `cpsJump` and may require a
+  ## jump to break out of the block.
   ##
-  ## this macro evaluate `n` and replace all `{.cpsBreak.}` in `n` with
+  ## This macro evaluates `n` and replaces all `{.cpsBreak.}` in `n` with
   ## `{.cpsPending.}`.
   expectKind cont, nnkSym
   expectKind label, {nnkSym, nnkEmpty}
@@ -325,18 +304,19 @@ macro cpsBlock(cont, label, n: typed): untyped =
   #debug("cpsBlock", result, Transformed, n)
 
 macro cpsBlock(cont, n: typed): untyped =
-  ## a block statement tained by a `cpsJump` and may require a jump to enter `after`.
+  ## A block statement tainted by a `cpsJump` and may require a jump to
+  ## enter `after`.
   ##
-  ## this is just an alias to cpsBlock with an empty label
+  ## This is just an alias to cpsBlock with an empty label.
   result = getAst(cpsBlock(cont, newEmptyNode(), n))
 
 macro cpsWhile(cont, cond, n: typed): untyped =
-  ## a while statement tainted by a `cpsJump` and may require a jump to exit
-  ## the loop.
+  ## A while statement tainted by a `cpsJump` and may require a jump to
+  ## exit the loop.
   ##
-  ## this macros evaluate `n` and replace all `{.cpsPending.}` with jump to
-  ## loop condition and `{.cpsBreak.}` with `{.cpsPending.}` to next
-  ## control-flow.
+  ## This macro evaluates `n` and replaces all `{.cpsPending.}` with a
+  ## jump to the loop condition and `{.cpsBreak.}` with `{.cpsPending.}`
+  ## to the next control-flow.
   expectKind cont, nnkSym
 
   #debug("cpsWhile", newTree(nnkWhileStmt, cond, n), Original, cond)
