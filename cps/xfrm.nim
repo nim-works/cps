@@ -375,24 +375,29 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
     case n[i].kind
     of nnkExceptBranch:
       let newExcept = copyNimNode n[i]
-      # add `Type` or `Type as e`
-      newExcept.add n[i][0]
+      # this is `except Type: body`
+      if n[i].len > 1:
+        # add `Type` or `Type as e`
+        newExcept.add n[i][0]
+
       # create a new body
       newExcept.add newStmtList()
 
       # get old handler body
-      var handlerBody = newStmtList(n[i][1])
+      var handlerBody = newStmtList(n[i].last)
 
       # if it's a `except Type as e`
-      if newExcept[0].kind == nnkInfix:
+      if newExcept.len > 1 and newExcept[0].kind == nnkInfix:
         # assign the exception to `ex`
-        let exSym = n[i][0][2]
-        newExcept.last.add newAssignment(ex, exSym)
+        let exSym = newExcept[0][2]
         # replace all occurance of `exSym` with `ex`
-        handlerBody = n[i][1].resym(exSym, ex)
-      else:
-        # assign the exception into `ex`
-        newExcept.last.add newAssignment(ex, newCall(bindSym"getCurrentException"))
+        handlerBody = handlerBody.resym(exSym, ex)
+
+        # rewrite this into `except Type`
+        newExcept[0] = newExcept[0][1]
+
+      # assign the exception into `ex`
+      newExcept.last.add newAssignment(ex, newCall(bindSym"getCurrentException"))
 
       # set exception to the stashed one before executing any other code
       handlerBody.insert(0):
