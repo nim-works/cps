@@ -16,6 +16,15 @@ proc isCpsCall(n: NimNode): bool =
       if not callee.isNil and callee.kind == nnkSym:
         result = callee.getImpl.hasPragma("cpsCall")
 
+proc isVoodooCall(n: NimNode): bool =
+  ## true if this node holds a call to a cps procedure
+  if n != nil and len(n) > 0:
+    if n.kind in nnkCallKinds:
+      let callee = n[0]
+      # all cpsCall are normal functions called via a generated symbol
+      if not callee.isNil and callee.kind == nnkSym:
+        result = callee.getImpl.hasPragma("cpsVoodooCall")
+
 proc firstReturn(p: NimNode): NimNode =
   ## find the first return statement within statement lists, or nil
   case p.kind
@@ -364,6 +373,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     if nc.isNil:
       result.add nc
       continue
+    
     # if it's a cps call,
     if nc.isCpsCall:
       let jumpCall = newCall(bindSym"cpsJump")
@@ -559,6 +569,16 @@ macro cpsFloater(n: typed): untyped =
 
   #debug(".cpsFloater.", result, Transformed, n)
 
+proc rewriteVoodoo(n: NimNode, env: Env): NimNode =
+  ## Rewrite non-yielding cpsCall calls by inserting the continuation as
+  ## the first argument
+  proc aux(n: NimNode): NimNode =
+    if n.isVoodooCall:
+      result = n.copyNimTree
+      result[0] = desym result[0]
+      result.insert(1, env.first)
+  n.filter(aux)
+
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
@@ -611,6 +631,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # transform defers
   n.body = rewriteDefer n.body
+
+  # rewrite non-yielding cps calls
+  n.body = rewriteVoodoo(n.body, env)
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)
