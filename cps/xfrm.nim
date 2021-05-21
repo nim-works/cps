@@ -434,6 +434,8 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   # wrap the try body and everything in it
   result.add wrapTry(cont, n[0])
 
+  result = workaroundRewrites result
+
 macro cpsTryFinally(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and may require a jump to enter finally.
   ##
