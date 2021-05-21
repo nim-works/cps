@@ -432,9 +432,3 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   let child = e.castToChild(e.first)
   for field, section in pairs(e):
     result = result.resym(section[0][0], newDotExpr(child, field))
-
-proc defineProc*(e: var Env; p: NimNode) =
-  ## add a proc definition, eg. as part of makeTail()
-  assert not p.isNil
-  assert p.kind == nnkProcDef
-  e.store.add p

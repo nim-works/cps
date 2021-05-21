@@ -101,46 +101,6 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
   # the result is the lifted stuff followed by the original code
   result = newStmtList(flatter.newStmtList, result)
 
-proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
-  ## make a tail call and put it in a single statement list;
-  ## this will always create a tail call proc and call it
-  let pragmas = nnkPragma.newTree bindSym"cpsLift"
-  result = newStmtList()
-  result.doc "new tail call: " & name.repr
-  result.add:
-    makeReturn:
-      if name.kind == nnkNilLit:
-        name                                   # return nil
-      else:
-        env.continuationReturnValue name       # return continuation
-
-  var procs = newStmtList()
-  if n.kind == nnkProcDef:
-    result.doc "adding the proc verbatim"
-    procs.add n
-  else:
-    # the locals value is, nominally, a proc param -- or it was.
-    # now we just use whatever the macro provided the env
-    var locals = env.first
-
-    # setup the proc body with whatever locals it still needs
-    var body = env.rewriteSymbolsIntoEnvDotField(n)
-
-    # add the declaration
-    procs.add newProc(name = name, pragmas = pragmas,
-                      body = newEmptyNode(),
-                      params = [env.root, newIdentDefs(locals,
-                                                       env.root)])
-    # add the implementation
-    procs.add newProc(name = name, pragmas = pragmas, body = body,
-                      params = [env.root, newIdentDefs(locals,
-                                                       env.root)])
-
-    # immediately push these definitions into the store and just
-    # return the tail call
-    for p in procs.items:
-      env.defineProc p
-
 proc saften(parent: var Env; n: NimNode): NimNode
 
 proc makeContProc(name, cont, source: NimNode): NimNode =
