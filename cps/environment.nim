@@ -326,25 +326,26 @@ proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
   if result.isNil:
     result = n.errorAst "unable to find field for symbol " & n.repr
 
-proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
-  {.deprecated: "not used yet".} =
-  case n.kind
-  of nnkVarSection, nnkLetSection:
-    if n.len != 1:
-      n.errorAst "only one assignment per section is supported"
+when false:
+  proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
+    {.deprecated: "not used yet".} =
+    case n.kind
+    of nnkVarSection, nnkLetSection:
+      if n.len != 1:
+        n.errorAst "only one assignment per section is supported"
+      else:
+        e.findJustOneAssignmentName n[0]
+    of nnkIdentDefs:
+      if n.len != 3:
+        n.errorAst "only one identifier per assignment is supported"
+      elif n[0].kind notin {nnkIdent, nnkSym}:
+        n.errorAst "bad rewrite presented bogus input"
+      else:
+        e.getFieldViaLocal n
+    of nnkVarTuple:
+      n.errorAst "tuples not supported yet"
     else:
-      e.findJustOneAssignmentName n[0]
-  of nnkIdentDefs:
-    if n.len != 3:
-      n.errorAst "only one identifier per assignment is supported"
-    elif n[0].kind notin {nnkIdent, nnkSym}:
-      n.errorAst "bad rewrite presented bogus input"
-    else:
-      e.getFieldViaLocal n
-  of nnkVarTuple:
-    n.errorAst "tuples not supported yet"
-  else:
-    n.errorAst "unrecognized input"
+      n.errorAst "unrecognized input"
 
 proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
