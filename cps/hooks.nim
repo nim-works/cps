@@ -6,6 +6,8 @@ type
   Hook* = enum
     Coop = "coop"
     Trace = "trace"
+    Alloc = "alloc"
+    Dealloc = "dealloc"
 
 proc introduce*(hook: Hook; n: NimNode) =
   ## introduce a hook into the given scope whatfer later use therein
@@ -33,8 +35,8 @@ proc makeLineInfo(n: LineInfo): NimNode =
 proc hook*(hook: Hook; n: NimNode): NimNode =
   ## execute the given hook on the given node
   case hook
-  of Coop:
-    # coop(continuation)
+  of Coop, Alloc, Dealloc:
+    # hook(continuation)
     newCall(ident $hook, n)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
