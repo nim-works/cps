@@ -1,6 +1,6 @@
 import std/[macros]
 import cps/[spec, xfrm]
-export Continuation, ContinuationProc, cpsCall
+export Continuation, ContinuationProc, cpsCall, cpsVoodooCall
 export cpsDebug
 
 type
@@ -32,13 +32,17 @@ macro cpsMagic*(n: untyped): untyped =
   ## errors out of `.cps.` context and taking continuations as input.
   expectKind(n, nnkProcDef)
 
-  # Add .cpsCall. pragma to the proc
-  n.addPragma ident"cpsCall"
 
   # create a Nim-land version of the proc that throws an exception when called
   # from outside of CPS-land.
   var m = copyNimTree n
-  m.params[0] = newEmptyNode()
+
+  if m.params[0] == m.params[1][1]:
+    m.params[0] = newEmptyNode()
+    m.addPragma ident"cpsCall"
+  else:
+    m.addPragma ident"cpsVoodooCall"
+
   del(m.params, 1)
   m.body = newStmtList:
     nnkRaiseStmt.newTree:
