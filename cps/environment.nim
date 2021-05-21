@@ -24,6 +24,7 @@ type
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
     rs: NimNode                     # the sym we use for "yielded" result
+    ex: NimNode                     # the sym we use for current exception
 
 proc len*(e: Env): int =
   if not e.isNil:
@@ -116,6 +117,8 @@ iterator pairs(e: Env): Pair =
   assert not e.isNil
   var seen = initHashSet[string]()
   for pair in e.allPairs:
+    if pair.key == e.ex:
+      continue
     # make sure we're actually measuring gensyms for collision
     if not seen.containsOrIncl definedName(pair.val).strVal:
       yield pair
@@ -195,6 +198,7 @@ proc newEnv*(parent: var Env; copy = off): Env =
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
+                 ex: parent.ex,
                  parent: parent)
     init result
   else:
@@ -390,7 +394,7 @@ proc newContinuation*(e: Env; goto: NimNode = nil): NimNode =
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, and exceptions, respectively
-    if field notin [e.fn, e.rs]:
+    if field notin [e.fn, e.rs, e.ex]:
       # the name from identdefs is not gensym'd (usually!)
       result.add newColonExpr(field, section.last[0])
   if not goto.isNil:
@@ -438,3 +442,15 @@ proc defineProc*(e: var Env; p: NimNode) =
   assert not p.isNil
   assert p.kind == nnkProcDef
   e.store.add p
+
+proc getException*(e: var Env): NimNode =
+  ## get the current exception from the env
+  if e.ex.isNil:
+    e.ex = genField("ex")
+
+    # TODO: idk how this works, really
+    e.locals[e.ex] = nnkVarSection.newTree:
+      newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+    e.seen.incl e.ex.strVal
+
+  newDotExpr(e.castToChild(e.first), e.ex)

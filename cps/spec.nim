@@ -20,6 +20,8 @@ template cpsCall*(n: typed) {.pragma.}  ## redirection
 template cpsPending*() {.pragma.}       ## this is the last continuation
 template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement in a cps block
 template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps block
+template cpsCont*() {.pragma.}          ## this is a continuation
+template cpsRecover*() {.pragma.}       ## the next step in finally recovery path
 
 type
   NodeFilter* = proc(n: NimNode): NimNode
@@ -520,6 +522,15 @@ proc isCpsContinue*(n: NimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
 
+func newCpsRecover*(): NimNode =
+  ## Produce a {.cpsRecover.} annotation
+  nnkPragma.newTree:
+    bindSym"cpsRecover"
+
+proc isCpsRecover*(n: NimNode): bool =
+  ## Return whether a node is a {.cpsRecover.} annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsRecover")
+
 proc breakLabel*(n: NimNode): NimNode =
   ## Return the break label of a `break` statement or a `cpsBreak` annotation
   if n.isCpsBreak():
@@ -622,3 +633,15 @@ proc rewriteDefer*(n: NimNode): NimNode =
     for child in n:
       result.add:
         rewriteDefer child
+
+func isCpsCont*(n: NimNode): bool =
+  ## Return whether the given procedure is a cps continuation
+  n.kind in RoutineNodes and n.hasPragma("cpsCont")
+
+func getContSym*(n: NimNode): NimNode =
+  ## Retrieve the continuation symbol from `n`, provided that
+  ## `n` is a cpsCont.
+  if n.isCpsCont:
+    n.params[1][0]
+  else:
+    nil
