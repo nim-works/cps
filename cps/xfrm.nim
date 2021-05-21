@@ -603,7 +603,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
               newStmtList env.saften(nc)
 
           result.add jumpCall
-          return
+
+        return
       else:
         result.add env.saften(nc)
 
