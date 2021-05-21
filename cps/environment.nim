@@ -449,8 +449,8 @@ proc getException*(e: var Env): NimNode =
     e.ex = genField("ex")
 
     # TODO: idk how this works, really
-    e.locals[e.ex] = nnkVarSection.newTree:
-      newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
-    e.seen.incl e.ex.strVal
+    e = e.set(e.ex):
+      nnkVarSection.newTree:
+        newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
 
   newDotExpr(e.castToChild(e.first), e.ex)
