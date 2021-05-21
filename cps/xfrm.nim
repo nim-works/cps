@@ -359,7 +359,9 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
 
   result = newStmtList()
 
-  var n = normalizingRewrites n
+  var
+    n = normalizingRewrites n
+    ex = normalizingRewrites ex
 
   # the try statement that will be used to wrap all child of `n`
   let tryTemplate = copyNimNode n
