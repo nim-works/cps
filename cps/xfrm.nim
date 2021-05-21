@@ -348,14 +348,15 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## any handler.
   ##
   ## Only rewrite try with except branches.
+  {.warning: "compiler workaround here".}
+  let cont = cont
+
   expectKind cont, nnkSym
   expectKind ex, nnkDotExpr
   expectKind n, nnkTryStmt
 
   result = newStmtList()
 
-  # XXX: compiler bug workaround, pending issue
-  let cont = cont
   var n = normalizingRewrites n
 
   # the try statement that will be used to wrap all child of `n`
