@@ -354,6 +354,8 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
 
   result = newStmtList()
 
+  # XXX: compiler bug workaround, pending issue
+  let cont = cont
   var n = normalizingRewrites n
 
   # the try statement that will be used to wrap all child of `n`
