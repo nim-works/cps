@@ -69,3 +69,8 @@ template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
   ## a cooperative yield at appropriate continuation exit points.
   c
+
+template trace*(fun: string; where: LineInfo) {.used.} =
+  ## This symbol may be reimplemented to introduce control-flow
+  ## tracing of the entry to each continuation leg.
+  discard

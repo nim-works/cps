@@ -1,7 +1,7 @@
+import std/macros
+import std/strutils
 import balls
-
 import cps
-
 import foreign
 
 type
@@ -1090,3 +1090,27 @@ suite "tasteful tests":
 
     trampoline foo()
     check r == 7
+
+  block:
+    ## control-flow tracing
+
+    var found: seq[string]
+    proc trace(name: string; info: LineInfo) =
+      let sub = name.split("_", maxsplit=1)[0]
+      found.add sub
+      found.add $info.column
+
+    proc foo() {.cps: Cont.} =
+      var i = 0
+      while i < 3:
+        noop()
+        inc i
+        if i == 0:
+          continue
+        if i > 2:
+          break
+
+    trampoline foo()
+    check found == [ "whileLoop", "24", "afterCall", "8",
+                     "whileLoop", "24", "afterCall", "8",
+                     "whileLoop", "24", "afterCall", "8", ]

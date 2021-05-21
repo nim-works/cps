@@ -1,7 +1,7 @@
 import std/[macros, sequtils, algorithm]
-import cps/[spec, environment]
+import cps/[spec, environment, hooks]
 export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace
+export cpsDebug
 
 when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
   {.error: "i'm afraid of what you may have become".}
@@ -37,7 +37,8 @@ proc makeReturn(n: NimNode): NimNode =
       if n.kind in nnkCallKinds:
         n
       else:
-        newCall(ident"coop", n)
+        hook Coop:
+          n
   else:
     n
 
@@ -142,26 +143,27 @@ proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
 
 proc saften(parent: var Env; n: NimNode): NimNode
 
-proc makeContProc(name, cont, body: NimNode): NimNode =
+proc makeContProc(name, cont, source: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation
   ## `cont` with the given body.
   let
-    # we always wrap the body because there's no reason not to
-    body = newStmtList body
     contParam = desym cont
     contType = getTypeInst cont
 
-  # mix the coop symbol into any continuation proc
-  body.insert(0, nnkMixinStmt.newTree ident"coop")
-
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
-  # make it something that we can consume and modify
-  result.body = normalizingRewrites body
-  # replace any `cont` within the body with the parameter of the newly made proc
+  result.copyLineInfo source        # grab lineinfo from the source body
+  result.body = newStmtList()       # start with an empty body
+  result.introduce {Coop, Trace}    # mix any hooks in, however we do that
+  result.body.add:                  # perform convenience rewrites on source
+    normalizingRewrites newStmtList(source)
+  result.body.last.insert 0:        # insert a hook ahead of the source,
+    Trace.hook result               # hooking against the proc as a whole
+
+  # replace `cont` in the body with the parameter of the new proc
   result.body = resym(result.body, cont, contParam)
-  # if this body don't have any continuing control-flow
+  # if this body doesn't have any continuing control-flow,
   if result.body.firstReturn.isNil:
-    # annotate it so that outer macros can fill in as needed
+    # annotate it so that outer macros can fill in as needed.
     result.body.add newCpsPending()
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
