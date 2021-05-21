@@ -1112,6 +1112,7 @@ suite "tasteful tests":
           break
 
     trampoline foo()
-    check found == [ "whileLoop", "24", "16", "afterCall", "8", "16",
+    check found == [ "foo", "4", "16",
+                     "whileLoop", "24", "16", "afterCall", "8", "16",
                      "whileLoop", "24", "16", "afterCall", "8", "16",
                      "whileLoop", "24", "16", "afterCall", "8", "16", ]

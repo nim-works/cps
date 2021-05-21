@@ -114,10 +114,10 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
   result.introduce {Coop, Trace}    # mix any hooks in, however we do that
+  result.body.add:                  # insert a hook ahead of the source,
+    Trace.hook contParam, result    # hooking against the proc (minus body)
   result.body.add:                  # perform convenience rewrites on source
     normalizingRewrites newStmtList(source)
-  result.body.last.insert 0:        # insert a hook ahead of the source,
-    Trace.hook contParam, result    # hooking against the proc as a whole
 
   # replace `cont` in the body with the parameter of the new proc
   result.body = resym(result.body, cont, contParam)
@@ -568,8 +568,14 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   #   proc name(continuation: T): T
   n.params = nnkFormalParams.newTree(T, env.firstDef)
 
+  var body = newStmtList()     # a statement list will wrap the body
+  body.introduce {Trace}       # prepare to add a trace hook
+  body.add:
+    Trace.hook env.first, n    # hooking against the proc (minus cloned body)
+  body.add n.body              # add in the cloned body of the original proc
+
   # perform sym substitutions (or whatever)
-  n.body = env.rewriteSymbolsIntoEnvDotField(newStmtList n.body)
+  n.body = env.rewriteSymbolsIntoEnvDotField body
 
   # transform defers
   n.body = rewriteDefer n.body
