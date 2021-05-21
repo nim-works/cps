@@ -395,14 +395,8 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
         newExcept.last.add newAssignment(ex, newCall(bindSym"getCurrentException"))
 
       # set exception to the stashed one before executing any other code
-      #
-      # if not isNil(ex):
-      #   setCurrentException(ex)
       handlerBody.insert(0):
-        nnkIfStmt.newTree:
-          nnkElifBranch.newTree(newCall(bindSym"not", newCall(bindSym"isNil", ex))):
-            newStmtList():
-              newCall(bindSym"setCurrentException", ex)
+        newCall(bindSym"setCurrentException", ex)
 
       # turn the exception body into a continuation
       let handler = makeContProc(genSym(nskProc, "except"), cont, handlerBody)
