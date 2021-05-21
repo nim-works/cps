@@ -157,7 +157,7 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result.body.add:                  # perform convenience rewrites on source
     normalizingRewrites newStmtList(source)
   result.body.last.insert 0:        # insert a hook ahead of the source,
-    Trace.hook result               # hooking against the proc as a whole
+    Trace.hook contParam, result    # hooking against the proc as a whole
 
   # replace `cont` in the body with the parameter of the new proc
   result.body = resym(result.body, cont, contParam)

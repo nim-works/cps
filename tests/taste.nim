@@ -1095,10 +1095,11 @@ suite "tasteful tests":
     ## control-flow tracing
 
     var found: seq[string]
-    proc trace(name: string; info: LineInfo) =
+    proc trace(c: Cont; name: string; info: LineInfo) =
       let sub = name.split("_", maxsplit=1)[0]
       found.add sub
       found.add $info.column
+      found.add $sizeof(c[])
 
     proc foo() {.cps: Cont.} =
       var i = 0
@@ -1111,6 +1112,6 @@ suite "tasteful tests":
           break
 
     trampoline foo()
-    check found == [ "whileLoop", "24", "afterCall", "8",
-                     "whileLoop", "24", "afterCall", "8",
-                     "whileLoop", "24", "afterCall", "8", ]
+    check found == [ "whileLoop", "24", "16", "afterCall", "8", "16",
+                     "whileLoop", "24", "16", "afterCall", "8", "16",
+                     "whileLoop", "24", "16", "afterCall", "8", "16", ]
