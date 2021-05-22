@@ -1119,7 +1119,7 @@ suite "tasteful tests":
   block:
     ## custom allocators
     var r = 0
-    proc alloc[Cont](c: typedesc[Cont]): c =
+    proc alloc[T: Cont](c: typedesc[T]): c =
       inc r
       new c
 
