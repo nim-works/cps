@@ -27,6 +27,13 @@ template finished*(c: Continuation): bool =
   ## `true` if the continuation is finished.
   c.state == Finished
 
+proc trampoline*(c: Continuation): Continuation =
+  ## This is the basic trampoline: it will continue the continuation
+  ## until it is no longer in 'running' state
+  result = c
+  while result.running:
+    result = result.fn(c)
+
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
   c.state == Dismissed
