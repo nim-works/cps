@@ -554,7 +554,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
   booty.introduce {Alloc, Dealloc}    # we may actually dealloc here
   booty.body.add:
-    newAssignment(ident"result", env.newContinuation booty.name)
+    env.createContinuation booty.name
 
   # we can't mutate typed nodes, so copy ourselves
   n = cloneProc n

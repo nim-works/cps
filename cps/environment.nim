@@ -6,7 +6,7 @@ they are comprised.
 ]##
 
 import std/[sets, sequtils ,hashes, tables, macros, algorithm]
-import cps/spec
+import cps/[spec, hooks]
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
@@ -364,18 +364,6 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
     e.store.add:
       n.errorAst "localSection input"
 
-proc newContinuation*(e: Env; goto: NimNode = nil): NimNode =
-  ## else, perform the following alloc...
-  result = nnkObjConstr.newTree e.identity
-  for field, section in e.pairs:
-    # omit special fields in the env that we use for holding
-    # custom functions, results, and exceptions, respectively
-    if field notin [e.fn, e.rs]:
-      # the name from identdefs is not gensym'd (usually!)
-      result.add newColonExpr(field, section.last[0])
-  if not goto.isNil:
-    result.add newColonExpr(e.fn, goto)
-
 proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
   ## returns the appropriate target of a `return` statement in a CPS
   ## procedure that may (and may not) have a continuation instantiated yet.
@@ -415,3 +403,21 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   let child = e.castToChild(e.first)
   for field, section in pairs(e):
     result = result.resym(section[0][0], newDotExpr(child, field))
+
+proc createContinuation*(e: Env; goto: NimNode): NimNode =
+  ## allocate a continuation as `result` and point it at the leg `goto`
+  proc resultdot(n: NimNode): NimNode =
+    newDotExpr(e.castToChild(ident"result"), n)
+  result = newStmtList:
+    newAssignment ident"result":
+      hook Alloc: e.identity
+  for field, section in e.pairs:
+    # omit special fields in the env that we use for holding
+    # custom functions, results, and exceptions, respectively
+    if field notin [e.fn, e.rs]:
+      # the name from identdefs is not gensym'd (usually!)
+      result.add:
+        newAssignment(resultdot field, section.last[0])
+  if not goto.isNil:
+    result.add:
+      newAssignment(resultdot e.fn, goto)
