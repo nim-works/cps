@@ -19,6 +19,18 @@ proc state*(c: Continuation): State =
   else:
     Running
 
+template running*(c: Continuation): bool =
+  ## `true` if the continuation is running.
+  c.state == Running
+
+template finished*(c: Continuation): bool =
+  ## `true` if the continuation is finished.
+  c.state == Finished
+
+template dismissed*(c: Continuation): bool =
+  ## `true` if the continuation was dimissed.
+  c.state == Dismissed
+
 macro cps*(T: typed, n: typed): untyped =
   ## This is the .cps. macro performing the proc transformation
   when defined(nimdoc):
@@ -57,17 +69,6 @@ macro cpsMagic*(n: untyped): untyped =
     result.add n
   result.add m
 
-template running*(c: Continuation): bool =
-  ## `true` if the continuation is running.
-  c.state == Running
-
-template finished*(c: Continuation): bool =
-  ## `true` if the continuation is finished.
-  c.state == Finished
-
-template dismissed*(c: Continuation): bool =
-  ## `true` if the continuation was dimissed.
-  c.state == Dismissed
 
 template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
