@@ -380,11 +380,14 @@ proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
   ## returns the appropriate target of a `return` statement in a CPS
   ## procedure that may (and may not) have a continuation instantiated yet.
   if e.first.isNil or e.first.isEmpty:
-    result = e.maybeConvertToRoot:
-      e.newContinuation goto
+    when false:
+      result = e.maybeConvertToRoot:
+        e.newContinuation goto
+    else:
+      error "this code path is deprecated because i'm lazy"
   else:
-    result = newStmtList()
-    result.add newAssignment(newDotExpr(e.first, e.fn), goto)
+    result = newStmtList:
+      newAssignment(newDotExpr(e.first, e.fn), goto)
     result.add e.first
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
