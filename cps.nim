@@ -84,7 +84,8 @@ template alloc*[T: Continuation](c: typedesc[T]): T {.used.} =
   ## allocation.
   new c
 
-template dealloc*(c: sink Continuation) {.used.} =
+template dealloc*[T: Continuation](t: typedesc[T];
+                                   c: sink Continuation) {.used.} =
   ## This symbol may be reimplemented to customize continuation
   ## deallocation.
   discard

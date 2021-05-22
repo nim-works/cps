@@ -335,7 +335,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     if nc.isNil:
       result.add nc
       continue
-    
+
     # if it's a cps call,
     if nc.isCpsCall:
       let jumpCall = newCall(bindSym"cpsJump")
@@ -502,8 +502,7 @@ macro cpsResolver(T: typed, n: typed): untyped =
   # replace all `pending` with the end of continuation
   result = replacePending n:
     tailCall cont:
-      hook Dealloc:
-        cont
+      Dealloc.hook(T, cont)
   result = danglingCheck result
   result = workaroundRewrites result
 
@@ -614,7 +613,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # run other stages
   n.addPragma bindSym"cpsFloater"
-  n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", T)
+  n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", env.identity)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)

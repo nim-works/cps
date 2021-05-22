@@ -41,14 +41,16 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
     newCall(ident $hook, newLit(repr n.name), makeLineInfo n.lineInfoObj)
-  of Dealloc:
-    newStmtList [newCall(ident $hook, n), newNilLit()]
+  else:
+    n.errorAst "the " & $hook & " hook doesn't take one argument"
 
-proc hook*(hook: Hook; c: NimNode; n: NimNode): NimNode =
-  ## execute the given hook on the given node; `c` is likely a continuation
+proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
+  ## execute the given hook with two arguments
   case hook
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
-    newCall(ident $hook, c, newLit(repr n.name), makeLineInfo n.lineInfoObj)
+    newCall(ident $hook, a, newLit(repr b.name), makeLineInfo b.lineInfoObj)
+  of Dealloc:
+    newStmtList [newCall(ident $hook, a, b), newNilLit()]
   else:
-    n.errorAst "the " & $hook & " hook doesn't take two arguments"
+    b.errorAst "the " & $hook & " hook doesn't take two arguments"
