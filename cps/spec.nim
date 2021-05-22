@@ -639,7 +639,7 @@ proc isCpsCont*(n: NimNode): bool =
   ## Return whether the given procedure is a cps continuation
   n.kind in RoutineNodes and n.hasPragma("cpsCont")
 
-func getContSym*(n: NimNode): NimNode =
+proc getContSym*(n: NimNode): NimNode =
   ## Retrieve the continuation symbol from `n`, provided that
   ## `n` is a cpsCont.
   if n.isCpsCont:
