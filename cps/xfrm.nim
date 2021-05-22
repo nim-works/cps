@@ -463,6 +463,7 @@ proc cloneProc(n: NimNode, body: NimNode = nil): NimNode =
     newEmptyNode(),
     newEmptyNode(),
     if body == nil: copy n.body else: body)
+  result.copyLineInfo n
 
 proc replacePending(n, replacement: NimNode): NimNode =
   ## Replace cpsPending annotations with something else, usually
