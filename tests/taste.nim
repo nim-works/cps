@@ -1093,7 +1093,6 @@ suite "tasteful tests":
 
   block:
     ## control-flow tracing
-
     var found: seq[string]
     proc trace(c: Cont; name: string; info: LineInfo) =
       let sub = name.split("_", maxsplit=1)[0]
@@ -1116,3 +1115,18 @@ suite "tasteful tests":
                      "whileLoop", "24", "16", "afterCall", "8", "16",
                      "whileLoop", "24", "16", "afterCall", "8", "16",
                      "whileLoop", "24", "16", "afterCall", "8", "16", ]
+
+  block:
+    ## custom allocators
+    var r = 0
+    proc alloc[Cont](c: typedesc[Cont]): c =
+      inc r
+      new c
+
+    proc foo(x: int) {.cps: Cont.} =
+      check x == 3
+      noop()
+      check x == 3
+
+    trampoline foo(3)
+    check r == 1, "bzzzt"
