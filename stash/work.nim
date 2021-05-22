@@ -6,47 +6,48 @@ import cps, deques
 ###########################################################################
 
 type
-  Cont = ref object of RootObj
-    fn*: proc(c: Cont): Cont {.nimcall.}
-    id: string
+  Work = ref object of RootObj
+    fn*: proc(c: Work): Work {.nimcall.}
     pool: Pool
 
   Pool = ref object
-    work: Deque[Cont]
+    workQueue: Deque[Work]
 
-proc work(pool: Pool) =
-  while pool.work.len > 0:
-    var c = pool.work.popFirst
+  Resumer = proc()
+
+proc push(pool: Pool, c: Work) =
+  if c.running:
+    c.pool = pool
+    pool.workQueue.addLast(c)
+
+proc jield(c: Work): Work {.cpsMagic.} =
+  c.pool.push c
+
+proc run(pool: Pool) =
+  while pool.workQueue.len > 0:
+    var c = pool.workQueue.popFirst
     c = c.fn(c)
-    if c != nil:
-      pool.work.addLast c
-
-proc push(pool: Pool, c: Cont) =
-  pool.work.addLast(c)
-
-proc setPool(c: Cont, pool: Pool): Cont {.cpsMagic.} =
-  c.pool = pool
-  return c
-
-proc jield(c: Cont): Cont {.cpsMagic.} =
-  assert(c.pool != nil)
-  if c != nil:
-    c.pool.work.addLast(c)
+    pool.push c
 
 ###########################################################################
 # Main code
 ###########################################################################
 
-proc job(p: Pool, id: string, n: int) {.cps:Cont.} =
-  setPool(p)
+var fooResumer: Resumer
+
+proc job(id: string, n: int) {.cps:Work.} =
+  echo "job ", id, " in"
   var i = 0
   while i < n:
-    echo id, ": ", i
+    echo "job ", id, ": ", i
     jield()
     inc i
+  echo "job ", id, " out"
+
 
 let pool = Pool()
-pool.push job(pool, "cat", 3)
-pool.push job(pool, "dog", 3)
-work(pool)
+pool.push job("cat", 3)
+pool.push job("dog", 5)
+pool.push job("pig", 3)
+pool.run()
 

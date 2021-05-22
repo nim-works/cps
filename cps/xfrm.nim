@@ -1,7 +1,7 @@
 import std/[macros, sequtils, algorithm]
-import cps/[spec, environment]
+import cps/[spec, environment, hooks]
 export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace
+export cpsDebug
 
 when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
   {.error: "i'm afraid of what you may have become".}
@@ -15,6 +15,15 @@ proc isCpsCall(n: NimNode): bool =
       # all cpsCall are normal functions called via a generated symbol
       if not callee.isNil and callee.kind == nnkSym:
         result = callee.getImpl.hasPragma("cpsCall")
+
+proc isVoodooCall(n: NimNode): bool =
+  ## true if this node holds a call to a cps procedure
+  if n != nil and len(n) > 0:
+    if n.kind in nnkCallKinds:
+      let callee = n[0]
+      # all cpsCall are normal functions called via a generated symbol
+      if not callee.isNil and callee.kind == nnkSym:
+        result = callee.getImpl.hasPragma("cpsVoodooCall")
 
 proc firstReturn(p: NimNode): NimNode =
   ## find the first return statement within statement lists, or nil
@@ -37,7 +46,8 @@ proc makeReturn(n: NimNode): NimNode =
       if n.kind in nnkCallKinds:
         n
       else:
-        newCall(ident"coop", n)
+        hook Coop:
+          n
   else:
     n
 
@@ -102,71 +112,33 @@ proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
   # the result is the lifted stuff followed by the original code
   result = newStmtList(flatter.newStmtList, result)
 
-proc makeTail(env: var Env; name: NimNode; n: NimNode): NimNode =
-  ## make a tail call and put it in a single statement list;
-  ## this will always create a tail call proc and call it
-  let pragmas = nnkPragma.newTree bindSym"cpsLift"
-  result = newStmtList()
-  result.doc "new tail call: " & name.repr
-  result.add:
-    makeReturn:
-      if name.kind == nnkNilLit:
-        name                                   # return nil
-      else:
-        env.continuationReturnValue name       # return continuation
-
-  var procs = newStmtList()
-  if n.kind == nnkProcDef:
-    result.doc "adding the proc verbatim"
-    procs.add n
-  else:
-    # the locals value is, nominally, a proc param -- or it was.
-    # now we just use whatever the macro provided the env
-    var locals = env.first
-
-    # setup the proc body with whatever locals it still needs
-    var body = env.rewriteSymbolsIntoEnvDotField(n)
-
-    # add the declaration
-    procs.add newProc(name = name, pragmas = pragmas,
-                      body = newEmptyNode(),
-                      params = [env.root, newIdentDefs(locals,
-                                                       env.root)])
-    # add the implementation
-    procs.add newProc(name = name, pragmas = pragmas, body = body,
-                      params = [env.root, newIdentDefs(locals,
-                                                       env.root)])
-
-    # immediately push these definitions into the store and just
-    # return the tail call
-    for p in procs.items:
-      env.defineProc p
-
 proc saften(parent: var Env; n: NimNode): NimNode
 
-proc makeContProc(name, cont, body: NimNode): NimNode =
+proc makeContProc(name, cont, source: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation
   ## `cont` with the given body.
   let
-    # we always wrap the body because there's no reason not to
-    body = newStmtList body
     contParam = desym cont
     contType = getTypeInst cont
 
-  # mix the coop symbol into any continuation proc
-  body.insert(0, nnkMixinStmt.newTree ident"coop")
-
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
-  # make it something that we can consume and modify
-  result.body = normalizingRewrites body
-  # replace any `cont` within the body with the parameter of the newly made proc
+  result.copyLineInfo source        # grab lineinfo from the source body
+  result.body = newStmtList()       # start with an empty body
+  result.introduce {Coop, Trace, Alloc, Dealloc}    # mix any hooks in
+  result.body.add:                  # insert a hook ahead of the source,
+    Trace.hook contParam, result    # hooking against the proc (minus body)
+  result.body.add:                  # perform convenience rewrites on source
+    normalizingRewrites newStmtList(source)
+
+  # replace `cont` in the body with the parameter of the new proc
   result.body = resym(result.body, cont, contParam)
-  # if this body don't have any continuing control-flow
+  # if this body doesn't have any continuing control-flow,
   if result.body.firstReturn.isNil:
-    # annotate it so that outer macros can fill in as needed
+    # annotate it so that outer macros can fill in as needed.
     result.body.add newCpsPending()
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
+  result.addPragma ident"nimcall"
   # let other macros know this is a continuation
   result.addPragma bindSym"cpsCont"
 
@@ -465,6 +437,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     if nc.isNil:
       result.add nc
       continue
+
     # if it's a cps call,
     if nc.isCpsCall:
       let jumpCall = newCall(bindSym"cpsJump")
@@ -633,6 +606,7 @@ proc cloneProc(n: NimNode, body: NimNode = nil): NimNode =
     newEmptyNode(),
     newEmptyNode(),
     if body == nil: copy n.body else: body)
+  result.copyLineInfo n
 
 proc replacePending(n, replacement: NimNode): NimNode =
   ## Replace cpsPending annotations with something else, usually
@@ -672,7 +646,8 @@ macro cpsResolver(T: typed, n: typed): untyped =
   let n = normalizingRewrites n
   # replace all `pending` with the end of continuation
   result = replacePending n:
-    tailCall(cont, newNilLit())
+    tailCall cont:
+      Dealloc.hook(T, cont)
   result = danglingCheck result
   result = workaroundRewrites result
 
@@ -701,6 +676,16 @@ macro cpsFloater(n: typed): untyped =
   result = xfrmFloat n
 
   #debug(".cpsFloater.", result, Transformed, n)
+
+proc rewriteVoodoo(n: NimNode, env: Env): NimNode =
+  ## Rewrite non-yielding cpsCall calls by inserting the continuation as
+  ## the first argument
+  proc aux(n: NimNode): NimNode =
+    if n.isVoodooCall:
+      result = n.copyNimTree
+      result[0] = desym result[0]
+      result.insert(1, env.first)
+  n.filter(aux)
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
@@ -733,8 +718,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   var booty = cloneProc(n, newStmtList())
   booty.params[0] = T
   booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
+  booty.introduce {Alloc, Dealloc}    # we may actually dealloc here
   booty.body.add:
-    newAssignment(ident"result", env.newContinuation booty.name)
+    env.createContinuation booty.name
 
   # we can't mutate typed nodes, so copy ourselves
   n = cloneProc n
@@ -749,11 +735,20 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   #   proc name(continuation: T): T
   n.params = nnkFormalParams.newTree(T, env.firstDef)
 
+  var body = newStmtList()     # a statement list will wrap the body
+  body.introduce {Trace, Alloc, Dealloc}   # prepare hooks
+  body.add:
+    Trace.hook env.first, n    # hooking against the proc (minus cloned body)
+  body.add n.body              # add in the cloned body of the original proc
+
   # perform sym substitutions (or whatever)
-  n.body = env.rewriteSymbolsIntoEnvDotField(newStmtList n.body)
+  n.body = env.rewriteSymbolsIntoEnvDotField body
 
   # transform defers
   n.body = rewriteDefer n.body
+
+  # rewrite non-yielding cps calls
+  n.body = rewriteVoodoo(n.body, env)
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)
@@ -763,7 +758,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # run other stages
   n.addPragma bindSym"cpsFloater"
-  n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", T)
+  n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", env.identity)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)

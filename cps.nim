@@ -1,7 +1,7 @@
 import std/[macros]
 import cps/[spec, xfrm]
-export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace
+export Continuation, ContinuationProc, cpsCall, cpsVoodooCall
+export cpsDebug
 
 type
   State* {.pure.} = enum
@@ -19,6 +19,25 @@ proc state*(c: Continuation): State =
   else:
     Running
 
+template running*(c: Continuation): bool =
+  ## `true` if the continuation is running.
+  c.state == Running
+
+template finished*(c: Continuation): bool =
+  ## `true` if the continuation is finished.
+  c.state == Finished
+
+proc trampoline*(c: Continuation): Continuation =
+  ## This is the basic trampoline: it will continue the continuation
+  ## until it is no longer in 'running' state
+  result = c
+  while result.running:
+    result = result.fn(result)
+
+template dismissed*(c: Continuation): bool =
+  ## `true` if the continuation was dimissed.
+  c.state == Dismissed
+
 macro cps*(T: typed, n: typed): untyped =
   ## This is the .cps. macro performing the proc transformation
   when defined(nimdoc):
@@ -32,13 +51,17 @@ macro cpsMagic*(n: untyped): untyped =
   ## errors out of `.cps.` context and taking continuations as input.
   expectKind(n, nnkProcDef)
 
-  # Add .cpsCall. pragma to the proc
-  n.addPragma ident"cpsCall"
 
   # create a Nim-land version of the proc that throws an exception when called
   # from outside of CPS-land.
   var m = copyNimTree n
-  m.params[0] = newEmptyNode()
+
+  if m.params[0] == m.params[1][1]:
+    m.params[0] = newEmptyNode()
+    m.addPragma ident"cpsCall"
+  else:
+    m.addPragma ident"cpsVoodooCall"
+
   del(m.params, 1)
   m.body = newStmtList:
     nnkRaiseStmt.newTree:
@@ -53,19 +76,24 @@ macro cpsMagic*(n: untyped): untyped =
     result.add n
   result.add m
 
-template running*(c: Continuation): bool =
-  ## `true` if the continuation is running.
-  c.state == Running
-
-template finished*(c: Continuation): bool =
-  ## `true` if the continuation is finished.
-  c.state == Finished
-
-template dismissed*(c: Continuation): bool =
-  ## `true` if the continuation was dimissed.
-  c.state == Dismissed
 
 template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
   ## a cooperative yield at appropriate continuation exit points.
   c
+
+template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
+  ## This symbol may be reimplemented to introduce control-flow
+  ## tracing of the entry to each continuation leg.
+  discard
+
+template alloc*[T: Continuation](c: typedesc[T]): T {.used.} =
+  ## This symbol may be reimplemented to customize continuation
+  ## allocation.
+  new c
+
+template dealloc*[T: Continuation](t: typedesc[T];
+                                   c: sink Continuation) {.used.} =
+  ## This symbol may be reimplemented to customize continuation
+  ## deallocation.
+  discard

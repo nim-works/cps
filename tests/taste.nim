@@ -1,7 +1,7 @@
+import std/macros
+import std/strutils
 import balls
-
 import cps
-
 import foreign
 
 type
@@ -1126,3 +1126,60 @@ suite "tasteful tests":
 
     trampoline foo()
     check r == 7
+
+  block:
+    ## control-flow tracing
+    var found: seq[string]
+    proc trace(c: Cont; name: string; info: LineInfo) =
+      let sub = name.split("_", maxsplit=1)[0]
+      found.add sub
+      found.add $info.column
+      found.add $sizeof(c[])
+
+    proc foo() {.cps: Cont.} =
+      var i = 0
+      while i < 3:
+        noop()
+        inc i
+        if i == 0:
+          continue
+        if i > 2:
+          break
+
+    trampoline foo()
+    check found == [ "foo", "4", "16",
+                     "whileLoop", "24", "16", "afterCall", "8", "16",
+                     "whileLoop", "24", "16", "afterCall", "8", "16",
+                     "whileLoop", "24", "16", "afterCall", "8", "16", ]
+
+  block:
+    ## custom allocators
+    var r = 0
+    proc alloc[T: Cont](c: typedesc[T]): c =
+      inc r
+      new c
+
+    proc foo(x: int) {.cps: Cont.} =
+      check x == 3
+      noop()
+      check x == 3
+
+    trampoline foo(3)
+    check r == 1, "bzzzt"
+
+  block:
+    ## custom deallocators
+    var r = 0
+    proc dealloc[T: Cont](t: typedesc; c: sink T) =
+      check r == 0
+      inc r
+
+    proc foo(x: int) {.cps: Cont.} =
+      check r == 0
+      check x == 3
+      noop()
+      check x == 3
+      check r == 0
+
+    trampoline foo(3)
+    check r == 1, "bzzzt"

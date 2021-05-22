@@ -6,16 +6,16 @@ boring utilities likely useful to multiple pieces of cps machinery
 
 import std/[hashes, sequtils, macros]
 
-when (NimMajor, NimMinor) < (1, 3):
-  {.fatal: "requires nim-1.3".}
+when (NimMajor, NimMinor) < (1, 5):
+  {.fatal: "requires nim-1.5".}
 
 const
   cpsDebug* {.booldefine.} = false       ## produce gratuitous output
-  cpsTrace* {.booldefine.} = false       ## store "stack" traces
   comments* = cpsDebug         ## embed comments within the transformation
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
+template cpsVoodooCall*() {.pragma.}    ## a voodoo call
 template cpsCall*(n: typed) {.pragma.}  ## redirection
 template cpsPending*() {.pragma.}       ## this is the last continuation
 template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement in a cps block
@@ -24,14 +24,15 @@ template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsRecover*() {.pragma.}       ## the next step in finally recovery path
 
 type
-  NodeFilter* = proc(n: NimNode): NimNode
-
-  Continuation* = concept c
+  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+  Continuation* = concept c ##
+    ## All continuation types must match this `Continuation` concept
+    ## in order to be used by the `.cps.` macro.
     c.fn is ContinuationProc[Continuation]
     c is ref object
     c of RootObj
 
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+  NodeFilter* = proc(n: NimNode): NimNode
 
   Pair* = tuple
     key: NimNode
