@@ -1134,7 +1134,7 @@ suite "tasteful tests":
   block:
     ## custom deallocators
     var r = 0
-    proc dealloc(c: Cont) =
+    proc dealloc[T: Cont](t: typedesc; c: sink T) =
       check r == 0
       inc r
 
