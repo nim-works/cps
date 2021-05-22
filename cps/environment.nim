@@ -254,6 +254,15 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   assert not via.isNil
   assert not via.isEmpty
   var c = if c.isNil or c.isEmpty: ident"continuation" else: c
+
+  # add a check to make sure the supplied type will work for descendants
+  let check = nnkWhenStmt.newNimNode via
+  check.add:
+    nnkElifBranch.newTree:
+      [ infix(via, "isnot", ident"Continuation"),
+        errorAst repr(via) & " does not match the Continuation concept" ]
+  store.add check
+
   result = Env(c: c, store: store, via: via, id: via)
   result.seen = initHashSet[string]()
   init result
