@@ -6,7 +6,7 @@ they are comprised.
 ]##
 
 import std/[sets, sequtils ,hashes, tables, macros, algorithm]
-import cps/spec
+import cps/[spec, hooks]
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
@@ -62,32 +62,11 @@ proc root*(e: Env): NimNode =
     r = r.parent
   result = r.inherits
 
-when cpsTrace:
-  proc addTrace(e: Env; n: NimNode): NimNode =
-    if n.isNil or n.kind == nnkNilLit: return
-    # XXX: this doesn't work, sadly
-    #discard bindSym("init" & $e.root, rule = brForceOpen)
-    let info = lineInfoObj(n)
-    var identity =
-      if e.camefrom.isNil or e.camefrom.isEmpty:
-        "nil"
-      else:
-        repr(e.camefrom.returnTo)
-    identity.add "(" & repr(e.identity) & ")"
-    result = newCall(ident("init"), n, identity.newLit,
-                     info.filename.newLit,
-                     info.line.newLit,
-                     info.column.newLit)
-
 proc castToRoot(e: Env; n: NimNode): NimNode =
-  result = newTree(nnkCall, e.root, n)
-  when cpsTrace:
-    result = e.addTrace(result)
+  newTree(nnkCall, e.root, n)
 
 proc castToChild(e: Env; n: NimNode): NimNode =
-  when cpsTrace:
-    var n = e.addTrace(n)
-  result = newTree(nnkCall, e.identity, n)
+  newTree(nnkCall, e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -335,25 +314,26 @@ proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
   if result.isNil:
     result = n.errorAst "unable to find field for symbol " & n.repr
 
-proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
-  {.deprecated: "not used yet".} =
-  case n.kind
-  of nnkVarSection, nnkLetSection:
-    if n.len != 1:
-      n.errorAst "only one assignment per section is supported"
+when false:
+  proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
+    {.deprecated: "not used yet".} =
+    case n.kind
+    of nnkVarSection, nnkLetSection:
+      if n.len != 1:
+        n.errorAst "only one assignment per section is supported"
+      else:
+        e.findJustOneAssignmentName n[0]
+    of nnkIdentDefs:
+      if n.len != 3:
+        n.errorAst "only one identifier per assignment is supported"
+      elif n[0].kind notin {nnkIdent, nnkSym}:
+        n.errorAst "bad rewrite presented bogus input"
+      else:
+        e.getFieldViaLocal n
+    of nnkVarTuple:
+      n.errorAst "tuples not supported yet"
     else:
-      e.findJustOneAssignmentName n[0]
-  of nnkIdentDefs:
-    if n.len != 3:
-      n.errorAst "only one identifier per assignment is supported"
-    elif n[0].kind notin {nnkIdent, nnkSym}:
-      n.errorAst "bad rewrite presented bogus input"
-    else:
-      e.getFieldViaLocal n
-  of nnkVarTuple:
-    n.errorAst "tuples not supported yet"
-  else:
-    n.errorAst "unrecognized input"
+      n.errorAst "unrecognized input"
 
 proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
@@ -393,27 +373,18 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
     e.store.add:
       n.errorAst "localSection input"
 
-proc newContinuation*(e: Env; goto: NimNode = nil): NimNode =
-  ## else, perform the following alloc...
-  result = nnkObjConstr.newTree e.identity
-  for field, section in e.pairs:
-    # omit special fields in the env that we use for holding
-    # custom functions, results, and exceptions, respectively
-    if field notin [e.fn, e.rs]:
-      # the name from identdefs is not gensym'd (usually!)
-      result.add newColonExpr(field, section.last[0])
-  if not goto.isNil:
-    result.add newColonExpr(e.fn, goto)
-
 proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
   ## returns the appropriate target of a `return` statement in a CPS
   ## procedure that may (and may not) have a continuation instantiated yet.
   if e.first.isNil or e.first.isEmpty:
-    result = e.maybeConvertToRoot:
-      e.newContinuation goto
+    when false:
+      result = e.maybeConvertToRoot:
+        e.newContinuation goto
+    else:
+      error "this code path is deprecated because i'm lazy"
   else:
-    result = newStmtList()
-    result.add newAssignment(newDotExpr(e.first, e.fn), goto)
+    result = newStmtList:
+      newAssignment(newDotExpr(e.first, e.fn), goto)
     result.add e.first
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
@@ -442,8 +413,20 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   for field, section in pairs(e):
     result = result.resym(section[0][0], newDotExpr(child, field))
 
-proc defineProc*(e: var Env; p: NimNode) =
-  ## add a proc definition, eg. as part of makeTail()
-  assert not p.isNil
-  assert p.kind == nnkProcDef
-  e.store.add p
+proc createContinuation*(e: Env; goto: NimNode): NimNode =
+  ## allocate a continuation as `result` and point it at the leg `goto`
+  proc resultdot(n: NimNode): NimNode =
+    newDotExpr(e.castToChild(ident"result"), n)
+  result = newStmtList:
+    newAssignment ident"result":
+      hook Alloc: e.identity
+  for field, section in e.pairs:
+    # omit special fields in the env that we use for holding
+    # custom functions, results, and exceptions, respectively
+    if field notin [e.fn, e.rs]:
+      # the name from identdefs is not gensym'd (usually!)
+      result.add:
+        newAssignment(resultdot field, section.last[0])
+  if not goto.isNil:
+    result.add:
+      newAssignment(resultdot e.fn, goto)

@@ -1,7 +1,7 @@
 import std/[macros]
 import cps/[spec, xfrm]
 export Continuation, ContinuationProc, cpsCall, cpsVoodooCall
-export cpsDebug, cpsTrace
+export cpsDebug
 
 type
   State* {.pure.} = enum
@@ -74,3 +74,19 @@ template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
   ## a cooperative yield at appropriate continuation exit points.
   c
+
+template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
+  ## This symbol may be reimplemented to introduce control-flow
+  ## tracing of the entry to each continuation leg.
+  discard
+
+template alloc*[T: Continuation](c: typedesc[T]): T {.used.} =
+  ## This symbol may be reimplemented to customize continuation
+  ## allocation.
+  new c
+
+template dealloc*[T: Continuation](t: typedesc[T];
+                                   c: sink Continuation) {.used.} =
+  ## This symbol may be reimplemented to customize continuation
+  ## deallocation.
+  discard

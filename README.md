@@ -27,11 +27,11 @@ The continuations produced by this macro...
 - compose efficient and idiomatic asynchronous code
 - are over a thousand times lighter than threads
 - are leak-free under Nim's ARC/ORC memory management
-- may be based upon your own custom `ref object`
+- may be based upon your own custom `ref object` type
 - may be dispatched using your own custom dispatcher
 - may be moved between threads to parallelize execution
 - are faster and lighter than async/await futures
-- have nearly zero overhead versus closure iterators
+- are 5-15% faster than native closure iterators
 - exploit no unsafe features of the language (`cast`, `ptr`, `addr`, `emit`)
 
 ## This is Work In Progress!
@@ -108,7 +108,6 @@ to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
 ## Hacking
 
 - use `--define:cpsDebug` to get extra debugging output
-- use `--define:cpsTrace` to get continuation tracing from the trampoline
 - use `--define:cpsTree` to dump AST via `treeRepr` in `cpsDebug` mode
 
 ## Documentation
