@@ -863,19 +863,21 @@ suite "tasteful tests":
 
   block:
     ## defer with split
-    skip "not working, see #80"
-    r = 0
-    proc foo() {.cps: Cont.} =
-      defer:
-        check r == 2, "defer run before end of scope"
+    when true:
+      skip "not working, see #80"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        defer:
+          check r == 2, "defer run before end of scope"
+          inc r
+
+        inc r
+        noop()
         inc r
 
-      inc r
-      noop()
-      inc r
-
-    trampoline foo()
-    check r == 3
+      trampoline foo()
+      check r == 3
 
   block:
     ## implicit generics
