@@ -22,14 +22,15 @@ template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement i
 template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps block
 
 type
-  NodeFilter* = proc(n: NimNode): NimNode
-
-  Continuation* = concept c
+  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+  Continuation* = concept c ##
+    ## All continuation types must match this `Continuation` concept
+    ## in order to be used by the `.cps.` macro.
     c.fn is ContinuationProc[Continuation]
     c is ref object
     c of RootObj
 
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+  NodeFilter* = proc(n: NimNode): NimNode
 
   Pair* = tuple
     key: NimNode
