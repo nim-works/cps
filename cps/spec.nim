@@ -11,7 +11,6 @@ when (NimMajor, NimMinor) < (1, 3):
 
 const
   cpsDebug* {.booldefine.} = false       ## produce gratuitous output
-  cpsTrace* {.booldefine.} = false       ## store "stack" traces
   comments* = cpsDebug         ## embed comments within the transformation
 
 template cpsLift*() {.pragma.}          ## lift this proc|type

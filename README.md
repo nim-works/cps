@@ -108,7 +108,6 @@ to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
 ## Hacking
 
 - use `--define:cpsDebug` to get extra debugging output
-- use `--define:cpsTrace` to get continuation tracing from the trampoline
 - use `--define:cpsTree` to dump AST via `treeRepr` in `cpsDebug` mode
 
 ## Documentation

@@ -1,7 +1,7 @@
 import std/[macros]
 import cps/[spec, xfrm]
 export Continuation, ContinuationProc, cpsCall
-export cpsDebug, cpsTrace
+export cpsDebug
 
 type
   State* {.pure.} = enum

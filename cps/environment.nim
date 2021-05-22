@@ -62,32 +62,11 @@ proc root*(e: Env): NimNode =
     r = r.parent
   result = r.inherits
 
-when cpsTrace:
-  proc addTrace(e: Env; n: NimNode): NimNode =
-    if n.isNil or n.kind == nnkNilLit: return
-    # XXX: this doesn't work, sadly
-    #discard bindSym("init" & $e.root, rule = brForceOpen)
-    let info = lineInfoObj(n)
-    var identity =
-      if e.camefrom.isNil or e.camefrom.isEmpty:
-        "nil"
-      else:
-        repr(e.camefrom.returnTo)
-    identity.add "(" & repr(e.identity) & ")"
-    result = newCall(ident("init"), n, identity.newLit,
-                     info.filename.newLit,
-                     info.line.newLit,
-                     info.column.newLit)
-
 proc castToRoot(e: Env; n: NimNode): NimNode =
-  result = newTree(nnkCall, e.root, n)
-  when cpsTrace:
-    result = e.addTrace(result)
+  newTree(nnkCall, e.root, n)
 
 proc castToChild(e: Env; n: NimNode): NimNode =
-  when cpsTrace:
-    var n = e.addTrace(n)
-  result = newTree(nnkCall, e.identity, n)
+  newTree(nnkCall, e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
