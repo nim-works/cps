@@ -113,7 +113,7 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
-  result.introduce {Coop, Trace, Dealloc}    # mix any hooks in
+  result.introduce {Coop, Trace, Alloc, Dealloc}    # mix any hooks in
   result.body.add:                  # insert a hook ahead of the source,
     Trace.hook contParam, result    # hooking against the proc (minus body)
   result.body.add:                  # perform convenience rewrites on source
@@ -570,7 +570,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   n.params = nnkFormalParams.newTree(T, env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
-  body.introduce {Trace}       # prepare to add a trace hook
+  body.introduce {Trace, Alloc, Dealloc}   # prepare hooks
   body.add:
     Trace.hook env.first, n    # hooking against the proc (minus cloned body)
   body.add n.body              # add in the cloned body of the original proc
