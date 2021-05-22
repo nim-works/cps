@@ -74,3 +74,13 @@ template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
   ## This symbol may be reimplemented to introduce control-flow
   ## tracing of the entry to each continuation leg.
   discard
+
+template alloc*[T: Continuation](c: typedesc[T]): T {.used.} =
+  ## This symbol may be reimplemented to customize continuation
+  ## allocation.
+  new c
+
+template dealloc*(c: sink Continuation) {.used.} =
+  ## This symbol may be reimplemented to customize continuation
+  ## deallocation.
+  discard
