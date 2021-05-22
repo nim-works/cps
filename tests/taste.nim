@@ -724,41 +724,75 @@ suite "tasteful tests":
 
   block:
     ## try-except-statement splits
-    when true:
-      skip "not working, see #78"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
         inc r
-        try:
-          noop()
-          inc r
-        except:
-          fail "this branch should not run"
-        inc r
+      except:
+        fail "this branch should not run"
+      inc r
 
-      trampoline foo()
-      check r == 3
+    trampoline foo()
+    check r == 3
 
   block:
     ## try-except splits with raise
-    when true:
-      skip "not working, see #78"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
         inc r
-        try:
-          noop()
-          inc r
-          raise newException(CatchableError, "")
-          fail "statement run after raise"
-        except:
-          inc r
+        raise newException(CatchableError, "test")
+        fail "statement run after raise"
+      except:
+        check getCurrentExceptionMsg() == "test"
         inc r
+      inc r
 
-      trampoline foo()
-      check r == 4
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## except splits with raise
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
+        inc r
+        raise newException(CatchableError, "test")
+        fail "statement run after raise"
+      except:
+        inc r
+        noop()
+        check getCurrentExceptionMsg() == "test"
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 5
+
+  block:
+    ## except split only with raise
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        inc r
+        raise newException(CatchableError, "test")
+        fail "statement run after raise"
+      except:
+        inc r
+        noop()
+        check getCurrentExceptionMsg() == "test"
+        inc r
+      inc r
+
+    trampoline foo()
+    check r == 5
 
   block:
     ## try-finally-statement splits
