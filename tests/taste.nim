@@ -1130,3 +1130,17 @@ suite "tasteful tests":
 
     trampoline foo(3)
     check r == 1, "bzzzt"
+
+  block:
+    ## custom deallocators
+    var r = 0
+    proc dealloc(c: Cont) =
+      inc r
+
+    proc foo(x: int) {.cps: Cont.} =
+      check x == 3
+      noop()
+      check x == 3
+
+    trampoline foo(3)
+    check r == 1, "bzzzt"

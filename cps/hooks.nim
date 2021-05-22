@@ -35,12 +35,14 @@ proc makeLineInfo(n: LineInfo): NimNode =
 proc hook*(hook: Hook; n: NimNode): NimNode =
   ## execute the given hook on the given node
   case hook
-  of Coop, Alloc, Dealloc:
+  of Coop, Alloc:
     # hook(continuation)
     newCall(ident $hook, n)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
     newCall(ident $hook, newLit(repr n.name), makeLineInfo n.lineInfoObj)
+  of Dealloc:
+    newStmtList [newCall(ident $hook, n), newNilLit()]
 
 proc hook*(hook: Hook; c: NimNode; n: NimNode): NimNode =
   ## execute the given hook on the given node; `c` is likely a continuation

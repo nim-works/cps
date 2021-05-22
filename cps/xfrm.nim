@@ -491,7 +491,9 @@ macro cpsResolver(T: typed, n: typed): untyped =
   let n = normalizingRewrites n
   # replace all `pending` with the end of continuation
   result = replacePending n:
-    tailCall(cont, newNilLit())
+    tailCall cont:
+      hook Dealloc:
+        cont
   result = danglingCheck result
   result = workaroundRewrites result
 
