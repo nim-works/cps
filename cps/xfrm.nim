@@ -136,6 +136,7 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
     result.body.add newCpsPending()
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
+  result.addPragma ident"nimcall"
 
 func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
