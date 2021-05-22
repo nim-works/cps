@@ -635,7 +635,7 @@ proc rewriteDefer*(n: NimNode): NimNode =
       result.add:
         rewriteDefer child
 
-func isCpsCont*(n: NimNode): bool =
+proc isCpsCont*(n: NimNode): bool =
   ## Return whether the given procedure is a cps continuation
   n.kind in RoutineNodes and n.hasPragma("cpsCont")
 
