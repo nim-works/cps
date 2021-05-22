@@ -32,7 +32,7 @@ proc trampoline*(c: Continuation): Continuation =
   ## until it is no longer in 'running' state
   result = c
   while result.running:
-    result = result.fn(c)
+    result = result.fn(result)
 
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
