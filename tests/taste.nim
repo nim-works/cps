@@ -1135,12 +1135,15 @@ suite "tasteful tests":
     ## custom deallocators
     var r = 0
     proc dealloc(c: Cont) =
+      check r == 0
       inc r
 
     proc foo(x: int) {.cps: Cont.} =
+      check r == 0
       check x == 3
       noop()
       check x == 3
+      check r == 0
 
     trampoline foo(3)
     check r == 1, "bzzzt"
