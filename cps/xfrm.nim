@@ -440,7 +440,8 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and may require a jump to enter finally.
   ##
   ## Only rewrite try with finally.
-  doAssert false, "not implemented"
+  result = newStmtList()
+  result.add errorAst("try with finally with splitting is not supported", n)
 
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
