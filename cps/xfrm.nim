@@ -113,7 +113,7 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
-  result.introduce {Coop, Trace}    # mix any hooks in, however we do that
+  result.introduce {Coop, Trace, Dealloc}    # mix any hooks in
   result.body.add:                  # insert a hook ahead of the source,
     Trace.hook contParam, result    # hooking against the proc (minus body)
   result.body.add:                  # perform convenience rewrites on source
@@ -552,6 +552,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   var booty = cloneProc(n, newStmtList())
   booty.params[0] = T
   booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
+  booty.introduce {Alloc, Dealloc}    # we may actually dealloc here
   booty.body.add:
     newAssignment(ident"result", env.newContinuation booty.name)
 
