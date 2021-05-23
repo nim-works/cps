@@ -5,6 +5,9 @@ boring utilities likely useful to multiple pieces of cps machinery
 ]##
 
 import std/[hashes, sequtils, macros]
+import cps/ast
+
+export isEmpty, errorAst
 
 when (NimMajor, NimMinor) < (1, 5):
   {.fatal: "requires nim-1.5".}
@@ -46,9 +49,9 @@ type
   Matcher* = proc(n: NimNode): bool
     ## A proc that returns whether a NimNode should be replaced
 
-func isEmpty*(n: NimNode): bool =
-  ## `true` if the node `n` is Empty
-  result = not n.isNil and n.kind == nnkEmpty
+# func isEmpty*(n: NimNode): bool =
+#   ## `true` if the node `n` is Empty
+#   result = not n.isNil and n.kind == nnkEmpty
 
 proc filter*(n: NimNode; f: NodeFilter): NimNode =
   result = f(n)
@@ -269,21 +272,21 @@ when cpsDebug:
 else:
   template lineAndFile*(n: NimNode): string = "(no debug)"
 
-proc errorAst*(s: string, info: NimNode = nil): NimNode =
-  ## produce {.error: s.} in order to embed errors in the ast
-  ##
-  ## optionally take a node to set the error line information
-  result = nnkPragma.newTree:
-    ident"error".newColonExpr: newLit s
-  if not info.isNil:
-    result[0].copyLineInfo info
+# proc errorAst*(s: string, info: NimNode = nil): NimNode =
+#   ## produce {.error: s.} in order to embed errors in the ast
+#   ##
+#   ## optionally take a node to set the error line information
+#   result = nnkPragma.newTree:
+#     ident"error".newColonExpr: newLit s
+#   if not info.isNil:
+#     result[0].copyLineInfo info
 
-proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
-  ## embed an error with a message, the line info is copied from the node
-  ## too
-  # TODO: we might no longer need this now that the other version can
-  #       get the line info
-  errorAst(s & ":\n" & treeRepr(n) & "\n", n)
+# proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
+#   ## embed an error with a message, the line info is copied from the node
+#   ## too
+#   # TODO: we might no longer need this now that the other version can
+#   #       get the line info
+#   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
 
 proc genField*(ident = ""): NimNode
   {.deprecated: "pending https://github.com/nim-lang/Nim/issues/17851".} =
@@ -293,40 +296,37 @@ proc genField*(ident = ""): NimNode
 proc normalizingRewrites*(n: NimNode): NimNode =
   ## Rewrite AST into a safe form for manipulation
   proc rewriter(n: NimNode): NimNode =
-    proc rewriteIdentDefs(n: NimNode): NimNode =
+    proc rewriteIdentDefs(n: IdentDefs): IdentDefs =
       ## Rewrite an identDefs to ensure it has three children.
-      if n.kind == nnkIdentDefs:
-        if n.len == 2:
-          n.add newEmptyNode()
-        elif n[1].isEmpty:          # add explicit type symbol
-          n[1] = getTypeInst n[2]
-        n[2] = normalizingRewrites n[2]
-        result = n
+      # if n.kind == nnkIdentDefs:
+      if n.hasNoExplicitInitValue:
+        n.NimNode.add newEmptyNode() # XXX: come up with a good name for this
+      else:
+        n.ensureExplicitType()
+      n.definition = normalizingRewrites n.definition
+      result = n
 
-    proc rewriteVarLet(n: NimNode): NimNode =
+    proc rewriteVarLet(n: VarLetSection): NimNode =
       ## Rewrite a var|let section of multiple identDefs
       ## into multiple such sections with well-formed identDefs
-      if n.kind in {nnkLetSection, nnkVarSection}:
-        result = newStmtList()
-        for child in n.items:
-          case child.kind
-          of nnkVarTuple:
-            # we used to rewrite these, but the rewrite is only safe for
-            # very trivial deconstructions.  now we rewrite the symbols
-            # into the env during the saften pass as necessary.
-            #
-            # a new section with a single VarTuple statement
-            result.add:
-              newNimNode(n.kind, n).add:
-                child
-          of nnkIdentDefs:
-            # a new section with a single rewritten identdefs within
-            result.add:
-              newNimNode(n.kind, n).add:
-                rewriteIdentDefs child
-          else:
-            result.add:
-              child.errorAst "unexpected"
+      result = newStmtList()
+      for child in n.items:
+        case child.kind
+        of VarLetSectionChildKind.nnkVarTuple:
+          # we used to rewrite these, but the rewrite is only safe for
+          # very trivial deconstructions.  now we rewrite the symbols
+          # into the env during the saften pass as necessary.
+          #
+          # a new section with a single VarTuple statement
+          result.add:
+            n.newSingleChildSection(child.get).NimNode
+        of VarLetSectionChildKind.nnkIdentDefs:
+          # a new section with a single rewritten identdefs within
+          result.add:
+            n.newSingleChildSection(rewriteIdentDefs child.get(IdentDefs)).NimNode
+        else:
+          result.add:
+            child.errorAst "unexpected"
 
     proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
       ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
@@ -419,9 +419,9 @@ proc normalizingRewrites*(n: NimNode): NimNode =
 
     case n.kind
     of nnkIdentDefs:
-      rewriteIdentDefs n
+      (rewriteIdentDefs n.asIdentDefs.get()).NimNode
     of nnkLetSection, nnkVarSection:
-      rewriteVarLet n
+      rewriteVarLet n.asVarLetSection
     of nnkHiddenAddr, nnkHiddenDeref:
       rewriteHiddenAddrDeref n
     of nnkConv:
