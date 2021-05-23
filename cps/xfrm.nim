@@ -3,6 +3,8 @@ import cps/[spec, environment, hooks]
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug
 
+#{.experimental: "strictNotNil".}
+
 when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
   {.error: "i'm afraid of what you may have become".}
 
@@ -208,6 +210,8 @@ macro cpsMayJump(cont, n, after: typed): untyped =
     afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
     afterTail = tailCall(desym cont, afterProc.name)
 
+    # FIXME: fix this to use makeReturn
+
     resolvedBody =
       n.replace(isCpsPending):
         afterTail
@@ -319,8 +323,8 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   #debug("cpsWhile", result, Transformed, cond)
 
 macro cpsTryExcept(cont, ex, n: typed): untyped =
-  ## A try statement tainted by a `cpsJump` and may require a jump to enter
-  ## any handler.
+  ## A try statement tainted by a `cpsJump` and
+  ## may require a jump to enter any handler.
   ##
   ## Only rewrite try with except branches.
   {.warning: "compiler workaround here".}
@@ -370,7 +374,8 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
         newExcept[0] = newExcept[0][1]
 
       # assign the exception into `ex`
-      newExcept.last.add newAssignment(ex, newCall(bindSym"getCurrentException"))
+      newExcept.last.add:
+        newAssignment(ex, newCall(bindSym"getCurrentException"))
 
       # set exception to the stashed one before executing any other code
       handlerBody.insert(0):
@@ -409,7 +414,8 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   result = workaroundRewrites result
 
 macro cpsTryFinally(cont, ex, n: typed): untyped =
-  ## A try statement tainted by a `cpsJump` and may require a jump to enter finally.
+  ## A try statement tainted by a `cpsJump` and
+  ## may require a jump to enter finally.
   ##
   ## Only rewrite try with finally.
   result = newStmtList()
@@ -440,8 +446,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
     # if it's a cps call,
     if nc.isCpsCall:
-      let jumpCall = newCall(bindSym"cpsJump")
-      jumpCall.add(env.first)
+      let jumpCall = newCall(bindSym"cpsJump", env.first)
       jumpCall.add:
         env.saften nc
       if i < n.len - 1:
@@ -450,21 +455,25 @@ proc saften(parent: var Env; n: NimNode): NimNode =
       result.add jumpCall
       return
 
-    if i < n.len-1:
-      if n.kind == nnkTryStmt:
-        discard "children of this node are separated execution branches"
-      elif nc.isCpsBlock and not nc.isCpsCall:
+    # we deal with the body of a try when processing the try itself,
+    # so check to see if our parent is a try statement, and if not...
+    if n.kind != nnkTryStmt:
+
+      # and (only) if it's not the last node, we need to evaluate
+      # whether we (may) want to issue a jump at this point
+      if i < n.len-1 and nc.isCpsBlock:
+
         case nc.kind
         of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
-          discard "these require their outer structure to be captured"
+          # these nodes will be handled by their respective parent nodes
+          discard
         else:
-          let jumpCall = newCall(bindSym"cpsMayJump")
-          jumpCall.add(env.first)
+          # control-flow will end here with a MayJump annotation
+          let jumpCall = newCall(bindSym"cpsMayJump", env.first)
           jumpCall.add:
-            env.saften:
-              newStmtList nc
+            env.saften newStmtList(nc)               # this child node
           jumpCall.add:
-              env.saften newStmtList(n[i + 1 .. ^1])
+            env.saften newStmtList(n[i + 1 .. ^1])   # subsequent siblings
           result.add jumpCall
           return
 
@@ -498,7 +507,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
           errorAst("for loop with a cps call inside is not supported", nc)
       else:
         var transformed = env.saften(nc)
-        # this is not a cps block, so all the break and continue should be preserved
+        # this is not a cps block, so all the break and continue
+        # statements should be preserved
         transformed = restoreBreak transformed
         transformed = restoreContinue transformed
         result.add transformed
@@ -525,7 +535,8 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         return
       else:
         var transformed = env.saften(nc)
-        # this is not a cps block, so all the break should be preserved
+        # this is not a cps block, so all the break
+        # statements should be preserved
         transformed = transformed.restoreBreak(nc[0])
         result.add transformed
 
@@ -543,8 +554,9 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.add jumpCall
         return
       else:
+        # this is not a cps block, so all the break and
+        # continue statements should be preserved
         var transformed = env.saften(nc)
-        # this is not a cps block, so all the break and continue should be preserved
         transformed = restoreBreak transformed
         transformed = restoreContinue transformed
         result.add transformed
@@ -589,6 +601,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
         return
       else:
+        # try statement with no cps complications
         result.add env.saften(nc)
 
     # not a statement cps is interested in
@@ -693,7 +706,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # Some sanity checks
   n.expectKind nnkProcdef
   if not n.params[0].isEmpty:
-    error "cps functions can not have a return type", n
+    error "do not specify a return-type for .cps. functions", n
+
+  if T.isNil:
+    error "specify a type for the continuation with .cps: SomeType", n
 
   # enhanced spam before it all goes to shit
   debug(".cps.", n, Original)

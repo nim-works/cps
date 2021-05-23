@@ -8,6 +8,8 @@ they are comprised.
 import std/[sets, sequtils ,hashes, tables, macros, algorithm]
 import cps/[spec, hooks]
 
+#{.experimental: "strictNotNil".}
+
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
   LocalCache = OrderedTable[NimNode, NimNode]
@@ -25,37 +27,33 @@ type
     fn: NimNode                     # the sym we use for the goto target
     rs: NimNode                     # the sym we use for "yielded" result
     ex: NimNode                     # the sym we use for current exception
+    mom: NimNode                    # the sym we use for parent continuation
 
-proc len*(e: Env): int =
-  if not e.isNil:
-    result = len(e.locals)
+proc len*(e: Env): int = e.locals.len
 
-proc isEmpty*(e: Env): bool =
-  result = len(e) == 0
+proc isEmpty*(e: Env): bool = e.len == 0
 
 proc inherits*(e: Env): NimNode =
-  assert not e.isNil
-  assert not e.via.isNil
-  assert not e.via.isEmpty
-  result = if e.parent.isNil: e.via else: e.parent.id
+  if e.parent.isNil:
+    e.via
+  else:
+    e.parent.id
 
-proc identity*(e: Env): NimNode =
-  assert not e.isNil
-  result = e.id
+proc identity*(e: Env): NimNode = e.id
 
-proc isWritten(e: Env): bool =
+func isWritten(e: Env): bool =
   ## why say in three lines what you can say in six?
   block found:
-    for section in items(e.store):
+    for section in e.store.items:
       if section.kind == nnkTypeSection:
-        for def in items(section):
+        for def in section.items:
           result = repr(def[0]) == repr(e.identity)
           if result:
             break found
 
-proc isDirty*(e: Env): bool =
+func isDirty*(e: Env): bool =
   ## the type hasn't been written since an add occurred
-  not(e.isWritten) or (not(e.parent.isNil) and e.parent.isDirty)
+  (not e.isWritten) or (not e.parent.isNil and e.parent.isDirty)
 
 proc root*(e: Env): NimNode =
   var r = e
@@ -81,7 +79,9 @@ proc init(e: var Env) =
   if e.fn.isNil:
     e.fn = ident"fn"
   if e.rs.isNil:
-    e.rs = genField("result")
+    e.rs = genField"result"
+  if e.mom.isNil:
+    e.mom = genField"mamma"
   e.id = genSym(nskType, "env")
 
 proc allPairs(e: Env): seq[Pair] =
@@ -93,26 +93,25 @@ proc allPairs(e: Env): seq[Pair] =
     result.add allPairs(e.parent)
 
 iterator pairs(e: Env): Pair =
-  assert not e.isNil
-  var seen = initHashSet[string]()
-  for pair in e.allPairs:
-    if pair.key == e.ex:
-      continue
-    # make sure we're actually measuring gensyms for collision
-    if not seen.containsOrIncl definedName(pair.val).strVal:
-      yield pair
+  if not e.isNil:
+    var seen = initHashSet[string]()
+    for pair in e.allPairs:
+      # FIXME: basically, we're saying that exceptions in our parents
+      #        will make it into this iterator, but exceptions from
+      #        _this_ Env will not...  we will fix this later.
+      if pair.key != e.ex:
+        # make sure we're actually measuring gensyms for collision
+        if not seen.containsOrIncl definedName(pair.val).strVal:
+          yield pair
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
   for name, section in e.locals.pairs:
     for defs in section.items:
-      if defs[1].isEmpty:
-        # get the type of the assignment
-        n.add:
+      n.add:
+        if defs[1].isEmpty:         # get the type of the assignment
           newIdentDefs(name, getTypeImpl(defs.last), newEmptyNode())
-      else:
-        # name is an ident or symbol
-        n.add:
+        else:                       # name is an ident or symbol
           newIdentDefs(name, defs[1], newEmptyNode())
 
 proc contains*(e: Env; key: NimNode): bool =
@@ -134,26 +133,21 @@ proc `==`(a, b: Env): bool {.deprecated, used.} = a.seen == b.seen
 proc `<`(a, b: Env): bool = a.seen < b.seen
 proc `*`(a, b: Env): HashSet[string] {.deprecated, used.} = a.seen * b.seen
 
-proc reparent(e: var Env; p: Env) =
+proc reparent(e: Env; p: Env) =
   ## set all nodes to have a parent at least as large as p
-  if not e.isNil:
-    if e < p:
-      # p is a superset of us; suggest it to our parents
-      reparent(e.parent, p)
-      if not e.parent.isNil:
-        if e.parent < p:
-          # and then set it as our parent if it's better
-          e.parent = p
-    else:
-      # offer ourselves to our parent instead
-      reparent(e.parent, e)
+  if e < p:
+    # p is a superset of us; suggest it to our parents
+    reparent(e.parent, p)
+    if not e.parent.isNil:
+      if e.parent < p:
+        # and then set it as our parent if it's better
+        e.parent = p
+  else:
+    # offer ourselves to our parent instead
+    reparent(e.parent, e)
 
-proc makeType*(e: var Env): NimNode =
+proc makeType*(e: Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-
-  # determine if a symbol clash necessitates pointing to a new parent
-  #performReparent(e)
-
   result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
@@ -165,10 +159,9 @@ proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs)
 
-proc newEnv*(parent: var Env; copy = off): Env =
+proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
   ## or on-demand in the back-end (with copy = on)
-  assert not parent.isNil
   if copy:
     result = Env(store: parent.store,
                  via: parent.identity,
@@ -183,26 +176,25 @@ proc newEnv*(parent: var Env; copy = off): Env =
   else:
     result = parent
 
-proc storeType*(e: var Env; force = off): Env =
+proc storeType*(e: Env; force = off): Env =
   ## turn an env into a complete typedef in a type section
-  assert not e.isNil
   if e.isDirty:
     if force:
       reparent(e, e)
     if not e.parent.isNil:
-      assert not e.parent.isDirty
-      # must store the parent for inheritance ordering reasons;
-      # also, we don't want it to be changed under our feet.
-      assert e.via == e.parent.id
-      e.parent = e.parent.storeType
-    e.store.add nnkTypeSection.newTree e.makeType
+      if not e.parent.isDirty:
+        # must store the parent for inheritance ordering reasons;
+        # also, we don't want it to be changed under our feet.
+        if e.via == e.parent.id:
+          e.parent = storeType e.parent
+    e.store.add:
+      nnkTypeSection.newTree e.makeType
     when cpsDebug:
       echo "storing type ", repr(e.identity)
     # clearly, if we ever write again, we want it to be a new type
     result = newEnv(e, copy = on)
-    e = result
     when cpsDebug:
-      echo "next type ", repr(e.identity)
+      echo "next type ", repr(result.identity)
   else:
     result = e
     assert not e.isDirty
@@ -214,7 +206,7 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
   assert val.len == 1, "too large a section"
   assert val[0].len == 3, "too small an identdefs"
   if key in e.locals:
-    result = e.storeType
+    result = storeType e
   else:
     result = e
   result.locals[key] = val
@@ -234,7 +226,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
       # iterate over the identifier names (a, b, c)
       for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
         # create a new identifier for the object field
-        let field = genField(name.strVal)
+        let field = genField name.strVal
         let value = newTree(kind,     # ident: <no var> type = default
                             newIdentDefs(name, stripVar(n[^2]), n[^1]))
         e = e.set(field, value)
@@ -245,7 +237,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
     let tup = n.last
     for i in 0 ..< len(tup):
       let name = n[i]
-      let field = genField(name.strVal)
+      let field = genField name.strVal
       let value = newTree(kind,
                           newIdentDefs(name, getTypeInst(tup[i]), tup[i]))
       e = e.set(field, value)
@@ -253,9 +245,8 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   else:
     error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
 
-proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
+proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env=
   ## the initial version of the environment
-  assert not via.isNil
   assert not via.isEmpty
   var c = if c.isNil or c.isEmpty: ident"continuation" else: c
 
@@ -272,7 +263,6 @@ proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env =
   init result
 
 proc identity*(e: var Env): NimNode =
-  assert not e.isNil
   assert not e.id.isNil
   assert not e.id.isEmpty
   result = e.id
@@ -380,16 +370,21 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
 proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
   ## returns the appropriate target of a `return` statement in a CPS
   ## procedure that may (and may not) have a continuation instantiated yet.
-  if e.first.isNil or e.first.isEmpty:
-    when false:
-      result = e.maybeConvertToRoot:
-        e.newContinuation goto
-    else:
-      error "this code path is deprecated because i'm lazy"
-  else:
-    result = newStmtList:
-      newAssignment(newDotExpr(e.first, e.fn), goto)
-    result.add e.first
+  result = newStmtList:
+    newAssignment(newDotExpr(e.first, e.fn), goto)
+  if goto.kind == nnkNilLit:
+    result.add:                               # return value is as follows:
+      nnkIfExpr.newTree [
+        nnkElifExpr.newTree [                 # if
+          newCall(bindSym"isNil", e.mom),     # we have no parent,
+          e.first                             # the current continuation;
+        ],
+        nnkElseExpr.newTree [                 # else,
+          e.mom                               # our parent continuation.
+        ],
+      ]
+  else:                                       # return value is simply
+    result.add e.first                        # the current continuation
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
@@ -414,7 +409,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   ## swap symbols for those in the continuation
   result = n
   let child = e.castToChild(e.first)
-  for field, section in pairs(e):
+  for field, section in e.pairs:
     result = result.resym(section[0][0], newDotExpr(child, field))
 
 proc createContinuation*(e: Env; goto: NimNode): NimNode =
@@ -426,8 +421,8 @@ proc createContinuation*(e: Env; goto: NimNode): NimNode =
       hook Alloc: e.identity
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
-    # custom functions, results, and exceptions, respectively
-    if field notin [e.fn, e.rs]:
+    # custom functions, results, exceptions, and parent respectively
+    if field notin [e.fn, e.rs, e.ex, e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
         newAssignment(resultdot field, section.last[0])
@@ -438,11 +433,11 @@ proc createContinuation*(e: Env; goto: NimNode): NimNode =
 proc getException*(e: var Env): NimNode =
   ## get the current exception from the env
   if e.ex.isNil:
-    e.ex = genField("ex")
+    e.ex = genField"ex"
 
     # TODO: idk how this works, really
     e = e.set(e.ex):
       nnkVarSection.newTree:
         newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
 
-  newDotExpr(e.castToChild(e.first), e.ex)
+  result = newDotExpr(e.castToChild(e.first), e.ex)

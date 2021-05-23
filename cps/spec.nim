@@ -285,10 +285,9 @@ proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
   #       get the line info
   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
 
-proc genField*(ident = ""): NimNode =
+proc genField*(ident = ""): NimNode
+  {.deprecated: "pending https://github.com/nim-lang/Nim/issues/17851".} =
   ## generate a unique field to put inside an object definition
-  ##
-  ## made as a workaround for [nim-lang/Nim#17851](https://github.com/nim-lang/Nim/issues/17851)
   desym genSym(nskField, ident)
 
 proc normalizingRewrites*(n: NimNode): NimNode =
