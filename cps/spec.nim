@@ -645,3 +645,16 @@ proc getContSym*(n: NimNode): NimNode =
     n.params[1][0]
   else:
     nil
+
+proc cloneProc*(n: NimNode, body: NimNode = nil): NimNode =
+  ## create a copy of a typed proc which satisfies the compiler
+  assert n.kind == nnkProcDef
+  result = nnkProcDef.newTree(
+    ident(repr n.name),           # repr to handle gensymbols
+    newEmptyNode(),
+    newEmptyNode(),
+    n.params,
+    newEmptyNode(),
+    newEmptyNode(),
+    if body == nil: copy n.body else: body)
+  result.copyLineInfo n

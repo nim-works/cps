@@ -608,19 +608,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     else:
       result.add env.saften(nc)
 
-proc cloneProc(n: NimNode, body: NimNode = nil): NimNode =
-  ## create a copy of a typed proc which satisfies the compiler
-  assert n.kind == nnkProcDef
-  result = nnkProcDef.newTree(
-    ident(repr n.name),           # repr to handle gensymbols
-    newEmptyNode(),
-    newEmptyNode(),
-    n.params,
-    newEmptyNode(),
-    newEmptyNode(),
-    if body == nil: copy n.body else: body)
-  result.copyLineInfo n
-
 proc replacePending(n, replacement: NimNode): NimNode =
   ## Replace cpsPending annotations with something else, usually
   ## a jump to an another location. If `replacement` is nil, remove
@@ -702,14 +689,7 @@ proc rewriteVoodoo(n: NimNode, env: Env): NimNode =
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
-
-  # Some sanity checks
   n.expectKind nnkProcdef
-  if not n.params[0].isEmpty:
-    error "do not specify a return-type for .cps. functions", n
-
-  if T.isNil:
-    error "specify a type for the continuation with .cps: SomeType", n
 
   # enhanced spam before it all goes to shit
   debug(".cps.", n, Original)
@@ -722,7 +702,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T)
+  var env = newEnv(ident"continuation", types, T, n.params[0])
 
   # add parameters into the environment
   for defs in n.params[1 .. ^1]:
@@ -730,22 +710,23 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       error "cps does not support var parameters", n
     env.localSection(defs)
 
-  ## Generate the bootstrap
-  var booty = cloneProc(n, newStmtList())
-  booty.params[0] = T
-  booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
-  booty.introduce {Alloc, Dealloc}    # we may actually dealloc here
-  booty.body.add:
-    env.createContinuation booty.name
+  # make a name for the new procedure that won't clash
+  let name = genSym(nskProc, $n.name)
 
   # we can't mutate typed nodes, so copy ourselves
   n = cloneProc n
 
+  # setup the bootstrap using the old proc name,
+  # but the first leg will be the new proc name
+  var booty = env.createBootstrap(n, name)
+
+  # now we'll reset the name of the new proc
+  n.name = name
+
   # do some pruning of these typed trees.
   for p in [booty, n]:
     p.name = desym(p.name)
-    while len(p) > 7:
-      p.del(7)
+    while len(p) > 7: p.del(7)     # strip out any extra result field
 
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
