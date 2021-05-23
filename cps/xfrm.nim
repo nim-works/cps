@@ -64,9 +64,11 @@ proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
-  of nnkForStmt, nnkBlockStmt, nnkElse, nnkOfBranch:
+  of nnkForStmt, nnkBlockStmt, nnkElse, nnkOfBranch, nnkExceptBranch,
+     nnkFinally:
     return n.last.isCpsBlock
-  of nnkStmtList, nnkIfStmt, nnkCaseStmt, nnkWhileStmt, nnkElifBranch:
+  of nnkStmtList, nnkIfStmt, nnkCaseStmt, nnkWhileStmt, nnkElifBranch,
+     nnkTryStmt:
     for n in n.items:
       if n.isCpsBlock:
         return true
@@ -137,6 +139,8 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindSym"cpsLift"
   result.addPragma ident"nimcall"
+  # let other macros know this is a continuation
+  result.addPragma bindSym"cpsCont"
 
 func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
@@ -314,6 +318,103 @@ macro cpsWhile(cont, cond, n: typed): untyped =
 
   #debug("cpsWhile", result, Transformed, cond)
 
+macro cpsTryExcept(cont, ex, n: typed): untyped =
+  ## A try statement tainted by a `cpsJump` and may require a jump to enter
+  ## any handler.
+  ##
+  ## Only rewrite try with except branches.
+  {.warning: "compiler workaround here".}
+  let cont = cont
+
+  expectKind cont, nnkSym
+  expectKind ex, nnkDotExpr
+  expectKind n, nnkTryStmt
+
+  result = newStmtList()
+
+  var
+    n = normalizingRewrites n
+    ex = normalizingRewrites ex
+
+  # the try statement that will be used to wrap all child of `n`
+  let tryTemplate = copyNimNode n
+
+  # use an empty node as a stand-in for the real body
+  tryTemplate.add newEmptyNode()
+
+  # Turn each handler branch into a continuation leg
+  # For finally we stash it into a variable for rewrite later
+  for i in 1 ..< n.len:
+    case n[i].kind
+    of nnkExceptBranch:
+      let newExcept = copyNimNode n[i]
+      # this is `except Type: body`
+      if n[i].len > 1:
+        # add `Type` or `Type as e`
+        newExcept.add n[i][0]
+
+      # create a new body
+      newExcept.add newStmtList()
+
+      # get old handler body
+      var handlerBody = newStmtList(n[i].last)
+
+      # if it's a `except Type as e`
+      if newExcept.len > 1 and newExcept[0].kind == nnkInfix:
+        # assign the exception to `ex`
+        let exSym = newExcept[0][2]
+        # replace all occurance of `exSym` with `ex`
+        handlerBody = handlerBody.resym(exSym, ex)
+
+        # rewrite this into `except Type`
+        newExcept[0] = newExcept[0][1]
+
+      # assign the exception into `ex`
+      newExcept.last.add newAssignment(ex, newCall(bindSym"getCurrentException"))
+
+      # set exception to the stashed one before executing any other code
+      handlerBody.insert(0):
+        newCall(bindSym"setCurrentException", ex)
+
+      # turn the exception body into a continuation
+      let handler = makeContProc(genSym(nskProc, "except"), cont, handlerBody)
+      # add the continuation to the top
+      result.add handler
+      # add a tail to the new continuation in the except branch
+      newExcept.last.add tailCall(cont, handler.name)
+
+      # add this into the template
+      tryTemplate.add newExcept
+    else: result.add errorAst(n[i], "unexpected node in cpsTryExcept")
+
+  proc wrapTry(contSym, n: NimNode): NimNode =
+    ## Wrap `n` with the `try` template, and replace all `cont` with `contSym`
+    proc wrapCont(n: NimNode): NimNode =
+      ## Wrap the body of continuation `n` with `try` template
+      if n.isCpsCont:
+        result = n
+        result.body = wrapTry(getContSym(result), result.body)
+
+    result = copyNimTree tryTemplate
+    # replace the body of the template with `n`
+    result[0] = newStmtList:
+      # wrap all continuations of `n` with the template
+      filter(n, wrapCont)
+    # replace `cont` with `contSym`
+    result = result.resym(cont, contSym)
+
+  # wrap the try body and everything in it
+  result.add wrapTry(cont, n[0])
+
+  result = workaroundRewrites result
+
+macro cpsTryFinally(cont, ex, n: typed): untyped =
+  ## A try statement tainted by a `cpsJump` and may require a jump to enter finally.
+  ##
+  ## Only rewrite try with finally.
+  result = newStmtList()
+  result.add errorAst("try with finally with splitting is not supported", n)
+
 proc saften(parent: var Env; n: NimNode): NimNode =
   ## transform `input` into a mutually-recursive cps convertible form
 
@@ -447,6 +548,48 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         transformed = restoreBreak transformed
         transformed = restoreContinue transformed
         result.add transformed
+
+    of nnkTryStmt:
+      if nc.isCpsBlock:
+        let final = nc.findChild(it.kind == nnkFinally)
+        if final.isNil:
+          let jumpCall = newCall(bindSym"cpsTryExcept")
+          # add continuation sym
+          jumpCall.add env.first
+          # add exception access
+          jumpCall.add env.getException()
+          # add body
+          jumpCall.add:
+            newStmtList env.saften(nc)
+          result.add jumpCall
+        else:
+          let jumpCall = newCall(bindSym"cpsTryFinally")
+          jumpCall.add env.first
+          # add exception access
+          jumpCall.add env.getException()
+          if not nc.findChild(it.kind == nnkExceptBranch).isNil:
+            # create a copy of `nc` without finally
+            let newTry = copyNimNode nc
+            newTry.add nc[0 .. ^2]
+
+            # wrap the try-finally outside of `nc`
+            let tryFinally = copyNimNode nc
+            tryFinally.add newStmtList(newTry)
+            tryFinally.add final
+
+            # add try-finally
+            jumpCall.add:
+              newStmtList env.saften(tryFinally)
+          else:
+            # add try-finally
+            jumpCall.add:
+              newStmtList env.saften(nc)
+
+          result.add jumpCall
+
+        return
+      else:
+        result.add env.saften(nc)
 
     # not a statement cps is interested in
     else:
