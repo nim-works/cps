@@ -1,35 +1,49 @@
 
-import cps
-import cps/eventqueue
+import cps, deques
 
-# Middleware
+###########################################################################
+# Implementation of a minimal scheduler, just a dequeue of work
+###########################################################################
 
-when false:
-  type C = ref object of RootObj
-    fn*: proc(c: C): C {.nimcall.}
+type
+  Work = ref object of RootObj
+    fn*: proc(c: Work): Work {.nimcall.}
+    pool: Pool
 
-  proc sleep(c: C): C =
-    echo "sleep"
-    return c
+  Pool = ref object
+    workQueue: Deque[Work]
 
-else:
-  type C = Cont
+proc push(pool: Pool, c: Work) =
+  if c.running:
+    c.pool = pool
+    pool.workQueue.addLast(c)
 
-# User code
+proc jield(c: Work): Work {.cpsMagic.} =
+  echo "jield"
+  c.pool.push c
 
-proc two() {.cps:C.} =
-  echo "two a"
-  cps sleep(2000)
-  echo "two b"
+proc run(pool: Pool) =
+  while pool.workQueue.len > 0:
+    var c = pool.workQueue.popFirst
+    c = c.fn(c)
+    pool.push c
 
-proc one() {.cps:C.} =
-  echo "one a"
-  cps two()
-  echo "one b"
+###########################################################################
+# Main code
+###########################################################################
+  
+proc foo() {.cps:Work.} =
+  echo "foo() in"
+  jield()
+  echo "foo() out"
+  
+proc bar() {.cps:Work.} =
+  echo "bar() in"
+  foo()
+  echo "bar() out"
 
 
-var c = one()
+var pool = Pool()
+pool.push bar()
+pool.run()
 
-run()
-#while c != nil and c.fn != nil:
-#  c = c.fn(c)
