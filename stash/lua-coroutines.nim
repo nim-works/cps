@@ -5,15 +5,16 @@
 #
 # resume(co, val):
 #
-#   Starts or continues the execution of coroutine co. The first time you resume
-#   a coroutine, it starts running its body. The values val1, ... are passed as
-#   the arguments to the body function. If the coroutine has yielded, resume
-#   restarts it; the value val1 is passed as the results from the yield.
+#   Starts or continues the execution of coroutine co. The first time you
+#   resume a coroutine, it starts running its body. If the coroutine has
+#   yielded, resume() restarts it; the value `val` is passed as the results
+#   from the yield().
 #
+#  send(val):
 #  yield():
 #
-#   Suspends the execution of the calling coroutine. Any arguments to yield are
-#   passed as extra results to resume.
+#   Suspends the execution of the calling coroutine. The value `val`
+#   passed to sent is returned as results from resume().
 #
 ###########################################################################
 
