@@ -5,6 +5,7 @@ import cps
 import foreign
 
 type
+  EmptyLoop = CatchableError
   InfiniteLoop = CatchableError
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
@@ -18,7 +19,10 @@ proc trampoline(c: Cont) =
     c = c.fn(c)
     inc jumps
     if jumps > 1000:
-      raise newException(InfiniteLoop, $jumps & " iterations")
+      raise InfiniteLoop.newException: $jumps & " iterations"
+  if jumps == 0:
+    raise EmptyLoop.newException:
+      "continuations test best when they, uh, bounce"
 
 proc noop*(c: Cont): Cont {.cpsMagic.} = c
 
@@ -36,7 +40,7 @@ suite "basic testing assumptions":
     check r > 1
 
   block:
-    ## noop magic smoke test
+    ## the noop magic smoke test demonstrates shedding scope
     var r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -50,7 +54,7 @@ suite "tasteful tests":
   var r = 0
 
   block:
-    ## local variables migrating in/out of env
+    ## local variables migrate into the continuation
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -62,7 +66,7 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## out-of-scope variables operate correctly
+    ## out-of-scope variables operate as expected
     r = 0
     var j = 2
     proc foo() {.cps: Cont.} =
@@ -78,7 +82,7 @@ suite "tasteful tests":
     check j == 5
 
   block:
-    ## deconstruction with a call source
+    ## tuple deconstruction with a call source works
     r = 0
     proc bar(): (int, float) = (4, 7.0)
 
@@ -95,7 +99,7 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## deconstruction with distinct types
+    ## tuple deconstruction with distinct types works
     type
       Goats = distinct int
       Pigs = distinct float
@@ -115,7 +119,7 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## declaration via tuple deconstruction
+    ## declaration via tuple deconstruction works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -134,7 +138,7 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## multi-var declaration
+    ## multi-variable declaration with shared initialization
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -153,8 +157,7 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## shadowing and proc param defaults
-    ## https://github.com/disruptek/cps/issues/22
+    ## shadowing and proc param defaults are supported
     r = 0
     proc foo(a, b, c: int = 3) {.cps: Cont.} =
       inc r
@@ -177,8 +180,7 @@ suite "tasteful tests":
     check r == 3
 
   block:
-    ## reassignment of var proc params
-    ## https://github.com/disruptek/cps/issues/47
+    ## reassignment of mutable var proc params
     skip"pending issue #47"
     r = 0
     proc foo(a, b, c: var int) {.cps: Cont.} =
@@ -202,7 +204,7 @@ suite "tasteful tests":
     check r == 3
 
   block:
-    ## block with break under if
+    ## a block statement with a break under an if
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -217,7 +219,7 @@ suite "tasteful tests":
     check r == 4
 
   block:
-    ## cps block with break
+    ## a block with a continuation followed by a break
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -234,23 +236,7 @@ suite "tasteful tests":
     check r == 5
 
   block:
-    ## break statements without cps 🥴
-    r = 0
-    proc foo() =
-      inc r
-      while true:
-        inc r
-        if true:
-          inc r
-          break
-        inc r
-        fail"block break failed to break block"
-      inc r
-    foo()
-    check r == 4
-
-  block:
-    ## a fairly tame cps break
+    ## a while statement with a continuation and a break
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -268,7 +254,7 @@ suite "tasteful tests":
     check r == 5
 
   block:
-    ## break in a nested else (don't ask)
+    ## a break inside a multiply-nested else inside a while
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -289,7 +275,7 @@ suite "tasteful tests":
     check r == 6
 
   block:
-    ## named breaks
+    ## named breaks are supported, with nested breaks
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -312,7 +298,7 @@ suite "tasteful tests":
     check r == 6
 
   block:
-    ## named breaks from inside a while
+    ## named breaks work from inside a while statement
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -335,7 +321,7 @@ suite "tasteful tests":
     check r == 6
 
   block:
-    ## while loops correctly
+    ## while loops correctly, uh, loop
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -349,72 +335,61 @@ suite "tasteful tests":
     check r == 4
 
   block:
-    ## while statement with cps call inside
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      var i = 0
-      while i < 2:
-        inc r
-        noop()
-        inc r
-        inc i
-      inc r
-      check i == 2
-    trampoline foo()
-    check r == 6
-
-  block:
-    ## shadow test A
+    ## proc parameters pass across continuations
     r = 0
     proc shadow(x: int) {.cps: Cont.} =
       r = 1
+      noop()
       check x > 0, "parameter value unset"
     trampoline shadow(1)
     check r == 1
 
   block:
-    ## shadow test B
+    ## local variables may shadow proc parameters
     r = 0
     proc shadow(x: int) {.cps: Cont.} =
       r = 1
       let x = 3
+      noop()
       check x == 3, "shadowed symbol wrong"
     trampoline shadow(1)
     check r == 1
 
   block:
-    ## shadow test C
+    ## shadowing variables may impart new mutability
     r = 0
     proc shadow(x: int) {.cps: Cont.} =
       r = 1
       block:
         var x = 4
+        noop()
         check x == 4, "shadowing symbol wrong"
       check x == 3, "shadowed symbol corrupted"
     trampoline shadow(3)
     check r == 1
 
   block:
-    ## shadow test D
+    ## shadowing variables pass across continuations
     r = 0
     proc shadow(x: int) {.cps: Cont.} =
       r = 1
       block:
         var x = 4
         inc x
+        noop()
         check x == 5, "shadowing symbol immutable"
       check x == 3, "shadowed symbol corrupted"
     trampoline shadow(3)
     check r == 1
 
   block:
-    ## shadow test E
+    ## scope-based shadowing is also supported
     r = 0
     proc shadow(x: int) {.cps: Cont.} =
       r = 1
       block:
         var x = 4
+        noop()
         block:
           inc x
         check x == 5, "failed to update from lower scope"
@@ -423,7 +398,7 @@ suite "tasteful tests":
     check r == 1
 
   block:
-    ## shadow test F
+    ## shadowing is unperturbed by continuation calls
     r = 0
     proc shadow1(x: int) {.cps: Cont.} =
       inc r
@@ -431,6 +406,7 @@ suite "tasteful tests":
       block:
         var x = x + 2
         check x == 5, "failed to update from lower scope"
+        noop()
         inc x
         check x == 6, "failed to update from lower scope"
       check x == 3, "shadowed symbol corrupted to " & $x
@@ -440,6 +416,7 @@ suite "tasteful tests":
       var x = x + 2
       check x == 3, "shadow1 is expecting x == 3"
       trampoline shadow1(x)
+      noop()
       check x == 3, "x mutated by cps call"
       inc x
       check x == 4, "shadowing symbol corrupted"
@@ -448,7 +425,7 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## case statements
+    ## case statements can support control-flow
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -478,13 +455,14 @@ suite "tasteful tests":
     check r == 9
 
   block:
-    ## continue statement within while
+    ## a continue statement within a while statement works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
       var i = 0
       while i < 3:
         inc r
+        noop()
         inc i
         if i <= 2:
           continue
@@ -495,27 +473,7 @@ suite "tasteful tests":
     check r == 6
 
   block:
-    ## for loop with continue, break
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      while true:
-        for i in 0 .. 3:
-          if i == 0:
-            continue
-          if i > 2:
-            break
-          r.inc i
-        inc r
-        if r == 5:
-          break
-        inc r
-      inc r
-    trampoline foo()
-    check r == 6
-
-  block:
-    ## shadow mission impossible
+    ## a gratuitously complex shadowing test works
     r = 0
     proc b(x: int) {.cps: Cont.} =
       inc r
@@ -571,7 +529,7 @@ suite "tasteful tests":
     check r == 15
 
   block:
-    ## assignment shim with constant
+    ## local assignment to a continuation return value
     when true:
       skip"pending discussion #28"
     else:
@@ -591,7 +549,7 @@ suite "tasteful tests":
       check r == 3
 
   block:
-    ## while statement with local var inside
+    ## a while statement supports a local variable inside
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -610,18 +568,19 @@ suite "tasteful tests":
     check r == 8
 
   block:
-    ## running a function pointer inside an object
+    ## calling a function pointer inside an object works
     type Fn = object
       fn: proc(i: int): int
     let fn = Fn(fn: proc(i: int): int = i * 2)
 
     proc foo() {.cps: Cont.} =
+      noop()
       check fn.fn(10) == 20
 
     trampoline foo()
 
   block:
-    ## call a macro that calls a foreign symbol
+    ## calling a macro that calls a foreign symbol works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -634,7 +593,7 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## call a template with explicit bind
+    ## calling a template with explicit symbol binding
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -647,10 +606,11 @@ suite "tasteful tests":
     check r == 2
 
   block:
-    ## template call in nested call nodes
+    ## template calls inside nested call nodes are fine
     r = 0
 
-    # It is crucial that none of these templates call any other templates/macros.
+    # It is crucial that none of these templates call
+    # any other templates/macros.
     template negate(b: untyped): untyped =
       not b
 
@@ -692,7 +652,7 @@ suite "tasteful tests":
     trampoline foo()
 
   block:
-    ## simple if-else split
+    ## a simple if-else split across continuations works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -707,7 +667,7 @@ suite "tasteful tests":
     check r == 3
 
   block:
-    ## simple case statement split
+    ## a simple case statement split across continuations works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -723,7 +683,7 @@ suite "tasteful tests":
     check r == 3
 
   block:
-    ## try-except-statement splits
+    ## try-except statements may be split across continuations
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -738,7 +698,7 @@ suite "tasteful tests":
     check r == 3
 
   block:
-    ## try-except splits with raise
+    ## try-except statements may split and also raise exceptions
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -756,7 +716,7 @@ suite "tasteful tests":
     check r == 4
 
   block:
-    ## except splits with raise
+    ## exception clauses may split across continuations
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -776,7 +736,7 @@ suite "tasteful tests":
     check r == 5
 
   block:
-    ## except split only with raise
+    ## exceptions raised in the current continuation work
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -795,7 +755,7 @@ suite "tasteful tests":
     check r == 5
 
   block:
-    ## try-finally-statement splits
+    ## try statements with a finally clause
     when true:
       skip "not working, see #78"
     else:
@@ -812,7 +772,7 @@ suite "tasteful tests":
       check r == 3
 
   block:
-    ## try-except-finally splits with raise
+    ## try statements with an exception and a finally
     when true:
       skip "not working, see #78"
     else:
@@ -834,7 +794,7 @@ suite "tasteful tests":
       check r == 5
 
   block:
-    ## block control flow after split
+    ## block control-flow across continuations works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -848,7 +808,7 @@ suite "tasteful tests":
     check r == 4
 
   block:
-    ## if control flow after split
+    ## if control-flow across continuations works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -862,7 +822,7 @@ suite "tasteful tests":
     check r == 4
 
   block:
-    ## defer with split
+    ## a defer statement works across a continuation
     when true:
       skip "not working, see #80"
     else:
@@ -880,7 +840,7 @@ suite "tasteful tests":
       check r == 3
 
   block:
-    ## implicit generics
+    ## implicit generics in continuation creation
     when true:
       skip "not working, ref #51"
     else:
@@ -897,7 +857,7 @@ suite "tasteful tests":
       check r == 1
 
   block:
-    ## explicit generics
+    ## explicit generics in continuation creation
     when true:
       skip "not working, ref #51"
     else:
@@ -914,7 +874,7 @@ suite "tasteful tests":
       check r == 1
 
   block:
-    ## nested block breaks with one containing split and one doesn't
+    ## nested blocks with an interior break works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -933,10 +893,11 @@ suite "tasteful tests":
     check r == 4
 
   block:
-    ## basic defer rewrite
+    ## a basic defer statement is supported
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
+      noop()
       defer:
         check r == 4
         inc r
@@ -950,7 +911,7 @@ suite "tasteful tests":
     check r == 5
 
   block:
-    ## defer in nested stmtlist rewrite
+    ## a defer in a nested template is supported
     r = 0
 
     template deferChk(i: int) =
@@ -969,7 +930,7 @@ suite "tasteful tests":
     check r == 6
 
   block:
-    ## defer in block rewrite
+    ## a defer inside a block statement works
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -987,7 +948,7 @@ suite "tasteful tests":
     check r == 5
 
   block:
-    ## there is only defer rewrite
+    ## a naked defer is not a problem
     r = 0
     proc foo() {.cps: Cont.} =
       defer:
@@ -997,7 +958,7 @@ suite "tasteful tests":
     check r == 1
 
   block:
-    ## varargs rewrites
+    ## various varargs usages are supported just fine
     # various forms of concat
     func concatConv(parts: varargs[string, `$`]): string =
       for i in parts:
@@ -1055,7 +1016,7 @@ suite "tasteful tests":
     check r == 1
 
   block:
-    ## for loops with continue, break
+    ## for loops with a continue and a break work correctly
     r = 0
     proc foo() {.cps: Cont.} =
       inc r
@@ -1070,7 +1031,7 @@ suite "tasteful tests":
     check r == 4
 
   block:
-    ## for loops with continue, break and a split
+    ## for loops with a continue and break across continuations
     when true:
       skip"pending #48"
     else:
@@ -1089,7 +1050,7 @@ suite "tasteful tests":
       check r == 4
 
   block:
-    ## while loop with only one cpsCall
+    ## a while loop with only a single continuing call works
     proc jield(c: Cont): Cont {.cpsMagic.} =
       discard
 
@@ -1107,7 +1068,7 @@ suite "tasteful tests":
     check r == 1
 
   block:
-    ## cooperative yield
+    ## cooperative yield hooks are used automatically
     proc coop(c: Cont): Cont {.cpsMagic.} =
       inc r
       result = c
@@ -1128,7 +1089,7 @@ suite "tasteful tests":
     check r == 7
 
   block:
-    ## control-flow tracing
+    ## control-flow tracing hooks are used automatically
     var found: seq[string]
     proc trace(c: Cont; name: string; info: LineInfo) =
       let sub = name.split("_", maxsplit=1)[0]
@@ -1153,7 +1114,7 @@ suite "tasteful tests":
                      "whileLoop", "24", "16", "afterCall", "8", "16", ]
 
   block:
-    ## custom allocators
+    ## custom continuation allocators are used automatically
     var r = 0
     proc alloc[T: Cont](c: typedesc[T]): c =
       inc r
@@ -1168,7 +1129,7 @@ suite "tasteful tests":
     check r == 1, "bzzzt"
 
   block:
-    ## custom deallocators
+    ## custom continuation deallocators are used automatically
     var r = 0
     proc dealloc[T: Cont](t: typedesc; c: sink T) =
       check r == 0
