@@ -24,7 +24,6 @@ type
   Coroutine = ref object of RootObj
     fn*: proc(c: Coroutine): Coroutine {.nimcall.}
     val: int
-    cResume: Coroutine
 
 # Magic procs for yielding and receiving. Note: we actually want
 # to have yield() and receive() in one single operation so we can
@@ -32,7 +31,6 @@ type
 
 proc jield(c: Coroutine, val: int): Coroutine {.cpsMagic.} =
   c.val = val
-  c.cResume = c
 
 proc recv(c: Coroutine): int {.cpsMagic.} =
   return c.val
