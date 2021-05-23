@@ -293,88 +293,79 @@ proc genField*(ident = ""): NimNode
   ## generate a unique field to put inside an object definition
   desym genSym(nskField, ident)
 
-proc normalizingRewrites*(n: NimNode): NimNode =
+proc normalizingRewrites*(n: NimNode): NimNode
   ## Rewrite AST into a safe form for manipulation
+
+proc normalize(n: IdentDefs): IdentDefs =
+  ## Rewrite an identDefs to ensure it has three children.
+  if n.hasNoExplicitInitValue:
+    n.NimNode.add newEmptyNode() # XXX: come up with a good name for this
+  else:
+    n.ensureExplicitType()
+  n.definition = normalizingRewrites n.definition
+  result = n
+
+proc normalize(n: VarLetSection): StmtList =
+  ## Rewrite a var|let section of multiple identDefs
+  ## into multiple such sections with well-formed identDefs
+  result = newStmtList2()
+  for child in n.items:
+    case child.kind
+    of VarLetSectionChildKind.nnkVarTuple:
+      # we used to rewrite these, but the rewrite is only safe for
+      # very trivial deconstructions.  now we rewrite the symbols
+      # into the env during the saften pass as necessary.
+      #
+      # a new section with a single VarTuple statement
+      result.add:
+        n.newSingleChildSection(child.get)
+    of VarLetSectionChildKind.nnkIdentDefs:
+      # a new section with a single rewritten identdefs within
+      result.add:
+        n.newSingleChildSection(normalize child.get(IdentDefs))
+    else:
+      result.add:
+        child.errorAst "unexpected"
+
+proc normalize(n: HiddenAddrDeref): NimNode =
+  ## Remove nnkHiddenAddr/Deref because they case the carnac bug
+  result = normalizingRewrites(n.target)
+
+proc normalize(n: Conv): Call =
+  ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
+  ## This is because nnkConv nodes are only valid if produced by sem.
+  newCall(infoOf = n.NimNode,
+          name = normalizingRewrites n.name,
+          arg = normalizingRewrites n.arg)
+
+proc normalize(n: ReturnStmt): ReturnStmt =
+  ## Inside procs, the compiler might produce an AST structure like this:
+  ##
+  ## ```
+  ## ReturnStmt
+  ##   Asgn
+  ##     Sym "result"
+  ##     Sym "continuation"
+  ## ```
+  ##
+  ## for `return continuation`.
+  ##
+  ## This structure is not valid if modified.
+  ##
+  ## Rewrite this back to `return expr`.
+  if n.isAssignment:
+    result = copy(n)
+    if repr(n.expression[0]) != "result":
+      result.expression.add:
+        n.errorAst "unexpected return assignment form"
+    result.add:
+      normalizingRewrites n.expression[1]
+  else:
+    result = n
+
+proc normalizingRewrites*(n: NimNode): NimNode =
+  # see forward declaration for documentation
   proc rewriter(n: NimNode): NimNode =
-    proc rewriteIdentDefs(n: IdentDefs): IdentDefs =
-      ## Rewrite an identDefs to ensure it has three children.
-      # if n.kind == nnkIdentDefs:
-      if n.hasNoExplicitInitValue:
-        n.NimNode.add newEmptyNode() # XXX: come up with a good name for this
-      else:
-        n.ensureExplicitType()
-      n.definition = normalizingRewrites n.definition
-      result = n
-
-    proc rewriteVarLet(n: VarLetSection): NimNode =
-      ## Rewrite a var|let section of multiple identDefs
-      ## into multiple such sections with well-formed identDefs
-      result = newStmtList()
-      for child in n.items:
-        case child.kind
-        of VarLetSectionChildKind.nnkVarTuple:
-          # we used to rewrite these, but the rewrite is only safe for
-          # very trivial deconstructions.  now we rewrite the symbols
-          # into the env during the saften pass as necessary.
-          #
-          # a new section with a single VarTuple statement
-          result.add:
-            n.newSingleChildSection(child.get).NimNode
-        of VarLetSectionChildKind.nnkIdentDefs:
-          # a new section with a single rewritten identdefs within
-          result.add:
-            n.newSingleChildSection(rewriteIdentDefs child.get(IdentDefs)).NimNode
-        else:
-          result.add:
-            child.errorAst "unexpected"
-
-    proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
-      ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
-      case n.kind
-      of nnkHiddenAddr, nnkHiddenDeref:
-        result = normalizingRewrites n[0]
-      else: discard
-
-    proc rewriteConv(n: NimNode): NimNode =
-      ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
-      ## This is because nnkConv nodes are only valid if produced by sem.
-      case n.kind
-      of nnkConv:
-        result = newNimNode(nnkCall, n)
-        result.add:
-          normalizingRewrites n[0]
-        result.add:
-          normalizingRewrites n[1]
-      else: discard
-
-    proc rewriteReturn(n: NimNode): NimNode =
-      ## Inside procs, the compiler might produce an AST structure like this:
-      ##
-      ## ```
-      ## ReturnStmt
-      ##   Asgn
-      ##     Sym "result"
-      ##     Sym "continuation"
-      ## ```
-      ##
-      ## for `return continuation`.
-      ##
-      ## This structure is not valid if modified.
-      ##
-      ## Rewrite this back to `return expr`.
-      case n.kind
-      of nnkReturnStmt:
-        if n[0].kind == nnkAsgn:
-          if repr(n[0][0]) != "result":
-            result = n.errorAst "unexpected return assignment form"
-          else:
-            result = copyNimNode(n)
-            result.add:
-              normalizingRewrites n[0][1]
-        else:
-          result = n
-      else: discard
-
     proc rewriteHidden(n: NimNode): NimNode =
       ## Unwrap hidden conversion nodes
       case n.kind
@@ -419,15 +410,15 @@ proc normalizingRewrites*(n: NimNode): NimNode =
 
     case n.kind
     of nnkIdentDefs:
-      (rewriteIdentDefs n.asIdentDefs.get()).NimNode
+      (n.asIdentDefs.get().normalize).NimNode
     of nnkLetSection, nnkVarSection:
-      rewriteVarLet n.asVarLetSection
+      (n.asVarLetSection.normalize).NimNode
     of nnkHiddenAddr, nnkHiddenDeref:
-      rewriteHiddenAddrDeref n
+      n.asHiddenAddrDeref.get().normalize
     of nnkConv:
-      rewriteConv n
+      (n.asConv.normalize).NimNode
     of nnkReturnStmt:
-      rewriteReturn n
+      (n.asReturnStmt.normalize).NimNode
     of CallNodes:
       rewriteHidden n
     else:
