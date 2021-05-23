@@ -13,8 +13,6 @@ type
   Pool = ref object
     workQueue: Deque[Work]
 
-  Resumer = proc()
-
 proc push(pool: Pool, c: Work) =
   if c.running:
     c.pool = pool
@@ -33,8 +31,6 @@ proc run(pool: Pool) =
 # Main code
 ###########################################################################
 
-var fooResumer: Resumer
-
 proc job(id: string, n: int) {.cps:Work.} =
   echo "job ", id, " in"
   var i = 0
@@ -43,7 +39,6 @@ proc job(id: string, n: int) {.cps:Work.} =
     jield()
     inc i
   echo "job ", id, " out"
-
 
 let pool = Pool()
 pool.push job("cat", 3)
