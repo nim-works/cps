@@ -42,29 +42,39 @@ built and rough edges are identified.
 
 ## How Do I Use It?
 
-The `cps` macro will use whatever return value you specify to determine the
-type of your continuations. This type is typically a `ref object of RootObj` so
-you can use it with inheritance.
+The `cps` macro takes a single argument: the parent type you wish your
+continuations to inherit from.  This type must match the `Continuation` concept, which is defined thusly:
 
 ```nim
-# all cps programs need the cps macro to perform the transformation
+type
+  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+  Continuation* = concept c
+    c.fn is ContinuationProc[Continuation]
+    c is ref object
+    c of RootObj
+```
+
+If your type matches the above concept, congratulations, you have yourself the
+basis of a continuation.
+
+```nim
+# All cps programs use the cps macro to perform the transformation.
 import cps
 
-# but each usage of the .cps. macro can have its own dispatcher
-# implementation and continuation type, allowing you to implement
-# custom forms of async or use an existing library implementation
-#
-# here we use a reference dispatcher (see below)
+# Each usage of the .cps. macro can have its own continuation type,
+# allowing you to implement custom types and logic yourself, or use
+# an existing library implementation.
+
+# Here we use a reference dispatcher (see below).
 from eventqueue import sleep, run, spawn, trampoline, Cont
 
-# this procedure is written in a simple synchronous style, but when
-# the .cps. is applied during compilation, it is rewritten to use
-# the Cont type in a series of asynchronous continuations
+# This procedure is written in a simple synchronous style, but when
+# the .cps. is applied during compilation, it will be rewritten to
+# use the Cont type in a series of continuations.
 
 proc tock(name: string; ms: int) {.cps: Cont.} =
   ## echo the `name` at `ms` millisecond intervals, ten times
 
-  # a recent change to cps allows us to use type inference
   var count = 10
 
   # `for` loops are not supported yet
@@ -76,23 +86,21 @@ proc tock(name: string; ms: int) {.cps: Cont.} =
     # continuation and returns control to the caller immediately
     sleep ms
 
-    # subsequent control-flow is continues from the dispatcher
+    # subsequent control-flow continues from the dispatcher
     # when it elects to resume the continuation
     echo name, " ", count
 
 # NOTE: all the subsequent code is supplied by the chosen dispatcher
 
 # the trampoline repeatedly invokes continuations until they
-# complete or are queued in the dispatcher; this call does not block
-trampoline tock("tick", ms = 300)
+# complete or are queued in the dispatcher
+trampoline tock("tick", ms = 300)         # this call does not block!
 
-# you can also send a continuation directly to the dispatcher;
-# this call does not block
-spawn tock("tock", ms = 700)
+# you can also send a continuation directly to the dispatcher
+spawn tock("tock", ms = 700)              # this call does not block!
 
-# run the dispatcher to invoke its pending continuations from the queue;
-# this is a blocking call that completes when the queue is empty
-run()
+# run the dispatcher to invoke its pending continuations from the queue
+run()  # this is a blocking call that completes when the queue is empty
 ```
 
 [The source to the tick-tock test.](https://github.com/disruptek/eventqueue/blob/master/tests/tock.nim)
@@ -119,13 +127,13 @@ See [the documentation for the cps module](https://disruptek.github.io/cps/cps.h
 The tests provide the best examples of usage and are a great starting point for
 your experiments.
 
-[Here are some tests that Zevv prepared:](https://github.com/disruptek/cps/blob/master/tests/tzevv.nim)
-
-![zevv tests](docs/tzevv.svg "zevv tests")
-
-[Here are more contrived tests of AST rewrites:](https://github.com/disruptek/cps/blob/master/tests/taste.nim)
+[Here are contrived tests of AST rewrites:](https://github.com/disruptek/cps/blob/master/tests/taste.nim)
 
 ![taste tests](docs/taste.svg "taste tests")
+
+[Here are tests that Zevv prepared:](https://github.com/disruptek/cps/blob/master/tests/tzevv.nim)
+
+![zevv tests](docs/tzevv.svg "zevv tests")
 
 ## License
 MIT
