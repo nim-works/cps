@@ -468,12 +468,12 @@ proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
     ]
 
   # do an easy static check, and then
-  if env.rs.isEmpty != result.params[0].isEmpty:
+  if env.rs.last.isEmpty != result.params[0].isEmpty:
     result.body.add:
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"
   # if the bootstrap has a return value,
-  elif not env.rs.isEmpty:
+  elif not env.rs.last.isEmpty:
     result.body.add:
       # then at runtime, issue an if statement to
       nnkIfStmt.newTree:
