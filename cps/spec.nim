@@ -153,12 +153,13 @@ proc getPragmaName(n: NimNode): NimNode =
 
 proc hasPragma*(n: NimNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
-  assert not n.isNil
   case n.kind
   of nnkPragma:
-    for p in n:
+    for p in n.items:
       # just skip ColonExprs, etc.
       result = p.getPragmaName.eqIdent s
+      if result:
+        break
   of RoutineNodes:
     result = hasPragma(n.pragma, s)
   of nnkObjectTy:
