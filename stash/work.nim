@@ -41,8 +41,8 @@ proc job(id: string, n: int) {.cps:Work.} =
   echo "job ", id, " out"
 
 let pool = Pool()
-pool.push job("cat", 3)
-pool.push job("dog", 5)
-pool.push job("pig", 3)
+pool.push whelp(job("cat", 3))
+pool.push whelp(job("dog", 5))
+pool.push whelp(job("pig", 3))
 pool.run()
 

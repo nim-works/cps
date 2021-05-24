@@ -416,7 +416,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
     result = result.resym(section[0][0], newDotExpr(child, field))
 
 proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
-  ## allocate a continuation as `result` and point it at the leg `goto`
+  ## allocate a continuation as `name` and maybe aim it at the leg `goto`
   proc resultdot(n: NimNode): NimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
@@ -450,7 +450,6 @@ proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
   result = cloneProc(n, newStmtList())
   result.params[0] = env.root
   result.name = nskProc.genSym"whelp"
-  result.addPragma ident"inline"
   result.introduce {Alloc}
 
   # create the continuation as the result and point it at the proc
@@ -460,7 +459,6 @@ proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
 proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
   ## the bootstrap needs to create a continuation and trampoline it
   result = cloneProc(n, newStmtList())
-  result.addPragma ident"inline"
   result.introduce {Alloc}
 
   let c = ident"c"

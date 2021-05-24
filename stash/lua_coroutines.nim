@@ -48,7 +48,7 @@ proc fn_coro1() {.cps:Coroutine.} =
     sum += recv()
     jield(sum)
 
-var coro = fn_coro1()
+var coro = whelp fn_coro1()
 
 for i in 0..10:
   echo coro.resume(i)

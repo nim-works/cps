@@ -76,11 +76,11 @@ macro cpsMagic*(n: untyped): untyped =
     result.add n
   result.add m
 
-proc doWhelp(n: NimNode): NimNode =
+proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
   for n in n.pragma.items:
     if n.kind == nnkExprColonExpr:
       if $n[0] == "cpsBootstrap":
-        result = newCall(n[1])
+        result = n[1].newCall args
   if result.isNil:
     result = n.errorAst "welping malfunction"
 
@@ -89,9 +89,9 @@ macro whelp*(n: typed): Continuation =
   ## running it; instead, return the continuation as a value.
   var n = normalizingRewrites n
   if n.kind in nnkCallKinds:
-    let n = getImpl n[0]
-    if n.hasPragma "cpsBootstrap":
-      return doWhelp(n)
+    let p = getImpl n[0]
+    if p.hasPragma "cpsBootstrap":
+      return doWhelp(p, n[1..^1])
   error "the input to whelp must be a .cps. call", n
 
 template coop*(c: Continuation): Continuation {.used.} =

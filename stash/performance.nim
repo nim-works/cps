@@ -41,7 +41,7 @@ let t1 = howLong "cps iterator":
 
   template finished(x: ref): bool = x == nil or x.fn == nil
 
-  var a = counter(1, iterations)
+  var a = whelp counter(1, iterations)
   while not finished(a):
     h = h !& hash(a.val)
     a = a.fn(a)
