@@ -334,7 +334,7 @@ proc normalize(n: HiddenAddrDeref): NimNode =
 proc normalize(n: Conv): Call =
   ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
   ## This is because nnkConv nodes are only valid if produced by sem.
-  newCall(infoOf = n.NimNode,
+  newCall2(infoOf = n.NimNode,
           name = normalizingRewrites n.name,
           arg = normalizingRewrites n.arg)
 

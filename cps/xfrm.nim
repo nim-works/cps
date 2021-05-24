@@ -1,5 +1,5 @@
 import std/[macros, sequtils, algorithm]
-import cps/[spec, environment, hooks]
+import cps/[spec, environment, hooks, ast]
 export Continuation, ContinuationProc, cpsCall
 export cpsDebug
 
@@ -649,19 +649,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     else:
       result.add env.saften(nc)
 
-proc cloneProc(n: NimNode, body: NimNode = nil): NimNode =
-  ## create a copy of a typed proc which satisfies the compiler
-  assert n.kind == nnkProcDef
-  result = nnkProcDef.newTree(
-    ident(repr n.name),           # repr to handle gensymbols
-    newEmptyNode(),
-    newEmptyNode(),
-    n.params,
-    newEmptyNode(),
-    newEmptyNode(),
-    if body == nil: copy n.body else: body)
-  result.copyLineInfo n
-
 proc replacePending(n, replacement: NimNode): NimNode =
   ## Replace cpsPending annotations with something else, usually
   ## a jump to an another location. If `replacement` is nil, remove
@@ -741,74 +728,92 @@ proc rewriteVoodoo(n: NimNode, env: Env): NimNode =
       result.insert(1, env.first)
   n.filter(aux)
 
-proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
-  ## rewrite the target procedure in Continuation-Passing Style
+type
+  ProcDefContType* = NimNode
+  ProcDefContToCPS* = object
+    T: ProcDefContType
+    n: ProcDef
 
-  # Some sanity checks
-  n.expectKind nnkProcdef
-  if not n.params[0].isEmpty:
-    error "do not specify a return-type for .cps. functions", n
+  NormalizedProcDef = #[distinct]# ProcDef
+  ValidProcDefContToCPS* = object
+    T: ProcDefContType
+    n: NormalizedProcDef
 
-  if T.isNil:
-    error "specify a type for the continuation with .cps: SomeType", n
+  ContType* = distinct NimNode
+  CPSXfrmedProcDef* = #[distinct]# NimNode # XXX: make distinct once finished
 
+proc validate(p: ProcDefContToCPS): ValidProcDefContToCPS =
+  ## check the ProcDef is valid for CPS
+  
+  # XXX: maybe lift out an error proc that absorbs the cast
+  if not p.n.isVoidReturn:
+    error "do not specify a return-type for .cps. functions", p.n.NimNode
+
+  if p.T.isNil:
+    error "specify a type for the continuation with .cps: SomeType", p.n.NimNode
+  
   # enhanced spam before it all goes to shit
-  debug(".cps.", n, Original)
+  debug(".cps.", p.n.NimNode, Original)
 
-  # make the AST easier for us to consume
-  var n = normalizingRewrites n
-  # establish a new environment with the supplied continuation type;
-  # accumulates byproducts of cps in the types statement list
-  var types = newStmtList()
+  result = ValidProcDefContToCPS(
+      T: p.T,
+      # make the AST easier for us to consume 
+      n: (normalizingRewrites p.n.NimNode).NormalizedProcDef
+    )
 
-  # creating the env with the continuation type,
-  # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T)
+proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
+  var
+    # we can't mutate typed nodes, so copy ourselves
+    n = p.n.clone()
+    # establish a new environment with the supplied continuation type;
+    # accumulates byproducts of cps in the types statement list
+    types = newStmtList()
+
+    # creating the env with the continuation type,
+    # and adding proc parameters to the env
+    env = newEnv(ident"continuation", types, p.T)
 
   # add parameters into the environment
   for defs in n.params[1 .. ^1]:
     if defs[1].kind == nnkVarTy:
-      error "cps does not support var parameters", n
+      error "cps does not support var parameters", n.NimNode
     env.localSection(defs)
 
   ## Generate the bootstrap
-  var booty = cloneProc(n, newStmtList())
-  booty.params[0] = T
+  var booty = clone(n, newStmtList())
+  booty.params[0] = p.T
   booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
-  booty.introduce {Alloc, Dealloc}    # we may actually dealloc here
+  booty.NimNode.introduce {Alloc, Dealloc}    # we may actually dealloc here
   booty.body.add:
-    env.createContinuation booty.name
-
-  # we can't mutate typed nodes, so copy ourselves
-  n = cloneProc n
+    env.createContinuation booty.name.NimNode
 
   # do some pruning of these typed trees.
   for p in [booty, n]:
-    p.name = desym(p.name)
-    while len(p) > 7:
-      p.del(7)
+    p.pruneTypes
 
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
-  n.params = nnkFormalParams.newTree(T, env.firstDef)
+  n.params = nnkFormalParams.newTree(p.T.NimNode, env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
   body.introduce {Trace, Alloc, Dealloc}   # prepare hooks
   body.add:
-    Trace.hook env.first, n    # hooking against the proc (minus cloned body)
-  body.add n.body              # add in the cloned body of the original proc
+    Trace.hook env.first, n.NimNode # hooking against the proc (minus cloned body)
+  body.add n.body                   # add in the cloned body of the original proc
 
   # perform sym substitutions (or whatever)
-  n.body = env.rewriteSymbolsIntoEnvDotField body
+  body = env.rewriteSymbolsIntoEnvDotField body
 
   # transform defers
-  n.body = rewriteDefer n.body
+  body = rewriteDefer body
 
   # rewrite non-yielding cps calls
-  n.body = rewriteVoodoo(n.body, env)
+  body = rewriteVoodoo(body, env)
 
   # ensaftening the proc's body
-  n.body = env.saften(n.body)
+  body = env.saften(body)
+
+  n.NimNode.body = body
 
   # add in a pragma so other cps macros can identify this as a cps call
   n.addPragma ident"cpsCall"
@@ -821,10 +826,17 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   env = env.storeType(force = off)
 
   # lifting the generated proc bodies
-  result = lambdaLift(types, n)
+  result = lambdaLift(types, n.NimNode)
 
   # adding in the bootstrap
-  result.add booty
+  result.add booty.NimNode
 
   # spamming the developers
   debug(".cps.", result, Transformed)
+
+proc attemptCpsXfrmProc*(p: ProcDefContToCPS): NimNode =
+  p.validate().cpsXfrm()
+
+proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
+  ## rewrite the target procedure in Continuation-Passing Style
+  attemptCpsXfrmProc(ProcDefContToCPS(T: T, n: n.expectProcDef))

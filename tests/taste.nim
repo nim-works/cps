@@ -1116,9 +1116,9 @@ suite "tasteful tests":
 
     trampoline foo()
     check found == [ "foo", "4", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16", ]
+                     "whileLoop", "22", "16", "afterCall", "8", "16",
+                     "whileLoop", "22", "16", "afterCall", "8", "16",
+                     "whileLoop", "22", "16", "afterCall", "8", "16", ]
 
   block:
     ## custom continuation allocators are used automatically
