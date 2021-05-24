@@ -362,20 +362,29 @@ proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
     proc consumeException(n: NimNode): NimNode =
       ## Prepend all cpsPending with `setCurrentException nil`
       # XXX: need a way to prevent multiple insertion of this
-      if n.isCpsPending:
+      if n.isScopeExit:
         result = newStmtList()
         # set the global exception to nil
         result.add newCall(bindSym"setCurrentException", newNilLit())
         # set our exception symbol to nil too
         result.add newAssignment(ex.resym(cont, contSym), newNilLit())
         result.add n
+      elif n.kind == nnkReturnStmt:
+        # we are moving to the next continuation
+        result = newStmtList()
+        # set the global exception to nil to prevent leaking it outside
+        result.add newCall(bindSym"setCurrentException", newNilLit())
+        result.add n
 
     result = result.filter(consumeException)
 
   # move the exception body into a handler
-  result.cont = makeContProc(genSym(nskProc, "except"), cont):
-    # rewrite the exception body to be continuation-aware
-    setException(cont, body)
+  result.cont = makeContProc(genSym(nskProc, "except"), cont, body)
+  # rewrite the body of the handler to be exception-aware
+  #
+  # we perform this after the creation of the continuation to catch any
+  # added annotations
+  result.cont.body = setException(desym cont, result.cont.body)
 
   # create the new body for the except clause
   result.excpt.add newStmtList()

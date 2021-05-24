@@ -645,3 +645,9 @@ proc getContSym*(n: NimNode): NimNode =
     n.params[1][0]
   else:
     nil
+
+proc isScopeExit*(n: NimNode): bool =
+  ## Return whether the given node signify a scope exit
+  ##
+  ## TODO: Handle early exit (ie. `c.fn = nil; return`)
+  n.isCpsPending or n.isCpsBreak or n.isCpsContinue

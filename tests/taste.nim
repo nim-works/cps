@@ -19,6 +19,8 @@ proc trampoline(c: Cont) =
     # pretends that an exception is raised and handled elsewhere
     setCurrentException(nil)
     c = c.fn(c)
+    # no exception should leak outside of the continuation
+    check getCurrentException().isNil
     inc jumps
     if jumps > 1000:
       raise InfiniteLoop.newException: $jumps & " iterations"
