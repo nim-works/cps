@@ -1144,3 +1144,18 @@ suite "tasteful tests":
 
     foo(3)
     check r == 1, "bzzzt"
+
+  block:
+    ## whelp instantiates continuations with arguments
+    r = 0
+    proc foo(x: int) {.cps: Cont.} =
+      check x == 5
+      inc r
+      let i = 3
+      noop()
+      inc r
+      check i == 3
+      check x == 5
+    let c = whelp foo(5)
+    trampoline c
+    check r == 2
