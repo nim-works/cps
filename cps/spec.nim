@@ -501,7 +501,7 @@ proc isCpsPending*(n: NimNode): bool =
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
 func newCpsBreak*(label: NimNode = newNilLit()): NimNode =
-  ## Produce a {.cpsPending.} annotation with the given label
+  ## Produce a {.cpsBreak.} annotation with the given label
   doAssert not label.isNil
   let label =
     if label.kind == nnkEmpty:
