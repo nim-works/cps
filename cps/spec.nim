@@ -473,6 +473,11 @@ func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
 
   filter(n, replacer)
 
+template replace*(n, noob: NimNode; body: untyped): NimNode {.dirty.} =
+  ## requires --define:nimWorkaround14447 so...  yeah.
+  let match = proc(it {.inject.}: NimNode): bool = body
+  replace(n, match, noob)
+
 proc multiReplace*(n: NimNode, replacements: varargs[(Matcher, NimNode)]): NimNode =
   ## Replace any node in `n` that is matched by a matcher in replacements with
   ## a copy of the accompanying NimNode.

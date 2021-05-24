@@ -178,6 +178,9 @@ suite "tasteful tests":
         c == 3
     foo(1, 2)
     check r == 3
+    let c = whelp foo(1, 2)
+    trampoline c
+    check r == 6
 
   block:
     ## reassignment of mutable var proc params

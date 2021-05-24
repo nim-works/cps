@@ -456,6 +456,12 @@ proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
   result.body.add:
     env.createContinuation(ident"result", desym goto)
 
+  # rewrite the symbols used in the arguments to identifiers
+  for defs in result.params[1..^1].items:
+    let sym = copy defs[0]
+    let match = proc(it: NimNode): bool = it == sym
+    result = result.replace(match, desym sym)
+
 proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
   ## the bootstrap needs to create a continuation and trampoline it
   result = cloneProc(n, newStmtList())
