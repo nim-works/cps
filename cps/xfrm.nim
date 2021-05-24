@@ -765,6 +765,7 @@ proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
   var
     # we can't mutate typed nodes, so copy ourselves
     n = p.n.clone()
+
     # establish a new environment with the supplied continuation type;
     # accumulates byproducts of cps in the types statement list
     types = newStmtList()
@@ -781,7 +782,7 @@ proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
 
   ## Generate the bootstrap
   var booty = clone(n, newStmtList())
-  booty.params[0] = p.T
+  booty.returnParam = p.T
   booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
   booty.NimNode.introduce {Alloc, Dealloc}    # we may actually dealloc here
   booty.body.add:
@@ -834,9 +835,6 @@ proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
   # spamming the developers
   debug(".cps.", result, Transformed)
 
-proc attemptCpsXfrmProc*(p: ProcDefContToCPS): NimNode =
-  p.validate().cpsXfrm()
-
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
-  attemptCpsXfrmProc(ProcDefContToCPS(T: T, n: n.expectProcDef))
+  (ProcDefContToCPS(T: T, n: n.expectProcDef)).validate().cpsXfrm()

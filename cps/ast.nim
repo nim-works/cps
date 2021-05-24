@@ -15,7 +15,6 @@ import std/macros
 # TODO
 # * move away from assert where it makes sense
 # * make templates to ease some of the type type boilerplate
-# * For the tiny procs use .borrow. more often
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
@@ -133,13 +132,12 @@ proc newStmtList2*(): StmtList =
   ## creates a new `nnkStmtList`, but
   newStmtList().StmtList
 
-proc add*(n: StmtList, c: NimNode): StmtList {.discardable.} =
-  ## add to the StmtList and return it for chaining
-  n.NimNode.add(c).StmtList
-
 proc add*(n: StmtList, c: DistinctNimNode): StmtList {.discardable.} =
   ## add to the StmtList and return it for chaining
   n.NimNode.add(c.NimNode).StmtList
+
+# this overload has to come after the `DistinctNimNode` one or things break
+proc add*(n: StmtList, c: NimNode): StmtList {.borrow, discardable.}
 
 # fn-IdentDefs
 
@@ -232,34 +230,32 @@ proc returnParam(n: ProcDef): NimNode =
   ## XXX: make this return a ReturnParam (Ident|Sym|Expr|Empty)
   n.NimNode.params[0]
 
+proc `returnParam=`*(p: ProcDef, n: NimNode): NimNode {.discardable.} =
+  ## set the return param
+  p.NimNode.params[0] = n
+
 proc isVoidReturn*(n: ProcDef): bool =
   ## is this a void func or proc?
   return n.returnParam.isEmpty
 
-proc name*(n: ProcDef): NameNode =
-  ## formal params
-  n.NimNode.name.NameNode
+proc name*(n: ProcDef): NameNode {.borrow.}
 
-proc `name=`*(p: ProcDef, n: AnyNameNode) =
+proc `name=`*(p: ProcDef, n: AnyNameNode): ProcDef {.discardable.} =
+  # compiler can't figure out the types in order to borrow it
   p.NimNode.name = n.NimNode
+  p
 
-proc params*(n: ProcDef): NimNode =
-  ## formal params
-  ## XXX: remove NimNode
-  n.NimNode.params
+proc params*(n: ProcDef): NimNode {.borrow.}
 
-proc `params=`*(n: var ProcDef, f: NimNode): ProcDef {.discardable.} =
-  ## write the formal params
-  ## XXX: FormalParams
-  n.NimNode.params = f
+proc `params=`*(n: ProcDef, f: NimNode) {.borrow.}
 
-proc body*(n: ProcDef): NimNode =
-  ## formal params
-  ## XXX: remove NimNode
-  n.NimNode.body
+proc body*(n: ProcDef): NimNode {.borrow.}
 
 proc addPragma*(n: ProcDef, p: NimNode): ProcDef {.discardable.} =
-  n.NimNode.addPragma p
+  ## add a pragma then return the ProcDef for chaining
+  proc addPragma(n: ProcDef, p: NimNode) {.borrow.}
+  n.addPragma p
+  n
 
 proc pruneTypes*(p: ProcDef) =
   ## prune some of the typed trees
@@ -294,6 +290,7 @@ proc newCall2*(name: NimNode, infoOf: NimNode, arg: NimNode): Call =
 # fn-Conv
 
 proc name*(c: Conv): NimNode =
+  # can't be borrowed as the macros impl can't pull the name
   c.NimNode[0]
 
 proc arg*(c: Conv): NimNode =
@@ -327,9 +324,7 @@ proc hasHiddenStdConv*(n: CallLike): bool =
 proc copy*(n: ReturnStmt): ReturnStmt =
   copyNimNode(n.NimNode).ReturnStmt
 
-proc add*(n: ReturnStmt, c: NimNode): ReturnStmt {.discardable.} =
-  ## XXX: this is bad and should be removed/reworked
-  n.NimNode.add(c).ReturnStmt
+proc add*(n: ReturnStmt, c: NimNode): ReturnStmt {.borrow, discardable.}
 
 proc isAssignment*(n: ReturnStmt): bool =
   n.NimNode[0].kind == nnkAsgn
@@ -338,5 +333,5 @@ proc expression*(n: ReturnStmt): NimNode =
   n.NimNode[0]
 
 proc asReturnStmt*(n: NimNode): ReturnStmt =
-  assert n.kind == nnkReturnStmt
+  doAssert n.kind == nnkReturnStmt
   result = n.ReturnStmt
