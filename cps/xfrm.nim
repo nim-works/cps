@@ -1,6 +1,6 @@
 import std/[macros, sequtils, algorithm]
 import cps/[spec, environment, hooks]
-export Continuation, ContinuationProc, cpsCall
+export Continuation, ContinuationProc, cpsCall, cpsMustJump
 export cpsDebug
 
 #{.experimental: "strictNotNil".}
@@ -14,16 +14,17 @@ proc isCpsCall(n: NimNode): bool =
   if len(n) > 0:
     if n.kind in nnkCallKinds:
       let callee = n[0]
-      # all cpsCall are normal functions called via a generated symbol
       if not callee.isNil and callee.kind == nnkSym:
-        result = callee.getImpl.hasPragma("cpsCall")
+        # what we're looking for here is a jumper; it could
+        # be a magic or it could be another continuation leg
+        # or it could be a completely new continuation
+        result = callee.getImpl.hasPragma("cpsMustJump")
 
 proc isVoodooCall(n: NimNode): bool =
-  ## true if this node holds a call to a cps procedure
+  ## true if this is a call to a voodoo procedure
   if n != nil and len(n) > 0:
     if n.kind in nnkCallKinds:
       let callee = n[0]
-      # all cpsCall are normal functions called via a generated symbol
       if not callee.isNil and callee.kind == nnkSym:
         result = callee.getImpl.hasPragma("cpsVoodooCall")
 
@@ -159,11 +160,12 @@ func jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
   assert via.kind in nnkCallKinds
 
   let jump = copyNimTree via
-  # desym the jumper, it is currently sem-ed to the variant that
-  # doesn't take a continuation
+  # we may need to insert an argument if the call is magical
+  if getImpl(jump[0]).hasPragma "cpsMagicCall":
+    jump.insert(1, cont)
+  # we need to desym the jumper; it is currently sem-ed to the
+  # variant that doesn't take a continuation.
   jump[0] = desym jump[0]
-  # insert our continuation as the first parameter
-  jump.insert(1, cont)
   result = tailCall(cont, to, jump)
 
 macro cpsJump(cont, call, n: typed): untyped =
@@ -728,6 +730,9 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   booty.addPragma:
     nnkExprColonExpr.newTree(bindSym"cpsBootstrap", whelp.name)
 
+  # like magics, the bootstrap must jump
+  booty.addPragma ident"cpsMustJump"
+
   # now we'll reset the name of the new proc
   n.name = name
 
@@ -757,9 +762,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # ensaftening the proc's body
   n.body = env.saften(n.body)
-
-  # add in a pragma so other cps macros can identify this as a cps call
-  n.addPragma ident"cpsCall"
 
   # run other stages
   n.addPragma bindSym"cpsFloater"

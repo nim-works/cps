@@ -1,6 +1,7 @@
 import std/[macros]
 import cps/[spec, xfrm]
-export Continuation, ContinuationProc, cpsCall, cpsVoodooCall
+export Continuation, ContinuationProc
+export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 export cpsDebug
 
 type
@@ -58,7 +59,8 @@ macro cpsMagic*(n: untyped): untyped =
 
   if m.params[0] == m.params[1][1]:
     m.params[0] = newEmptyNode()
-    m.addPragma ident"cpsCall"
+    m.addPragma ident"cpsMustJump"
+    m.addPragma ident"cpsMagicCall"
   else:
     m.addPragma ident"cpsVoodooCall"
 

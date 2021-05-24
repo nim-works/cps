@@ -15,8 +15,9 @@ const
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
+template cpsMagicCall*() {.pragma.}     ## a cps call
 template cpsVoodooCall*() {.pragma.}    ## a voodoo call
-template cpsCall*(n: typed) {.pragma.}  ## redirection
+template cpsMustJump*() {.pragma.}      ## cps calls and magic calls jump
 template cpsPending*() {.pragma.}       ## this is the last continuation
 template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement in a cps block
 template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps block
@@ -148,7 +149,7 @@ proc getPragmaName(n: NimNode): NimNode =
   else:
     n
 
-proc hasPragma*(n: NimNode; s: static[string]): bool =
+func hasPragma*(n: NimNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
   case n.kind
   of nnkPragma:
