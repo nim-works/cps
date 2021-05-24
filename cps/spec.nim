@@ -22,6 +22,7 @@ template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement i
 template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps block
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsRecover*() {.pragma.}       ## the next step in finally recovery path
+template cpsBootstrap*(whelp: typed) {.pragma.}  ## the symbol for creating a continuation
 
 type
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}

@@ -76,6 +76,21 @@ macro cpsMagic*(n: untyped): untyped =
     result.add n
   result.add m
 
+proc doWhelp(n: NimNode): NimNode =
+  for n in n.pragma.items:
+    if n.kind == nnkExprColonExpr:
+      if $n[0] == "cpsBootstrap":
+        result = newCall(n[1])
+  if result.isNil:
+    result = n.errorAst "welping malfunction"
+
+macro whelp*(n: typed): Continuation =
+  var n = normalizingRewrites n
+  if n.kind in nnkCallKinds:
+    let n = getImpl n[0]
+    if n.hasPragma "cpsBootstrap":
+      return doWhelp(n)
+  error "the input to whelp must be a .cps. call", n
 
 template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce

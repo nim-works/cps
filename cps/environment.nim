@@ -445,9 +445,22 @@ proc getException*(e: var Env): NimNode =
 
   result = newDotExpr(e.castToChild(e.first), e.ex)
 
+proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
+  ## the whelp needs to create a continuation
+  result = cloneProc(n, newStmtList())
+  result.params[0] = env.root
+  result.name = nskProc.genSym"whelp"
+  result.addPragma ident"inline"
+  result.introduce {Alloc}
+
+  # create the continuation as the result and point it at the proc
+  result.body.add:
+    env.createContinuation(ident"result", desym goto)
+
 proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
   ## the bootstrap needs to create a continuation and trampoline it
   result = cloneProc(n, newStmtList())
+  result.addPragma ident"inline"
   result.introduce {Alloc}
 
   let c = ident"c"

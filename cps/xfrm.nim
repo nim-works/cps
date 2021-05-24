@@ -716,9 +716,17 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # we can't mutate typed nodes, so copy ourselves
   n = cloneProc n
 
+  # the whelp is a limited bootstrap that merely makes
+  # the continuation without invoking it in a trampoline
+  var whelp = env.createWhelp(n, name)
+
   # setup the bootstrap using the old proc name,
   # but the first leg will be the new proc name
   var booty = env.createBootstrap(n, name)
+
+  # we store a pointer to the whelp on the bootstrap
+  booty.addPragma:
+    nnkExprColonExpr.newTree(bindSym"cpsBootstrap", whelp.name)
 
   # now we'll reset the name of the new proc
   n.name = name
@@ -763,7 +771,8 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # lifting the generated proc bodies
   result = lambdaLift(types, n)
 
-  # adding in the bootstrap
+  # adding in the whelp and bootstrap
+  result.add whelp
   result.add booty
 
   # spamming the developers
