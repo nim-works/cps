@@ -92,12 +92,13 @@ proc tock(name: string; ms: int) {.cps: Cont.} =
 
 # NOTE: all the subsequent code is supplied by the chosen dispatcher
 
-# the trampoline repeatedly invokes continuations until they
+# the built-in trampoline repeatedly invokes continuations until they
 # complete or are queued in the dispatcher
-trampoline tock("tick", ms = 300)         # this call does not block!
+tock("tick", ms = 300)                    # this call does not block!
 
 # you can also send a continuation directly to the dispatcher
-spawn tock("tock", ms = 700)              # this call does not block!
+let child = whelp tock("tock", ms = 700)  # this call does not block!
+spawn child                               # this call does not block!
 
 # run the dispatcher to invoke its pending continuations from the queue
 run()  # this is a blocking call that completes when the queue is empty
