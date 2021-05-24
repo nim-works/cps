@@ -87,10 +87,7 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
   proc desymifier(n: NimNode): NimNode =
     case n.kind
     of nnkSym:
-      if n.strVal in ["cpsLift", "cpsCall"]:
-        result = n
-      else:
-        result = desym n
+      result = desym n
     else:
       discard
   result = filter(n, desymifier)
