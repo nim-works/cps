@@ -86,13 +86,11 @@ proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
 proc replacedSymsWithIdents*(n: NimNode): NimNode =
   proc desymifier(n: NimNode): NimNode =
     case n.kind
-    #of nnkTypeSection:
-    #  result = n
     of nnkSym:
-      if n.strVal notin ["cpsLift", "cpsCall"]:
-        result = desym n
-      else:
+      if n.strVal in ["cpsLift", "cpsCall"]:
         result = n
+      else:
+        result = desym n
     else:
       discard
   result = filter(n, desymifier)

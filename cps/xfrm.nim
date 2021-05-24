@@ -718,11 +718,11 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # the whelp is a limited bootstrap that merely makes
   # the continuation without invoking it in a trampoline
-  var whelp = env.createWhelp(n, name)
+  let whelp = env.createWhelp(n, name)
 
   # setup the bootstrap using the old proc name,
   # but the first leg will be the new proc name
-  var booty = env.createBootstrap(n, name)
+  let booty = env.createBootstrap(n, name)
 
   # we store a pointer to the whelp on the bootstrap
   booty.addPragma:

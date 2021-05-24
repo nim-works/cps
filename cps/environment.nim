@@ -461,7 +461,7 @@ proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
   result = cloneProc(n, newStmtList())
   result.introduce {Alloc}
 
-  let c = ident"c"
+  let c = nskVar.genSym"c"
   result.body.add:
     # declare `var c: Cont`
     nnkVarSection.newTree:
