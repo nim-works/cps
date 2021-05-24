@@ -83,22 +83,22 @@ proc errorAst*(s: string, info: NimNode = nil): NimNode =
   if not info.isNil:
     result[0].copyLineInfo info
 
-proc errorAst*(n: NimNode; s = "creepy ast"): NimNode {.inline.} =
+proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
   ## embed an error with a message, the line info is copied from the node
   ## too
   # TODO: we might no longer need this now that the other version can
   #       get the line info
   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
 
-proc errorAst*[T:DistinctNimNode](n: T; s = "creepy ast"): NimNode {.inline.} =
+proc errorAst*[T:DistinctNimNode](n: T; s = "creepy ast"): NimNode =
   errorAst(n.NimNode, s)
 
-proc errorAst*[T:DistinctNimNode](n: Maybe[T]; s = "creepy ast"): NimNode {.inline.} =
+proc errorAst*[T:DistinctNimNode](n: Maybe[T]; s = "creepy ast"): NimNode =
   errorAst(n.n.NimNode, s)
 
 # fn-Maybe
 
-func baseKind*(n: Maybe): NimNodeKind {.inline.} =
+func baseKind*(n: Maybe): NimNodeKind =
   n.n.NimNode.kind
 
 # proc mapAs*[T:DistinctNode](n: NimNode, _: typedesc[T], mapper: Mapper[T]): Maybe[T] =
@@ -108,18 +108,18 @@ func baseKind*(n: Maybe): NimNodeKind {.inline.} =
 
 # fn-NameNode
 
-proc baseKind(n: NameNode): NimNodeKind {.inline.} =
+proc baseKind(n: NameNode): NimNodeKind =
   n.NimNode.kind
 
 # fn-IdentNode
 
-proc newIdentNode(i: string, infoOf: NimNode): IdentNode {.inline.} =
+proc newIdentNode(i: string, infoOf: NimNode): IdentNode =
   result = ident(i).IdentNode
   result.NimNode.copyLineInfo infoOf
 
 # fn-SymNode
 
-proc desym(n: NameNode): NameNode {.inline.} =
+proc desym(n: NameNode): NameNode =
   result =
     case n.baseKind
     of nnkSym:
@@ -129,73 +129,73 @@ proc desym(n: NameNode): NameNode {.inline.} =
 
 # fn-stmtList
 
-proc newStmtList2*(): StmtList {.inline.} =
+proc newStmtList2*(): StmtList =
   ## creates a new `nnkStmtList`, but
   newStmtList().StmtList
 
-proc add*(n: StmtList, c: NimNode): StmtList {.inline, discardable.} =
+proc add*(n: StmtList, c: NimNode): StmtList {.discardable.} =
   ## add to the StmtList and return it for chaining
   n.NimNode.add(c).StmtList
 
-proc add*(n: StmtList, c: DistinctNimNode): StmtList {.inline, discardable.} =
+proc add*(n: StmtList, c: DistinctNimNode): StmtList {.discardable.} =
   ## add to the StmtList and return it for chaining
   n.NimNode.add(c.NimNode).StmtList
 
 # fn-IdentDefs
 
-func hasNoExplicitInitValue*(i: IdentDefs): bool {.inline.} =
+func hasNoExplicitInitValue*(i: IdentDefs): bool =
   i.NimNode.len == 2
 
-func hasNoExplicitType*(i: IdentDefs): bool {.inline.} =
+func hasNoExplicitType*(i: IdentDefs): bool =
   i.NimNode[1].isEmpty
 
-proc ensureExplicitType*(i: IdentDefs) {.inline.} =
+proc ensureExplicitType*(i: IdentDefs) =
   ## add an explicit type symbol
   if i.hasNoExplicitType:
     i.NimNode[1] = getTypeInst i.NimNode[2]
 
-proc definition*(i: IdentDefs): NimNode {.inline.} =
+proc definition*(i: IdentDefs): NimNode =
   i.NimNode[2]
 
-proc `definition=`*(i: IdentDefs, v: NimNode) {.inline.} =
+proc `definition=`*(i: IdentDefs, v: NimNode) =
   i.NimNode[2] = v
 
-proc get*(n: Maybe[IdentDefs]): IdentDefs {.inline.} =
+proc get*(n: Maybe[IdentDefs]): IdentDefs =
   doAssert n.baseKind == nnkIdentDefs
   n.n
 
-proc asIdentDefs*(n: NimNode): Maybe[IdentDefs] {.inline.} =
+proc asIdentDefs*(n: NimNode): Maybe[IdentDefs] =
   result = Maybe[IdentDefs](n: n.IdentDefs)
 
 # fn-VarTupleOrIdentDefs
 
-func kind*(n: Maybe[VarTupleOrIdentDefs]): VarLetSectionChildKind {.inline.} =
+func kind*(n: Maybe[VarTupleOrIdentDefs]): VarLetSectionChildKind =
   case n.baseKind
   of nnkVarTuple: VarletSectionChildKind.nnkVarTuple
   of nnkIdentDefs: VarLetSectionChildKind.nnkIdentDefs
   else: VarLetSectionChildKind.invalid
 
-func asVarTupleOrIdentDefs(n: NimNode): Maybe[VarTupleOrIdentDefs] {.inline.} =
+func asVarTupleOrIdentDefs(n: NimNode): Maybe[VarTupleOrIdentDefs] =
   result = Maybe[VarTupleOrIdentDefs](n: n.VarTupleOrIdentDefs)
 
-func get*(n: Maybe[VarTupleOrIdentDefs]): VarTupleOrIdentDefs {.inline.} =
+func get*(n: Maybe[VarTupleOrIdentDefs]): VarTupleOrIdentDefs =
   doAssert n.baseKind in {nnkVarTuple, nnkIdentDefs}
   result = n.n
 
-func get*[T: VarTuple | IdentDefs](n: Maybe[VarTupleOrIdentDefs], _: typedesc[T]): T {.inline.} =
+func get*[T: VarTuple | IdentDefs](n: Maybe[VarTupleOrIdentDefs], _: typedesc[T]): T =
   doAssert n.baseKind == (when T is IdentDefs: nnkIdentDefs else: nnkVarTuple)
   result = n.n.T
 
 # fn-VarLetSection
 
-func baseKind*(n: VarLetSection): NimNodeKind {.inline.} =
+func baseKind*(n: VarLetSection): NimNodeKind =
   n.NimNode.kind
 
-iterator items*(n: VarLetSection): Maybe[VarTupleOrIdentDefs] {.inline.} =
+iterator items*(n: VarLetSection): Maybe[VarTupleOrIdentDefs] =
   for child in n.NimNode.items():
     yield Maybe(child.asVarTupleOrIdentDefs)
 
-proc add*(n: VarLetSection, c: AnyVarTupleOrIdentDefs): VarLetSection {.inline.} =
+proc add*(n: VarLetSection, c: AnyVarTupleOrIdentDefs): VarLetSection =
   n.NimNode.add(c.NimNode)
   n
 
@@ -203,65 +203,65 @@ proc newSingleChildSection*(n: VarLetSection, c: AnyVarTupleOrIdentDefs): VarLet
   result = newNimNode(n.baseKind, n.NimNode).VarLetSection
   return result.add(c)
 
-proc asVarLetSection*(n: NimNode): VarLetSection {.inline.} =
+proc asVarLetSection*(n: NimNode): VarLetSection =
   # XXX: move away from assert, maybe via Maybe
   doAssert n.kind in {nnkVarSection, nnkLetSection}
   result = n.VarLetSection
 
 # fn-HiddenAddrDeref
 
-func target*(n: HiddenAddrDeref): NimNode {.inline.} =
+func target*(n: HiddenAddrDeref): NimNode =
   n.NimNode[0]
 
-func get*(n: Maybe[HiddenAddrDeref]): HiddenAddrDeref {.inline.} =
+func get*(n: Maybe[HiddenAddrDeref]): HiddenAddrDeref =
   doAssert n.baseKind in {nnkHiddenAddr, nnkHiddenDeref}
   result = n.n
 
-func asHiddenAddrDeref*(n: NimNode): Maybe[HiddenAddrDeref] {.inline.} =
+func asHiddenAddrDeref*(n: NimNode): Maybe[HiddenAddrDeref] =
   result = Maybe[HiddenAddrDeref](n: n.HiddenAddrDeref)
 
 # fn-ProcDef
 
-proc expectProcDef*(n: NimNode): ProcDef {.inline.} =
+proc expectProcDef*(n: NimNode): ProcDef =
   ## will be a ProcDef or use `expectKind` to error out
   result = n.ProcDef
   n.expectKind nnkProcDef
 
-proc returnParam(n: ProcDef): NimNode {.inline.} =
+proc returnParam(n: ProcDef): NimNode =
   ## the return param or empty if void
   ## XXX: make this return a ReturnParam (Ident|Sym|Expr|Empty)
   n.NimNode.params[0]
 
-proc isVoidReturn*(n: ProcDef): bool {.inline.} =
+proc isVoidReturn*(n: ProcDef): bool =
   ## is this a void func or proc?
   return n.returnParam.isEmpty
 
-proc name*(n: ProcDef): NameNode {.inline.} =
+proc name*(n: ProcDef): NameNode =
   ## formal params
   n.NimNode.name.NameNode
 
-proc `name=`*(p: ProcDef, n: AnyNameNode) {.inline.} =
+proc `name=`*(p: ProcDef, n: AnyNameNode) =
   p.NimNode.name = n.NimNode
 
-proc params*(n: ProcDef): NimNode {.inline.} =
+proc params*(n: ProcDef): NimNode =
   ## formal params
   ## XXX: remove NimNode
   n.NimNode.params
 
-proc `params=`*(n: var ProcDef, f: NimNode): ProcDef {.inline, discardable.} =
+proc `params=`*(n: var ProcDef, f: NimNode): ProcDef {.discardable.} =
   ## write the formal params
   ## XXX: FormalParams
   n.NimNode.params = f
 
-proc body*(n: ProcDef): NimNode {.inline.} =
+proc body*(n: ProcDef): NimNode =
   ## formal params
   ## XXX: remove NimNode
   n.NimNode.body
 
-proc addPragma*(n: ProcDef, p: NimNode): ProcDef {.inline, discardable.} =
+proc addPragma*(n: ProcDef, p: NimNode): ProcDef {.discardable.} =
   n.NimNode.addPragma p
 
-proc pruneTypes*(p: ProcDef) {.inline.} =
+proc pruneTypes*(p: ProcDef) =
   ## prune some of the typed trees
   ## XXX: there should be a better description of this
   ## XXX: remove `NimNode`
@@ -269,7 +269,7 @@ proc pruneTypes*(p: ProcDef) {.inline.} =
   while len(p.NimNode) > 7:
     p.NimNode.del(7)
 
-proc clone*(n: ProcDef, body: NimNode = nil): ProcDef {.inline.} =
+proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
   # XXX: rip out the `NimNode`
   result = (nnkProcDef.newTree(
@@ -284,7 +284,7 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef {.inline.} =
 
 # fn-Call
 
-proc newCall2*(name: NimNode, infoOf: NimNode, arg: NimNode): Call {.inline.} =
+proc newCall2*(name: NimNode, infoOf: NimNode, arg: NimNode): Call =
   ## Create a new single arugment Call (nnkCall)
   ## XXX: rename to newCall once types are less ambiguous
   result = newNimNode(nnkCall, infoOf).Call
@@ -293,19 +293,19 @@ proc newCall2*(name: NimNode, infoOf: NimNode, arg: NimNode): Call {.inline.} =
 
 # fn-Conv
 
-proc name*(c: Conv): NimNode {.inline.} =
+proc name*(c: Conv): NimNode =
   c.NimNode[0]
 
-proc arg*(c: Conv): NimNode {.inline.} =
+proc arg*(c: Conv): NimNode =
   c.NimNode[1]
 
-proc asConv*(n: NimNode): Conv {.inline.} =
+proc asConv*(n: NimNode): Conv =
   assert n.kind == nnkConv
   result = n.Conv
 
 # fn-HiddenCallConv
 
-proc toCall(n: HiddenCallConv, mapper: Mapper): Call {.inline.} =
+proc toCall(n: HiddenCallConv, mapper: Mapper): Call =
   ## unwraps the hidden conversion, mapping the children over
   result = nnkCall.newNimNode(n.NimNode).Call
   for child in n.NimNode.items:
@@ -314,29 +314,29 @@ proc toCall(n: HiddenCallConv, mapper: Mapper): Call {.inline.} =
 
 # fn-Calllike
 
-proc isNonNullary*(n: CallLike): bool {.inline.} =
+proc isNonNullary*(n: CallLike): bool =
   ## Takes at least one argument
   n.NimNode.len > 1
 
-proc hasHiddenStdConv*(n: CallLike): bool {.inline.} =
+proc hasHiddenStdConv*(n: CallLike): bool =
   ## Has an immediate child with a standard conversion
   not n.NimNode.findChild(it.kind == nnkHiddenStdConv).isNil
 
 # fn-ReturnStmt
 
-proc copy*(n: ReturnStmt): ReturnStmt {.inline.} =
+proc copy*(n: ReturnStmt): ReturnStmt =
   copyNimNode(n.NimNode).ReturnStmt
 
-proc add*(n: ReturnStmt, c: NimNode): ReturnStmt {.inline, discardable.} =
+proc add*(n: ReturnStmt, c: NimNode): ReturnStmt {.discardable.} =
   ## XXX: this is bad and should be removed/reworked
   n.NimNode.add(c).ReturnStmt
 
-proc isAssignment*(n: ReturnStmt): bool {.inline.} =
+proc isAssignment*(n: ReturnStmt): bool =
   n.NimNode[0].kind == nnkAsgn
 
-proc expression*(n: ReturnStmt): NimNode {.inline.} =
+proc expression*(n: ReturnStmt): NimNode =
   n.NimNode[0]
 
-proc asReturnStmt*(n: NimNode): ReturnStmt {.inline.} =
+proc asReturnStmt*(n: NimNode): ReturnStmt =
   assert n.kind == nnkReturnStmt
   result = n.ReturnStmt
