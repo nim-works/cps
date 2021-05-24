@@ -85,6 +85,8 @@ proc doWhelp(n: NimNode): NimNode =
     result = n.errorAst "welping malfunction"
 
 macro whelp*(n: typed): Continuation =
+  ## Instantiate the given continuation call but do not begin
+  ## running it; instead, return the continuation as a value.
   var n = normalizingRewrites n
   if n.kind in nnkCallKinds:
     let n = getImpl n[0]
