@@ -311,31 +311,31 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
         if n.findChild(it.kind in {nnkElifBranch, nnkElifExpr} and it[0].hasCpsExpr) != nil:
           result = newStmtList()
 
-          var currentIf = copyNimNode n
-          var workingBody = result
+          let newIf = copyNimNode n
 
           for idx, child in n.pairs:
             case child.kind
             of nnkElifBranch, nnkElifExpr:
               if child[0].hasCpsExpr:
-                # if there are some branches in this if statement
-                if currentIf.len > 0:
-                  # add the current if into the working body
-                  workingBody.add currentIf
+                # if there are some branches the new if statement
+                if newIf.len > 0:
+                  # move this and all later branches into a new if
+                  let leftovers = copyNimNode(newIf).add n[idx .. ^1]
 
-                  # move everything from here on to an else branch
-                  workingBody = newStmtList()
-                  currentIf.add:
-                    nnkElse.newTree(workingBody)
-                  # new if statement to store everything from here on
-                  currentIf = copyNimNode n
+                  # rewrite this if then add it as the `else` branch
+                  newIf.add:
+                    nnkElse.newTree:
+                      rewriteCpsExpr(leftovers)
+
+                  # we are done here
+                  break
 
                 # create a variable to assign the condition result to
                 let (tmp, decl) = makeTempVar getTypeInst(child[0])
-                workingBody.add decl
+                result.add decl
 
                 # rewrite and push the condition to above the if statement
-                workingBody.add:
+                result.add:
                   child[0].rewriteCpsExpr().rewriteExprWith(tmp, force = true)
 
                 let newBranch = copyNimNode child
@@ -345,18 +345,18 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
                 newBranch.add child[1].rewriteCpsExpr()
 
                 # add the branch into the if statement
-                currentIf.add newBranch
+                newIf.add newBranch
               else:
                 # add the rewrite of this elif branch
-                currentIf.add child.rewriteCpsExpr()
+                newIf.add child.rewriteCpsExpr()
             of nnkElse, nnkElseExpr:
                # add the rewrite of this else branch
-               currentIf.add child.rewriteCpsExpr()
+               newIf.add child.rewriteCpsExpr()
 
             else: discard "there can't be any other node kinds here"
 
-          # add the new if into the working body
-          workingBody.add currentIf
+          # add the new if to the result
+          result.add newIf
 
       else:
         discard
