@@ -45,6 +45,7 @@ type
   HiddenAddrDeref* = distinct NimNode
 
   ProcDef* = distinct NimNode
+  FormalParams* = distinct NimNode
 
   Call* = distinct NimNode
   Conv* = distinct NimNode
@@ -70,6 +71,18 @@ type
 
   # Utility Types
   Mapper*[T = NimNode] = proc(n: NimNode): T
+
+# Converters - because plastering `.NimNode` makes everyone sad
+
+template converterFor(t: typedesc) =
+  converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
+
+converterFor(ProcDef)
+converterFor(NameNode)
+converterFor(Call)
+converterFor(FormalParams)
+converterFor(IdentDefs)
+converterFor(ReturnStmt)
 
 # fn-Error
 
@@ -99,11 +112,6 @@ proc errorAst*[T:DistinctNimNode](n: Maybe[T]; s = "creepy ast"): NimNode =
 
 func baseKind*(n: Maybe): NimNodeKind =
   n.n.NimNode.kind
-
-# proc mapAs*[T:DistinctNode](n: NimNode, _: typedesc[T], mapper: Mapper[T]): Maybe[T] =
-#   when T is HiddenCallConv:
-#     if n.kind == nnkHiddenCallConv:
-#       result = mapper(n.HiddenAddrDeref)
 
 # fn-NameNode
 
@@ -142,21 +150,35 @@ proc add*(n: StmtList, c: NimNode): StmtList {.borrow, discardable.}
 # fn-IdentDefs
 
 func hasNoExplicitInitValue*(i: IdentDefs): bool =
-  i.NimNode.len == 2
+  i.len == 2
 
 func hasNoExplicitType*(i: IdentDefs): bool =
-  i.NimNode[1].isEmpty
+  i[^2].isEmpty
 
 proc ensureExplicitType*(i: IdentDefs) =
   ## add an explicit type symbol
   if i.hasNoExplicitType:
-    i.NimNode[1] = getTypeInst i.NimNode[2]
+    i[^2] = getTypeInst i[^1]
 
 proc definition*(i: IdentDefs): NimNode =
-  i.NimNode[2]
+  ## gets the rhs or value
+  i[^1]
 
 proc `definition=`*(i: IdentDefs, v: NimNode) =
-  i.NimNode[2] = v
+  ## sets the rhs or value
+  i[^1] = v
+
+proc definesMany*(i: IdentDefs): bool =
+  ## does the ident def define multiple identifiers, eg: `var a, b, c = 3`
+  i.len > 3
+
+iterator itemsDefined*(i: IdentDefs): IdentDefs =
+  ## an IdentDef per define or a copy of itself
+  if i.definesMany:
+    for child in i[0 .. ^3]: # last two nodes are the type and rhs
+      yield newIdentDefs(child, copyNimNode(i[^2]), copyNimNode(i[^1])).IdentDefs
+  else:
+    yield copy(i).IdentDefs
 
 proc get*(n: Maybe[IdentDefs]): IdentDefs =
   doAssert n.baseKind == nnkIdentDefs
@@ -218,6 +240,21 @@ func get*(n: Maybe[HiddenAddrDeref]): HiddenAddrDeref =
 func asHiddenAddrDeref*(n: NimNode): Maybe[HiddenAddrDeref] =
   result = Maybe[HiddenAddrDeref](n: n.HiddenAddrDeref)
 
+# fn-FormalParams
+
+proc add*(n: FormalParams, p: NimNode): FormalParams {.borrow, discardable.}
+
+proc newFormalParams*(infoOf: NimNode, retParam: NimNode): FormalParams =
+  result = newNimNode(nnkFormalParams, infoOf).FormalParams
+  result.add retParam
+
+iterator formalArgParams*(n: FormalParams): NimNode =
+  for a in n[1 .. ^1]:
+    yield a
+
+proc returnParam*(n: FormalParams): NimNode =
+  n[0]
+
 # fn-ProcDef
 
 proc expectProcDef*(n: NimNode): ProcDef =
@@ -250,6 +287,8 @@ proc params*(n: ProcDef): NimNode {.borrow.}
 proc `params=`*(n: ProcDef, f: NimNode) {.borrow.}
 
 proc body*(n: ProcDef): NimNode {.borrow.}
+
+proc `body=`*(n: ProcDef, b: NimNode) {.borrow.}
 
 proc addPragma*(n: ProcDef, p: NimNode): ProcDef {.discardable.} =
   ## add a pragma then return the ProcDef for chaining
@@ -302,7 +341,12 @@ proc asConv*(n: NimNode): Conv =
 
 # fn-HiddenCallConv
 
-proc toCall(n: HiddenCallConv, mapper: Mapper): Call =
+proc expectHiddenCallConv*(n: NimNode): HiddenCallConv =
+  ## will be a HiddenCallConv or use `expectKind` to error out
+  result = n.HiddenCallConv
+  n.expectKind nnkHiddenCallConv
+
+proc toCall*(n: HiddenCallConv, mapper: Mapper): Call =
   ## unwraps the hidden conversion, mapping the children over
   result = nnkCall.newNimNode(n.NimNode).Call
   for child in n.NimNode.items:
@@ -311,7 +355,7 @@ proc toCall(n: HiddenCallConv, mapper: Mapper): Call =
 
 # fn-Calllike
 
-proc isNonNullary*(n: CallLike): bool =
+proc isBinaryOrMore*(n: CallLike): bool =
   ## Takes at least one argument
   n.NimNode.len > 1
 
@@ -319,18 +363,28 @@ proc hasHiddenStdConv*(n: CallLike): bool =
   ## Has an immediate child with a standard conversion
   not n.NimNode.findChild(it.kind == nnkHiddenStdConv).isNil
 
+proc copy*(n: CallLike): CallLike =
+  proc copyNimNode(n: CallLike): CallLike {.borrow.}
+  n.copyNimNode
+
 # fn-ReturnStmt
 
 proc copy*(n: ReturnStmt): ReturnStmt =
   copyNimNode(n.NimNode).ReturnStmt
 
-proc add*(n: ReturnStmt, c: NimNode): ReturnStmt {.borrow, discardable.}
+# proc add*(n: ReturnStmt, c: NimNode): ReturnStmt {.borrow, discardable.}
 
 proc isAssignment*(n: ReturnStmt): bool =
   n.NimNode[0].kind == nnkAsgn
 
 proc expression*(n: ReturnStmt): NimNode =
   n.NimNode[0]
+
+proc `expression=`*(n: ReturnStmt, r: NimNode) =
+  if n.len == 0:
+    n.add r
+  else:
+    n[0] = r
 
 proc asReturnStmt*(n: NimNode): ReturnStmt =
   doAssert n.kind == nnkReturnStmt

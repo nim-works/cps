@@ -747,18 +747,18 @@ proc validate(p: ProcDefContToCPS): ValidProcDefContToCPS =
   
   # XXX: maybe lift out an error proc that absorbs the cast
   if not p.n.isVoidReturn:
-    error "do not specify a return-type for .cps. functions", p.n.NimNode
+    error "do not specify a return-type for .cps. functions", p.n
 
   if p.T.isNil:
-    error "specify a type for the continuation with .cps: SomeType", p.n.NimNode
+    error "specify a type for the continuation with .cps: SomeType", p.n
   
   # enhanced spam before it all goes to shit
-  debug(".cps.", p.n.NimNode, Original)
+  debug(".cps.", p.n, Original)
 
   result = ValidProcDefContToCPS(
       T: p.T,
       # make the AST easier for us to consume 
-      n: (normalizingRewrites p.n.NimNode).NormalizedProcDef
+      n: (normalizingRewrites p.n).NormalizedProcDef
     )
 
 proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
@@ -777,16 +777,16 @@ proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
   # add parameters into the environment
   for defs in n.params[1 .. ^1]:
     if defs[1].kind == nnkVarTy:
-      error "cps does not support var parameters", n.NimNode
+      error "cps does not support var parameters", n
     env.localSection(defs)
 
   ## Generate the bootstrap
   var booty = clone(n, newStmtList())
   booty.returnParam = p.T
   booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
-  booty.NimNode.introduce {Alloc, Dealloc}    # we may actually dealloc here
+  booty.introduce {Alloc, Dealloc}    # we may actually dealloc here
   booty.body.add:
-    env.createContinuation booty.name.NimNode
+    env.createContinuation booty.name
 
   # do some pruning of these typed trees.
   for p in [booty, n]:
@@ -794,13 +794,13 @@ proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
 
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
-  n.params = nnkFormalParams.newTree(p.T.NimNode, env.firstDef)
+  n.params = nnkFormalParams.newTree(p.T, env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
   body.introduce {Trace, Alloc, Dealloc}   # prepare hooks
   body.add:
-    Trace.hook env.first, n.NimNode # hooking against the proc (minus cloned body)
-  body.add n.body                   # add in the cloned body of the original proc
+    Trace.hook env.first, n # hooking against the proc (minus cloned body)
+  body.add n.body           # add in the cloned body of the original proc
 
   # perform sym substitutions (or whatever)
   body = env.rewriteSymbolsIntoEnvDotField body
@@ -814,7 +814,7 @@ proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
   # ensaftening the proc's body
   body = env.saften(body)
 
-  n.NimNode.body = body
+  n.body = body
 
   # add in a pragma so other cps macros can identify this as a cps call
   n.addPragma ident"cpsCall"
@@ -827,10 +827,10 @@ proc cpsXfrm(p: ValidProcDefContToCPS): CPSXfrmedProcDef =
   env = env.storeType(force = off)
 
   # lifting the generated proc bodies
-  result = lambdaLift(types, n.NimNode)
+  result = lambdaLift(types, n)
 
   # adding in the bootstrap
-  result.add booty.NimNode
+  result.add cProcDefToNimNode(booty)
 
   # spamming the developers
   debug(".cps.", result, Transformed)

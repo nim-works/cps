@@ -358,10 +358,36 @@ proc normalize(n: ReturnStmt): ReturnStmt =
     if repr(n.expression[0]) != "result":
       result.expression.add:
         n.errorAst "unexpected return assignment form"
-    result.add:
-      normalizingRewrites n.expression[1]
+    result.expression = normalizingRewrites n.expression[1]
   else:
     result = n
+
+# XXX: things go horribly wrong when we use this
+proc normalize(n: FormalParams): FormalParams =
+  # echo "formalParams - before: ", treeRepr n
+  result = newFormalParams(infoOf = n,
+                          retParam = normalizingRewrites n.returnParam)
+  for arg in n.formalArgParams:
+    case arg.kind
+    of nnkIdentDefs:
+      for d in normalize(arg.IdentDefs).itemsDefined:
+        result.add(d)
+    of nnkEmpty:
+      result.add(arg)
+    else:
+      result.add:
+        # arg
+        normalizingRewrites arg
+  # echo "formalParams - after: ", treeRepr result
+  # result = nil
+
+# proc normalize(n: HiddenCallConv): Call =
+#   n.toCall(mapper = normalizingRewrites)
+
+# proc normalize(n: CallLike): CallLike =
+#   if n.isBinaryOrMore and not n.hasHiddenStdConv:
+#     result = copy n
+    # nnkCall, nnkInfix, nnkPrefix, nnkPostfix, nnkCommand, nnkCallStrLit, nnkHiddenCallConv
 
 proc normalizingRewrites*(n: NimNode): NimNode =
   # see forward declaration for documentation
@@ -419,6 +445,8 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       (n.asConv.normalize).NimNode
     of nnkReturnStmt:
       (n.asReturnStmt.normalize).NimNode
+    of nnkFormalParams:
+      (normalize n.FormalParams).NimNode
     of CallNodes:
       rewriteHidden n
     else:
