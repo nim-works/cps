@@ -365,12 +365,12 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       case n.kind
       of nnkReturnStmt:
         if n[0].kind == nnkAsgn:
-          result = copyNimNode(n)
           if repr(n[0][0]) != "result":
+            result = n.errorAst "unexpected return assignment form"
+          else:
+            result = copyNimNode(n)
             result.add:
-              n.errorAst "unexpected return assignment form"
-          result.add:
-            normalizingRewrites n[0][1]
+              normalizingRewrites n[0][1]
         else:
           result = n
       else: discard
