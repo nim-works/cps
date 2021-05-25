@@ -280,12 +280,9 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
         result.add newBody
 
       of nnkCaseStmt:
-        if n.findChild(it.kind in {nnkElifBranch, nnkElifExpr} and it[0].hasCpsExpr) != nil:
-          # to properly support this we need to slice the case statement into ifs
-          result = n.errorAst("case statements with elif branches with a cps expression as condition is not supported")
-
-        # if the evaluated expression is a cps expression
-        elif n[0].hasCpsExpr:
+        # if the evaluated expression is a cps expression or there are
+        # elif branches with a cps expression as the condition.
+        if n[0].hasCpsExpr or n.findChild(it.kind in {nnkElifBranch, nnkElifExpr} and it[0].hasCpsExpr) != nil:
           result = newStmtList()
           let newCase = copyNimNode(n)
 
@@ -293,16 +290,40 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
           let (tmp, decl) = makeTempVar getTypeInst(n[0])
           result.add decl
 
-          # rewrite the expression to assign to tmpVar and
+          # rewrite the expression to assign to the temporary and
           # push it above the case statement
           result.add n[0].rewriteCpsExpr().rewriteExprWith(tmp, force = true)
 
           # evaluates tmpVar instead
           newCase.add tmp
 
-          # rewrite all child nodes
+          # rewrite all branches nodes
           for idx in 1 ..< n.len:
-            newCase.add n[idx].rewriteCpsExpr()
+            let child = n[idx]
+            case child.kind
+            of nnkElifBranch, nnkElifExpr:
+              # if the condition of this elif branch is a cps expr
+              if child[0].hasCpsExpr:
+                let ifStmt = newNimNode nnkIfStmt
+                # collect this and the remaining elif branches to add to the
+                # if statement
+                #
+                # there can't be any `of` branch after this, so we can
+                # safely collect everything to the if
+                ifStmt.add n[idx .. ^1]
+
+                # rewrite and add the new if statement as the else branch of
+                # this case
+                newCase.add:
+                  nnkElse.newTree:
+                    rewriteCpsExpr ifStmt
+
+                # we are done
+                break
+              else:
+                newCase.add child.rewriteCpsExpr()
+            else:
+              newCase.add child.rewriteCpsExpr()
 
           result.add newCase
 
@@ -350,8 +371,8 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
                 # add the rewrite of this elif branch
                 newIf.add child.rewriteCpsExpr()
             of nnkElse, nnkElseExpr:
-               # add the rewrite of this else branch
-               newIf.add child.rewriteCpsExpr()
+              # add the rewrite of this else branch
+              newIf.add child.rewriteCpsExpr()
 
             else: discard "there can't be any other node kinds here"
 

@@ -1249,6 +1249,25 @@ suite "tasteful tests":
     check r == 4
 
   block:
+    ## a case statement with elif branches evaluating a cps expression
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      case (noop(); inc r; true)
+      of false:
+        fail "this branch should not be taken"
+      elif (noop(); inc r; false):
+        fail "this branch should not be taken"
+      elif (noop(); inc r; true):
+        inc r
+      else:
+        fail "this branch should not be taken"
+      inc r
+
+    trampoline foo()
+    check r == 6
+
+  block:
     ## a if statement evaluating a cps expression
     r = 0
     proc foo() {.cps: Cont.} =
