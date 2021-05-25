@@ -79,7 +79,7 @@ proc init(e: var Env) =
   if e.fn.isNil:
     e.fn = ident"fn"
   if e.mom.isNil:
-    e.mom = genField"mamma"
+    e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
 
 proc allPairs(e: Env): seq[Pair] =
@@ -369,25 +369,6 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
   else:
     e.store.add:
       n.errorAst "localSection input"
-
-proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
-  ## returns the appropriate target of a `return` statement in a CPS
-  ## procedure that may (and may not) have a continuation instantiated yet.
-  result = newStmtList:
-    newAssignment(newDotExpr(e.first, e.fn), goto)
-  if goto.kind == nnkNilLit:
-    result.add:                               # return value is as follows:
-      nnkIfExpr.newTree [
-        nnkElifExpr.newTree [                 # if
-          newCall(bindSym"isNil", e.mom),     # we have no parent,
-          e.first                             # the current continuation;
-        ],
-        nnkElseExpr.newTree [                 # else,
-          e.mom                               # our parent continuation.
-        ],
-      ]
-  else:                                       # return value is simply
-    result.add e.first                        # the current continuation
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.

@@ -9,6 +9,7 @@ type
   InfiniteLoop = CatchableError
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
+    mom*: Cont
 
 var jumps: int
 
@@ -1135,10 +1136,10 @@ suite "tasteful tests":
           break
 
     foo()
-    check found == [ "foo", "4", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16", ]
+    check found == [ "foo", "4",        "24",
+                     "whileLoop", "24", "24", "afterCall", "8", "24",
+                     "whileLoop", "24", "24", "afterCall", "8", "24",
+                     "whileLoop", "24", "24", "afterCall", "8", "24", ]
 
   block:
     ## custom continuation allocators are used automatically

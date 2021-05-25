@@ -13,6 +13,7 @@ type
 
   C = ref object of RootObj
     fn*: proc(c: C): C {.nimcall.}
+    mom*: C
 
 
 # Trampoline with count safeguard

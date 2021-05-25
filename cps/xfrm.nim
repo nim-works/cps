@@ -41,21 +41,50 @@ proc firstReturn(p: NimNode): NimNode =
   else:
     result = nil
 
+proc isNillish(n: NimNode): bool =
+  ## unwrap statement lists and see if the end in a literal nil
+  case n.kind
+  of nnkStmtList:
+    isNillish n.last
+  of nnkNilLit:
+    true
+  else:
+    false
+
+proc maybeReturnParent*(c: NimNode): NimNode =
+  ## the appropriate target of a `return` statement in a CPS procedure
+  ## (that would otherwise return continuation `c`) first performs a
+  ## runtime check to see if the parent should be returned instead.
+  let mom = newDotExpr(c, ident"mom")
+  result =                                  # return value is as follows:
+    nnkIfExpr.newTree [
+      nnkElifExpr.newTree [                 # if
+        newCall(bindSym"isNil", mom),       # we have no parent,
+        c                                   # the current continuation;
+      ],
+      nnkElseExpr.newTree [                 # else,
+        mom                                 # our parent continuation.
+      ],
+    ]
+
 proc makeReturn(n: NimNode): NimNode =
   ## generate a `return` of the node if it doesn't already contain a return
   assert not n.isNil, "we no longer permit nil nodes"
   if n.firstReturn.isNil:
     nnkReturnStmt.newNimNode(n).add:
       if n.kind in nnkCallKinds:
-        n
+        n           # what we're saying here is, don't hook Coop on magics
       else:
         hook Coop:
-          n
+          n         # but we will hook Coop on child continuations
   else:
     n
 
 proc makeReturn(pre: NimNode; n: NimNode): NimNode =
   ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
+  if not pre.firstReturn.isNil:
+    result.add:
+      n.errorAst "i want to know about this"
   result = newStmtList pre
   result.add:
     if pre.firstReturn.isNil:
@@ -148,9 +177,20 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
 func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
+  if to.isNillish and not jump.isNil:
+    return jump.errorAst "where do you think you're going?"
   result = newStmtList:
     newAssignment(newDotExpr(cont, ident"fn"), to)
-  let jump = if jump.isNil: cont else: jump
+
+  # figure out what the return value will be...
+  var jump =
+    if jump.isNil:
+      if to.isNillish:             # continuation.fn appears to be nil,
+        maybeReturnParent cont     # we may be returning a parent here.
+      else:
+        cont                       # just return our continuation
+    else:
+      jump                         # return the jump target as requested
   result = makeReturn(result, jump)
 
 func jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
@@ -179,11 +219,27 @@ macro cpsJump(cont, call, n: typed): untyped =
 
   #debug("cpsJump", n, Original)
 
+  let call = normalizingRewrites call
   let name = nskProc.genSym"afterCall"
+
   result = newStmtList makeContProc(name, cont, n)
-  result.add:
-    cont.jumperCall name:
-      normalizingRewrites call
+  if getImpl(call[0]).hasPragma "cpsBootstrap":
+    let c = nskLet.genSym"c"
+    result.add:
+      # install the return point in the current continuation
+      newAssignment(newDotExpr(cont, ident"fn"), name)
+    result.add:
+      # instantiate a new child continuation with the given arguments
+      newLetStmt(c, newCall(ident"whelp", call))
+    result.add:
+      # FIXME: softcode mom?  see environment definition...
+      # assign our current continuation to the child's parent field
+      newAssignment(newDotExpr(c, ident"mom"), cont)
+    # return the child continuation
+    result = result.makeReturn c
+  else:
+    result.add:
+      jumperCall(cont, name, call)
   result = workaroundRewrites result
 
   #debug("cpsJump", result, Transformed, n)
