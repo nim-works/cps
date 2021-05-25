@@ -1148,3 +1148,134 @@ suite "tasteful tests":
 
     trampoline foo(3)
     check r == 1, "bzzzt"
+
+  block:
+    ## if expression containing a jump assigned to a variable
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      let x =
+        if true:
+          noop()
+          inc r
+          1
+        else:
+          fail "this branch should not be taken"
+          0 # needed because the compiler sucks at expression analysis
+
+      inc r
+      check x == 1
+
+    trampoline foo()
+    check r == 3
+
+  block:
+    ## block expression assigned to a variable
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      let x =
+        block:
+          noop()
+          inc r
+          1
+
+      inc r
+      check x == 1
+
+    trampoline foo()
+    check r == 3
+
+  block:
+    ## try expression assigned to a variable
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      let x =
+        try:
+          noop()
+          inc r
+          raise newException(CatchableError, "something")
+          fail "this statement should not run"
+          0
+        except:
+          inc r
+          1
+
+      inc r
+      check x == 1
+
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## while loop with condition being a cps expression
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var x = 0
+      while (noop(); inc r; r < 3):
+        inc x
+
+      check x == 1
+
+    trampoline foo()
+    check r == 3
+
+  block:
+    ## a call with cps expression being a parameter
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      check (noop(); inc r; true)
+      inc r
+
+    trampoline foo()
+    check r == 3
+
+  block:
+    ## a case statement evaluating a cps expression
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      case (noop(); inc r; true)
+      of true:
+        inc r
+      else:
+        fail "this branch should not be taken"
+      inc r
+
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## a if statement evaluating a cps expression
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      if (noop(); inc r; true):
+        inc r
+      else:
+        fail "this branch should not be taken"
+      inc r
+
+    trampoline foo()
+    check r == 4
+
+  block:
+    ## a if statement with multiple elif branches evaluating a cps expression
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      if (noop(); inc r; false):
+        fail "this branch should not be taken"
+      elif false:
+        fail "this branch should not be taken"
+      elif (noop(); inc r; true):
+        inc r
+
+      inc r
+
+    trampoline foo()
+    check r == 5
