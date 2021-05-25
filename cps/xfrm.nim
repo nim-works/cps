@@ -81,7 +81,7 @@ proc isCpsBlock(n: NimNode): bool =
 
 proc isCpsExpr(n: NimNode): bool =
   ## `true` if the `n` is an expression with a cps call in it
-  n.typeKind != ntyNone and n.isCpsBlock
+  n.isExpr and n.isCpsBlock
 
 proc hasCpsExpr(n: NimNode): bool =
   ## `true` if the `n` has a cpsExpr
@@ -104,10 +104,10 @@ proc hasCpsExpr(n: NimNode): bool =
 proc rewriteCpsExpr(n: NimNode): NimNode =
   ## flatten all cpsExpr within `n` so that the expr can be
   ## rewritten into a continuation
-  proc rewriteExprWith(n, sym: NimNode, force = false): NimNode =
+  proc rewriteExprWith(n, sym: NimNode): NimNode =
     ## rewrite an expression into a statement assigning to `sym`
     # only rewrite if the node has a type
-    if n.typeKind != ntyNone or force:
+    if n.isExpr:
       case n.kind
       of CallNodes, AtomicNodes:
         result = newAssignment(sym, n)
@@ -138,7 +138,7 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
         # rewrite all branches
         for child in n:
           # force rewrite since these children don't have a type
-          result.add child.rewriteExprWith(sym, force = true)
+          result.add child.rewriteExprWith(sym)
 
       of nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse, nnkOfBranch,
          nnkExceptBranch:
@@ -150,10 +150,6 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
 
         # rewrite the meat of the operation
         result.add n.last.rewriteExprWith(sym)
-
-      of nnkFinally:
-        # finally can't have a type
-        result = n
 
       else:
         doAssert false, $n.kind & " has a type but we don't know how to rewrite it"
@@ -176,13 +172,14 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
         # if n is a cps expr and the very last node
         # of the list is also a cps expr
         if n.lastOfLast.isCpsExpr:
-          result = newStmtList()
+          # copy the node to retain the type information
+          result = copyNimNode n
           # create a variable to assign the result to
           let (tmp, decl) = makeTempVar getTypeInst(n)
           # push the declaration to the top
           result.add decl
           # rewrite the body to assign all results into the temporary
-          result.add n.rewriteCpsExpr().rewriteExprWith(tmp, force = true)
+          result.add n.rewriteCpsExpr().rewriteExprWith(tmp)
           # expose the temporary as the final expression
           result.add tmp
         else:
@@ -202,7 +199,7 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
 
             # rewrite the expression to assign to temporary
             # and move it to before the var/let section
-            result.add value.rewriteCpsExpr().rewriteExprWith(tmp, force = true)
+            result.add value.rewriteCpsExpr().rewriteExprWith(tmp)
 
             # make a new IdentDefs
             let newDefs = copyNimNode defs
@@ -233,7 +230,7 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
 
             # rewrite the expression to assign to temporary
             # and move it to before the call node
-            result.add child.rewriteCpsExpr().rewriteExprWith(tmp, force = true)
+            result.add child.rewriteCpsExpr().rewriteExprWith(tmp)
 
             # substitute the expression with the temporary
             newNode.add tmp
@@ -256,7 +253,7 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
 
         # rewrite the condition
         newBody.add:
-          n[0].rewriteCpsExpr().rewriteExprWith(tmp, force = true)
+          n[0].rewriteCpsExpr().rewriteExprWith(tmp)
 
         # rewrite the body into:
         # if tmp:
@@ -292,7 +289,7 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
 
           # rewrite the expression to assign to the temporary and
           # push it above the case statement
-          result.add n[0].rewriteCpsExpr().rewriteExprWith(tmp, force = true)
+          result.add n[0].rewriteCpsExpr().rewriteExprWith(tmp)
 
           # evaluates tmpVar instead
           newCase.add tmp
@@ -357,7 +354,7 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
 
                 # rewrite and push the condition to above the if statement
                 result.add:
-                  child[0].rewriteCpsExpr().rewriteExprWith(tmp, force = true)
+                  child[0].rewriteCpsExpr().rewriteExprWith(tmp)
 
                 let newBranch = copyNimNode child
                 # evaluate the temporary instead

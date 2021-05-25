@@ -660,3 +660,24 @@ proc makeTempVar*(typ: NimNode): tuple[sym: NimNode, decl: NimNode] =
   result.decl =
     nnkVarSection.newTree:
       newIdentDefs(result.sym, typ)
+
+proc isExpr*(n: NimNode): bool =
+  ## Return whether `n` is an expression
+  # if there compiler said `n` has a type, then `n` is an expression
+  if n.typeKind != ntyNone:
+    result = true
+  else:
+    # this information might be lost due to rewrites, so we
+    # attempt to infer it to the best of our capabilities
+    case n.kind
+    of nnkStmtList, nnkStmtListExpr, nnkBlockStmt, nnkBlockExpr,
+       nnkElifBranch, nnkElifExpr, nnkElse, nnkElseExpr, nnkOfBranch,
+       nnkExceptBranch:
+      if n.len > 0:
+        result = n.last.isExpr()
+    of nnkCaseStmt, nnkIfStmt, nnkIfExpr, nnkTryStmt:
+      for child in n.items:
+        if child.isExpr:
+          return true
+    else:
+      result = false
