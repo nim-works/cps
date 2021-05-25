@@ -681,3 +681,56 @@ proc isExpr*(n: NimNode): bool =
           return true
     else:
       result = false
+
+proc assignExpr*(n, sym: NimNode): NimNode =
+  ## rewrite the expression `n` into a statement assigning to `sym`
+  ##
+  ## does nothing if `n` is not an expression
+  if n.isExpr:
+    case n.kind
+    of CallNodes, AtomicNodes:
+      result = newAssignment(sym, n)
+
+    of nnkStmtList, nnkStmtListExpr:
+      # we don't copy to remove the type associated with the node
+      result = newNimNode(n.kind, n)
+      # copy everything but the last node
+      for idx in 0 ..< n.len - 1:
+        result.add n[idx]
+
+      # add the rewrite of the last node
+      result.add n.last.assignExpr(sym)
+
+    of nnkCaseStmt, nnkBlockExpr, nnkBlockStmt:
+      # we don't copy to remove the type associated with the node
+      result = newNimNode(n.kind, n)
+      # copy the expr being tested/label
+      result.add n[0]
+
+      for idx in 1 ..< n.len:
+        # rewrite everything else
+        result.add n[idx].assignExpr(sym)
+
+    of nnkIfStmt, nnkIfExpr, nnkTryStmt:
+      # we don't copy to remove the type associated with the node
+      result = newNimNode(n.kind, n)
+      # rewrite all branches
+      for child in n:
+        result.add child.assignExpr(sym)
+
+    of nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse, nnkOfBranch,
+       nnkExceptBranch:
+      # we don't copy to remove the type associated with the node
+      result = newNimNode(n.kind, n)
+      # add the condition/exception, if any
+      if n.len > 1:
+        result.add n[0]
+
+      # rewrite the meat of the operation
+      result.add n.last.assignExpr(sym)
+
+    else:
+      doAssert false, $n.kind & " has a type but we don't know how to rewrite it"
+
+  else:
+    result = n
