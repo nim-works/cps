@@ -651,3 +651,12 @@ proc isScopeExit*(n: NimNode): bool =
   ##
   ## TODO: Handle early exit (ie. `c.fn = nil; return`)
   n.isCpsPending or n.isCpsBreak or n.isCpsContinue
+
+proc makeTempVar*(typ: NimNode): tuple[sym: NimNode, decl: NimNode] =
+  # Make a temporary variable with type `typ`
+  #
+  # `sym` is the symbol of the variable, and `decl` is the declaration
+  result.sym = genSym(nskVar)
+  result.decl =
+    nnkVarSection.newTree:
+      newIdentDefs(result.sym, typ)
