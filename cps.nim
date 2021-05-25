@@ -77,7 +77,6 @@ macro cpsMagic*(n: untyped): untyped =
   when not defined(nimdoc):
     result.add n
   result.add m
-  echo result.repr
 
 proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
   for n in n.pragma.items:
