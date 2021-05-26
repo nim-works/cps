@@ -272,22 +272,6 @@ when cpsDebug:
 else:
   template lineAndFile*(n: NimNode): string = "(no debug)"
 
-# proc errorAst*(s: string, info: NimNode = nil): NimNode =
-#   ## produce {.error: s.} in order to embed errors in the ast
-#   ##
-#   ## optionally take a node to set the error line information
-#   result = nnkPragma.newTree:
-#     ident"error".newColonExpr: newLit s
-#   if not info.isNil:
-#     result[0].copyLineInfo info
-
-# proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
-#   ## embed an error with a message, the line info is copied from the node
-#   ## too
-#   # TODO: we might no longer need this now that the other version can
-#   #       get the line info
-#   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
-
 proc genField*(ident = ""): NimNode
   {.deprecated: "pending https://github.com/nim-lang/Nim/issues/17851".} =
   ## generate a unique field to put inside an object definition
@@ -362,32 +346,22 @@ proc normalize(n: ReturnStmt): ReturnStmt =
   else:
     result = n
 
-# XXX: things go horribly wrong when we use this
 proc normalize(n: FormalParams): FormalParams =
-  # echo "formalParams - before: ", treeRepr n
+  ## make formal params such as `foo(a, b: int)` into `foo(a: int, b: int)`
   result = newFormalParams(infoOf = n,
                           retParam = normalizingRewrites n.returnParam)
   for arg in n.formalArgParams:
     case arg.kind
     of nnkIdentDefs:
+      # if there is more than one param defined, then make them independent
       for d in normalize(arg.IdentDefs).itemsDefined:
         result.add(d)
     of nnkEmpty:
       result.add(arg)
     else:
       result.add:
-        # arg
+        # sometimes we have symbols, they get desymed elsewhere
         normalizingRewrites arg
-  # echo "formalParams - after: ", treeRepr result
-  # result = nil
-
-# proc normalize(n: HiddenCallConv): Call =
-#   n.toCall(mapper = normalizingRewrites)
-
-# proc normalize(n: CallLike): CallLike =
-#   if n.isBinaryOrMore and not n.hasHiddenStdConv:
-#     result = copy n
-    # nnkCall, nnkInfix, nnkPrefix, nnkPostfix, nnkCommand, nnkCallStrLit, nnkHiddenCallConv
 
 proc normalizingRewrites*(n: NimNode): NimNode =
   # see forward declaration for documentation
