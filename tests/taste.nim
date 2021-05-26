@@ -30,6 +30,9 @@ proc trampoline(c: Cont) =
 
 proc noop*(c: Cont): Cont {.cpsMagic.} = c
 
+# We have a lot of these for the purpose of control-flow validation
+{.warning[UnreachableCode]: off.}
+
 suite "basic testing assumptions":
 
   block:
