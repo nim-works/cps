@@ -83,79 +83,67 @@ proc isCpsExpr(n: NimNode): bool =
   ## `true` if the `n` is an expression with a cps call in it
   n.isExpr and n.isCpsBlock
 
-proc hasCpsExpr(n: NimNode): bool =
-  ## `true` if the `n` has a cpsExpr
-  if n.isCpsExpr:
-    result = true
-  else:
+proc rewriteCpsExpr(n: NimNode): NimNode =
+  ## flatten all cps expression inside `n` so that they can
+  ## be rewritten into continuations
+  proc needRewrite(n: NimNode): bool =
+    ## whether `n` contains a cps expression that might have to be moved
+    ## outside
     case n.kind
     of nnkIdentDefs:
-      result = n[^1].isCpsExpr
-    of nnkVarSection, nnkLetSection, CallNodes, nnkIfStmt, nnkIfExpr,
-       nnkCaseStmt, nnkAsgn:
-      for c in n.items:
-        if c.hasCpsExpr:
+      result = n.last.needRewrite
+    of nnkVarSection, nnkLetSection, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
+       nnkElifBranch, nnkElifExpr, nnkElse, nnkElseExpr, CallNodes:
+      for child in n.items:
+        if child.needRewrite:
           return true
-    of nnkWhileStmt, nnkElifBranch, nnkElifExpr:
-      result = n[0].hasCpsExpr
+    of nnkWhileStmt:
+      result = n[0].needRewrite
     else:
       result = n.isCpsExpr
 
-proc rewriteCpsExpr(n: NimNode): NimNode =
-  ## flatten all cpsExpr within `n` so that the expr can be
-  ## rewritten into a continuation
-
-  proc lastOfLast(n: NimNode): NimNode =
-    # get the very last node of nnkStmtList
-    case n.kind
-    of nnkStmtList, nnkStmtListExpr:
-      n.last
-    else:
-      n
-
   proc flatten(n: NimNode): NimNode =
-    if n.hasCpsExpr:
+    if n.needRewrite:
       case n.kind
-      of nnkStmtList, nnkStmtListExpr:
-        # if n is a cps expr and the very last node
-        # of the list is also a cps expr
-        if n.lastOfLast.isCpsExpr:
-          # copy the node to retain the type information
-          result = copyNimNode n
-          # create a variable to assign the result to
-          let (tmp, decl) = makeTempVar getTypeInst(n)
-          # push the declaration to the top
-          result.add decl
-          # rewrite the body to assign all results into the temporary
-          result.add n.rewriteCpsExpr().assignExpr(tmp)
-          # expose the temporary as the final expression
-          result.add tmp
-        else:
-          result = nil
-
       of nnkVarSection, nnkLetSection:
+        # this var/let section have at least one declaration requiring
+        # flattening
         result = newStmtList()
 
-        var newSection = copyNimNode n
-        for defs in n.items:
+        let newSection = copyNimNode n
+        for idx, defs in n.pairs:
           let value = defs[^1]
-          # if this definition has a cps expression block
-          if value.isCpsExpr and not value.isCpsCall:
-            # create a temporary to assign the value to
-            let (tmp, decl) = makeTempVar getTypeInst(value)
-            result.add decl
+          # if this definition has a cps expression block but
+          # not a call (we rewrite those in saften)
+          if value.needRewrite and not value.isCpsCall:
+            if newSection.len > 0:
+              # there are more than one ident defs in here
+              # push the new var/let section to the body
+              result.add newSection
 
-            # rewrite the expression to assign to temporary
-            # and move it to before the var/let section
-            result.add value.rewriteCpsExpr().assignExpr(tmp)
+              # create a new one containing the rest, flatten it,
+              # then add to the body
+              result.add:
+                rewriteCpsExpr:
+                  copyNimNode(newSection).add n[idx .. ^1]
+
+              # we are done here
+              return
+
+            # flatten then rewrite the expression
+            let (newValue, stmt) =
+              exprAsSym:
+                rewriteCpsExpr value
+            # move it to before the var/let section
+            result.add stmt
 
             # make a new IdentDefs
             let newDefs = copyNimNode defs
             # copy everything but the value
             for idx in 0 ..< defs.len - 1:
               newDefs.add defs[idx]
-            # assign the temporary variable as the value
-            newDefs.add tmp
+            # set the value to what we want
+            newDefs.add newValue
 
             # add the new defs to the section
             newSection.add newDefs
@@ -165,26 +153,47 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
 
         result.add newSection
 
-      of CallNodes, nnkAsgn:
+      of nnkAsgn, CallNodes:
         result = newStmtList()
 
-        var newNode = copyNimNode n
-        for child in n.items:
-          # if this parameter of the call/assignment is a cps expression
-          if child.hasCpsExpr:
-            # create a temporary to assign the value to
-            let (tmp, decl) = makeTempVar getTypeInst(child)
-            result.add decl
+        # find the last position that require rewriting
+        var lastRewriteAt = 0
+        for idx, child in n.pairs:
+          if child.needRewrite:
+            lastRewriteAt = idx
 
-            # rewrite the expression to assign to temporary
-            # and move it to before the call node
-            result.add child.rewriteCpsExpr().assignExpr(tmp)
+        let newNode = copyNimNode n
+
+        # rewrite everything before that
+        #
+        # this will create a lot of locals, but it has to be done to
+        # preserve the evaluation order
+        #
+        # TODO: perform analysis to figure out whether we can skip
+        # creating locals
+        for idx in 0 .. lastRewriteAt:
+          let child = n[idx]
+
+          if idx == 0:
+            # TODO: This is not the right thing, but we can't
+            # do it any other way atm
+            newNode.add child
+          elif child.kind in nnkLiterals:
+            # we can skip locals for literals, since they are constant
+            newNode.add child
+          else:
+            let (val, stmt) =
+              exprAsSym:
+                rewriteCpsExpr child
+
+            result.add stmt
 
             # substitute the expression with the temporary
-            newNode.add tmp
-          else:
-            # add as-is
-            newNode.add child.rewriteCpsExpr()
+            newNode.add val
+
+        # add the remaining nodes
+        for idx in lastRewriteAt + 1 ..< n.len:
+          newNode.add n[idx]
 
         result.add newNode
 
@@ -194,132 +203,118 @@ proc rewriteCpsExpr(n: NimNode): NimNode =
         result = newNimNode(n.kind)
         result.add newLit(true)
 
-        let newBody = newStmtList()
-        # create a variable to assign the condition result to
-        let (tmp, decl) = makeTempVar getTypeInst(n[0])
-        newBody.add decl
-
-        # rewrite the condition
-        newBody.add:
-          n[0].rewriteCpsExpr().assignExpr(tmp)
-
         # rewrite the body into:
-        # if tmp:
-        #   <body (also flattened)>
+        # if <cond>:
+        #   <body>
         # else:
         #   break
-        newBody.add:
-          nnkIfStmt.newTree [
-            nnkElifBranch.newTree [
-              tmp,
-              n[1].rewriteCpsExpr()
-            ],
+        #
+        # then flatten it
+        result.add:
+          rewriteCpsExpr:
+            nnkIfStmt.newTree [
+              nnkElifBranch.newTree [
+                n[0],
+                n[1]
+              ],
 
-            nnkElse.newTree [
-              newStmtList [
-                nnkBreakStmt.newTree(newEmptyNode())
+              nnkElse.newTree [
+                newStmtList [
+                  nnkBreakStmt.newTree(newEmptyNode())
+                ]
               ]
             ]
-          ]
-
-        result.add newBody
 
       of nnkCaseStmt:
         # if the evaluated expression is a cps expression or there are
         # elif branches with a cps expression as the condition.
-        if n[0].hasCpsExpr or n.findChild(it.kind in {nnkElifBranch, nnkElifExpr} and it[0].hasCpsExpr) != nil:
+        if n[0].needRewrite or
+           n.findChild(it.kind in {nnkElifBranch, nnkElifExpr} and
+                       it[0].needRewrite) != nil:
           result = newStmtList()
           let newCase = copyNimNode(n)
 
-          # create a variable to assign the evaluated expression to
-          let (tmp, decl) = makeTempVar getTypeInst(n[0])
-          result.add decl
-
           # rewrite the expression to assign to the temporary and
           # push it above the case statement
-          result.add n[0].rewriteCpsExpr().assignExpr(tmp)
+          if n[0].needRewrite:
+            let (sym, decl) =
+              exprAsSym:
+                rewriteCpsExpr n[0]
 
-          # evaluates tmpVar instead
-          newCase.add tmp
+            result.add decl
+            newCase.add sym
+          else:
+            result.add n[0]
 
           # rewrite all branches nodes
           for idx in 1 ..< n.len:
             let child = n[idx]
-            case child.kind
-            of nnkElifBranch, nnkElifExpr:
-              # if the condition of this elif branch is a cps expr
-              if child[0].hasCpsExpr:
-                let ifStmt = newNimNode nnkIfStmt
-                # collect this and the remaining elif branches to add to the
-                # if statement
-                #
-                # there can't be any `of` branch after this, so we can
-                # safely collect everything to the if
-                ifStmt.add n[idx .. ^1]
+            # if this is an elif branch with an condition need rewriting
+            if child.kind in {nnkElifBranch, nnkElifExpr} and
+               child[0].needRewrite:
+              let ifStmt = newNimNode nnkIfStmt
+              # collect this and the remaining elif branches to add to the
+              # if statement
+              #
+              # there can't be any `of` branch after this, so we can
+              # safely collect everything to the if
+              ifStmt.add n[idx .. ^1]
 
-                # rewrite and add the new if statement as the else branch of
-                # this case
-                newCase.add:
-                  nnkElse.newTree:
-                    rewriteCpsExpr ifStmt
+              # rewrite and add the new if statement as the else branch of
+              # this case
+              newCase.add:
+                nnkElse.newTree:
+                  rewriteCpsExpr ifStmt
 
-                # we are done
-                break
-              else:
-                newCase.add child.rewriteCpsExpr()
+              # we are done
+              break
             else:
-              newCase.add child.rewriteCpsExpr()
+              newCase.add rewriteCpsExpr(child)
 
           result.add newCase
 
       of nnkIfStmt, nnkIfExpr:
         # if there are branches with condition being a cps expr
-        if n.findChild(it.kind in {nnkElifBranch, nnkElifExpr} and it[0].hasCpsExpr) != nil:
+        if n.findChild(it.kind in {nnkElifBranch, nnkElifExpr} and
+                       it[0].needRewrite) != nil:
           result = newStmtList()
 
           let newIf = copyNimNode n
 
           for idx, child in n.pairs:
-            case child.kind
-            of nnkElifBranch, nnkElifExpr:
-              if child[0].hasCpsExpr:
-                # if there are some branches the new if statement
-                if newIf.len > 0:
-                  # move this and all later branches into a new if
-                  let leftovers = copyNimNode(newIf).add n[idx .. ^1]
+            # if this branch has a cps expression as condition
+            if child.kind in {nnkElifBranch, nnkElifExpr} and
+               child[0].needRewrite:
+              # if there are some branches the new if statement
+              if newIf.len > 0:
+                # move this and all later branches into a new if
+                let leftovers = copyNimNode(newIf).add n[idx .. ^1]
 
-                  # rewrite this if then add it as the `else` branch
-                  newIf.add:
-                    nnkElse.newTree:
-                      rewriteCpsExpr(leftovers)
+                # rewrite this if then add it as the `else` branch
+                newIf.add:
+                  nnkElse.newTree:
+                    rewriteCpsExpr(leftovers)
 
-                  # we are done here
-                  break
+                # we are done here
+                break
 
-                # create a variable to assign the condition result to
-                let (tmp, decl) = makeTempVar getTypeInst(child[0])
-                result.add decl
+              # create a variable to assign the condition result to
+              let (cond, decl) =
+                exprAsSym:
+                  rewriteCpsExpr child[0]
+              result.add decl
 
-                # rewrite and push the condition to above the if statement
-                result.add:
-                  child[0].rewriteCpsExpr().assignExpr(tmp)
+              let newBranch = copyNimNode child
+              # evaluate the temporary instead
+              newBranch.add cond
+              # add the rewrite of the body
+              newBranch.add rewriteCpsExpr(child[1])
 
-                let newBranch = copyNimNode child
-                # evaluate the temporary instead
-                newBranch.add tmp
-                # add the rewrite of the body
-                newBranch.add child[1].rewriteCpsExpr()
-
-                # add the branch into the if statement
-                newIf.add newBranch
-              else:
-                # add the rewrite of this elif branch
-                newIf.add child.rewriteCpsExpr()
-            of nnkElse, nnkElseExpr:
+              # add the branch into the if statement
+              newIf.add newBranch
+            else:
               # add the rewrite of this else branch
-              newIf.add child.rewriteCpsExpr()
-
-            else: discard "there can't be any other node kinds here"
+              newIf.add rewriteCpsExpr(child)
 
           # add the new if to the result
           result.add newIf

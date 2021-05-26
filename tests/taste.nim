@@ -1225,13 +1225,20 @@ suite "tasteful tests":
   block:
     ## a call with cps expression being a parameter
     r = 0
+
+    proc bar(x, y, z: int) =
+      check x == 3
+      check y == 1
+      check z == 2
+
     proc foo() {.cps: Cont.} =
       inc r
-      check (noop(); inc r; true)
+      var x = 3
+      bar(x, (noop(); dec(x, 2); x), (inc x; x))
       inc r
 
     trampoline foo()
-    check r == 3
+    check r == 2
 
   block:
     ## a case statement evaluating a cps expression

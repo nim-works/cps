@@ -23,6 +23,14 @@ template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsRecover*() {.pragma.}       ## the next step in finally recovery path
 
+template cpsHiddenAddr*(T, n: typed): untyped =
+  ## Annotation to tell whether `n` was originally stored in an nnkHiddenAddr
+  ##
+  ## T is the type of the `nnkHiddenAddr`
+  ##
+  ## This is needed for a correct rewrite
+  n
+
 type
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
   Continuation* = concept c ##
@@ -331,7 +339,11 @@ proc normalizingRewrites*(n: NimNode): NimNode =
     proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
       ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
       case n.kind
-      of nnkHiddenAddr, nnkHiddenDeref:
+      of nnkHiddenAddr:
+        result =
+          newCall(bindSym"cpsHiddenAddr", getTypeInst(n)):
+            normalizingRewrites n[0]
+      of nnkHiddenDeref:
         result = normalizingRewrites n[0]
       else: discard
 
@@ -661,26 +673,37 @@ proc makeTempVar*(typ: NimNode): tuple[sym: NimNode, decl: NimNode] =
     nnkVarSection.newTree:
       newIdentDefs(result.sym, typ)
 
-proc isExpr*(n: NimNode): bool =
-  ## Return whether `n` is an expression
-  # if there compiler said `n` has a type, then `n` is an expression
+proc isCpsHiddenAddr*(n: NimNode): bool =
+  ## whether `n` was a cpsHiddenAddr node
+  n.kind == nnkCall and n[0] == bindSym"cpsHiddenAddr"
+
+proc getExprTypeInst*(n: NimNode): NimNode =
+  ## Retrieve the type instantiation of expression `n`
+  ##
+  ## `nil` is returned if `n` is not an expression
   if n.typeKind != ntyNone:
-    result = true
+    result = n.getTypeInst
   else:
     # this information might be lost due to rewrites, so we
-    # attempt to infer it to the best of our capabilities
+    # attempt to retrieve it from the children of `n`
     case n.kind
     of nnkStmtList, nnkStmtListExpr, nnkBlockStmt, nnkBlockExpr,
        nnkElifBranch, nnkElifExpr, nnkElse, nnkElseExpr, nnkOfBranch,
        nnkExceptBranch:
       if n.len > 0:
-        result = n.last.isExpr()
+        result = n.last.getExprTypeInst
     of nnkCaseStmt, nnkIfStmt, nnkIfExpr, nnkTryStmt:
       for child in n.items:
-        if child.isExpr:
-          return true
-    else:
-      result = false
+        result = child.getExprTypeInst
+        if not result.isNil:
+          break
+    elif n.isCpsHiddenAddr:
+      result = n[1]
+    else: discard
+
+proc isExpr*(n: NimNode): bool =
+  ## Return whether `n` is an expression
+  not n.getExprTypeInst.isNil
 
 proc assignExpr*(n, sym: NimNode): NimNode =
   ## rewrite the expression `n` into a statement assigning to `sym`
@@ -734,3 +757,16 @@ proc assignExpr*(n, sym: NimNode): NimNode =
 
   else:
     result = n
+
+proc exprAsSym*(n: NimNode): tuple[sym, stmt: NimNode] =
+  ## rewrite the typed expression `n` into a statement assigning to a temporary
+  ##
+  ## `sym` is the symbol of the temporary and `stmt` is the rewritten
+  ## expression
+  doAssert n.isExpr, "n does not have a type"
+  let (sym, decl) = makeTempVar getExprTypeInst(n)
+  result.sym = sym
+  result.stmt = newStmtList:
+    decl
+
+  discard result.stmt.add n.assignExpr(sym)
