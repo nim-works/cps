@@ -159,7 +159,8 @@ proc hasPragma*(n: NimNode; s: static[string]): bool =
   of nnkPragma:
     for p in n:
       # just skip ColonExprs, etc.
-      result = p.getPragmaName.eqIdent s
+      if p.getPragmaName.eqIdent(s):
+        return true
   of RoutineNodes:
     result = hasPragma(n.pragma, s)
   of nnkObjectTy:
