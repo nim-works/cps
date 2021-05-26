@@ -77,12 +77,13 @@ type
 template converterFor(t: typedesc) =
   converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
 
-converterFor(ProcDef)
-converterFor(NameNode)
+converterFor(IdentDefs)
+converterFor(StmtList)
 converterFor(Call)
 converterFor(FormalParams)
-converterFor(IdentDefs)
 converterFor(ReturnStmt)
+converterFor(ProcDef)
+converterFor(NameNode)
 
 # fn-Error
 

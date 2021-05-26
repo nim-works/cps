@@ -410,17 +410,17 @@ proc normalizingRewrites*(n: NimNode): NimNode =
 
     case n.kind
     of nnkIdentDefs:
-      (n.asIdentDefs.get().normalize).NimNode
+      cIdentDefsToNimNode(n.asIdentDefs.get().normalize)
     of nnkLetSection, nnkVarSection:
-      (n.asVarLetSection.normalize).NimNode
+      cStmtListToNimNode(n.asVarLetSection.normalize)
     of nnkHiddenAddr, nnkHiddenDeref:
       n.asHiddenAddrDeref.get().normalize
     of nnkConv:
-      (n.asConv.normalize).NimNode
+      cCallToNimNode(n.asConv.normalize)
     of nnkReturnStmt:
-      (n.asReturnStmt.normalize).NimNode
+      cReturnStmtToNimNode(n.asReturnStmt.normalize)
     of nnkFormalParams:
-      (normalize n.FormalParams).NimNode
+      cFormalParamsToNimNode(normalize n.FormalParams)
     of CallNodes:
       rewriteHidden n
     else:
