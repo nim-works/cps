@@ -28,15 +28,20 @@ proc isVoodooCall(n: NimNode): bool =
         result = callee.getImpl.hasPragma("cpsVoodooCall")
 
 proc firstReturn(p: NimNode): NimNode =
-  ## find the first return statement within statement lists, or nil
+  ## find the first control-flow return statement or cps control-flow within
+  ## statement lists, or nil
   case p.kind
-  of nnkReturnStmt:
+  of nnkReturnStmt, nnkRaiseStmt:
     result = p
-  of nnkStmtList:
+  of nnkTryStmt, nnkStmtList, nnkStmtListExpr:
     for child in p.items:
       result = child.firstReturn
       if not result.isNil:
         break
+  of nnkBlockStmt, nnkBlockExpr, nnkFinally:
+    result = p.last.firstReturn
+  elif p.isCpsPending or p.isCpsBreak or p.isCpsContinue:
+    result = p
   else:
     result = nil
 
@@ -144,7 +149,7 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   # let other macros know this is a continuation
   result.addPragma bindSym"cpsCont"
 
-func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
+proc tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   result = newStmtList:
@@ -152,7 +157,7 @@ func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   let jump = if jump.isNil: cont else: jump
   result = makeReturn(result, jump)
 
-func jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
+proc jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   assert not via.isNil
