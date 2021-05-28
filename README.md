@@ -50,6 +50,8 @@ type
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
   Continuation* = concept c
     c.fn is ContinuationProc[Continuation]
+    # (recursive concepts are not supported by the Nim compiler yet)
+    c.mom is Continuation
     c is ref object
     c of RootObj
 ```
