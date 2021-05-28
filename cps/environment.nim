@@ -474,8 +474,8 @@ proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
   elif not env.rs.last.isEmpty:
     result.body.add:
       # then at runtime, issue an if statement to
-      nnkIfStmt.newTree:
-        nnkElifBranch.newTree [
+      nnkIfExpr.newTree:
+        nnkElifExpr.newTree [
           # check if the continuation is not nil, and if so, to
           newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
           # assign the result from the continuation's result field
