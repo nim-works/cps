@@ -1,6 +1,7 @@
 import std/[macros]
 import cps/[spec, xfrm]
-export Continuation, ContinuationProc, cpsCall, cpsVoodooCall
+export Continuation, ContinuationProc
+export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 export cpsDebug
 
 type
@@ -58,7 +59,8 @@ macro cpsMagic*(n: untyped): untyped =
 
   if m.params[0] == m.params[1][1]:
     m.params[0] = newEmptyNode()
-    m.addPragma ident"cpsCall"
+    m.addPragma ident"cpsMustJump"
+    m.addPragma ident"cpsMagicCall"
   else:
     m.addPragma ident"cpsVoodooCall"
 
@@ -76,6 +78,23 @@ macro cpsMagic*(n: untyped): untyped =
     result.add n
   result.add m
 
+proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
+  for n in n.pragma.items:
+    if n.kind == nnkExprColonExpr:
+      if $n[0] == "cpsBootstrap":
+        result = n[1].newCall args
+  if result.isNil:
+    result = n.errorAst "welping malfunction"
+
+macro whelp*(n: typed): Continuation =
+  ## Instantiate the given continuation call but do not begin
+  ## running it; instead, return the continuation as a value.
+  var n = normalizingRewrites n
+  if n.kind in nnkCallKinds:
+    let p = getImpl n[0]
+    if p.hasPragma "cpsBootstrap":
+      return doWhelp(p, n[1..^1])
+  error "the input to whelp must be a .cps. call", n
 
 template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce

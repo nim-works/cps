@@ -15,13 +15,15 @@ const
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
+template cpsMagicCall*() {.pragma.}     ## a cps call
 template cpsVoodooCall*() {.pragma.}    ## a voodoo call
-template cpsCall*(n: typed) {.pragma.}  ## redirection
+template cpsMustJump*() {.pragma.}      ## cps calls and magic calls jump
 template cpsPending*() {.pragma.}       ## this is the last continuation
 template cpsBreak*(label: typed = nil) {.pragma.} ## this is a break statement in a cps block
 template cpsContinue*() {.pragma.}      ## this is a continue statement in a cps block
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsRecover*() {.pragma.}       ## the next step in finally recovery path
+template cpsBootstrap*(whelp: typed) {.pragma.}  ## the symbol for creating a continuation
 
 type
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
@@ -85,13 +87,8 @@ proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
 proc replacedSymsWithIdents*(n: NimNode): NimNode =
   proc desymifier(n: NimNode): NimNode =
     case n.kind
-    #of nnkTypeSection:
-    #  result = n
     of nnkSym:
-      if n.strVal notin ["cpsLift", "cpsCall"]:
-        result = desym n
-      else:
-        result = n
+      result = desym n
     else:
       discard
   result = filter(n, desymifier)
@@ -152,15 +149,15 @@ proc getPragmaName(n: NimNode): NimNode =
   else:
     n
 
-proc hasPragma*(n: NimNode; s: static[string]): bool =
+func hasPragma*(n: NimNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
-  assert not n.isNil
   case n.kind
   of nnkPragma:
-    for p in n:
+    for p in n.items:
       # just skip ColonExprs, etc.
-      if p.getPragmaName.eqIdent(s):
-        return true
+      result = p.getPragmaName.eqIdent s
+      if result:
+        break
   of RoutineNodes:
     result = hasPragma(n.pragma, s)
   of nnkObjectTy:
@@ -475,6 +472,11 @@ func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
 
   filter(n, replacer)
 
+template replace*(n, noob: NimNode; body: untyped): NimNode {.dirty.} =
+  ## requires --define:nimWorkaround14447 so...  yeah.
+  let match = proc(it {.inject.}: NimNode): bool = body
+  replace(n, match, noob)
+
 proc multiReplace*(n: NimNode, replacements: varargs[(Matcher, NimNode)]): NimNode =
   ## Replace any node in `n` that is matched by a matcher in replacements with
   ## a copy of the accompanying NimNode.
@@ -499,7 +501,7 @@ proc isCpsPending*(n: NimNode): bool =
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
 func newCpsBreak*(label: NimNode = newNilLit()): NimNode =
-  ## Produce a {.cpsPending.} annotation with the given label
+  ## Produce a {.cpsBreak.} annotation with the given label
   doAssert not label.isNil
   let label =
     if label.kind == nnkEmpty:
@@ -646,6 +648,19 @@ proc getContSym*(n: NimNode): NimNode =
     n.params[1][0]
   else:
     nil
+
+proc cloneProc*(n: NimNode, body: NimNode = nil): NimNode =
+  ## create a copy of a typed proc which satisfies the compiler
+  assert n.kind == nnkProcDef
+  result = nnkProcDef.newTree(
+    ident(repr n.name),           # repr to handle gensymbols
+    newEmptyNode(),
+    newEmptyNode(),
+    n.params,
+    newEmptyNode(),
+    newEmptyNode(),
+    if body == nil: copy n.body else: body)
+  result.copyLineInfo n
 
 proc isScopeExit*(n: NimNode): bool =
   ## Return whether the given node signify a scope exit

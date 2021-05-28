@@ -1,5 +1,5 @@
 const
-  skippy {.booldefine.} = false
+  strictTrampoline {.booldefine.} = false
 
 import balls
 import posix
@@ -13,19 +13,23 @@ type
 
   C = ref object of RootObj
     fn*: proc(c: C): C {.nimcall.}
+    mom*: C
 
 
 # Trampoline with count safeguard
 
 var jumps = 0
 
-proc run(c: C) =
-  jumps = 0
-  var c = c
-  while c != nil and c.fn != nil:
-    c = c.fn(c)
-    inc jumps
-    doAssert jumps < 1000, "Too many iterations on trampoline, looping?"
+when strictTrampoline:
+  proc run(c: C) =
+    jumps = 0
+    var c = c
+    while c != nil and c.fn != nil:
+      c = c.fn(c)
+      inc jumps
+      doAssert jumps < 1000, "Too many iterations on trampoline, looping?"
+else:
+  template run(c) = c
 
 # Helper templates.
 
@@ -249,23 +253,23 @@ suite "suite, suite zevv":
   test "int":
     proc test1() {.cps:C} =
       foo(1)
-    discard test1()
+    test1()
 
   test "'i16":
     proc test1() {.cps:C} =
       foo(1'i16)
-    discard test1()
+    test1()
 
   test "int16()":
     proc test1() {.cps:C} =
       foo(int16(1))
-    discard test1()
+    test1()
 
   test ".int16":
     proc test1() {.cps:C} =
       foo(1.int16)
-    discard test1()
-   
+    test1()
+
   test "type problem":
     type Thing = distinct int
     proc foo(): Thing = 1.Thing
@@ -277,7 +281,7 @@ suite "suite, suite zevv":
     proc running(c: C): bool = c != nil and c.fn != nil
     proc dismissed(c: C): bool = c == nil
     proc done(c: C): bool = c != nil and c.fn == nil
-    
+
     var save: C
 
     proc jield(c: C): C {.cpsMagic.} =
@@ -290,7 +294,7 @@ suite "suite, suite zevv":
         echo i
         inc i
 
-    var c = count()
+    var c = whelp count()
     c = c.fn(c) # boot
     check c.state == Running
     c = c.fn(c) # first jield

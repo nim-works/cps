@@ -9,6 +9,7 @@ type
   InfiniteLoop = CatchableError
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
+    mom*: Cont
 
 var jumps: int
 
@@ -43,7 +44,7 @@ suite "basic testing assumptions":
         noop()
         inc r
     expect InfiniteLoop:
-      trampoline foo()
+      trampoline whelp(foo())
     check r > 1
 
   block:
@@ -53,7 +54,7 @@ suite "basic testing assumptions":
       inc r
       noop()
       inc r
-    trampoline foo()
+    trampoline whelp(foo())
     check r == 2, "who let the smoke out?"
 
 suite "tasteful tests":
@@ -69,7 +70,7 @@ suite "tasteful tests":
       noop()
       inc r
       check i == 3
-    trampoline foo()
+    foo()
     check r == 2
 
   block:
@@ -84,7 +85,7 @@ suite "tasteful tests":
       inc r
       check j == 4
       inc j
-    trampoline foo()
+    foo()
     check r == 2
     check j == 5
 
@@ -102,7 +103,7 @@ suite "tasteful tests":
       check "declared variables":
         i == 4
         k == 7.0
-    trampoline foo()
+    foo()
     check r == 2
 
   block:
@@ -122,7 +123,7 @@ suite "tasteful tests":
       check "declared variables":
         i == 4.Goats
         k == Pigs 7.0
-    trampoline foo()
+    foo()
     check r == 2
 
   block:
@@ -141,7 +142,7 @@ suite "tasteful tests":
         k == 4
         x == 4
         z == 6
-    trampoline foo()
+    foo()
     check r == 2
 
   block:
@@ -160,7 +161,7 @@ suite "tasteful tests":
         k == 4
         x == 4
         z == 4
-    trampoline foo()
+    foo()
     check r == 2
 
   block:
@@ -183,8 +184,35 @@ suite "tasteful tests":
         a == 5
         b == 7
         c == 3
-    trampoline foo(1, 2)
+    foo(1, 2)
     check r == 3
+
+  block:
+    ## whelp operates multi-var proc parameters correctly
+    when true:
+      skip"pending https://github.com/nim-lang/Nim/issues/18076"
+    else:
+      r = 0
+      proc foo(a, b, c: int = 3) {.cps: Cont.} =
+        inc r
+        ## a=1, b=2, c=3
+        var a = 5
+        ## a=5, b=2, c=3
+        noop()
+        inc r
+        ## a=5, b=2, c=3
+        var b = b + a
+        ## a=5, b=7, c=3
+        noop()
+        inc r
+        ## a=5, b=7, c=3
+        check "proc parameters":
+          a == 5
+          b == 7
+          c == 3
+      let c = whelp foo(1, 2)
+      trampoline c
+      check r == 3
 
   block:
     ## reassignment of mutable var proc params
@@ -203,7 +231,7 @@ suite "tasteful tests":
         b == 7
         c == 3
     var (x, y, z) = (1, 2, 3)
-    trampoline foo(x, y, z)
+    foo(x, y, z)
     check "var param assignment":
       x == 5
       y == 7
@@ -222,7 +250,7 @@ suite "tasteful tests":
           break
         fail"block break failed to break block"
       inc r
-    trampoline foo()
+    foo()
     check r == 4
 
   block:
@@ -239,7 +267,7 @@ suite "tasteful tests":
           break
         fail"block break failed to break block"
       inc r
-    trampoline foo()
+    foo()
     check r == 5
 
   block:
@@ -257,7 +285,7 @@ suite "tasteful tests":
         inc r
         fail"block break failed to break block"
       inc r
-    trampoline foo()
+    foo()
     check r == 5
 
   block:
@@ -278,7 +306,7 @@ suite "tasteful tests":
             inc r
             break
       inc r
-    trampoline foo()
+    foo()
     check r == 6
 
   block:
@@ -301,7 +329,7 @@ suite "tasteful tests":
         break
         fail"B: should be unreachable"
       inc r
-    trampoline foo()
+    foo()
     check r == 6
 
   block:
@@ -324,7 +352,7 @@ suite "tasteful tests":
         inc r
         break
         inc r
-    trampoline foo()
+    foo()
     check r == 6
 
   block:
@@ -338,7 +366,7 @@ suite "tasteful tests":
         inc i
       inc r
       check i == 2
-    trampoline foo()
+    foo()
     check r == 4
 
   block:
@@ -348,7 +376,7 @@ suite "tasteful tests":
       r = 1
       noop()
       check x > 0, "parameter value unset"
-    trampoline shadow(1)
+    shadow(1)
     check r == 1
 
   block:
@@ -359,7 +387,7 @@ suite "tasteful tests":
       let x = 3
       noop()
       check x == 3, "shadowed symbol wrong"
-    trampoline shadow(1)
+    shadow(1)
     check r == 1
 
   block:
@@ -372,7 +400,7 @@ suite "tasteful tests":
         noop()
         check x == 4, "shadowing symbol wrong"
       check x == 3, "shadowed symbol corrupted"
-    trampoline shadow(3)
+    shadow(3)
     check r == 1
 
   block:
@@ -386,7 +414,7 @@ suite "tasteful tests":
         noop()
         check x == 5, "shadowing symbol immutable"
       check x == 3, "shadowed symbol corrupted"
-    trampoline shadow(3)
+    shadow(3)
     check r == 1
 
   block:
@@ -401,7 +429,7 @@ suite "tasteful tests":
           inc x
         check x == 5, "failed to update from lower scope"
       check x == 3, "shadowed symbol corrupted"
-    trampoline shadow(3)
+    shadow(3)
     check r == 1
 
   block:
@@ -422,13 +450,13 @@ suite "tasteful tests":
       inc r
       var x = x + 2
       check x == 3, "shadow1 is expecting x == 3"
-      trampoline shadow1(x)
+      shadow1(x)
       noop()
       check x == 3, "x mutated by cps call"
       inc x
       check x == 4, "shadowing symbol corrupted"
 
-    trampoline shadow2(1)
+    shadow2(1)
     check r == 2
 
   block:
@@ -458,7 +486,7 @@ suite "tasteful tests":
         check i == q, "bad control flow"
         inc r
       inc r
-    trampoline foo()
+    foo()
     check r == 9
 
   block:
@@ -476,7 +504,7 @@ suite "tasteful tests":
         check i == 3
         inc r
       inc r
-    trampoline foo()
+    foo()
     check r == 6
 
   block:
@@ -527,12 +555,12 @@ suite "tasteful tests":
       check x == 2, "could not shadow proc param x"
       noop()
       inc r
-      trampoline b(x)
+      b(x)
       noop()
       inc r
       check x == 2, "x mutated by cps call"
 
-    trampoline a(1)
+    a(1)
     check r == 15
 
   block:
@@ -552,7 +580,7 @@ suite "tasteful tests":
         inc r
         check x == 8
 
-      trampoline foo()
+      foo()
       check r == 3
 
   block:
@@ -571,7 +599,7 @@ suite "tasteful tests":
         inc r
         check x == i - 1
       inc r
-    trampoline foo()
+    foo()
     check r == 8
 
   block:
@@ -584,7 +612,7 @@ suite "tasteful tests":
       noop()
       check fn.fn(10) == 20
 
-    trampoline foo()
+    foo()
 
   block:
     ## calling a macro that calls a foreign symbol works
@@ -596,7 +624,7 @@ suite "tasteful tests":
       inc r
       check jsonifyImplicit(i) == $i
 
-    trampoline foo()
+    foo()
     check r == 2
 
   block:
@@ -609,7 +637,7 @@ suite "tasteful tests":
       inc r
       check jsonifyBind(i) == $i
 
-    trampoline foo()
+    foo()
     check r == 2
 
   block:
@@ -640,7 +668,7 @@ suite "tasteful tests":
                 makeStr "foo"
       check chk
 
-    trampoline foo()
+    foo()
     check r == 1
 
   block:
@@ -656,7 +684,7 @@ suite "tasteful tests":
       noop()
       check i == 4
 
-    trampoline foo()
+    foo()
 
   block:
     ## a simple if-else split across continuations works
@@ -670,7 +698,7 @@ suite "tasteful tests":
         fail "this branch should not run"
       inc r
 
-    trampoline foo()
+    foo()
     check r == 3
 
   block:
@@ -686,7 +714,7 @@ suite "tasteful tests":
         fail "this branch should not run"
       inc r
 
-    trampoline foo()
+    foo()
     check r == 3
 
   block:
@@ -701,7 +729,7 @@ suite "tasteful tests":
         fail "this branch should not run"
       inc r
 
-    trampoline foo()
+    foo()
     check r == 3
 
   block:
@@ -719,7 +747,7 @@ suite "tasteful tests":
         inc r
       inc r
 
-    trampoline foo()
+    foo()
     check r == 4
 
   block:
@@ -739,7 +767,7 @@ suite "tasteful tests":
         inc r
       inc r
 
-    trampoline foo()
+    foo()
     check r == 5
 
   block:
@@ -758,7 +786,7 @@ suite "tasteful tests":
         inc r
       inc r
 
-    trampoline foo()
+    foo()
     check r == 5
 
   block:
@@ -775,7 +803,7 @@ suite "tasteful tests":
         finally:
           inc r
 
-      trampoline foo()
+      foo()
       check r == 3
 
   block:
@@ -797,7 +825,7 @@ suite "tasteful tests":
           inc r
         inc r
 
-      trampoline foo()
+      foo()
       check r == 5
 
   block:
@@ -811,7 +839,7 @@ suite "tasteful tests":
         inc r
       inc r
 
-    trampoline foo()
+    foo()
     check r == 4
 
   block:
@@ -825,7 +853,7 @@ suite "tasteful tests":
         inc r
       inc r
 
-    trampoline foo()
+    foo()
     check r == 4
 
   block:
@@ -843,7 +871,7 @@ suite "tasteful tests":
         noop()
         inc r
 
-      trampoline foo()
+      foo()
       check r == 3
 
   block:
@@ -856,11 +884,11 @@ suite "tasteful tests":
         inc r
 
       r = 0
-      trampoline foo(42)
+      foo(42)
       check r == 1
 
       r = 0
-      trampoline foo("string")
+      foo("string")
       check r == 1
 
   block:
@@ -873,11 +901,11 @@ suite "tasteful tests":
         inc r
 
       r = 0
-      trampoline foo(42)
+      foo(42)
       check r == 1
 
       r = 0
-      trampoline foo("string")
+      foo("string")
       check r == 1
 
   block:
@@ -896,7 +924,7 @@ suite "tasteful tests":
         fail "block was not broken out"
       inc r
 
-    trampoline foo()
+    foo()
     check r == 4
 
   block:
@@ -914,7 +942,7 @@ suite "tasteful tests":
         inc r
       inc r
 
-    trampoline foo()
+    foo()
     check r == 5
 
   block:
@@ -933,7 +961,7 @@ suite "tasteful tests":
       deferChk(4)
       inc r
 
-    trampoline foo()
+    foo()
     check r == 6
 
   block:
@@ -951,7 +979,7 @@ suite "tasteful tests":
         inc r
       inc r
 
-    trampoline foo()
+    foo()
     check r == 5
 
   block:
@@ -961,7 +989,7 @@ suite "tasteful tests":
       defer:
         inc r
 
-    trampoline foo()
+    foo()
     check r == 1
 
   block:
@@ -1019,7 +1047,7 @@ suite "tasteful tests":
       check @["f", "o", "o "] %& "420" == "foo 420"
       check @["foo "] %&% @[$42, $0] == "foo 420"
 
-    trampoline foo()
+    foo()
     check r == 1
 
   block:
@@ -1034,7 +1062,7 @@ suite "tasteful tests":
           break
         r.inc i
 
-    trampoline foo()
+    foo()
     check r == 4
 
   block:
@@ -1053,7 +1081,7 @@ suite "tasteful tests":
             break
           r.inc i
 
-      trampoline foo()
+      foo()
       check r == 4
 
   block:
@@ -1071,7 +1099,7 @@ suite "tasteful tests":
 
       fail "this statement should not run"
 
-    trampoline count()
+    count()
     check r == 1
 
   block:
@@ -1092,7 +1120,7 @@ suite "tasteful tests":
         if i > 2:
           break
 
-    trampoline foo()
+    foo()
     check r == 7
 
   block:
@@ -1114,11 +1142,11 @@ suite "tasteful tests":
         if i > 2:
           break
 
-    trampoline foo()
-    check found == [ "foo", "4", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16",
-                     "whileLoop", "24", "16", "afterCall", "8", "16", ]
+    foo()
+    check found == [ "foo", "4",        "24",
+                     "whileLoop", "24", "24", "afterCall", "8", "24",
+                     "whileLoop", "24", "24", "afterCall", "8", "24",
+                     "whileLoop", "24", "24", "afterCall", "8", "24", ]
 
   block:
     ## custom continuation allocators are used automatically
@@ -1132,7 +1160,7 @@ suite "tasteful tests":
       noop()
       check x == 3
 
-    trampoline foo(3)
+    foo(3)
     check r == 1, "bzzzt"
 
   block:
@@ -1149,5 +1177,20 @@ suite "tasteful tests":
       check x == 3
       check r == 0
 
-    trampoline foo(3)
+    foo(3)
     check r == 1, "bzzzt"
+
+  block:
+    ## whelp instantiates continuations with arguments
+    r = 0
+    proc foo(x: int) {.cps: Cont.} =
+      check x == 5
+      inc r
+      let i = 3
+      noop()
+      inc r
+      check i == 3
+      check x == 5
+    let c = whelp foo(5)
+    trampoline c
+    check r == 2

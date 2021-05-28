@@ -18,8 +18,11 @@ proc push(pool: Pool, w: Work) =
     w.pool = pool
     pool.workQueue.addLast(w)
 
-proc jield(w: Work): Work {.cpsMagic.} =
-  w.pool.push w
+template push(pool: Pool; c: untyped) =
+  pool.push whelp(c)
+
+proc jield(c: Work): Work {.cpsMagic.} =
+  c.pool.push c
 
 proc run(pool: Pool) =
   while pool.workQueue.len > 0:

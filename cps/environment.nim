@@ -25,7 +25,7 @@ type
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
-    rs: NimNode                     # the sym we use for "yielded" result
+    rs: NimNode                     # the identdefs for the result
     ex: NimNode                     # the sym we use for current exception
     mom: NimNode                    # the sym we use for parent continuation
 
@@ -78,10 +78,8 @@ proc init(e: var Env) =
   e.seen = initHashSet[string]()
   if e.fn.isNil:
     e.fn = ident"fn"
-  if e.rs.isNil:
-    e.rs = genField"result"
   if e.mom.isNil:
-    e.mom = genField"mamma"
+    e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
 
 proc allPairs(e: Env): seq[Pair] =
@@ -165,7 +163,7 @@ proc newEnv*(parent: Env; copy = off): Env =
   if copy:
     result = Env(store: parent.store,
                  via: parent.identity,
-                 seen: parent.seen,
+                 seen: parent.seen,  # FIXME: this gets clobbered in init()!
                  locals: initOrderedTable[NimNode, NimNode](),
                  c: parent.c,
                  rs: parent.rs,
@@ -245,21 +243,26 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   else:
     error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
 
-proc newEnv*(c: NimNode; store: var NimNode; via: NimNode): Env=
-  ## the initial version of the environment
-  assert not via.isEmpty
-  var c = if c.isNil or c.isEmpty: ident"continuation" else: c
+proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
+  ## the initial version of the environment;
+  ## `c` names the first parameter of continuations,
+  ## `store` is where we add types and procedures,
+  ## `via` is the type from which we inherit,
+  ## `rs` is the return type (if not nnkEmpty) of the continuation.
+  let via = if via.isNil: errorAst"need a type" else: via
+  let rs = if rs.isNil: newEmptyNode() else: rs
+  let c = if c.isNil or c.isEmpty: ident"continuation" else: c
 
   # add a check to make sure the supplied type will work for descendants
   let check = nnkWhenStmt.newNimNode via
   check.add:
     nnkElifBranch.newTree:
-      [ infix(via, "isnot", ident"Continuation"),
+      [ infix(via, "isnot", bindSym"Continuation"),
         errorAst repr(via) & " does not match the Continuation concept" ]
   store.add check
 
   result = Env(c: c, store: store, via: via, id: via)
-  result.seen = initHashSet[string]()
+  result.rs = newIdentDefs(genField"result", rs, newEmptyNode())
   init result
 
 proc identity*(e: var Env): NimNode =
@@ -367,25 +370,6 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
     e.store.add:
       n.errorAst "localSection input"
 
-proc continuationReturnValue*(e: Env; goto: NimNode): NimNode =
-  ## returns the appropriate target of a `return` statement in a CPS
-  ## procedure that may (and may not) have a continuation instantiated yet.
-  result = newStmtList:
-    newAssignment(newDotExpr(e.first, e.fn), goto)
-  if goto.kind == nnkNilLit:
-    result.add:                               # return value is as follows:
-      nnkIfExpr.newTree [
-        nnkElifExpr.newTree [                 # if
-          newCall(bindSym"isNil", e.mom),     # we have no parent,
-          e.first                             # the current continuation;
-        ],
-        nnkElseExpr.newTree [                 # else,
-          e.mom                               # our parent continuation.
-        ],
-      ]
-  else:                                       # return value is simply
-    result.add e.first                        # the current continuation
-
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
   if n.len != 1:
@@ -412,12 +396,12 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   for field, section in e.pairs:
     result = result.resym(section[0][0], newDotExpr(child, field))
 
-proc createContinuation*(e: Env; goto: NimNode): NimNode =
-  ## allocate a continuation as `result` and point it at the leg `goto`
+proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
+  ## allocate a continuation as `name` and maybe aim it at the leg `goto`
   proc resultdot(n: NimNode): NimNode =
-    newDotExpr(e.castToChild(ident"result"), n)
+    newDotExpr(e.castToChild(name), n)
   result = newStmtList:
-    newAssignment ident"result":
+    newAssignment name:
       hook Alloc: e.identity
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
@@ -441,3 +425,59 @@ proc getException*(e: var Env): NimNode =
         newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
 
   result = newDotExpr(e.castToChild(e.first), e.ex)
+
+proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
+  ## the whelp needs to create a continuation
+  result = cloneProc(n, newStmtList())
+  result.params[0] = env.root
+  result.name = nskProc.genSym"whelp"
+  result.introduce {Alloc}
+
+  # create the continuation as the result and point it at the proc
+  result.body.add:
+    env.createContinuation(ident"result", desym goto)
+
+  # rewrite the symbols used in the arguments to identifiers
+  for defs in result.params[1..^1].items:
+    let sym = copy defs[0]
+    let match = proc(it: NimNode): bool = it == sym
+    result = result.replace(match, desym sym)
+
+proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
+  ## the bootstrap needs to create a continuation and trampoline it
+  result = cloneProc(n, newStmtList())
+  result.introduce {Alloc}
+
+  let c = nskVar.genSym"c"
+  result.body.add:
+    # declare `var c: Cont`
+    nnkVarSection.newTree:
+      newIdentDefs(c, env.root)
+
+  # create the continuation using the new variable and point it at the proc
+  result.body.add:
+    env.createContinuation(c, desym goto)
+
+  # now the trampoline
+  result.body.add:
+    nnkWhileStmt.newTree: [
+      newCall(ident"running", c),  # XXX: bindSym?  bleh.
+      newAssignment(c, newDotExpr(c, env.fn).newCall(c))
+    ]
+
+  # do an easy static check, and then
+  if env.rs.last.isEmpty != result.params[0].isEmpty:
+    result.body.add:
+      result.errorAst:
+        "environment return-type doesn't match bootstrap return-type"
+  # if the bootstrap has a return value,
+  elif not env.rs.last.isEmpty:
+    result.body.add:
+      # then at runtime, issue an if statement to
+      nnkIfStmt.newTree:
+        nnkElifBranch.newTree [
+          # check if the continuation is not nil, and if so, to
+          newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
+          # assign the result from the continuation's result field
+          newAssignment(ident"result", newDotExpr(c, env.rs))
+        ]

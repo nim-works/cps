@@ -1,6 +1,6 @@
 import std/[macros, sequtils, algorithm]
 import cps/[spec, environment, hooks]
-export Continuation, ContinuationProc, cpsCall
+export Continuation, ContinuationProc, cpsCall, cpsMustJump
 export cpsDebug
 
 #{.experimental: "strictNotNil".}
@@ -14,16 +14,17 @@ proc isCpsCall(n: NimNode): bool =
   if len(n) > 0:
     if n.kind in nnkCallKinds:
       let callee = n[0]
-      # all cpsCall are normal functions called via a generated symbol
       if not callee.isNil and callee.kind == nnkSym:
-        result = callee.getImpl.hasPragma("cpsCall")
+        # what we're looking for here is a jumper; it could
+        # be a magic or it could be another continuation leg
+        # or it could be a completely new continuation
+        result = callee.getImpl.hasPragma("cpsMustJump")
 
 proc isVoodooCall(n: NimNode): bool =
-  ## true if this node holds a call to a cps procedure
+  ## true if this is a call to a voodoo procedure
   if n != nil and len(n) > 0:
     if n.kind in nnkCallKinds:
       let callee = n[0]
-      # all cpsCall are normal functions called via a generated symbol
       if not callee.isNil and callee.kind == nnkSym:
         result = callee.getImpl.hasPragma("cpsVoodooCall")
 
@@ -45,21 +46,50 @@ proc firstReturn(p: NimNode): NimNode =
   else:
     result = nil
 
+proc isNillish(n: NimNode): bool =
+  ## unwrap statement lists and see if the end in a literal nil
+  case n.kind
+  of nnkStmtList:
+    isNillish n.last
+  of nnkNilLit:
+    true
+  else:
+    false
+
+proc maybeReturnParent*(c: NimNode): NimNode =
+  ## the appropriate target of a `return` statement in a CPS procedure
+  ## (that would otherwise return continuation `c`) first performs a
+  ## runtime check to see if the parent should be returned instead.
+  let mom = newDotExpr(c, ident"mom")
+  result =                                  # return value is as follows:
+    nnkIfExpr.newTree [
+      nnkElifExpr.newTree [                 # if
+        newCall(bindSym"isNil", mom),       # we have no parent,
+        c                                   # the current continuation;
+      ],
+      nnkElseExpr.newTree [                 # else,
+        mom                                 # our parent continuation.
+      ],
+    ]
+
 proc makeReturn(n: NimNode): NimNode =
   ## generate a `return` of the node if it doesn't already contain a return
   assert not n.isNil, "we no longer permit nil nodes"
   if n.firstReturn.isNil:
     nnkReturnStmt.newNimNode(n).add:
       if n.kind in nnkCallKinds:
-        n
+        n           # what we're saying here is, don't hook Coop on magics
       else:
         hook Coop:
-          n
+          n         # but we will hook Coop on child continuations
   else:
     n
 
 proc makeReturn(pre: NimNode; n: NimNode): NimNode =
   ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
+  if not pre.firstReturn.isNil:
+    result.add:
+      n.errorAst "i want to know about this"
   result = newStmtList pre
   result.add:
     if pre.firstReturn.isNil:
@@ -152,9 +182,20 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
 proc tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
+  if to.isNillish and not jump.isNil:
+    return jump.errorAst "where do you think you're going?"
   result = newStmtList:
     newAssignment(newDotExpr(cont, ident"fn"), to)
-  let jump = if jump.isNil: cont else: jump
+
+  # figure out what the return value will be...
+  var jump =
+    if jump.isNil:
+      if to.isNillish:             # continuation.fn appears to be nil,
+        maybeReturnParent cont     # we may be returning a parent here.
+      else:
+        cont                       # just return our continuation
+    else:
+      jump                         # return the jump target as requested
   result = makeReturn(result, jump)
 
 proc jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
@@ -164,11 +205,12 @@ proc jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
   assert via.kind in nnkCallKinds
 
   let jump = copyNimTree via
-  # desym the jumper, it is currently sem-ed to the variant that
-  # doesn't take a continuation
+  # we may need to insert an argument if the call is magical
+  if getImpl(jump[0]).hasPragma "cpsMagicCall":
+    jump.insert(1, cont)
+  # we need to desym the jumper; it is currently sem-ed to the
+  # variant that doesn't take a continuation.
   jump[0] = desym jump[0]
-  # insert our continuation as the first parameter
-  jump.insert(1, cont)
   result = tailCall(cont, to, jump)
 
 macro cpsJump(cont, call, n: typed): untyped =
@@ -182,11 +224,27 @@ macro cpsJump(cont, call, n: typed): untyped =
 
   #debug("cpsJump", n, Original)
 
+  let call = normalizingRewrites call
   let name = nskProc.genSym"afterCall"
+
   result = newStmtList makeContProc(name, cont, n)
-  result.add:
-    cont.jumperCall name:
-      normalizingRewrites call
+  if getImpl(call[0]).hasPragma "cpsBootstrap":
+    let c = nskLet.genSym"c"
+    result.add:
+      # install the return point in the current continuation
+      newAssignment(newDotExpr(cont, ident"fn"), name)
+    result.add:
+      # instantiate a new child continuation with the given arguments
+      newLetStmt(c, newCall(ident"whelp", call))
+    result.add:
+      # FIXME: softcode mom?  see environment definition...
+      # assign our current continuation to the child's parent field
+      newAssignment(newDotExpr(c, ident"mom"), cont)
+    # return the child continuation
+    result = result.makeReturn c
+  else:
+    result.add:
+      jumperCall(cont, name, call)
   result = workaroundRewrites result
 
   #debug("cpsJump", result, Transformed, n)
@@ -654,19 +712,6 @@ proc saften(parent: var Env; n: NimNode): NimNode =
     else:
       result.add env.saften(nc)
 
-proc cloneProc(n: NimNode, body: NimNode = nil): NimNode =
-  ## create a copy of a typed proc which satisfies the compiler
-  assert n.kind == nnkProcDef
-  result = nnkProcDef.newTree(
-    ident(repr n.name),           # repr to handle gensymbols
-    newEmptyNode(),
-    newEmptyNode(),
-    n.params,
-    newEmptyNode(),
-    newEmptyNode(),
-    if body == nil: copy n.body else: body)
-  result.copyLineInfo n
-
 proc replacePending(n, replacement: NimNode): NimNode =
   ## Replace cpsPending annotations with something else, usually
   ## a jump to an another location. If `replacement` is nil, remove
@@ -748,14 +793,7 @@ proc rewriteVoodoo(n: NimNode, env: Env): NimNode =
 
 proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
-
-  # Some sanity checks
   n.expectKind nnkProcdef
-  if not n.params[0].isEmpty:
-    error "do not specify a return-type for .cps. functions", n
-
-  if T.isNil:
-    error "specify a type for the continuation with .cps: SomeType", n
 
   # enhanced spam before it all goes to shit
   debug(".cps.", n, Original)
@@ -768,7 +806,7 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T)
+  var env = newEnv(ident"continuation", types, T, n.params[0])
 
   # add parameters into the environment
   for defs in n.params[1 .. ^1]:
@@ -776,22 +814,34 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
       error "cps does not support var parameters", n
     env.localSection(defs)
 
-  ## Generate the bootstrap
-  var booty = cloneProc(n, newStmtList())
-  booty.params[0] = T
-  booty.body.doc "This is the bootstrap to go from Nim-land to CPS-land"
-  booty.introduce {Alloc, Dealloc}    # we may actually dealloc here
-  booty.body.add:
-    env.createContinuation booty.name
+  # make a name for the new procedure that won't clash
+  let name = genSym(nskProc, $n.name)
 
   # we can't mutate typed nodes, so copy ourselves
   n = cloneProc n
 
+  # the whelp is a limited bootstrap that merely makes
+  # the continuation without invoking it in a trampoline
+  let whelp = env.createWhelp(n, name)
+
+  # setup the bootstrap using the old proc name,
+  # but the first leg will be the new proc name
+  let booty = env.createBootstrap(n, name)
+
+  # we store a pointer to the whelp on the bootstrap
+  booty.addPragma:
+    nnkExprColonExpr.newTree(bindSym"cpsBootstrap", whelp.name)
+
+  # like magics, the bootstrap must jump
+  booty.addPragma ident"cpsMustJump"
+
+  # now we'll reset the name of the new proc
+  n.name = name
+
   # do some pruning of these typed trees.
   for p in [booty, n]:
     p.name = desym(p.name)
-    while len(p) > 7:
-      p.del(7)
+    while len(p) > 7: p.del(7)     # strip out any extra result field
 
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
@@ -815,9 +865,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # ensaftening the proc's body
   n.body = env.saften(n.body)
 
-  # add in a pragma so other cps macros can identify this as a cps call
-  n.addPragma ident"cpsCall"
-
   # run other stages
   n.addPragma bindSym"cpsFloater"
   n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", env.identity)
@@ -828,7 +875,8 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # lifting the generated proc bodies
   result = lambdaLift(types, n)
 
-  # adding in the bootstrap
+  # adding in the whelp and bootstrap
+  result.add whelp
   result.add booty
 
   # spamming the developers
