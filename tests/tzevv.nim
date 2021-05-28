@@ -60,6 +60,9 @@ template runCps(body: untyped) =
   proc t() {.cps:C.} = body
   run t()
 
+# We have a lot of these for the purpose of control-flow validation
+{.warning[UnreachableCode]: off.}
+
 var r: int
 
 suite "suite, suite zevv":

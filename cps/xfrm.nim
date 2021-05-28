@@ -29,15 +29,20 @@ proc isVoodooCall(n: NimNode): bool =
         result = callee.getImpl.hasPragma("cpsVoodooCall")
 
 proc firstReturn(p: NimNode): NimNode =
-  ## find the first return statement within statement lists, or nil
+  ## find the first control-flow return statement or cps control-flow within
+  ## statement lists, or nil
   case p.kind
-  of nnkReturnStmt:
+  of nnkReturnStmt, nnkRaiseStmt:
     result = p
-  of nnkStmtList:
+  of nnkTryStmt, nnkStmtList, nnkStmtListExpr:
     for child in p.items:
       result = child.firstReturn
       if not result.isNil:
         break
+  of nnkBlockStmt, nnkBlockExpr, nnkFinally:
+    result = p.last.firstReturn
+  elif p.isCpsPending or p.isCpsBreak or p.isCpsContinue:
+    result = p
   else:
     result = nil
 
@@ -174,7 +179,7 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   # let other macros know this is a continuation
   result.addPragma bindSym"cpsCont"
 
-func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
+proc tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   if to.isNillish and not jump.isNil:
@@ -193,7 +198,7 @@ func tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
       jump                         # return the jump target as requested
   result = makeReturn(result, jump)
 
-func jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
+proc jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   assert not via.isNil
@@ -380,6 +385,79 @@ macro cpsWhile(cont, cond, n: typed): untyped =
 
   #debug("cpsWhile", result, Transformed, cond)
 
+proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
+  ## Rewrite the exception branch `n` to use `ex` as the "current" exception
+  ## and move its body into a continuation
+  doAssert n.kind == nnkExceptBranch
+
+  result.excpt = copyNimNode n
+
+  var body = newStmtList(n.last)
+  # this is `except Type: body`
+  if n.len > 1:
+    # this is `except Type as e: body`
+    if n[0].kind == nnkInfix:
+      # replace all occurance of `e` with `ex`
+      body = body.resym(n[0][2], ex)
+
+      # add `Type` to our new except clause
+      result.excpt.add n[0][1]
+    else:
+      # add `Type`
+      result.excpt.add n[0]
+
+  proc setException(contSym, n: NimNode): NimNode =
+    ## Set the exception to `ex` before running any other code
+    proc setContException(n: NimNode): NimNode =
+      ## If `n` is a continuation, set the exception to `ex` before
+      ## running any other code
+      # XXX: need a way to prevent multiple insertions of this
+      if n.isCpsCont:
+        result = n
+        result.body = setException(getContSym(n), result.body)
+
+    result = newStmtList():
+      newCall(bindSym"setCurrentException", ex.resym(cont, contSym))
+
+    for i in n.items:
+      result.add i.filter(setContException)
+
+    proc consumeException(n: NimNode): NimNode =
+      ## Prepend all cpsPending with `setCurrentException nil`
+      # XXX: need a way to prevent multiple insertion of this
+      if n.isScopeExit:
+        result = newStmtList()
+        # set the global exception to nil
+        result.add newCall(bindSym"setCurrentException", newNilLit())
+        # set our exception symbol to nil too
+        result.add newAssignment(ex.resym(cont, contSym), newNilLit())
+        result.add n
+      elif n.kind == nnkReturnStmt:
+        # we are moving to the next continuation
+        result = newStmtList()
+        # set the global exception to nil to prevent leaking it outside
+        result.add newCall(bindSym"setCurrentException", newNilLit())
+        result.add n
+
+    result = result.filter(consumeException)
+
+  # move the exception body into a handler
+  result.cont = makeContProc(genSym(nskProc, "except"), cont, body)
+  # rewrite the body of the handler to be exception-aware
+  #
+  # we perform this after the creation of the continuation to catch any
+  # added annotations
+  result.cont.body = setException(desym cont, result.cont.body)
+
+  # create the new body for the except clause
+  result.excpt.add newStmtList()
+  # capture the exception into the continuation
+  result.excpt.last.add newAssignment(ex, newCall(bindSym"getCurrentException"))
+  # add the tail call to the created handler
+  result.excpt.last.add tailCall(cont, result.cont.name)
+
+  discard "workaround for NimNode.add() returning something"
+
 macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
   ## may require a jump to enter any handler.
@@ -407,47 +485,15 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   # Turn each handler branch into a continuation leg
   # For finally we stash it into a variable for rewrite later
   for i in 1 ..< n.len:
-    case n[i].kind
+    let child = n[i]
+    case child.kind
     of nnkExceptBranch:
-      let newExcept = copyNimNode n[i]
-      # this is `except Type: body`
-      if n[i].len > 1:
-        # add `Type` or `Type as e`
-        newExcept.add n[i][0]
+      let (cont, excpt) = rewriteExcept(cont, ex, child)
+      # push the handler continuation to the top
+      result.add cont
 
-      # create a new body
-      newExcept.add newStmtList()
-
-      # get old handler body
-      var handlerBody = newStmtList(n[i].last)
-
-      # if it's a `except Type as e`
-      if newExcept.len > 1 and newExcept[0].kind == nnkInfix:
-        # assign the exception to `ex`
-        let exSym = newExcept[0][2]
-        # replace all occurance of `exSym` with `ex`
-        handlerBody = handlerBody.resym(exSym, ex)
-
-        # rewrite this into `except Type`
-        newExcept[0] = newExcept[0][1]
-
-      # assign the exception into `ex`
-      newExcept.last.add:
-        newAssignment(ex, newCall(bindSym"getCurrentException"))
-
-      # set exception to the stashed one before executing any other code
-      handlerBody.insert(0):
-        newCall(bindSym"setCurrentException", ex)
-
-      # turn the exception body into a continuation
-      let handler = makeContProc(genSym(nskProc, "except"), cont, handlerBody)
-      # add the continuation to the top
-      result.add handler
-      # add a tail to the new continuation in the except branch
-      newExcept.last.add tailCall(cont, handler.name)
-
-      # add this into the template
-      tryTemplate.add newExcept
+      # add the rewritten except branch to the template
+      tryTemplate.add excpt
     else: result.add errorAst(n[i], "unexpected node in cpsTryExcept")
 
   proc wrapTry(contSym, n: NimNode): NimNode =

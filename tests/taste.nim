@@ -17,7 +17,11 @@ proc trampoline(c: Cont) =
   jumps = 0
   var c = c
   while c.running:
+    # pretends that an exception is raised and handled elsewhere
+    setCurrentException(nil)
     c = c.fn(c)
+    # no exception should leak outside of the continuation
+    check getCurrentException().isNil
     inc jumps
     if jumps > 1000:
       raise InfiniteLoop.newException: $jumps & " iterations"
@@ -26,6 +30,9 @@ proc trampoline(c: Cont) =
       "continuations test best when they, uh, bounce"
 
 proc noop*(c: Cont): Cont {.cpsMagic.} = c
+
+# We have a lot of these for the purpose of control-flow validation
+{.warning[UnreachableCode]: off.}
 
 suite "basic testing assumptions":
 
