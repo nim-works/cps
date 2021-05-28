@@ -5,10 +5,13 @@ they are comprised.
 
 ]##
 
-import std/[sets, sequtils ,hashes, tables, macros, algorithm]
+import std/[sets, sequtils, hashes, tables, macros, algorithm]
 import cps/[spec, hooks]
 
 #{.experimental: "strictNotNil".}
+
+const
+  cpsReparent = false
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
@@ -20,7 +23,8 @@ type
     parent: Env                     # the parent environment (scope)
     locals: LocalCache              # locals and their typedefs|generics
     store: NimNode                  # where to put typedefs, a stmtlist
-    seen: HashSet[string]           # count/measure idents/syms by string
+    when cpsReparent:
+      seen: HashSet[string]           # count/measure idents/syms by string
 
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
@@ -75,7 +79,6 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
     locals
 
 proc init(e: var Env) =
-  e.seen = initHashSet[string]()
   if e.fn.isNil:
     e.fn = ident"fn"
   if e.mom.isNil:
@@ -112,13 +115,6 @@ proc populateType(e: Env; n: var NimNode) =
         else:                       # name is an ident or symbol
           newIdentDefs(name, defs[1], newEmptyNode())
 
-proc contains*(e: Env; key: NimNode): bool =
-  ## you're giving us a symbol|ident and we're telling you if we have it
-  ## recorded with that name.
-  assert not key.isNil
-  assert key.kind in {nnkSym, nnkIdent}
-  result = key.strVal in e.seen
-
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
   var pragma = newEmptyNode()
@@ -127,22 +123,30 @@ proc objectType(e: Env): NimNode =
   var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
   result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
 
-proc `==`(a, b: Env): bool {.deprecated, used.} = a.seen == b.seen
-proc `<`(a, b: Env): bool = a.seen < b.seen
-proc `*`(a, b: Env): HashSet[string] {.deprecated, used.} = a.seen * b.seen
+when cpsReparent:
+  proc contains(e: Env; key: NimNode): bool {.deprecated: "unused".} =
+    ## you're giving us a symbol|ident and we're telling you if we have it
+    ## recorded with that name.
+    assert not key.isNil
+    assert key.kind in {nnkSym, nnkIdent}
+    result = key.strVal in e.seen
 
-proc reparent(e: Env; p: Env) =
-  ## set all nodes to have a parent at least as large as p
-  if e < p:
-    # p is a superset of us; suggest it to our parents
-    reparent(e.parent, p)
-    if not e.parent.isNil:
-      if e.parent < p:
-        # and then set it as our parent if it's better
-        e.parent = p
-  else:
-    # offer ourselves to our parent instead
-    reparent(e.parent, e)
+  proc `==`(a, b: Env): bool {.deprecated, used.} = a.seen == b.seen
+  proc `<`(a, b: Env): bool = a.seen < b.seen
+  proc `*`(a, b: Env): HashSet[string] {.deprecated, used.} = a.seen * b.seen
+
+  proc reparent(e: Env; p: Env) =
+    ## set all nodes to have a parent at least as large as p
+    if e < p:
+      # p is a superset of us; suggest it to our parents
+      reparent(e.parent, p)
+      if not e.parent.isNil:
+        if e.parent < p:
+          # and then set it as our parent if it's better
+          e.parent = p
+    else:
+      # offer ourselves to our parent instead
+      reparent(e.parent, e)
 
 proc makeType*(e: Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
@@ -163,13 +167,14 @@ proc newEnv*(parent: Env; copy = off): Env =
   if copy:
     result = Env(store: parent.store,
                  via: parent.identity,
-                 seen: parent.seen,  # FIXME: this gets clobbered in init()!
                  locals: initOrderedTable[NimNode, NimNode](),
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
                  ex: parent.ex,
                  parent: parent)
+    when cpsReparent:
+      result.seen = parent.seen
     init result
   else:
     result = parent
@@ -177,8 +182,9 @@ proc newEnv*(parent: Env; copy = off): Env =
 proc storeType*(e: Env; force = off): Env =
   ## turn an env into a complete typedef in a type section
   if e.isDirty:
-    if force:
-      reparent(e, e)
+    when cpsReparent:
+      if force:
+        reparent(e, e)
     if not e.parent.isNil:
       if not e.parent.isDirty:
         # must store the parent for inheritance ordering reasons;
@@ -208,7 +214,8 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
   else:
     result = e
   result.locals[key] = val
-  result.seen.incl key.strVal
+  when cpsReparent:
+    result.seen.incl key.strVal
 
 iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ## add `a, b, c: type = default` to the env;
@@ -263,6 +270,8 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
 
   result = Env(c: c, store: store, via: via, id: via)
   result.rs = newIdentDefs(genField"result", rs, newEmptyNode())
+  when cpsReparent:
+    result.seen = initHashSet[string]()
   init result
 
 proc identity*(e: var Env): NimNode =
