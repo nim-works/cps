@@ -7,16 +7,16 @@ import cps, deques
 
 type
   Work = ref object of RootObj
-    fn*: proc(c: Work): Work {.nimcall.}
+    fn*: proc(w: Work): Work {.nimcall.}
     pool: Pool
 
   Pool = ref object
     workQueue: Deque[Work]
 
-proc push(pool: Pool, c: Work) =
-  if c.running:
-    c.pool = pool
-    pool.workQueue.addLast(c)
+proc push(pool: Pool, w: Work) =
+  if w.running:
+    w.pool = pool
+    pool.workQueue.addLast(w)
 
 template push(pool: Pool; c: untyped) =
   pool.push whelp(c)
@@ -26,9 +26,8 @@ proc jield(c: Work): Work {.cpsMagic.} =
 
 proc run(pool: Pool) =
   while pool.workQueue.len > 0:
-    var c = pool.workQueue.popFirst
-    c = c.fn(c)
-    pool.push c
+    var w = pool.workQueue.popFirst
+    pool.push w.trampoline
 
 ###########################################################################
 # Main code
