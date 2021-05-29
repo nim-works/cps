@@ -11,6 +11,7 @@ type
 
   C = ref object of RootObj
     fn: CFn
+    mom: C
     labels: Table[string, CFn]
 
 
@@ -29,15 +30,17 @@ proc goto(c: C, id: string): C {.cpsMagic.} =
 
 proc foo() {.cps:C.} =
   echo "one"
-  label("here")
+  label"here"
   echo "two"
   echo "three"
-  goto("here")
+  goto"here"
   echo "four"
 
 
 # Trampoline
 
-var c = foo()
-while c != nil and c.fn != nil:
+var x = 0
+var c = whelp foo()
+while c.running and x < 1000:
   c = c.fn(c)
+  inc x

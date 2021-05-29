@@ -4,6 +4,7 @@ import cps, options, deques
 type
   Coroutine = ref object of RootObj
     fn*: proc(c: Coroutine): Coroutine {.nimcall.}
+    mom: Coroutine
     s: int
     cResume: Coroutine
 
@@ -40,8 +41,8 @@ proc fn_coro2() {.cps:Coroutine.} =
     echo val
 
 
-let coro2 = fn_coro2()
-let coro1 = fn_coro1(coro2, true)
+let coro2 = whelp fn_coro2()
+let coro1 = whelp fn_coro1(coro2, true)
 
 coro1.tramp()
 coro2.tramp()

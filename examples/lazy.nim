@@ -8,6 +8,7 @@ import cps, deques, macros, sugar
 type
   Stream = ref object of RootObj
     fn*: proc(s: Stream): Stream {.nimcall.}
+    mom: Stream
     id: string
     val: int
     sIn: Stream
@@ -76,10 +77,10 @@ proc pump() {.stream.} =
   while sIn.running:
     discard sIn.resume()
 
-var s = toStream(1..10) -> 
-        map(x => x * 3) -> 
+var s = toStream(1..10) ->
+        map(x => x * 3) ->
         filter(x => (x mod 2) == 0) ->
-        print() -> 
+        print() ->
         pump()
 
 discard s.trampoline()

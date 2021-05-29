@@ -8,6 +8,7 @@ import cps, deques
 type
   Work = ref object of RootObj
     fn*: proc(w: Work): Work {.nimcall.}
+    mom: Work
     pool: Pool
 
   Pool = ref object

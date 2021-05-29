@@ -3,7 +3,7 @@
 # Simple test of a naive threadpool for scheduling CPS threads. This demo
 # creates 1 million 'threads' scheduled on all available CPUs in the system
 #
-# nim r --gc:arc --threads:on --threadanalysis:off stash/threadpool.nim 
+# nim r --gc:arc --threads:on --threadanalysis:off threadpool.nim
 #
 
 import cps, math, std/locks, deques, cpuinfo
@@ -14,6 +14,7 @@ import cps, math, std/locks, deques, cpuinfo
 
 type Cont = ref object of RootObj
   fn*: proc(c: Cont): Cont {.nimcall.}
+  mom: Cont
 
 
 type Pool = ref object
@@ -87,9 +88,11 @@ proc ticker() {.cps:Cont.} =
     jield()
 
 for i in 1..1_000_000:
-  pool.work.addLast slow(i, 100)
+  pool.work.addLast:
+    whelp slow(i, 100)
 
-pool.work.addLast ticker()
+pool.work.addLast:
+  whelp ticker()
 
 work(countProcessors())
 

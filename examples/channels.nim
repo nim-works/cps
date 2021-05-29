@@ -13,6 +13,7 @@ import macros
 
 type Cont = ref object of RootObj
   fn*: proc(c: Cont): Cont {.nimcall.}
+  mom: Cont
 
 # A channel connects a sender and a receiver CPS proc; it holds a continuation
 # for each of them, the pump will run either one, depending on the existance of
@@ -34,7 +35,7 @@ proc recv(c: Cont, ch: Channel): Cont {.cpsMagic.} =
 proc send(c: Cont, ch: Channel, val: int): Cont {.cpsMagic.} =
   ch.val = some(val)
   ch.cSend = c
-   
+
 # Helper to get the value out of a channel. We need this because we
 # can not return values from continuations yet
 
@@ -42,12 +43,12 @@ proc getval(ch: Channel): int =
   result = ch.val.get
   ch.val = none(int)
 
-# The lady is a 
+# The lady is a
 
 proc tramp(cont: var Cont) =
   var c = cont
   cont = nil
-  while c != nil:
+  while c.running:
     c = c.fn(c)
 
 # Pump all channels in the pool until there is nothing to be done
@@ -79,7 +80,7 @@ proc pump(chs: seq[Channel]) =
 
 # This is a simple source, generating numbers
 
-proc source(ch: Channel, lo, hi: int) {.cps:Cont.} =
+proc source(ch: Channel; lo: int; hi: int) {.cps:Cont.} =
   var i = lo
   while i <= hi:
     ch.send(i)
@@ -96,8 +97,8 @@ proc sink(ch: Channel) {.cps:Cont.} =
 
 block:
   var ch = Channel()
-  ch.cSend = source(ch, 10, 12)
-  ch.cRecv = sink(ch)
+  ch.cSend = whelp source(ch, 10, 12)
+  ch.cRecv = whelp sink(ch)
 
   pump(@[ch])
   echo ""
@@ -115,7 +116,7 @@ block:
 # Here is a filter, connected to two channels: it reads from one, calculates
 # the running sum and sends it to the second
 
-proc filter(chIn, chOut: Channel) {.cps:Cont.} =
+proc filter(chIn: Channel; chOut: Channel) {.cps:Cont.} =
   var total: int
   while true:
     recv(chIn)
@@ -131,9 +132,9 @@ block:
   var ch1 = Channel()
   var ch2 = Channel()
 
-  let cSource = source(ch1, 10, 20)
-  let cFilter = filter(ch1, ch2)
-  let cSink = sink(ch2)
+  let cSource = whelp source(ch1, 10, 20)
+  let cFilter = whelp filter(ch1, ch2)
+  let cSink = whelp sink(ch2)
 
   ch1.cSend = cSource
   ch1.cRecv = cFilter

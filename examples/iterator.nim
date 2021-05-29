@@ -10,6 +10,7 @@ import cps, options
 
 type Iterator = ref object of RootObj
   fn*: proc(c: Iterator): Iterator {.nimcall.}
+  mom: Iterator
   val: Option[int]
 
 assert Iterator is Continuation
@@ -45,7 +46,7 @@ proc counter(lo: int, hi: int) {.cps:Iterator.} =
 
 # Create an instance of the iterator, counting from 3 up to 7
 
-var a = counter(3, 7)
+var a = whelp counter(3, 7)
 
 # Resume the iterator a bunch of times
 

@@ -9,6 +9,7 @@ import cps
 type
   Tc = ref object of RootObj
     fn*: proc(c: Tc): Tc {.nimcall.}
+    mom: Tc
 
 var
   err: bool
@@ -17,11 +18,11 @@ var
 
 # CPS magic functions
 
-proc start(c: Tc): Tc =
+proc start(c: Tc): Tc {.cpsMagic.} =
   where = c
   return c
 
-proc throw(c: Tc, m: string): Tc =
+proc throw(c: Tc, m: string): Tc {.cpsMagic.} =
   err = true
   msg = m
   return where
@@ -31,7 +32,7 @@ proc throw(c: Tc, m: string): Tc =
 
 proc deeper() {.cps:Tc.} =
   echo "throwing"
-  cps throw("Boom")
+  throw("Boom")
   echo "you will never see this"
 
 
@@ -39,16 +40,16 @@ proc deeper() {.cps:Tc.} =
 # function that will throw
 
 proc foo() {.cps:Tc.} =
-  
-  cps start()
+
+  start()
 
   if not err:
     echo "one"
     echo "two"
-    return deeper()
+    deeper()
     echo "three"
     echo "four"
-  
+
   if err:
     echo "** caught error: ", msg, " **"
 
@@ -58,6 +59,6 @@ proc foo() {.cps:Tc.} =
 
 # Trampoline
 
-var c = foo()
-while c != nil and c.fn != nil:
+var c = whelp foo()
+while c.running:
   c = c.fn(c)
