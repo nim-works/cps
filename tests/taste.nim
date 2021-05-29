@@ -1194,3 +1194,18 @@ suite "tasteful tests":
     let c = whelp foo(5)
     trampoline c
     check r == 2
+
+  block:
+    ## continuations can return values via bootstrap
+    r = 0
+    proc foo(x: int): int {.cps: Cont.} =
+      noop()
+      inc r
+      return x * x
+
+    let x = foo(3)
+    check r == 1
+    check x == 9
+    var c = whelp foo(5)
+    trampoline c
+    check r == 2

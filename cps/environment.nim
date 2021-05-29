@@ -78,12 +78,16 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   else:
     locals
 
+proc set(e: var Env; key: NimNode; val: NimNode): Env
+
 proc init(e: var Env) =
   if e.fn.isNil:
     e.fn = ident"fn"
   if e.mom.isNil:
     e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
+  if not e.rs[1].isEmpty:
+    e = e.set(e.rs[0], nnkVarSection.newTree e.rs)
 
 proc definedName(n: NimNode): NimNode =
   ## create an identifier from an typesection/identDef as cached;
@@ -110,11 +114,16 @@ proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
   for name, section in e.locals.pairs:
     for defs in section.items:
-      n.add:
-        if defs[1].isEmpty:         # get the type of the assignment
-          newIdentDefs(name, getTypeImpl(defs.last), newEmptyNode())
-        else:                       # name is an ident or symbol
-          newIdentDefs(name, defs[1], newEmptyNode())
+      # we need either an initialization value or a type field
+      if defs[1].isEmpty and defs[2].isEmpty:
+        if name != e.rs[0]:
+          error "local " & repr(name) & " lacks type/initialization"
+      else:
+        n.add:
+          if defs[1].isEmpty:         # get the type of the assignment
+            newIdentDefs(name, getTypeImpl(defs.last), newEmptyNode())
+          else:                       # name is an ident or symbol
+            newIdentDefs(name, defs[1], newEmptyNode())
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
@@ -161,7 +170,7 @@ proc firstDef*(e: Env): NimNode =
 
 proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
-  newDotExpr(e.castToChild(e.first), e.rs)
+  newDotExpr(e.castToChild(e.first), e.rs[0])
 
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -275,7 +284,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   store.add check
 
   result = Env(c: c, store: store, via: via, id: via)
-  result.rs = newIdentDefs(genField"result", rs, newEmptyNode())
+  result.rs = newIdentDefs(ident"result", rs, newEmptyNode())
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
@@ -331,16 +340,16 @@ iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
       echo $kind, "\t", repr(defs)
     yield e.initialization(kind, field, value)
 
-proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
-  ## get a field from the env using a local symbol as input
-  for field, sym in e.locals.pairs:
-    if sym == n:
-      result = field
-      break
-  if result.isNil:
-    result = n.errorAst "unable to find field for symbol " & n.repr
-
 when false:
+  proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
+    ## get a field from the env using a local symbol as input
+    for field, defs in e.allPairs:
+      if defs[0] == n:
+        result = field
+        break
+    if result.isNil:
+      result = n.errorAst "unable to find field for symbol " & n.repr
+
   proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
     {.deprecated: "not used yet".} =
     case n.kind
@@ -409,14 +418,21 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
       # okay, it's a return: result = ...
       result = newStmtList()
       # ignore the result symbol and create a new assignment
-      result.add newAssignment(e.rs, n.last.last)
+      result.add newAssignment(e.get, n.last.last)
       # and just issue an empty `return`
       result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
     of nnkEmpty, nnkIdent:
       # this is `return` or `return continuation`, so that's fine...
       result = n
     else:
-      result = n.errorAst "malformed return"
+      # okay, it's a return of some rando expr
+      result = newStmtList()
+      # ignore the result symbol and create a new assignment
+      result.add newAssignment(e.get, n.last)
+      # signify the end of the continuation
+      result.add newAssignment(newDotExpr(e.first, e.fn), newNilLit())
+      # and return the continuation
+      result.add nnkReturnStmt.newNimNode(n).add(e.first)
 
 proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   ## swap symbols for those in the continuation
@@ -441,7 +457,7 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
-    if field notin [e.fn, e.rs, e.mom]:
+    if field notin [e.fn, e.rs[0], e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
         newAssignment(resultdot field, section.last[0])
@@ -498,12 +514,12 @@ proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
     ]
 
   # do an easy static check, and then
-  if env.rs.last.isEmpty != result.params[0].isEmpty:
+  if env.rs[1] != result.params[0]:
     result.body.add:
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"
-  # if the bootstrap has a return value,
-  elif not env.rs.last.isEmpty:
+  # if the bootstrap has a return type,
+  elif not env.rs[1].isEmpty:
     result.body.add:
       # then at runtime, issue an if statement to
       nnkIfExpr.newTree:
@@ -511,7 +527,8 @@ proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
           # check if the continuation is not nil, and if so, to
           newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
           # assign the result from the continuation's result field
-          newAssignment(ident"result", newDotExpr(c, env.rs))
+          newAssignment(ident"result",
+            newDotExpr(env.castToChild(c), env.rs[0]))
         ]
 
 proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =
