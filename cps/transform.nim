@@ -161,16 +161,19 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   let name = nskProc.genSym"whileLoop"
   let tail = tailCall(desym cont, name)
   debugAnnotation cpsWhile, n:
-    var body =
-      newStmtList nnkIfStmt.newTree [
-        nnkElifBranch.newTree [cond, it],
-        nnkElse.newTree newCpsBreak(n)
-      ]
+    # a key first step is to ensure that the loop body, uh, loops, by
+    # issuing a tailcall back to the while proc instead falling through
+    it.add tail
+    var body = newStmtList nnkIfStmt.newTree [  # a conditional test up top,
+      nnkElifBranch.newTree [cond, it],         # runs the body if it's true,
+      nnkElse.newTree newCpsBreak(n)            # else, runs a break clause
+    ]
     body = body.multiReplace(
       (isCpsPending.Matcher, tail),
       (isCpsContinue.Matcher, tail),
       (matchCpsBreak(newEmptyNode()), newCpsPending())
     )
+    # we return the while proc and a tailcall to enter it the first time
     it = newStmtList [makeContProc(name, cont, body), tail]
 
 proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
