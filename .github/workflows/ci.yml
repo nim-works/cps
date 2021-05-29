@@ -4,6 +4,8 @@ on:
     - cron: '30 5 * * *'
 
   push:
+    branches:
+      - master
     paths:
       - '**.cfg'
       - '**.nims'
@@ -12,6 +14,8 @@ on:
       - 'tests/**'
       - '.github/workflows/ci.yml'
   pull_request:
+    branches:
+      - '*'
     paths:
       - '**.cfg'
       - '**.nims'
