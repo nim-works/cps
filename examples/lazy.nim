@@ -9,14 +9,11 @@ type
   Stream = ref object of RootObj
     fn*: proc(s: Stream): Stream {.nimcall.}
     mom: Stream
-    id: string
     val: int
     sIn: Stream
-    resumed: Stream
 
 proc jield(s: Stream, val: int = 0): Stream {.cpsMagic.} =
   s.val = val
-  s.resumed = s
 
 proc getSin(s: Stream): (Stream) {.cpsMagic.} =
   s.sIn
@@ -63,6 +60,7 @@ proc filter(fn: proc(x: int): bool) {.stream.} =
     if not sIn.running: break
     if fn(v):
       jield(v)
+    discard   # <- take this out to break code
 
 proc print() {.stream.} =
   let sIn = getSin()
