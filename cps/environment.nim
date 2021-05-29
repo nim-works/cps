@@ -193,11 +193,11 @@ proc storeType*(e: Env; force = off): Env =
           e.parent = storeType e.parent
     e.store.add:
       nnkTypeSection.newTree e.makeType
-    when cpsDebug:
+    when cpsDebug == "Env":
       echo "storing type ", repr(e.identity)
     # clearly, if we ever write again, we want it to be a new type
     result = newEnv(e, copy = on)
-    when cpsDebug:
+    when cpsDebug == "Env":
       echo "next type ", repr(result.identity)
   else:
     result = e
@@ -307,7 +307,7 @@ iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
       letOrVar(defs)
   for field, value in e.addIdentDef(section, defs):
     #let name = definedName(value)
-    when cpsDebug:
+    when cpsDebug == "Env":
       echo $kind, "\t", repr(defs)
     yield e.initialization(kind, field, value)
 

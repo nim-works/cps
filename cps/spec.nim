@@ -10,8 +10,8 @@ when (NimMajor, NimMinor) < (1, 5):
   {.fatal: "requires nim-1.5".}
 
 const
-  cpsDebug* {.booldefine.} = false       ## produce gratuitous output
-  comments* = cpsDebug         ## embed comments within the transformation
+  cpsDebug* {.strdefine.} = "" ## produce gratuitous output
+  comments* = cpsDebug != ""   ## embed comments within the transformation
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
@@ -93,7 +93,7 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
       discard
   result = filter(n, desymifier)
 
-when not cpsDebug:
+when cpsDebug == "":
   template debug*(ignore: varargs[untyped]) = discard
 else:
   import std/strutils
@@ -116,6 +116,7 @@ else:
     ## from.
     ##
     ## If `info` is `nil`, the line information will be retrieved from `n`.
+    if cpsDebug != id: return
     let info =
       if info.isNil:
         n
@@ -252,20 +253,12 @@ proc letOrVar*(n: NimNode): NimNodeKind =
   else:
     result = nnkLetSection
 
-proc isLiftable*(n: NimNode): bool =
-  ## is this a node we should float to top-level?
-  result = n.kind in {nnkProcDef, nnkTypeSection} and n.hasPragma "cpsLift"
-
-proc hasLiftableChild*(n: NimNode): bool =
-  ## does this node contain liftable nodes?
-  result = anyIt(toSeq items(n), it.isLiftable or it.hasLiftableChild)
-
-when cpsDebug:
+when cpsDebug == "":
+  template lineAndFile*(n: NimNode): string = "(no debug)"
+else:
   import os
   template lineAndFile*(n: NimNode): string =
     $n.lineInfoObj.line & " of " & extractFilename($n.lineInfoObj.filename)
-else:
-  template lineAndFile*(n: NimNode): string = "(no debug)"
 
 proc errorAst*(s: string, info: NimNode = nil): NimNode =
   ## produce {.error: s.} in order to embed errors in the ast
@@ -500,25 +493,24 @@ proc isCpsPending*(n: NimNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
-func newCpsBreak*(label: NimNode = newNilLit()): NimNode =
+func newCpsBreak*(n: NimNode; label: NimNode = newNilLit()): NimNode =
   ## Produce a {.cpsBreak.} annotation with the given label
-  doAssert not label.isNil
   let label =
     if label.kind == nnkEmpty:
       newNilLit()
     else:
       label
 
-  nnkPragma.newTree:
+  nnkPragma.newNimNode(n).add:
     newColonExpr(bindSym"cpsBreak", label)
 
 proc isCpsBreak*(n: NimNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
 
-func newCpsContinue*(): NimNode =
+func newCpsContinue*(n: NimNode): NimNode =
   ## Produce a {.cpsContinue.} annotation
-  nnkPragma.newTree:
+  nnkPragma.newNimNode(n).add:
     bindSym"cpsContinue"
 
 proc isCpsContinue*(n: NimNode): bool =
@@ -667,3 +659,36 @@ proc isScopeExit*(n: NimNode): bool =
   ##
   ## TODO: Handle early exit (ie. `c.fn = nil; return`)
   n.isCpsPending or n.isCpsBreak or n.isCpsContinue
+
+template rewriteIt*(n: typed; body: untyped): NimNode =
+  var it {.inject.} = normalizingRewrites:
+    newStmtList n
+  body
+  workaroundRewrites it
+
+template debugAnnotation*(s: typed; n: NimNode; body: untyped) {.dirty.} =
+  debug(astToStr s, n, Original)
+  result = rewriteIt n:
+    body
+  debug(astToStr s, result, Transformed, n)
+
+func matchCpsBreak*(label: NimNode): Matcher =
+  ## create a matcher matching cpsBreak with the given label
+  ## and cpsBreak without any label
+  result =
+    proc (n: NimNode): bool =
+      if n.isCpsBreak:
+        let breakLabel = n.breakLabel
+        breakLabel.kind == nnkEmpty or breakLabel == label
+      else:
+        false
+
+func wrappedFinally*(n: NimNode; final: NimNode): NimNode =
+  ## rewrite a try/except/finally into try/try-except/finally
+  # create a copy of the try statement minus finally
+  let newTry = copyNimNode(n).add n[0 .. ^2]
+
+  # wrap the try-finally outside of `nc`
+  result = copyNimNode n
+  result.add newStmtList(newTry)
+  result.add final
