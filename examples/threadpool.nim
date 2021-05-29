@@ -46,7 +46,6 @@ proc doWork(pool: Pool) {.thread.} =
     while c.running:
       c = c.fn(c)
 
-
 proc work(nThreads: int) =
   var threads = newSeq[Thread[Pool]](nThreads)
   for i in 0..<nThreads:
@@ -69,6 +68,7 @@ proc slow(id: int, n: float) {.cps:Cont.} =
 
   while i < n:
     i += 1
+
     j = 0
     while j < 100_000:
       j += 0.01
@@ -79,7 +79,6 @@ proc slow(id: int, n: float) {.cps:Cont.} =
 
 for i in 1..32:
   pool.work.addLast whelp slow(i, 4)
-
 
 work(countProcessors())
 
