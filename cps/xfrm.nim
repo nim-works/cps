@@ -268,23 +268,54 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   var n = normalizingRewrites:
     # we always wrap the input because there's no reason not to
     newStmtList n
+  var after = normalizingRewrites:
+    # we always wrap the input because there's no reason not to
+    newStmtList after
 
-  let
-    afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
-    afterTail = tailCall(desym cont, afterProc.name)
+  proc countToTwo(n: NimNode): int =
+    ## Count the amount of cpsPending in `n`, stopping as soon
+    ## as two or more cpsPending is found
+    if n.isCpsPending:
+      inc result
+    else:
+      for child in n.items:
+        result += child.countToTwo
+        if result >= 2:
+          return
 
-    # FIXME: fix this to use makeReturn
+  # whether a jump is needed to leave `n`
+  let jumpCount = n.countToTwo + int(n.firstReturn.isNil)
+
+  result = newStmtList()
+  var resolvedBody: NimNode
+
+  if jumpCount > 1:
+    let
+      afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
+      afterTail = tailCall(desym cont, afterProc.name)
+
+      # FIXME: fix this to use makeReturn
 
     resolvedBody =
       n.replace(isCpsPending):
         afterTail
 
-  if resolvedBody.firstReturn.isNil:
-    resolvedBody.add afterTail
+    if resolvedBody.firstReturn.isNil:
+      resolvedBody.add afterTail
 
-  result = newStmtList()
-  result.add afterProc
+    result.add afterProc
+  else:
+    # If no jump is needed, we inline instead
+    let nextBody = after.resym(cont, desym cont)
+    if nextBody.firstReturn.isNil:
+      nextBody.add newCpsPending()
+
+    resolvedBody =
+      n.replace(isCpsPending):
+        nextBody
+
   result.add resolvedBody
+
   result = workaroundRewrites result
 
   #debug("cpsMayJump", result, Transformed, n)
