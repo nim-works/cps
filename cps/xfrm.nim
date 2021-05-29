@@ -315,6 +315,11 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
   result = newStmtList:
     n.errorAst "try with finally with splitting is not supported"
 
+func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
+  result = newCall bindSym(a)
+  result.copyLineInfo n
+  result.add env.first
+
 proc annotate(parent: var Env; n: NimNode): NimNode =
   ## annotate `input` or otherwise prepare it for conversion into a
   ## mutually-recursive cps convertible form; the `parent` environment
@@ -343,9 +348,8 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
 
     # if it's a cps call,
     if nc.isCpsCall:
-      let jumpCall = newCall(bindSym"cpsJump", env.first)
-      jumpCall.add:
-        env.annotate nc
+      let jumpCall = env.newAnnotation(nc, "cpsJump")
+      jumpCall.add env.annotate(nc)
       if i < n.len - 1:
         jumpCall.add:
           env.annotate newStmtList(n[i + 1 .. ^1])
@@ -366,7 +370,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
           discard
         else:
           # control-flow will end here with a MayJump annotation
-          let jumpCall = newCall(bindSym"cpsMayJump", env.first)
+          let jumpCall = env.newAnnotation(nc, "cpsMayJump")
           jumpCall.add:
             env.annotate newStmtList(nc)           # this child node
           jumpCall.add:
@@ -418,9 +422,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
 
     of nnkBlockStmt:
       if nc.isCpsBlock:
-        let jumpCall = newCall(bindSym"cpsBlock")
-        jumpCall.copyLineInfo nc
-        jumpCall.add env.first
+        let jumpCall = env.newAnnotation(nc, "cpsBlock")
         if nc[0].kind != nnkEmpty:
           # add label if it exists
           jumpCall.add nc[0]
@@ -429,56 +431,46 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         result.add jumpCall
         return
       else:
-        var transformed = env.annotate(nc)
         # this is not a cps block, so all the break
         # statements should be preserved
+        var transformed = env.annotate(nc)
         transformed = transformed.restoreBreak(nc[0])
         result.add transformed
 
     of nnkWhileStmt:
       if nc.isCpsBlock:
-        let jumpCall = newCall(bindSym"cpsWhile")
-        jumpCall.copyLineInfo nc
-        jumpCall.add env.first
-        # add condition
-        jumpCall.add:
-          env.annotate nc[0]
-        # add body
-        jumpCall.add:
-          env.annotate newStmtList(nc[1])
+        let jumpCall = env.newAnnotation(nc, "cpsWhile")
+        jumpCall.add env.annotate nc[0]                 # add condition
+        jumpCall.add env.annotate newStmtList(nc[1])    # add body
         result.add jumpCall
         return
       else:
         # this is not a cps block, so all the break and
         # continue statements should be preserved
-        var transformed = env.annotate(nc)
-        transformed = restoreBreak transformed
-        transformed = restoreContinue transformed
-        result.add transformed
+        result.add:
+          restoreContinue:
+            restoreBreak:
+              env.annotate nc
 
     of nnkTryStmt:
       if nc.isCpsBlock:
         let final = nc.findChild(it.kind == nnkFinally)
         var jumpCall: NimNode
         if final.isNil:                    # no finally!
-          jumpCall = nnkCall.newTree [
-            bindSym"cpsTryExcept",         # annotation
-            env.first,                     # continuation sym
-            env.getException(),            # exception access
-            newStmtList env.annotate(nc),  # try body
-          ]
+          jumpCall = env.newAnnotation(nc, "cpsTryExcept")
+          jumpCall.add env.getException()  # exception access
+          jumpCall.add:
+            newStmtList env.annotate(nc)   # try body
         else:
           let body =
             if nc.findChild(it.kind == nnkExceptBranch).isNil:
               nc                           # no exception branch!
             else:
               wrappedFinally(nc, final)    # try/try-except/finally
-          jumpCall = nnkCall.newTree [
-            bindSym"cpsTryFinally",        # annotation
-            env.first,                     # continuation sym
-            env.getException(),            # exception access
+          jumpCall = env.newAnnotation(nc, "cpsTryFinally")
+          jumpCall.add env.getException()  # exception access
+          jumpCall.add:
             newStmtList env.annotate(body) # try body
-          ]
         result.add jumpCall
         return
       else:
