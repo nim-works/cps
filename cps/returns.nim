@@ -68,7 +68,9 @@ proc makeReturn*(pre: NimNode; n: NimNode): NimNode =
     if pre.firstReturn.isNil:
       makeReturn n
     else:
-      doc "omitted a return of " & repr(n)
+      newEmptyNode()
+    #else:
+    #  doc "omitted a return of " & repr(n)
 
 proc tailCall*(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`

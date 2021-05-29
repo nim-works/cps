@@ -6,7 +6,7 @@ they are comprised.
 ]##
 
 import std/[sets, sequtils, hashes, tables, macros, algorithm]
-import cps/[spec, hooks]
+import cps/[spec, hooks, help, rewrites]
 
 #{.experimental: "strictNotNil".}
 
@@ -84,6 +84,12 @@ proc init(e: var Env) =
   if e.mom.isNil:
     e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
+
+proc definedName(n: NimNode): NimNode =
+  ## create an identifier from an typesection/identDef as cached;
+  ## this is a copy and it is repr'd to ensure gensym compat...
+  assert n.kind in {nnkVarSection, nnkLetSection}, "use this on env[key]"
+  result = ident(repr(n[0][0]))
 
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
@@ -216,6 +222,10 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
 iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ## add `a, b, c: type = default` to the env;
   ## yields pairs of field, value as added
+  template stripVar(n: NimNode): NimNode =
+    ## pull the type out of a VarTy
+    if n.kind == nnkVarTy: n[0] else: n
+
   case n.kind
   of nnkIdentDefs:
     if len(n) == 2:
@@ -292,6 +302,20 @@ proc initialization(e: Env; kind: NimNodeKind;
     if len(defs) > 2 and not defs.last.isEmpty:
       # this is basically env2323(cont).foo34 = "some default"
       result.add newAssignment(newDotExpr(child, field), defs.last)
+
+proc letOrVar(n: NimNode): NimNodeKind =
+  ## choose between let or var for proc parameters
+  assert n.kind == nnkIdentDefs
+  if len(n) == 2:
+    # ident: type; we'll add a default for numbering reasons
+    n.add newEmptyNode()
+  case n[^2].kind
+  of nnkEmpty:
+    error "i need a type: " & repr(n)
+  of nnkVarTy:
+    result = nnkVarSection
+  else:
+    result = nnkLetSection
 
 iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
   ## compose an assignment during addition of identDefs to env
@@ -489,3 +513,13 @@ proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
           # assign the result from the continuation's result field
           newAssignment(ident"result", newDotExpr(c, env.rs))
         ]
+
+proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =
+  ## Rewrite non-yielding cpsCall calls by inserting the continuation as
+  ## the first argument
+  proc voodoo(n: NimNode): NimNode =
+    if n.isVoodooCall:
+      result = n.copyNimTree
+      result[0] = desym result[0]
+      result.insert(1, env.first)
+  result = filter(n, voodoo)

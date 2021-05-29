@@ -1,7 +1,6 @@
 import std/[macros, sequtils]
-import cps/[spec, environment, hooks, returns]
+import cps/[spec, environment, hooks, returns, defers, rewrites, help]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
-export cpsDebug
 
 #{.experimental: "strictNotNil".}
 
@@ -18,14 +17,6 @@ proc isCpsCall(n: NimNode): bool =
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
         result = callee.getImpl.hasPragma("cpsMustJump")
-
-proc isVoodooCall(n: NimNode): bool =
-  ## true if this is a call to a voodoo procedure
-  if n != nil and len(n) > 0:
-    if n.kind in nnkCallKinds:
-      let callee = n[0]
-      if not callee.isNil and callee.kind == nnkSym:
-        result = callee.getImpl.hasPragma("cpsVoodooCall")
 
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -503,10 +494,11 @@ macro cpsResolver(T: typed, n: typed): untyped =
     ## the annotation.
     proc resolved(n: NimNode): NimNode =
       if n.isCpsPending:
-        if replacement.isNil:
-          result = newEmptyNode()
-        else:
-          result = copyNimTree replacement
+        result =
+          if replacement.isNil:
+            newEmptyNode()
+          else:
+            copyNimTree replacement
     result = filter(n, resolved)
 
   # grabbing the first argument to the proc as an identifier
@@ -534,17 +526,7 @@ macro cpsFloater(n: typed): untyped =
   result = floater:
     copyNimTree n
 
-proc rewriteVoodoo(n: NimNode, env: Env): NimNode =
-  ## Rewrite non-yielding cpsCall calls by inserting the continuation as
-  ## the first argument
-  proc aux(n: NimNode): NimNode =
-    if n.isVoodooCall:
-      result = n.copyNimTree
-      result[0] = desym result[0]
-      result.insert(1, env.first)
-  n.filter(aux)
-
-proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
+proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # make the AST easier for us to consume
@@ -609,10 +591,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   n.body = rewriteDefer n.body
 
   # rewrite non-yielding cps calls
-  n.body = rewriteVoodoo(n.body, env)
+  n.body = env.rewriteVoodoo n.body
 
   # annotate the proc's body
-  n.body = env.annotate(n.body)
+  n.body = env.annotate n.body
 
   # run other stages
   n.addPragma bindSym"cpsFloater"
@@ -621,9 +603,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
-  # lifting the generated proc bodies
-  result = newStmtList(types, n)
-
-  # adding in the whelp and bootstrap
-  result.add whelp
-  result.add booty
+  # generated proc bodies, remaining proc, whelp, bootstrap
+  result = newStmtList(types, n, whelp, booty)
+  result = workaroundRewrites result
