@@ -94,16 +94,11 @@ proc allPairs(e: Env): seq[Pair] =
     result.add allPairs(e.parent)
 
 iterator pairs(e: Env): Pair =
-  if not e.isNil:
-    var seen = initHashSet[string]()
-    for pair in e.allPairs:
-      # FIXME: basically, we're saying that exceptions in our parents
-      #        will make it into this iterator, but exceptions from
-      #        _this_ Env will not...  we will fix this later.
-      if pair.key != e.ex:
-        # make sure we're actually measuring gensyms for collision
-        if not seen.containsOrIncl definedName(pair.val).strVal:
-          yield pair
+  var seen = initHashSet[string]()
+  for pair in e.allPairs:
+    # make sure we're actually measuring gensyms for collision
+    if not seen.containsOrIncl definedName(pair.val).strVal:
+      yield pair
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
@@ -119,9 +114,10 @@ proc objectType(e: Env): NimNode =
   ## turn an env into an object type
   var pragma = newEmptyNode()
   var record = nnkRecList.newNimNode(e.identity)
-  populateType(e, record)
+  e.populateType record
   var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
-  result = nnkRefTy.newTree nnkObjectTy.newTree(pragma, parent, record)
+  result = nnkRefTy.newTree:
+    nnkObjectTy.newTree(pragma, parent, record)
 
 when cpsReparent:
   proc contains(e: Env; key: NimNode): bool {.deprecated: "unused".} =
@@ -150,7 +146,7 @@ when cpsReparent:
 
 proc makeType*(e: Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-  result = nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
+  nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
 
@@ -401,9 +397,15 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
 proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   ## swap symbols for those in the continuation
   result = n
-  let child = e.castToChild(e.first)
+  let child = e.castToChild e.first
   for field, section in e.pairs:
-    result = result.resym(section[0][0], newDotExpr(child, field))
+    # we don't resym identifiers, which we must have created;
+    # these are a side-effect of an open nim bug
+    let sym = section.last[0]
+    if sym.kind == nnkSym:
+      result = result.resym(sym, newDotExpr(child, field))
+    else:
+      {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
 
 proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
@@ -415,7 +417,7 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
-    if field notin [e.fn, e.rs, e.ex, e.mom]:
+    if field notin [e.fn, e.rs, e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
         newAssignment(resultdot field, section.last[0])
@@ -424,15 +426,12 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
       newAssignment(resultdot e.fn, goto)
 
 proc getException*(e: var Env): NimNode =
-  ## get the current exception from the env
+  ## get the current exception from the env, instantiating it if necessary
   if e.ex.isNil:
     e.ex = genField"ex"
-
-    # TODO: idk how this works, really
-    e = e.set(e.ex):
+    e = e.set e.ex:
       nnkVarSection.newTree:
         newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
-
   result = newDotExpr(e.castToChild(e.first), e.ex)
 
 proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
