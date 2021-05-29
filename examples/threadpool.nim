@@ -34,7 +34,6 @@ proc doWork(pool: Pool) {.thread.} =
 
     pool.lock.acquire
     if pool.work.len == 0:
-      echo "Deque empty"
       pool.lock.release
       return
 
@@ -46,11 +45,6 @@ proc doWork(pool: Pool) {.thread.} =
 
     while c.running:
       c = c.fn(c)
-
-    if c != nil:
-      pool.lock.acquire
-      pool.work.addLast c
-      pool.lock.release
 
 
 proc work(nThreads: int) =
@@ -74,7 +68,7 @@ proc slow(id: int, n: float) {.cps:Cont.} =
   var i, j, b: float
 
   while i < n:
-    i += 0.01
+    i += 1
     j = 0
     while j < 100_000:
       j += 0.01
@@ -83,15 +77,9 @@ proc slow(id: int, n: float) {.cps:Cont.} =
 
   echo id, ": ", b
 
-proc ticker() {.cps:Cont.} =
-  while true:
-    echo "tick"
-    jield()
+for i in 1..32:
+  pool.work.addLast whelp slow(i, 4)
 
-for i in 1..100:
-  pool.work.addLast whelp slow(i, 100)
-
-pool.work.addLast whelp ticker()
 
 work(countProcessors())
 
