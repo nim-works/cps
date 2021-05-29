@@ -1,7 +1,6 @@
-import std/[macros, sequtils, algorithm]
-import cps/[spec, environment, hooks]
+import std/[macros, sequtils]
+import cps/[spec, environment, hooks, returns, defers, rewrites, help]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
-export cpsDebug
 
 #{.experimental: "strictNotNil".}
 
@@ -10,8 +9,7 @@ when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
 
 proc isCpsCall(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
-  assert not n.isNil
-  if len(n) > 0:
+  if n.len > 0:
     if n.kind in nnkCallKinds:
       let callee = n[0]
       if not callee.isNil and callee.kind == nnkSym:
@@ -19,83 +17,6 @@ proc isCpsCall(n: NimNode): bool =
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
         result = callee.getImpl.hasPragma("cpsMustJump")
-
-proc isVoodooCall(n: NimNode): bool =
-  ## true if this is a call to a voodoo procedure
-  if n != nil and len(n) > 0:
-    if n.kind in nnkCallKinds:
-      let callee = n[0]
-      if not callee.isNil and callee.kind == nnkSym:
-        result = callee.getImpl.hasPragma("cpsVoodooCall")
-
-proc firstReturn(p: NimNode): NimNode =
-  ## find the first control-flow return statement or cps control-flow within
-  ## statement lists, or nil
-  case p.kind
-  of nnkReturnStmt, nnkRaiseStmt:
-    result = p
-  of nnkTryStmt, nnkStmtList, nnkStmtListExpr:
-    for child in p.items:
-      result = child.firstReturn
-      if not result.isNil:
-        break
-  of nnkBlockStmt, nnkBlockExpr, nnkFinally:
-    result = p.last.firstReturn
-  elif p.isCpsPending or p.isCpsBreak or p.isCpsContinue:
-    result = p
-  else:
-    result = nil
-
-proc isNillish(n: NimNode): bool =
-  ## unwrap statement lists and see if the end in a literal nil
-  case n.kind
-  of nnkStmtList:
-    isNillish n.last
-  of nnkNilLit:
-    true
-  else:
-    false
-
-proc maybeReturnParent*(c: NimNode): NimNode =
-  ## the appropriate target of a `return` statement in a CPS procedure
-  ## (that would otherwise return continuation `c`) first performs a
-  ## runtime check to see if the parent should be returned instead.
-  let mom = newDotExpr(c, ident"mom")
-  result =                                  # return value is as follows:
-    nnkIfExpr.newTree [
-      nnkElifExpr.newTree [                 # if
-        newCall(bindSym"isNil", mom),       # we have no parent,
-        c                                   # the current continuation;
-      ],
-      nnkElseExpr.newTree [                 # else,
-        mom                                 # our parent continuation.
-      ],
-    ]
-
-proc makeReturn(n: NimNode): NimNode =
-  ## generate a `return` of the node if it doesn't already contain a return
-  assert not n.isNil, "we no longer permit nil nodes"
-  if n.firstReturn.isNil:
-    nnkReturnStmt.newNimNode(n).add:
-      if n.kind in nnkCallKinds:
-        n           # what we're saying here is, don't hook Coop on magics
-      else:
-        hook Coop:
-          n         # but we will hook Coop on child continuations
-  else:
-    n
-
-proc makeReturn(pre: NimNode; n: NimNode): NimNode =
-  ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
-  if not pre.firstReturn.isNil:
-    result.add:
-      n.errorAst "i want to know about this"
-  result = newStmtList pre
-  result.add:
-    if pre.firstReturn.isNil:
-      makeReturn n
-    else:
-      doc "omitted a return of " & repr(n)
 
 proc isCpsBlock(n: NimNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -114,42 +35,7 @@ proc isCpsBlock(n: NimNode): bool =
   else:
     return false
 
-proc cmpKind(a, b: NimNode): int =
-  if a.kind == b.kind:
-    if a.kind == nnkProcDef:
-      result = cmp(a.body.len, b.body.len)  # work around decl bug
-    else:
-      result = 0
-  elif a.kind == nnkProcDef:
-    result = 1
-  else:
-    result = -1
-
-proc lambdaLift(lifted: NimNode; n: NimNode): NimNode =
-  ## lift AST tagged with cpsLift pragma to top-level and omit the pragma
-
-  # pull the liftable procs out of the input; the result is, uh, `result`
-  proc liften(n: NimNode): NimNode =
-    if n.isLiftable:
-      lifted.add filter(n.stripPragma "cpsLift", liften)
-      result = newEmptyNode()
-  result = filter(n, liften)
-
-  # flatten the series of declarations
-  var flatter: seq[NimNode]
-  proc flatten(n: NimNode): NimNode {.nosinks.} =
-    if n.kind != nnkStmtList:
-      flatter.add n
-      result = newEmptyNode()
-  discard filter(lifted, flatten)
-
-  # sort the declarations so that we predeclare types and procs
-  sort(flatter, cmpKind)
-
-  # the result is the lifted stuff followed by the original code
-  result = newStmtList(flatter.newStmtList, result)
-
-proc saften(parent: var Env; n: NimNode): NimNode
+proc annotate(parent: var Env; n: NimNode): NimNode
 
 proc makeContProc(name, cont, source: NimNode): NimNode =
   ## creates a continuation proc from with `name` using continuation
@@ -179,75 +65,34 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   # let other macros know this is a continuation
   result.addPragma bindSym"cpsCont"
 
-proc tailCall(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
-  ## a tail call to `to` with `cont` as the continuation; if the `jump`
-  ## is supplied, return that call instead of the continuation itself
-  if to.isNillish and not jump.isNil:
-    return jump.errorAst "where do you think you're going?"
-  result = newStmtList:
-    newAssignment(newDotExpr(cont, ident"fn"), to)
-
-  # figure out what the return value will be...
-  var jump =
-    if jump.isNil:
-      if to.isNillish:             # continuation.fn appears to be nil,
-        maybeReturnParent cont     # we may be returning a parent here.
-      else:
-        cont                       # just return our continuation
-    else:
-      jump                         # return the jump target as requested
-  result = makeReturn(result, jump)
-
-proc jumperCall(cont: NimNode; to: NimNode; via: NimNode): NimNode =
-  ## Produce a tail call to `to` with `cont` as the continuation
-  ## The `via` argument is expected to be a cps jumper call.
-  assert not via.isNil
-  assert via.kind in nnkCallKinds
-
-  let jump = copyNimTree via
-  # we may need to insert an argument if the call is magical
-  if getImpl(jump[0]).hasPragma "cpsMagicCall":
-    jump.insert(1, cont)
-  # we need to desym the jumper; it is currently sem-ed to the
-  # variant that doesn't take a continuation.
-  jump[0] = desym jump[0]
-  result = tailCall(cont, to, jump)
-
 macro cpsJump(cont, call, n: typed): untyped =
   ## Rewrite `n` into a tail call via `call` where `cont` is the symbol of
   ## the continuation and `fn` is the identifier/symbol of the function
   ## field.
   ##
   ## All AST rewritten by cpsJump should end in a control-flow statement.
-  expectKind cont, nnkSym
-  expectKind call, nnkCallKinds
-
-  #debug("cpsJump", n, Original)
-
   let call = normalizingRewrites call
   let name = nskProc.genSym"afterCall"
-
-  result = newStmtList makeContProc(name, cont, n)
-  if getImpl(call[0]).hasPragma "cpsBootstrap":
-    let c = nskLet.genSym"c"
-    result.add:
-      # install the return point in the current continuation
-      newAssignment(newDotExpr(cont, ident"fn"), name)
-    result.add:
-      # instantiate a new child continuation with the given arguments
-      newLetStmt(c, newCall(ident"whelp", call))
-    result.add:
-      # FIXME: softcode mom?  see environment definition...
-      # assign our current continuation to the child's parent field
-      newAssignment(newDotExpr(c, ident"mom"), cont)
-    # return the child continuation
-    result = result.makeReturn c
-  else:
-    result.add:
-      jumperCall(cont, name, call)
-  result = workaroundRewrites result
-
-  #debug("cpsJump", result, Transformed, n)
+  debugAnnotation cpsJump, n:
+    it = newStmtList:
+      makeContProc(name, cont, it)
+    if getImpl(call[0]).hasPragma "cpsBootstrap":
+      let c = nskLet.genSym"c"
+      it.add:
+        # install the return point in the current continuation
+        newAssignment(newDotExpr(cont, ident"fn"), name)
+      it.add:
+        # instantiate a new child continuation with the given arguments
+        newLetStmt(c, newCall(ident"whelp", call))
+      it.add:
+        # FIXME: softcode mom?  see environment definition...
+        # assign our current continuation to the child's parent field
+        newAssignment(newDotExpr(c, ident"mom"), cont)
+      # return the child continuation
+      it = it.makeReturn c
+    else:
+      it.add:
+        jumperCall(cont, name, call)
 
 macro cpsJump(cont, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
@@ -259,46 +104,13 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ##
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` in `n`
   ## with tail calls to `after`.
-  expectKind cont, nnkSym
-
-  #debug("cpsMayJump", n, Original)
-  #debug("cpsMayJump", after, Original)
-
-  # make `n` safe to modify
-  var n = normalizingRewrites:
-    # we always wrap the input because there's no reason not to
-    newStmtList n
-
-  let
-    afterProc = makeContProc(genSym(nskProc, "done"), cont, after)
-    afterTail = tailCall(desym cont, afterProc.name)
-
-    # FIXME: fix this to use makeReturn
-
-    resolvedBody =
-      n.replace(isCpsPending):
-        afterTail
-
-  if resolvedBody.firstReturn.isNil:
-    resolvedBody.add afterTail
-
-  result = newStmtList()
-  result.add afterProc
-  result.add resolvedBody
-  result = workaroundRewrites result
-
-  #debug("cpsMayJump", result, Transformed, n)
-
-func matchCpsBreak(label: NimNode): Matcher =
-  ## create a matcher matching cpsBreak with the given label
-  ## and cpsBreak without any label
-  result =
-    proc (n: NimNode): bool =
-      if n.isCpsBreak:
-        let breakLabel = n.breakLabel
-        breakLabel.kind == nnkEmpty or breakLabel == label
-      else:
-        false
+  let name = nskProc.genSym"done"
+  let tail = tailCall(desym cont, name)
+  debugAnnotation cpsMayJump, n:
+    it = it.replace(isCpsPending, tail)
+    if it.firstReturn.isNil:
+      it.add tail
+    it = newStmtList [makeContProc(name, cont, after), it]
 
 proc restoreBreak(n: NimNode, label: NimNode = newEmptyNode()): NimNode =
   ## restore {.cpsBreak: label.} into break statements
@@ -329,20 +141,8 @@ macro cpsBlock(cont, label, n: typed): untyped =
   ##
   ## This macro evaluates `n` and replaces all `{.cpsBreak.}` in `n` with
   ## `{.cpsPending.}`.
-  expectKind cont, nnkSym
-  expectKind label, {nnkSym, nnkEmpty}
-
-  #debug("cpsBlock", n, Original)
-
-  # make `n` safe to modify
-  var n = normalizingRewrites:
-    # we always wrap the input because there's no reason not to
-    newStmtList n
-
-  result = n.replace(matchCpsBreak(label), newCpsPending())
-  result = workaroundRewrites result
-
-  #debug("cpsBlock", result, Transformed, n)
+  debugAnnotation cpsBlock, n:
+    it = it.replace(matchCpsBreak(label), newCpsPending())
 
 macro cpsBlock(cont, n: typed): untyped =
   ## A block statement tainted by a `cpsJump` and may require a jump to
@@ -358,38 +158,24 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` with a
   ## jump to the loop condition and `{.cpsBreak.}` with `{.cpsPending.}`
   ## to the next control-flow.
-  expectKind cont, nnkSym
-
-  #debug("cpsWhile", newTree(nnkWhileStmt, cond, n), Original, cond)
-
-  result = newStmtList()
-
-  let loopBody = newStmtList:
-    newIfStmt((cond, n)).add:
-      nnkElse.newTree:
-        newCpsBreak()
-
-  let
-    whileLoop = makeContProc(genSym(nskProc, "whileLoop"), cont, loopBody)
-    whileTail = tailCall(desym cont, whileLoop.name)
-
-  whileLoop.body = whileLoop.body.multiReplace(
-    (isCpsPending.Matcher, whileTail),
-    (isCpsContinue.Matcher, whileTail),
-    (matchCpsBreak(newEmptyNode()), newCpsPending())
-  )
-
-  result.add whileLoop
-  result.add whileTail
-  result = workaroundRewrites result
-
-  #debug("cpsWhile", result, Transformed, cond)
+  let name = nskProc.genSym"whileLoop"
+  let tail = tailCall(desym cont, name)
+  debugAnnotation cpsWhile, n:
+    var body =
+      newStmtList nnkIfStmt.newTree [
+        nnkElifBranch.newTree [cond, it],
+        nnkElse.newTree newCpsBreak(n)
+      ]
+    body = body.multiReplace(
+      (isCpsPending.Matcher, tail),
+      (isCpsContinue.Matcher, tail),
+      (matchCpsBreak(newEmptyNode()), newCpsPending())
+    )
+    it = newStmtList [makeContProc(name, cont, body), tail]
 
 proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
-  ## Rewrite the exception branch `n` to use `ex` as the "current" exception
-  ## and move its body into a continuation
-  doAssert n.kind == nnkExceptBranch
-
+  ## Rewrite the exception branch `n` to use `ex` as the "current"
+  ## exception and move its body into a continuation
   result.excpt = copyNimNode n
 
   var body = newStmtList(n.last)
@@ -465,11 +251,6 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## Only rewrite try with except branches.
   {.warning: "compiler workaround here".}
   let cont = cont
-
-  expectKind cont, nnkSym
-  expectKind ex, nnkDotExpr
-  expectKind n, nnkTryStmt
-
   result = newStmtList()
 
   var
@@ -522,11 +303,19 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
   ## may require a jump to enter finally.
   ##
   ## Only rewrite try with finally.
-  result = newStmtList()
-  result.add errorAst("try with finally with splitting is not supported", n)
+  result = newStmtList:
+    n.errorAst "try with finally with splitting is not supported"
 
-proc saften(parent: var Env; n: NimNode): NimNode =
-  ## transform `input` into a mutually-recursive cps convertible form
+func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
+  result = newCall bindSym(a)
+  result.copyLineInfo n
+  result.add env.first
+
+proc annotate(parent: var Env; n: NimNode): NimNode =
+  ## annotate `input` or otherwise prepare it for conversion into a
+  ## mutually-recursive cps convertible form; the `parent` environment
+  ## may be mutated as a side-effect, otherwise a new environment will be
+  ## created which points to this parent.
 
   # the accumulated environment
   var env =
@@ -540,7 +329,7 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
   # the result is a copy of the current node
   result = copyNimNode n
-  result.doc "saften at " & n.lineAndFile
+  result.doc "annotate at " & n.lineAndFile
 
   # we're going to iterate over the (non-comment) children
   for i, nc in n.pairs:
@@ -550,12 +339,11 @@ proc saften(parent: var Env; n: NimNode): NimNode =
 
     # if it's a cps call,
     if nc.isCpsCall:
-      let jumpCall = newCall(bindSym"cpsJump", env.first)
-      jumpCall.add:
-        env.saften nc
+      let jumpCall = env.newAnnotation(nc, "cpsJump")
+      jumpCall.add env.annotate(nc)
       if i < n.len - 1:
         jumpCall.add:
-          env.saften newStmtList(n[i + 1 .. ^1])
+          env.annotate newStmtList(n[i + 1 .. ^1])
       result.add jumpCall
       return
 
@@ -573,11 +361,11 @@ proc saften(parent: var Env; n: NimNode): NimNode =
           discard
         else:
           # control-flow will end here with a MayJump annotation
-          let jumpCall = newCall(bindSym"cpsMayJump", env.first)
+          let jumpCall = env.newAnnotation(nc, "cpsMayJump")
           jumpCall.add:
-            env.saften newStmtList(nc)               # this child node
+            env.annotate newStmtList(nc)           # this child node
           jumpCall.add:
-            env.saften newStmtList(n[i + 1 .. ^1])   # subsequent siblings
+            env.annotate newStmtList(n[i+1..^1])   # subsequent siblings
           result.add jumpCall
           return
 
@@ -610,193 +398,136 @@ proc saften(parent: var Env; n: NimNode): NimNode =
         result.add:
           errorAst("for loop with a cps call inside is not supported", nc)
       else:
-        var transformed = env.saften(nc)
         # this is not a cps block, so all the break and continue
         # statements should be preserved
-        transformed = restoreBreak transformed
-        transformed = restoreContinue transformed
-        result.add transformed
+        result.add:
+          restoreContinue:
+            restoreBreak:
+              env.annotate nc
 
     of nnkContinueStmt:
-      result.add newCpsContinue()
-      result[^1].copyLineInfo nc
+      result.add newCpsContinue(nc)
 
     of nnkBreakStmt:
-      result.add newCpsBreak(nc.breakLabel)
-      result[^1].copyLineInfo(nc)
+      result.add newCpsBreak(nc, nc.breakLabel)
 
     of nnkBlockStmt:
       if nc.isCpsBlock:
-        let jumpCall = newCall(bindSym"cpsBlock")
-        jumpCall.copyLineInfo nc
-        jumpCall.add env.first
+        let jumpCall = env.newAnnotation(nc, "cpsBlock")
         if nc[0].kind != nnkEmpty:
           # add label if it exists
           jumpCall.add nc[0]
         jumpCall.add:
-          env.saften newStmtList(nc[1])
+          env.annotate newStmtList(nc[1])
         result.add jumpCall
         return
       else:
-        var transformed = env.saften(nc)
         # this is not a cps block, so all the break
         # statements should be preserved
+        var transformed = env.annotate(nc)
         transformed = transformed.restoreBreak(nc[0])
         result.add transformed
 
     of nnkWhileStmt:
       if nc.isCpsBlock:
-        let jumpCall = newCall(bindSym"cpsWhile")
-        jumpCall.copyLineInfo nc
-        jumpCall.add env.first
-        # add condition
-        jumpCall.add:
-          env.saften nc[0]
-        # add body
-        jumpCall.add:
-          env.saften newStmtList(nc[1])
+        let jumpCall = env.newAnnotation(nc, "cpsWhile")
+        jumpCall.add env.annotate nc[0]                 # add condition
+        jumpCall.add env.annotate newStmtList(nc[1])    # add body
         result.add jumpCall
         return
       else:
         # this is not a cps block, so all the break and
         # continue statements should be preserved
-        var transformed = env.saften(nc)
-        transformed = restoreBreak transformed
-        transformed = restoreContinue transformed
-        result.add transformed
+        result.add:
+          restoreContinue:
+            restoreBreak:
+              env.annotate nc
 
     of nnkTryStmt:
       if nc.isCpsBlock:
         let final = nc.findChild(it.kind == nnkFinally)
-        if final.isNil:
-          let jumpCall = newCall(bindSym"cpsTryExcept")
-          # add continuation sym
-          jumpCall.add env.first
-          # add exception access
-          jumpCall.add env.getException()
-          # add body
+        var jumpCall: NimNode
+        if final.isNil:                    # no finally!
+          jumpCall = env.newAnnotation(nc, "cpsTryExcept")
+          jumpCall.add env.getException()  # exception access
           jumpCall.add:
-            newStmtList env.saften(nc)
-          result.add jumpCall
+            newStmtList env.annotate(nc)   # try body
         else:
-          let jumpCall = newCall(bindSym"cpsTryFinally")
-          jumpCall.add env.first
-          # add exception access
-          jumpCall.add env.getException()
-          if not nc.findChild(it.kind == nnkExceptBranch).isNil:
-            # create a copy of `nc` without finally
-            let newTry = copyNimNode nc
-            newTry.add nc[0 .. ^2]
-
-            # wrap the try-finally outside of `nc`
-            let tryFinally = copyNimNode nc
-            tryFinally.add newStmtList(newTry)
-            tryFinally.add final
-
-            # add try-finally
-            jumpCall.add:
-              newStmtList env.saften(tryFinally)
-          else:
-            # add try-finally
-            jumpCall.add:
-              newStmtList env.saften(nc)
-
-          result.add jumpCall
-
+          let body =
+            if nc.findChild(it.kind == nnkExceptBranch).isNil:
+              nc                           # no exception branch!
+            else:
+              wrappedFinally(nc, final)    # try/try-except/finally
+          jumpCall = env.newAnnotation(nc, "cpsTryFinally")
+          jumpCall.add env.getException()  # exception access
+          jumpCall.add:
+            newStmtList env.annotate(body) # try body
+        result.add jumpCall
         return
       else:
         # try statement with no cps complications
-        result.add env.saften(nc)
+        result.add env.annotate(nc)
 
     # not a statement cps is interested in
     else:
-      result.add env.saften(nc)
-
-proc replacePending(n, replacement: NimNode): NimNode =
-  ## Replace cpsPending annotations with something else, usually
-  ## a jump to an another location. If `replacement` is nil, remove
-  ## the annotation.
-  proc resolved(n: NimNode): NimNode =
-    if n.isCpsPending:
-      if replacement.isNil:
-        result = newEmptyNode()
-      else:
-        result = copyNimTree replacement
-
-  result = filter(n, resolved)
-
-proc danglingCheck(n: NimNode): NimNode =
-  ## look for un-rewritten control-flow then replace them with errors
-  proc dangle(n: NimNode): NimNode =
-    if n.kind == nnkPragma and n.len == 1 and
-      (n.hasPragma("cpsContinue") or n.hasPragma("cpsBreak") or n.hasPragma("cpsPending")):
-      errorAst(n, "cps error: un-rewritten cps control-flow")
-    else: n
-
-  filter(n, dangle)
+      result.add env.annotate(nc)
 
 macro cpsResolver(T: typed, n: typed): untyped =
   ## resolve any left over cps control-flow annotations
   ##
   ## this is not needed, but it's here so we can change this to
   ## a sanity check pass later.
-  expectKind n, nnkProcDef
-  #debug(".cpsResolver.", n, Original)
+  proc danglingCheck(n: NimNode): NimNode =
+    ## look for un-rewritten control-flow then replace them with errors
+    proc dangle(n: NimNode): NimNode =
+      if n.kind == nnkPragma and n.len == 1 and
+        (n.hasPragma"cpsContinue" or
+         n.hasPragma"cpsBreak" or
+         n.hasPragma"cpsPending"):
+        errorAst(n, "cps error: un-rewritten cps control-flow")
+      else: n
+    filter(n, dangle)
+
+  proc replacePending(n, replacement: NimNode): NimNode =
+    ## Replace cpsPending annotations with something else, usually
+    ## a jump to an another location. If `replacement` is nil, remove
+    ## the annotation.
+    proc resolved(n: NimNode): NimNode =
+      if n.isCpsPending:
+        result =
+          if replacement.isNil:
+            newEmptyNode()
+          else:
+            copyNimTree replacement
+    result = filter(n, resolved)
 
   # grabbing the first argument to the proc as an identifier
   let cont = desym n.params[1][0]
 
-  # make `n` safe for modification
-  let n = normalizingRewrites n
-  # replace all `pending` with the end of continuation
-  result = replacePending n:
-    tailCall cont:
-      Dealloc.hook(T, cont)
-  result = danglingCheck result
-  result = workaroundRewrites result
-
-  #debug(".cpsResolver.", result, Transformed, n)
-
-proc xfrmFloat(n: NimNode): NimNode =
-  var floats = newStmtList()
-
-  proc float(n: NimNode): NimNode =
-    if not n.isNil and n.hasPragma("cpsLift"):
-      var n = n.stripPragma("cpsLift")
-      floats.add:
-        xfrmFloat n
-      result = newEmptyNode()
-
-  let cleaned = filter(n, float)
-  result = floats
-  result.add cleaned
+  debugAnnotation cpsResolver, n:
+    # replace all `pending` with the end of continuation
+    it = replacePending it:
+      tailCall cont:
+        Dealloc.hook(T, cont)
+    it = danglingCheck it
 
 macro cpsFloater(n: typed): untyped =
   ## float all `{.cpsLift.}` to top-level
-  expectKind n, nnkProcDef
-  #debug(".cpsFloater.", n, Original)
+  proc floater(n: NimNode): NimNode =
+    var floated = newStmtList()
+    proc float(n: NimNode): NimNode =
+      if not n.isNil and n.hasPragma("cpsLift"):
+        var n = n.stripPragma("cpsLift")
+        floated.add:
+          floater n
+        result = newEmptyNode()
+    result = newStmtList [floated, filter(n, float)]
 
-  var n = copyNimTree n
-  result = xfrmFloat n
+  result = floater:
+    copyNimTree n
 
-  #debug(".cpsFloater.", result, Transformed, n)
-
-proc rewriteVoodoo(n: NimNode, env: Env): NimNode =
-  ## Rewrite non-yielding cpsCall calls by inserting the continuation as
-  ## the first argument
-  proc aux(n: NimNode): NimNode =
-    if n.isVoodooCall:
-      result = n.copyNimTree
-      result[0] = desym result[0]
-      result.insert(1, env.first)
-  n.filter(aux)
-
-proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
+proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
-  n.expectKind nnkProcdef
-
-  # enhanced spam before it all goes to shit
-  debug(".cps.", n, Original)
 
   # make the AST easier for us to consume
   var n = normalizingRewrites n
@@ -860,10 +591,10 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   n.body = rewriteDefer n.body
 
   # rewrite non-yielding cps calls
-  n.body = rewriteVoodoo(n.body, env)
+  n.body = env.rewriteVoodoo n.body
 
-  # ensaftening the proc's body
-  n.body = env.saften(n.body)
+  # annotate the proc's body
+  n.body = env.annotate n.body
 
   # run other stages
   n.addPragma bindSym"cpsFloater"
@@ -872,12 +603,6 @@ proc cpsXfrmProc*(T: NimNode, n: NimNode): NimNode =
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
-  # lifting the generated proc bodies
-  result = lambdaLift(types, n)
-
-  # adding in the whelp and bootstrap
-  result.add whelp
-  result.add booty
-
-  # spamming the developers
-  debug(".cps.", result, Transformed)
+  # generated proc bodies, remaining proc, whelp, bootstrap
+  result = newStmtList(types, n, whelp, booty)
+  result = workaroundRewrites result

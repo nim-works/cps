@@ -1,8 +1,7 @@
 import std/[macros]
-import cps/[spec, xfrm]
+import cps/[spec, transform, rewrites]
 export Continuation, ContinuationProc
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
-export cpsDebug
 
 type
   State* {.pure.} = enum
@@ -44,8 +43,7 @@ macro cps*(T: typed, n: typed): untyped =
   when defined(nimdoc):
     result = n
   else:
-    result = cpsXfrmProc(T, n)
-    result = workaroundRewrites(result)
+    result = cpsTransformProc(T, n)
 
 macro cpsMagic*(n: untyped): untyped =
   ## Upgrades a procedure to serve as a CPS primitive, generating
