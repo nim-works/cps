@@ -45,19 +45,19 @@ jobs:
           path: nim
           version: ${{ matrix.nim }}
 
-      - name: Run tests
-        shell: bash
-        run: |
-          cd cps
-          nimble --accept develop
-          nimble test
-
       - name: Run examples
         shell: bash
         run: |
           cd cps/examples
           # iirc this won't work on windows, but...  we don't test windows.
           balls
+
+      - name: Run tests
+        shell: bash
+        run: |
+          cd cps
+          nimble --accept develop
+          nimble test
 
       - name: Build docs
         if: ${{ matrix.docs }} == 'true'
