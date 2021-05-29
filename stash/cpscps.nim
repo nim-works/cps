@@ -34,15 +34,31 @@ proc run(pool: Pool) =
 ###########################################################################
 # Main code
 ###########################################################################
+
+proc deeper() {.cps:Work.} =
+  # "not so deep youre hurting me"
+  echo "deeper() in"
+  jield()
+  echo "deeper() out"
   
 proc foo() {.cps:Work.} =
   echo "foo() in"
+  echo "foo() yield()"
   jield()
+  echo "foo() yield done()"
+  echo "foo() calls deeper()"
+  deeper()
+  echo "foo() returned from deeper()"
   echo "foo() out"
   
 proc bar() {.cps:Work.} =
   echo "bar() in"
+  echo "bar() yield"
+  jield()
+  echo "bar() yield done"
+  echo "bar() calls foo()"
   foo()
+  echo "bar() returned from foo()"
   echo "bar() out"
 
 
