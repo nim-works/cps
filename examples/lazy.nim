@@ -60,7 +60,6 @@ proc filter(fn: proc(x: int): bool) {.stream.} =
     if not sIn.running: break
     if fn(v):
       jield(v)
-    discard   # <- take this out to break code
 
 proc print() {.stream.} =
   let sIn = getSin()
