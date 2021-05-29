@@ -13,6 +13,7 @@ type
 
   Pool = ref object
     workQueue: Deque[Work]
+    yields: int
 
 proc push(pool: Pool, c: Work) =
   if c.running:
@@ -20,12 +21,14 @@ proc push(pool: Pool, c: Work) =
     pool.workQueue.addLast(c)
 
 proc jield(c: Work): Work {.cpsMagic.} =
-  echo "jield"
+  inc c.pool.yields
   c.pool.push c
 
 proc run(pool: Pool) =
   while pool.workQueue.len > 0:
     var c = pool.workQueue.popFirst
+    # During trampolining we need to make sure the continuation always has
+    # a proper pointer to the pool, due to momification
     while c.running:
       c.pool = pool
       c = c.fn(c)
@@ -35,29 +38,37 @@ proc run(pool: Pool) =
 # Main code
 ###########################################################################
 
-proc deeper() {.cps:Work.} =
-  # "not so deep youre hurting me"
-  echo "deeper() in"
+var total: int
+
+proc deeper(b: ref int) {.cps:Work.} =
+  echo "  deeper() in, b: ", b[]
   jield()
-  echo "deeper() out"
+  inc total, b[]
+  echo "  deeper() out"
   
-proc foo() {.cps:Work.} =
-  echo "foo() in"
-  echo "foo() yield()"
+proc foo(a: int) {.cps:Work.} =
+  echo " foo() in a: ", a
+  echo " foo() yield()"
   jield()
-  echo "foo() yield done()"
-  echo "foo() calls deeper()"
-  deeper()
-  echo "foo() returned from deeper()"
-  echo "foo() out"
+  echo " foo() yield done()"
+  echo " foo() calls deeper()"
+  # CPS does not support var parameters yet. We can box an int tho
+  var b = new int;
+  b[] = a * 2
+  deeper(b)
+  echo " foo() returned from deeper(), b: ", b[]
+  echo " foo() out"
   
 proc bar() {.cps:Work.} =
   echo "bar() in"
   echo "bar() yield"
   jield()
   echo "bar() yield done"
-  echo "bar() calls foo()"
-  foo()
+  echo "bar() calls foo(1)"
+  foo(1)
+  echo "bar() returned from foo()"
+  echo "bar() calls foo(2)"
+  foo(2)
   echo "bar() returned from foo()"
   echo "bar() out"
 
@@ -66,3 +77,7 @@ var pool = Pool()
 pool.push whelp bar()
 pool.run()
 
+echo pool.yields
+doAssert pool.yields == 5
+echo total
+doAssert total == 6
