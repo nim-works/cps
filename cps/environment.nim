@@ -331,16 +331,16 @@ iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
       echo $kind, "\t", repr(defs)
     yield e.initialization(kind, field, value)
 
-proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
-  ## get a field from the env using a local symbol as input
-  for field, sym in e.locals.pairs:
-    if sym == n:
-      result = field
-      break
-  if result.isNil:
-    result = n.errorAst "unable to find field for symbol " & n.repr
-
 when false:
+  proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
+    ## get a field from the env using a local symbol as input
+    for field, defs in e.allPairs:
+      if defs[0] == n:
+        result = field
+        break
+    if result.isNil:
+      result = n.errorAst "unable to find field for symbol " & n.repr
+
   proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
     {.deprecated: "not used yet".} =
     case n.kind
