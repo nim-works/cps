@@ -41,6 +41,6 @@ proc foo() {.cps:C.} =
 
 var x = 0
 var c = whelp foo()
-while c.running and x < 1000:
+while c.running and x < 100:
   c = c.fn(c)
   inc x
