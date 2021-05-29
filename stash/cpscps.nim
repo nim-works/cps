@@ -8,6 +8,7 @@ import cps, deques
 type
   Work = ref object of RootObj
     fn*: proc(c: Work): Work {.nimcall.}
+    mom: Work
     pool: Pool
 
   Pool = ref object
@@ -25,7 +26,9 @@ proc jield(c: Work): Work {.cpsMagic.} =
 proc run(pool: Pool) =
   while pool.workQueue.len > 0:
     var c = pool.workQueue.popFirst
-    c = c.fn(c)
+    while c.running:
+      c.pool = pool
+      c = c.fn(c)
     pool.push c
 
 ###########################################################################
@@ -44,6 +47,6 @@ proc bar() {.cps:Work.} =
 
 
 var pool = Pool()
-pool.push bar()
+pool.push whelp bar()
 pool.run()
 
