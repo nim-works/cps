@@ -14,6 +14,7 @@ import cps, math, std/locks, deques, cpuinfo
 
 type Cont = ref object of RootObj
   fn*: proc(c: Cont): Cont {.nimcall.}
+  mom: Cont
 
 
 type Pool = ref object
@@ -26,35 +27,36 @@ proc newPool(): Pool =
 
 
 var pool = newPool()
+  
+proc doWork(pool: Pool) {.thread.} =
 
-proc work(nThreads: int) =
+  while true:
 
-  proc aux(pool: Pool) {.thread.} =
-
-    while true:
-
-      var c: Cont
-
-      pool.lock.acquire
-      if pool.work.len == 0:
-        echo "Deque empty"
-        return
-      c = pool.work.popFirst
+    pool.lock.acquire
+    if pool.work.len == 0:
+      echo "Deque empty"
       pool.lock.release
+      return
 
-      if c == nil:
-        break
+    var c = pool.work.popFirst
+    pool.lock.release
 
+    if c == nil:
+      break
+
+    while c.running:
       c = c.fn(c)
 
-      if c != nil:
-        pool.lock.acquire
-        pool.work.addLast c
-        pool.lock.release
+    if c != nil:
+      pool.lock.acquire
+      pool.work.addLast c
+      pool.lock.release
 
+
+proc work(nThreads: int) =
   var threads = newSeq[Thread[Pool]](nThreads)
   for i in 0..<nThreads:
-    createThread(threads[i], aux, pool)
+    createThread(threads[i], doWork, pool)
   joinThreads(threads)
 
 
@@ -74,7 +76,7 @@ proc slow(id: int, n: float) {.cps:Cont.} =
   while i < n:
     i += 0.01
     j = 0
-    while j < 100:
+    while j < 100_000:
       j += 0.01
       b += sin(i) + cos(j)
     jield()
@@ -83,13 +85,13 @@ proc slow(id: int, n: float) {.cps:Cont.} =
 
 proc ticker() {.cps:Cont.} =
   while true:
-    echo readFile("/proc/self/stat")
+    echo "tick"
     jield()
 
-for i in 1..1_000_000:
-  pool.work.addLast slow(i, 100)
+for i in 1..100:
+  pool.work.addLast whelp slow(i, 100)
 
-pool.work.addLast ticker()
+pool.work.addLast whelp ticker()
 
 work(countProcessors())
 
