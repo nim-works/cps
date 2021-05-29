@@ -45,6 +45,15 @@ jobs:
           path: nim
           version: ${{ matrix.nim }}
 
+      - name: Run examples
+        shell: bash
+        run: |
+          cd cps
+          nimble --accept develop
+          cd examples
+          # iirc this won't work on windows, but...  we don't test windows.
+          balls
+
       - name: Run tests
         shell: bash
         run: |
