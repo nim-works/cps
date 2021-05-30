@@ -1,5 +1,6 @@
 import std/[macros, sequtils]
-import cps/[spec, environment, hooks, returns, defers, rewrites, help]
+import cps/[spec, environment, hooks, returns, defers, rewrites, help,
+            normalizedast]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
 
 #{.experimental: "strictNotNil".}
@@ -533,7 +534,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # make the AST easier for us to consume
-  var n = normalizingRewrites n
+  var n = normalizeProcDef n
   # establish a new environment with the supplied continuation type;
   # accumulates byproducts of cps in the types statement list
   var types = newStmtList()
@@ -552,7 +553,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   let name = genSym(nskProc, $n.name)
 
   # we can't mutate typed nodes, so copy ourselves
-  n = cloneProc n
+  n = n.clone
 
   # the whelp is a limited bootstrap that merely makes
   # the continuation without invoking it in a trampoline
