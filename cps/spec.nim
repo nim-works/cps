@@ -9,7 +9,7 @@ import std/[hashes, sequtils, macros]
 when (NimMajor, NimMinor) < (1, 5):
   {.fatal: "requires nim-1.5".}
 
-import cps/[rewrites, help]
+import cps/[rewrites, help, normalizedast]
 export errorAst, desym, isEmpty, genField
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
@@ -181,18 +181,10 @@ proc getContSym*(n: NimNode): NimNode =
   else:
     nil
 
-proc cloneProc*(n: NimNode, body: NimNode = nil): NimNode =
+proc cloneProc*(n: NimNode, body: NimNode = nil): NimNode {.deprecated.} =
   ## create a copy of a typed proc which satisfies the compiler
   assert n.kind == nnkProcDef
-  result = nnkProcDef.newTree(
-    ident(repr n.name),           # repr to handle gensymbols
-    newEmptyNode(),
-    newEmptyNode(),
-    copy n.params,                # parameter normalization will mutate these
-    newEmptyNode(),
-    newEmptyNode(),
-    if body == nil: copy n.body else: body)
-  result.copyLineInfo n
+  cProcDefToNimNode(clone(n.ProcDef, body))
 
 proc isScopeExit*(n: NimNode): bool =
   ## Return whether the given node signify a scope exit
