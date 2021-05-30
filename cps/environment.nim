@@ -87,7 +87,7 @@ proc init(e: var Env) =
   if e.mom.isNil:
     e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
-  if not e.rs.hasType:
+  if e.rs.hasType:
     e = e.set(e.rs.name, newVarSection e.rs)
 
 proc definedName(n: NimNode): NimNode =
@@ -231,7 +231,7 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
 
 proc set(e: var Env; key: NimNode; val: VarSection): Env =
   # TODO: remove NimNode
-  set(e, key, val.NimNode)
+  set(e, key, cVarSectionToNimNode(val))
 
 iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ## add `a, b, c: type = default` to the env;
@@ -475,8 +475,7 @@ proc getException*(e: var Env): NimNode =
   if e.ex.isNil:
     e.ex = genField"ex"
     e = e.set e.ex:
-      nnkVarSection.newTree:
-        newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+      newVarSection(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
   result = newDotExpr(e.castToChild(e.first), e.ex)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
@@ -502,8 +501,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   let c = nskVar.genSym"c"
   result.body.add:
     # declare `var c: Cont`
-    nnkVarSection.newTree:
-      newIdentDefs(c, env.root)
+    cVarSectionToNimNode(newVarSection(c, env.root))
 
   # create the continuation using the new variable and point it at the proc
   result.body.add:
@@ -522,7 +520,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"
   # if the bootstrap has a return type,
-  elif not env.rs.hasType:
+  elif env.rs.hasType:
     result.body.add:
       # then at runtime, issue an if statement to
       nnkIfExpr.newTree:

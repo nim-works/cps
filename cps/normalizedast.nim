@@ -39,22 +39,33 @@ proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
 
 # fn-IdentDefs
 
+nimNodeConverter(IdentDefs)
+
 proc newIdentDefs*(n: string, info: NimNode, val = newEmptyNode()): IdentDefs =
   newIdentDefs(ident(n), info, val).IdentDefs
 
 func name*(n: IdentDefs): NimNode =
-  n.NimNode[0]
+  n[0]
 
 func typ*(n: IdentDefs): NimNode =
-  n.NimNode[1]
+  n[1]
 
 func hasType*(n: IdentDefs): bool =
-  n.typ.kind == nnkEmpty
+  n.typ.kind != nnkEmpty
+
+func hasNoType*(n: IdentDefs): bool =
+  not n.hasType
 
 # fn-VarSection
 
+nimNodeConverter(VarSection)
+
 proc newVarSection*(i: IdentDefs): VarSection =
-  (nnkVarSection.newTree i.NimNode).VarSection
+  (nnkVarSection.newTree i).VarSection
+
+proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
+  ## create a var section with an identdef, eg: `n`: `typ` = `val`
+  newVarSection(newIdentDefs(n, typ, val).IdentDefs)
 
 # fn-ProcDef
 
@@ -68,6 +79,8 @@ func `returnParam=`*(n: ProcDef, ret: NimNode) =
   ## set the return param
   ## XXX: remove normalizingRewrites once this is typed
   n.params[0] = normalizingRewrites ret
+
+func `name=`*(n: ProcDef, name: NimNode) {.borrow.}
 
 proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
