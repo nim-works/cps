@@ -40,17 +40,23 @@ proc `=destroy`(k: var Killer) =
 proc newKiller(x = 1): Killer =
   Killer(n: 1, x: x + 1)
 
+template step(i: int) {.dirty.} =
+  check k.n == i, "out-of-order"
+  inc k.n
+  k.x = max(i, k.x)
+
 suite "breaking deterministic memory managers":
   block:
     ## try-except-statement splits
     proc foo() {.cps: Cont.} =
-      var k = newKiller(2)
-      inc k.n
+      var k = newKiller(3)
+      step 1
       try:
         noop()
-        inc k.n
+        step 2
       except:
         fail "this branch should not run"
+      step 3
 
     foo()
 
@@ -58,28 +64,29 @@ suite "breaking deterministic memory managers":
     ## try-except splits with raise
     proc foo() {.cps: Cont.} =
       var k = newKiller(4)
-      inc k.n
+      step 1
       try:
         noop()
-        inc k.n
+        step 2
         raise newException(CatchableError, "")
         fail "statement run after raise"
       except:
-        inc k.n
-      inc k.n
+        step 3
+      step 4
 
     foo()
 
   block:
     ## try-finally-statement splits
     proc foo() {.cps: Cont.} =
-      var k = newKiller(3)
-      inc k.n
+      var k = newKiller(4)
+      step 1
       try:
         noop()
-        inc k.n
+        step 2
       finally:
-        inc k.n
+        step 3
+      step 4
 
     foo()
 
@@ -87,16 +94,16 @@ suite "breaking deterministic memory managers":
     ## try-except-finally splits with raise
     proc foo() {.cps: Cont.} =
       var k = newKiller(5)
-      inc k.n
+      step 1
       try:
         noop()
-        inc k.n
+        step 2
         raise newException(CatchableError, "")
         fail "statement run after raise"
       except:
-        inc k.n
+        step 3
       finally:
-        inc k.n
-      inc k.n
+        step 4
+      step 5
 
     foo()
