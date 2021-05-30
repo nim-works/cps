@@ -9,6 +9,7 @@ type
   InfiniteLoop = CatchableError
   Cont* = ref object of RootObj
     fn*: proc(c: Cont): Cont {.nimcall.}
+    mom: Cont
 
 var jumps: int
 
@@ -51,7 +52,7 @@ suite "breaking deterministic memory managers":
       except:
         fail "this branch should not run"
 
-    trampoline foo()
+    foo()
 
   block:
     ## try-except splits with raise
@@ -67,7 +68,7 @@ suite "breaking deterministic memory managers":
         inc k.n
       inc k.n
 
-    trampoline foo()
+    foo()
 
   block:
     ## try-finally-statement splits
@@ -80,7 +81,7 @@ suite "breaking deterministic memory managers":
       finally:
         inc k.n
 
-    trampoline foo()
+    foo()
 
   block:
     ## try-except-finally splits with raise
@@ -98,4 +99,4 @@ suite "breaking deterministic memory managers":
         inc k.n
       inc k.n
 
-    trampoline foo()
+    foo()
