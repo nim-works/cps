@@ -188,7 +188,7 @@ proc cloneProc*(n: NimNode, body: NimNode = nil): NimNode =
     ident(repr n.name),           # repr to handle gensymbols
     newEmptyNode(),
     newEmptyNode(),
-    n.params,
+    copy n.params,                # parameter normalization will mutate these
     newEmptyNode(),
     newEmptyNode(),
     if body == nil: copy n.body else: body)

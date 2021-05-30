@@ -216,27 +216,27 @@ suite "tasteful tests":
 
   block:
     ## reassignment of mutable var proc params
-    skip"pending issue #47"
-    r = 0
-    proc foo(a, b, c: var int) {.cps: Cont.} =
-      inc r
-      a = 5
-      noop()
-      inc r
-      b = b + a
-      noop()
-      inc r
+    skip"pending issue #47":
+      r = 0
+      proc foo(a, b, c: var int) {.cps: Cont.} =
+        inc r
+        a = 5
+        noop()
+        inc r
+        b = b + a
+        noop()
+        inc r
+        check "var param assignment":
+          a == 5
+          b == 7
+          c == 3
+      var (x, y, z) = (1, 2, 3)
+      foo(x, y, z)
       check "var param assignment":
-        a == 5
-        b == 7
-        c == 3
-    var (x, y, z) = (1, 2, 3)
-    foo(x, y, z)
-    check "var param assignment":
-      x == 5
-      y == 7
-      z == 3
-    check r == 3
+        x == 5
+        y == 7
+        z == 3
+      check r == 3
 
   block:
     ## a block statement with a break under an if

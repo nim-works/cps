@@ -100,21 +100,11 @@ proc normalizingRewrites*(n: NimNode): NimNode =
                 child
           of nnkIdentDefs:
             # a new section with a single rewritten identdefs within
-            # result.add:
-            #   newNimNode(n.kind, n).add:
-            #     rewriteIdentDefs child
-            let
-              defs = rewriteIdentDefs(child)
-              definesMany = defs.len > 3
-            if definesMany:
-              for d in defs[0 .. ^3]: # last two nodes are type and rhs
-                result.add:
-                  newNimNode(n.kind, n).add:
-                    newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
-            else:
+            let defs = rewriteIdentDefs(child)
+            for d in defs[0 .. ^3].items: # last two nodes are type and rhs
               result.add:
                 newNimNode(n.kind, n).add:
-                  defs
+                  newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
           else:
             result.add:
               child.errorAst "unexpected"
@@ -168,30 +158,19 @@ proc normalizingRewrites*(n: NimNode): NimNode =
 
     proc rewriteFormalParams(n: NimNode): NimNode =
       ## make formal params such as `foo(a, b: int)` into `foo(a: int, b: int)`
-      echo "before ", treeRepr n
       case n.kind
       of nnkFormalParams:
         result = nnkFormalParams.newNimNode(n)
         result.add:
-          copyNimNode(n[0]) # return value
+          normalizingRewrites n[0] # return value
         for arg in n[1 .. ^1]:
           case arg.kind
           of nnkIdentDefs:
             # if there is more than one param defined, then break them up
-            let
-              defs = rewriteIdentDefs(arg)
-              definesMany = defs.len > 3
-            if definesMany:
-              for d in defs[0 .. ^3]: # last two nodes are type and rhs
-                result.add:
-                  newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
-            else:
+            let defs = rewriteIdentDefs arg
+            for d in defs[0 .. ^3].items: # last two nodes are type and rhs
               result.add:
-                defs
-          of nnkEmpty:
-            result.add:
-              arg.errorAst "unexpected"
-            echo "empty ", treeRepr n
+                newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
           else:
             result.add:
               # sometimes we have symbols, they get desymed elsewhere
@@ -199,8 +178,6 @@ proc normalizingRewrites*(n: NimNode): NimNode =
             echo "else ", treeRepr n
       else:
         discard
-      echo "after ", treeRepr result
-      return result
 
     proc rewriteHidden(n: NimNode): NimNode =
       ## Unwrap hidden conversion nodes
@@ -255,8 +232,8 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       rewriteConv n
     of nnkReturnStmt:
       rewriteReturn n
-    # of nnkFormalParams:
-    #   rewriteFormalParams n
+    of nnkFormalParams:
+      rewriteFormalParams n
     of CallNodes:
       rewriteHidden n
     else:
