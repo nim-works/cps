@@ -77,9 +77,9 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       if n.kind == nnkIdentDefs:
         if n.len == 2:
           n.add newEmptyNode()
-        elif n[1].isEmpty:          # add explicit type symbol
-          n[1] = getTypeInst n[2]
-        n[2] = normalizingRewrites n[2]
+        elif n[^2].isEmpty:          # add explicit type symbol
+          n[^2] = getTypeInst n[^1]
+        n[^1] = normalizingRewrites n[^1]
         result = n
 
     proc rewriteVarLet(n: NimNode): NimNode =
@@ -100,9 +100,11 @@ proc normalizingRewrites*(n: NimNode): NimNode =
                 child
           of nnkIdentDefs:
             # a new section with a single rewritten identdefs within
-            result.add:
-              newNimNode(n.kind, n).add:
-                rewriteIdentDefs child
+            let defs = rewriteIdentDefs(child)
+            for d in defs[0 .. ^3].items: # last two nodes are type and rhs
+              result.add:
+                newNimNode(n.kind, n).add:
+                  newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
           else:
             result.add:
               child.errorAst "unexpected"
@@ -153,6 +155,28 @@ proc normalizingRewrites*(n: NimNode): NimNode =
         else:
           result = n
       else: discard
+
+    proc rewriteFormalParams(n: NimNode): NimNode =
+      ## make formal params such as `foo(a, b: int)` into `foo(a: int, b: int)`
+      case n.kind
+      of nnkFormalParams:
+        result = nnkFormalParams.newNimNode(n)
+        result.add:
+          normalizingRewrites n[0] # return value
+        for arg in n[1 .. ^1].items:
+          case arg.kind
+          of nnkIdentDefs:
+            # if there is more than one param defined, then break them up
+            let defs = rewriteIdentDefs arg
+            for d in defs[0 .. ^3].items: # last two nodes are type and rhs
+              result.add:
+                newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
+          else:
+            result.add:
+              # sometimes we have symbols, they get desymed elsewhere
+              normalizingRewrites arg
+      else:
+        discard
 
     proc rewriteHidden(n: NimNode): NimNode =
       ## Unwrap hidden conversion nodes
@@ -207,6 +231,8 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       rewriteConv n
     of nnkReturnStmt:
       rewriteReturn n
+    of nnkFormalParams:
+      rewriteFormalParams n
     of CallNodes:
       rewriteHidden n
     else:
