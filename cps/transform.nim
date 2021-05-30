@@ -541,10 +541,10 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T, n.params[0])
+  var env = newEnv(ident"continuation", types, T, n.returnParam)
 
   # add parameters into the environment
-  for defs in n.params[1 .. ^1]:
+  for defs in n.callingParams:
     if defs[1].kind == nnkVarTy:
       error "cps does not support var parameters", n
     env.localSection(defs)
@@ -553,7 +553,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   let name = genSym(nskProc, $n.name)
 
   # we can't mutate typed nodes, so copy ourselves
-  n = n.clone
+  n = clone(n)
 
   # the whelp is a limited bootstrap that merely makes
   # the continuation without invoking it in a trampoline

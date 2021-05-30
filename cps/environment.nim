@@ -6,7 +6,7 @@ they are comprised.
 ]##
 
 import std/[sets, sequtils, hashes, tables, macros, algorithm]
-import cps/[spec, hooks, help, rewrites]
+import cps/[spec, hooks, help, rewrites, normalizedast]
 
 #{.experimental: "strictNotNil".}
 
@@ -474,10 +474,10 @@ proc getException*(e: var Env): NimNode =
         newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
   result = newDotExpr(e.castToChild(e.first), e.ex)
 
-proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
+proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
-  result = cloneProc(n, newStmtList())
-  result.params[0] = env.root
+  result = clone(n, newStmtList())
+  result.returnParam = env.root
   result.name = nskProc.genSym"whelp"
   result.introduce {Alloc}
 
@@ -486,14 +486,12 @@ proc createWhelp*(env: Env; n, goto: NimNode): NimNode =
     env.createContinuation(ident"result", desym goto)
 
   # rewrite the symbols used in the arguments to identifiers
-  for defs in result.params[1..^1].items:
-    let sym = copy defs[0]
-    let match = proc(it: NimNode): bool = it == sym
-    result = result.replace(match, desym sym)
+  for defs in result.callingParams:
+    result = desym(result, defs[0])
 
-proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
+proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
-  result = cloneProc(n, newStmtList())
+  result = clone(n, newStmtList())
   result.introduce {Alloc}
 
   let c = nskVar.genSym"c"
@@ -514,7 +512,7 @@ proc createBootstrap*(env: Env; n, goto: NimNode): NimNode =
     ]
 
   # do an easy static check, and then
-  if env.rs[1] != result.params[0]:
+  if env.rs[1] != result.returnParam:
     result.body.add:
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"
