@@ -1,6 +1,6 @@
 import std/macros
 
-from cps/rewrites import normalizingRewrites
+from cps/rewrites import normalizingRewrites, replace, desym
 
 # Parts of this module:
 # * distinct types representing normalized/transformed variants of distinct AST
@@ -25,9 +25,17 @@ proc normalizeProcDef*(n: NimNode): ProcDef =
 template nimNodeConverter(t: typedesc) =
   converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
 
-nimNodeConverter(ProcDef)
+# fn-NormalizedNimNode
+
+nimNodeConverter(NormalizedNimNode)
+
+proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
+  ## desym all occurences of a specific sym
+  n.replace(proc(it: NimNode): bool = it == sym, desym sym).NormalizedNimNode
 
 # fn-ProcDef
+
+nimNodeConverter(ProcDef)
 
 func returnParam*(n: ProcDef): NimNode =
   ## the return param or empty if void
@@ -35,16 +43,23 @@ func returnParam*(n: ProcDef): NimNode =
 
 func `returnParam=`*(n: ProcDef, ret: NimNode) =
   ## set the return param
-  n.params[0] = ret
+  ## XXX: remove normalizingRewrites once this is typed
+  n.params[0] = normalizingRewrites ret
 
 proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
   result = nnkProcDef.newTree(
-    ident(repr n.name),           # repr to handle gensymbols
+    ident(repr n.name),         # repr to handle gensymbols
     newEmptyNode(),
     newEmptyNode(),
-    copy n.params,                # parameter normalization will mutate these
+    copy n.params,              # parameter normalization will mutate these
     newEmptyNode(),
     newEmptyNode(),
     if body == nil: copy n.body else: body).ProcDef
   result.copyLineInfo n
+
+iterator callingParams*(n: ProcDef): NimNode =
+  for a in n.params[1..^1].items:
+    yield a
+
+proc desym*(n: ProcDef, sym: NimNode): ProcDef {.borrow.}

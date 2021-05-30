@@ -181,11 +181,6 @@ proc getContSym*(n: NimNode): NimNode =
   else:
     nil
 
-proc cloneProc*(n: NimNode, body: NimNode = nil): NimNode {.deprecated.} =
-  ## create a copy of a typed proc which satisfies the compiler
-  assert n.kind == nnkProcDef
-  cProcDefToNimNode(clone(n.ProcDef, body))
-
 proc isScopeExit*(n: NimNode): bool =
   ## Return whether the given node signify a scope exit
   ##
