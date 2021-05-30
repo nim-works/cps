@@ -163,7 +163,7 @@ proc normalizingRewrites*(n: NimNode): NimNode =
         result = nnkFormalParams.newNimNode(n)
         result.add:
           normalizingRewrites n[0] # return value
-        for arg in n[1 .. ^1]:
+        for arg in n[1 .. ^1].items:
           case arg.kind
           of nnkIdentDefs:
             # if there is more than one param defined, then break them up
@@ -175,7 +175,6 @@ proc normalizingRewrites*(n: NimNode): NimNode =
             result.add:
               # sometimes we have symbols, they get desymed elsewhere
               normalizingRewrites arg
-            echo "else ", treeRepr n
       else:
         discard
 
