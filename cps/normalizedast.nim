@@ -15,6 +15,10 @@ type
 
   ProcDef* = distinct NormalizedNimNode
     ## an nnkProcDef node which has been normalized
+  
+  IdentDefs* = distinct NormalizedNimNode
+
+  VarSection* = distinct NormalizedNimNode
 
 proc normalizeProcDef*(n: NimNode): ProcDef =
   expectKind(n, nnkProcDef)
@@ -32,6 +36,25 @@ nimNodeConverter(NormalizedNimNode)
 proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
   ## desym all occurences of a specific sym
   n.replace(proc(it: NimNode): bool = it == sym, desym sym).NormalizedNimNode
+
+# fn-IdentDefs
+
+proc newIdentDefs*(n: string, info: NimNode, val = newEmptyNode()): IdentDefs =
+  newIdentDefs(ident(n), info, val).IdentDefs
+
+func name*(n: IdentDefs): NimNode =
+  n.NimNode[0]
+
+func typ*(n: IdentDefs): NimNode =
+  n.NimNode[1]
+
+func hasType*(n: IdentDefs): bool =
+  n.typ.kind == nnkEmpty
+
+# fn-VarSection
+
+proc newVarSection*(i: IdentDefs): VarSection =
+  (nnkVarSection.newTree i.NimNode).VarSection
 
 # fn-ProcDef
 
@@ -63,3 +86,10 @@ iterator callingParams*(n: ProcDef): NimNode =
     yield a
 
 proc desym*(n: ProcDef, sym: NimNode): ProcDef {.borrow.}
+
+proc addPragma*(n: ProcDef, prag: NimNode) {.borrow.}
+
+proc addPragma*(n: ProcDef, prag: NimNode, pragArg: NimNode) =
+  ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
+  n.addPragma:
+    nnkExprColonExpr.newTree(prag, pragArg)

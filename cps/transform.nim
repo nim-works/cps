@@ -564,8 +564,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   let booty = env.createBootstrap(n, name)
 
   # we store a pointer to the whelp on the bootstrap
-  booty.addPragma:
-    nnkExprColonExpr.newTree(bindSym"cpsBootstrap", whelp.name)
+  booty.addPragma(bindSym"cpsBootstrap", whelp.name)
 
   # like magics, the bootstrap must jump
   booty.addPragma ident"cpsMustJump"
@@ -601,8 +600,8 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   n.body = env.annotate n.body
 
   # run other stages
-  n.addPragma bindSym"cpsFloater"
-  n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", env.identity)
+  n.addPragma(bindSym"cpsFloater")
+  n.addPragma(bindSym"cpsResolver", env.identity)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)

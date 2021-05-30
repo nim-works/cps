@@ -29,7 +29,7 @@ type
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
-    rs: NimNode                     # the identdefs for the result
+    rs: IdentDefs                   # the identdefs for the result
     ex: NimNode                     # the sym we use for current exception
     mom: NimNode                    # the sym we use for parent continuation
 
@@ -79,6 +79,7 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
     locals
 
 proc set(e: var Env; key: NimNode; val: NimNode): Env
+proc set(e: var Env; key: NimNode; val: VarSection): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
@@ -86,8 +87,8 @@ proc init(e: var Env) =
   if e.mom.isNil:
     e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
-  if not e.rs[1].isEmpty:
-    e = e.set(e.rs[0], nnkVarSection.newTree e.rs)
+  if not e.rs.hasType:
+    e = e.set(e.rs.name, newVarSection e.rs)
 
 proc definedName(n: NimNode): NimNode =
   ## create an identifier from an typesection/identDef as cached;
@@ -116,7 +117,7 @@ proc populateType(e: Env; n: var NimNode) =
     for defs in section.items:
       # we need either an initialization value or a type field
       if defs[1].isEmpty and defs[2].isEmpty:
-        if name != e.rs[0]:
+        if name != e.rs.name:
           error "local " & repr(name) & " lacks type/initialization"
       else:
         n.add:
@@ -170,7 +171,7 @@ proc firstDef*(e: Env): NimNode =
 
 proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
-  newDotExpr(e.castToChild(e.first), e.rs[0])
+  newDotExpr(e.castToChild(e.first), e.rs.name)
 
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -228,6 +229,10 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
   when cpsReparent:
     result.seen.incl key.strVal
 
+proc set(e: var Env; key: NimNode; val: VarSection): Env =
+  # TODO: remove NimNode
+  set(e, key, val.NimNode)
+
 iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ## add `a, b, c: type = default` to the env;
   ## yields pairs of field, value as added
@@ -284,7 +289,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   store.add check
 
   result = Env(c: c, store: store, via: via, id: via)
-  result.rs = newIdentDefs(ident"result", rs, newEmptyNode())
+  result.rs = newIdentDefs("result", rs)
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
@@ -457,7 +462,7 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
-    if field notin [e.fn, e.rs[0], e.mom]:
+    if field notin [e.fn, e.rs.name, e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
         newAssignment(resultdot field, section.last[0])
@@ -512,12 +517,12 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
     ]
 
   # do an easy static check, and then
-  if env.rs[1] != result.returnParam:
+  if env.rs.typ != result.returnParam:
     result.body.add:
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"
   # if the bootstrap has a return type,
-  elif not env.rs[1].isEmpty:
+  elif not env.rs.hasType:
     result.body.add:
       # then at runtime, issue an if statement to
       nnkIfExpr.newTree:
@@ -526,7 +531,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
           newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(ident"result",
-            newDotExpr(env.castToChild(c), env.rs[0]))
+            newDotExpr(env.castToChild(c), env.rs.name))
         ]
 
 proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =
