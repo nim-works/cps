@@ -37,7 +37,7 @@ proc jield(c: Iterator, val: int): Iterator {.cpsMagic.} =
 # A simple counting iterator, will produce all integers from 'lo' to 'high',
 # inclusive
 
-proc counter(lo: int, hi: int) {.cps:Iterator.} =
+proc counter(lo, hi: int) {.cps:Iterator.} =
   var i = lo
   while i <= hi:
     jield(i)
