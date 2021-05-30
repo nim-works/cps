@@ -51,8 +51,7 @@ jobs:
           cd cps
           nimble --accept develop
           cd examples
-          # iirc this won't work on windows, but...  we don't test windows.
-          balls
+          env GITHUB_ACTIONS=false balls
 
       - name: Run tests
         shell: bash
