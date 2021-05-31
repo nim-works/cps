@@ -304,6 +304,8 @@ proc letOrVar(n: IdentDefs): NimNodeKind =
 
 iterator addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
   ## compose an assignment during addition of identDefs to env
+  ## XXX: `kind` is being used to differentiate between IdentDef in a Var|Let
+  ##       Section vs a parameter, used for assignment. Create a new type
   let section =
     if kind in {nnkVarSection, nnkLetSection}:
       kind
