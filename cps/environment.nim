@@ -230,32 +230,32 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
     result.seen.incl key.strVal
 
 proc set(e: var Env; key: NimNode; val: VarSection): Env =
-  # TODO: remove NimNode
   set(e, key, cVarSectionToNimNode(val))
+
+iterator addIdentDef2(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
+  ## add an IdentDef from a Var|Let Section to the env
+  template stripVar(n: NimNode): NimNode =
+    ## pull the type out of a VarTy
+    if n.kind == nnkVarTy: n[0] else: n
+  
+  let
+    field = genField def.name.strVal
+    value = newTree(kind,     # ident: <no var> type = default
+                    newIdentDefs(def.name, stripVar(def.typ), def.val))
+  e = e.set(field, value)
+  yield (key: field, val: value)
 
 iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
   ## add `a, b, c: type = default` to the env;
   ## yields pairs of field, value as added
-  template stripVar(n: NimNode): NimNode =
-    ## pull the type out of a VarTy
-    if n.kind == nnkVarTy: n[0] else: n
+  ## XXX: for IdentDefs at least this should go away due to normalization
 
   case n.kind
   of nnkIdentDefs:
-    if len(n) == 2:
-      # ident: type; we'll add a default for numbering reasons
-      n.add newEmptyNode()
-    if n[0].kind notin {nnkIdent, nnkSym}:
-      error "bad rewrite presented\n" & $kind & ": " & repr(n), n
-    else:
-      # iterate over the identifier names (a, b, c)
-      for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
-        # create a new identifier for the object field
-        let field = genField name.strVal
-        let value = newTree(kind,     # ident: <no var> type = default
-                            newIdentDefs(name, stripVar(n[^2]), n[^1]))
-        e = e.set(field, value)
-        yield (key: field, val: value)
+    # create a new identifier for the object field
+    # XXX: remove this once IdentDef and VarTuple have been refactored
+    for p in e.addIdentDef2(kind, expectIdentDefs(n)):
+      yield p
   of nnkVarTuple:
     # transform tuple to section
     assert n.last.kind == nnkTupleConstr, "expected tuple: " & treeRepr(n)
@@ -302,7 +302,7 @@ proc identity*(e: var Env): NimNode =
 proc initialization(e: Env; kind: NimNodeKind;
                     field: NimNode; value: NimNode): NimNode =
   ## produce the `x = 34` appropriate given the field and identDefs
-  assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
+  doAssert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
 
   result = newStmtList()
 
@@ -317,13 +317,9 @@ proc initialization(e: Env; kind: NimNodeKind;
       # this is basically env2323(cont).foo34 = "some default"
       result.add newAssignment(newDotExpr(child, field), defs.last)
 
-proc letOrVar(n: NimNode): NimNodeKind =
+proc letOrVar(n: IdentDefs): NimNodeKind =
   ## choose between let or var for proc parameters
-  assert n.kind == nnkIdentDefs
-  if len(n) == 2:
-    # ident: type; we'll add a default for numbering reasons
-    n.add newEmptyNode()
-  case n[^2].kind
+  case n.typ.kind:
   of nnkEmpty:
     error "i need a type: " & repr(n)
   of nnkVarTy:
@@ -331,18 +327,17 @@ proc letOrVar(n: NimNode): NimNodeKind =
   else:
     result = nnkLetSection
 
-iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
+iterator addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
   ## compose an assignment during addition of identDefs to env
-  assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
   let section =
     if kind in {nnkVarSection, nnkLetSection}:
       kind
     else:
-      letOrVar(defs)
-  for field, value in e.addIdentDef(section, defs):
+      letOrVar(d)
+  for field, value in e.addIdentDef2(section, d):
     #let name = definedName(value)
     when cpsDebug == "Env":
-      echo $kind, "\t", repr(defs)
+      echo $kind, "\t", repr(d)
     yield e.initialization(kind, field, value)
 
 when false:
@@ -404,10 +399,10 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
           maybeAdd newAssignment(tups, defs.last)
         else:
           # an iterator handles `var a, b, c = 3` appropriately
-          for assignment in e.addAssignment(n.kind, defs):
+          for assignment in e.addAssignment(n.kind, expectIdentDefs(defs)):
             maybeAdd assignment
   of nnkIdentDefs:
-    for assignment in e.addAssignment(n.kind, n):
+    for assignment in e.addAssignment(n.kind, expectIdentDefs(n)):
       maybeAdd assignment
   else:
     e.store.add:

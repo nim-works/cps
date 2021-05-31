@@ -41,6 +41,16 @@ proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
 
 nimNodeConverter(IdentDefs)
 
+proc expectIdentDefs*(n: NimNode): IdentDefs =
+  ## return an IdentDef or error out
+  doAssert n.kind == nnkIdentDefs, "not and IdentDefs, got: " & $n.kind
+  if n[0].kind notin {nnkIdent, nnkSym}:
+    error "bad rewrite presented:\n" & repr(n), n
+  elif n.len != 3:
+    error "bad rewrite, failed to set init\n" & repr(n), n
+
+  return n.IdentDefs
+
 proc newIdentDefs*(n: string, info: NimNode, val = newEmptyNode()): IdentDefs =
   newIdentDefs(ident(n), info, val).IdentDefs
 
@@ -50,11 +60,18 @@ func name*(n: IdentDefs): NimNode =
 func typ*(n: IdentDefs): NimNode =
   n[1]
 
+func val*(n: IdentDefs): NimNode =
+  n[2]
+
+func hasVal*(n: IdentDefs): bool =
+  n.val.kind != nnkEmpty
+
 func hasType*(n: IdentDefs): bool =
   n.typ.kind != nnkEmpty
 
-func hasNoType*(n: IdentDefs): bool =
-  not n.hasType
+func inferTypFromImpl*(n: IdentDefs): NimNode =
+  ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
+  if n.hasType: n.typ else: getTypeImpl(n.val)
 
 # fn-VarSection
 
