@@ -26,12 +26,12 @@ proc normalizeProcDef*(n: NimNode): ProcDef =
 
 # Converters - because plastering `.NimNode` makes everyone sad
 
-template nimNodeConverter(t: typedesc) =
+template defineToNimNodeConverter(t: typedesc) =
   converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
 
 # fn-NormalizedNimNode
 
-nimNodeConverter(NormalizedNimNode)
+defineToNimNodeConverter(NormalizedNimNode)
 
 proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
   ## desym all occurences of a specific sym
@@ -39,7 +39,7 @@ proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
 
 # fn-IdentDefs
 
-nimNodeConverter(IdentDefs)
+defineToNimNodeConverter(IdentDefs)
 
 proc expectIdentDefs*(n: NimNode): IdentDefs =
   ## return an IdentDef or error out
@@ -79,7 +79,7 @@ func inferTypFromImpl*(n: IdentDefs): NimNode =
 
 # fn-VarSection
 
-nimNodeConverter(VarSection)
+defineToNimNodeConverter(VarSection)
 
 proc newVarSection*(i: IdentDefs): VarSection =
   (nnkVarSection.newTree i).VarSection
@@ -90,7 +90,7 @@ proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
 
 # fn-ProcDef
 
-nimNodeConverter(ProcDef)
+defineToNimNodeConverter(ProcDef)
 
 func returnParam*(n: ProcDef): NimNode =
   ## the return param or empty if void
