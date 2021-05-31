@@ -35,7 +35,10 @@ proc makeLineInfo(n: LineInfo): NimNode =
 proc hook*(hook: Hook; n: NimNode): NimNode =
   ## execute the given hook on the given node
   case hook
-  of Coop, Alloc:
+  of Alloc:
+    # hook(typedesc[Continuation])
+    newCall(ident $hook, n)
+  of Coop:
     # hook(continuation)
     newCall(ident $hook, n)
   of Trace:
