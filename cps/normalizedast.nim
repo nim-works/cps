@@ -43,7 +43,7 @@ nimNodeConverter(IdentDefs)
 
 proc expectIdentDefs*(n: NimNode): IdentDefs =
   ## return an IdentDef or error out
-  doAssert n.kind == nnkIdentDefs, "not and IdentDefs, got: " & $n.kind
+  doAssert n.kind == nnkIdentDefs, "not an IdentDefs, got: " & $n.kind
   if n[0].kind notin {nnkIdent, nnkSym}:
     error "bad rewrite presented:\n" & repr(n), n
   elif n.len != 3:
@@ -63,10 +63,14 @@ func typ*(n: IdentDefs): NimNode =
 func val*(n: IdentDefs): NimNode =
   n[2]
 
-func hasVal*(n: IdentDefs): bool =
+func hasValue*(n: IdentDefs): bool =
+  ## has a non-Empty value defined
+  ##
+  ## Yes, proc, you ARE a good proc. You have value, hasValue, in fact.
   n.val.kind != nnkEmpty
 
 func hasType*(n: IdentDefs): bool =
+  ## has a non-Empty type (`typ`) defined
   n.typ.kind != nnkEmpty
 
 func inferTypFromImpl*(n: IdentDefs): NimNode =
@@ -121,5 +125,9 @@ proc addPragma*(n: ProcDef, prag: NimNode) {.borrow.}
 
 proc addPragma*(n: ProcDef, prag: NimNode, pragArg: NimNode) =
   ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
+  ##
+  ## XXX: there is a bracket form for pragmas, discussion[1] suggests using an
+  ##      openArray for that variant.
+  ##      [1]: https://github.com/disruptek/cps/pull/144#discussion_r642208263
   n.addPragma:
     nnkExprColonExpr.newTree(prag, pragArg)

@@ -80,6 +80,8 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
 
 proc set(e: var Env; key: NimNode; val: NimNode): Env
 proc set(e: var Env; key: NimNode; val: VarSection): Env
+# XXX: listen `key` param, you're going to get typed one of these days, mark my
+#      words. Your `NimNode` days are numbered, now wtf do we call you?
 
 proc init(e: var Env) =
   if e.fn.isNil:
@@ -473,6 +475,8 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   let c = nskVar.genSym"c"
   result.body.add:
     # declare `var c: Cont`
+    # XXX: conversion must be forced otherwise we end up with an ambiguous call
+    #      between the add a single NimNode and add many NimNode (varargs).
     cVarSectionToNimNode(newVarSection(c, env.root))
 
   # create the continuation using the new variable and point it at the proc
