@@ -44,6 +44,12 @@ macro cps*(T: typed, n: typed): untyped =
     result = n
   else:
     result = cpsTransformProc(T, n)
+    when not(defined(gcArc) or defined(gcOrc)):
+      once:
+        result.add:
+          nnkPragma.newTree:
+            ident"warning".newColonExpr:
+              newLit "cps supports --gc:arc or --gc:orc only; see https://github.com/nim-lang/Nim/issues/18099"
 
 proc makeErrorShim(n: NimNode): NimNode =
   ## Upgrades a procedure to serve as a CPS primitive, generating
