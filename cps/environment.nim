@@ -232,7 +232,7 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
 proc set(e: var Env; key: NimNode; val: VarSection): Env =
   set(e, key, cVarSectionToNimNode(val))
 
-iterator addIdentDef2(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
+iterator addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
   ## add an IdentDef from a Var|Let Section to the env
   template stripVar(n: NimNode): NimNode =
     ## pull the type out of a VarTy
@@ -244,31 +244,6 @@ iterator addIdentDef2(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
                     newIdentDefs(def.name, stripVar(def.typ), def.val))
   e = e.set(field, value)
   yield (key: field, val: value)
-
-iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
-  ## add `a, b, c: type = default` to the env;
-  ## yields pairs of field, value as added
-  ## XXX: for IdentDefs at least this should go away due to normalization
-
-  case n.kind
-  of nnkIdentDefs:
-    # create a new identifier for the object field
-    # XXX: remove this once IdentDef and VarTuple have been refactored
-    for p in e.addIdentDef2(kind, expectIdentDefs(n)):
-      yield p
-  of nnkVarTuple:
-    # transform tuple to section
-    assert n.last.kind == nnkTupleConstr, "expected tuple: " & treeRepr(n)
-    let tup = n.last
-    for i in 0 ..< len(tup):
-      let name = n[i]
-      let field = genField name.strVal
-      let value = newTree(kind,
-                          newIdentDefs(name, getTypeInst(tup[i]), tup[i]))
-      e = e.set(field, value)
-      yield (key: field, val: value)
-  else:
-    error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
 
 proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   ## the initial version of the environment;
@@ -334,7 +309,7 @@ iterator addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
       kind
     else:
       letOrVar(d)
-  for field, value in e.addIdentDef2(section, d):
+  for field, value in e.addIdentDef(section, d):
     #let name = definedName(value)
     when cpsDebug == "Env":
       echo $kind, "\t", repr(d)
@@ -394,7 +369,7 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
             let entry = newIdentDefs(name, rhs[index], newEmptyNode())
             # we need to insert the variable and then write a new
             # accessor that plucks the field from the env
-            for field, value in e.addIdentDef(n.kind, entry):
+            for field, value in e.addIdentDef(n.kind, expectIdentDefs(entry)):
               tups.add newDotExpr(child, field)
           maybeAdd newAssignment(tups, defs.last)
         else:
