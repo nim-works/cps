@@ -553,7 +553,8 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   let name = genSym(nskProc, $n.name)
 
   # we can't mutate typed nodes, so copy ourselves
-  n = clone(n)
+  n = clone n
+  n.addPragma ident"used"  # avoid gratuitous warnings
 
   # the whelp is a limited bootstrap that merely makes
   # the continuation without invoking it in a trampoline

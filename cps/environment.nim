@@ -477,6 +477,7 @@ proc getException*(e: var Env): NimNode =
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
   result = clone(n, newStmtList())
+  result.addPragma ident"used"  # avoid gratuitous warnings
   result.returnParam = env.root
   result.name = nskProc.genSym"whelp"
   result.introduce {Alloc}
@@ -492,6 +493,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   result = clone(n, newStmtList())
+  result.addPragma ident"used"  # avoid gratuitous warnings
   result.introduce {Alloc}
 
   let c = nskVar.genSym"c"
