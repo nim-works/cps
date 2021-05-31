@@ -14,7 +14,7 @@ proc tramp(c: Coroutine): Coroutine {.discardable.}  =
   while result.running:
     result = c.fn(result)
 
-proc recv(c: Coroutine): int {.cpsMagic.} =
+proc recv(c: Coroutine): int {.cpsVoodoo.} =
   c.s
 
 proc jield(c: Coroutine): Coroutine {.cpsMagic.} =
