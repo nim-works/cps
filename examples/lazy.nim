@@ -15,7 +15,7 @@ type
 proc jield(s: Stream, val: int = 0): Stream {.cpsMagic.} =
   s.val = val
 
-proc getSin(s: Stream): (Stream) {.cpsMagic.} =
+proc getSin(s: Stream): (Stream) {.cpsVoodoo.} =
   s.sIn
 
 proc resume(s: Stream): int=

@@ -16,10 +16,10 @@ suite "bug #145":
         mom: C
         val: int
 
-    proc send(c: C, v: int) {.cpsMagic.} =
+    proc send(c: C, v: int) {.cpsVoodoo.} =
       c.val = v
 
-    proc recv(c: C): int {.cpsMagic.} =
+    proc recv(c: C): int {.cpsVoodoo.} =
       c.val
 
     var k = newKiller(6)
