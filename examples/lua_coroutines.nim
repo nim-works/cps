@@ -33,7 +33,7 @@ type
 proc jield(c: Coroutine, val: int): Coroutine {.cpsMagic.} =
   c.val = val
 
-proc recv(c: Coroutine): int {.cpsMagic.} =
+proc recv(c: Coroutine): int {.cpsVoodoo.} =
   return c.val
 
 proc resume(c: Coroutine, val: int): int =

@@ -45,22 +45,14 @@ macro cps*(T: typed, n: typed): untyped =
   else:
     result = cpsTransformProc(T, n)
 
-macro cpsMagic*(n: untyped): untyped =
+proc makeErrorShim(n: NimNode): NimNode =
   ## Upgrades a procedure to serve as a CPS primitive, generating
   ## errors out of `.cps.` context and taking continuations as input.
   expectKind(n, nnkProcDef)
 
-
   # create a Nim-land version of the proc that throws an exception when called
   # from outside of CPS-land.
   var m = copyNimTree n
-
-  if m.params[0] == m.params[1][1]:
-    m.params[0] = newEmptyNode()
-    m.addPragma ident"cpsMustJump"
-    m.addPragma ident"cpsMagicCall"
-  else:
-    m.addPragma ident"cpsVoodooCall"
 
   del(m.params, 1)
   m.body = newStmtList:
@@ -75,6 +67,18 @@ macro cpsMagic*(n: untyped): untyped =
   when not defined(nimdoc):
     result.add n
   result.add m
+
+macro cpsMagic*(n: untyped): untyped =
+  let shim = n.makeErrorShim()
+  shim[1].params[0] = newEmptyNode()
+  shim[1].addPragma ident"cpsMustJump"
+  shim[1].addPragma ident"cpsMagicCall"
+  shim
+
+macro cpsVoodoo*(n: untyped): untyped =
+  let shim = n.makeErrorShim()
+  shim[1].addPragma ident"cpsVoodooCall"
+  shim
 
 proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
   for n in n.pragma.items:
