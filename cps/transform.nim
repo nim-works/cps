@@ -601,6 +601,11 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   # annotate the proc's body
   n.body = env.annotate n.body
 
+  if n.body.firstReturn.isNil:
+    # fixes https://github.com/disruptek/cps/issues/145
+    # by ensuring that we always rewrite termination
+    n.body.add newCpsPending()
+
   # run other stages
   n.addPragma bindSym"cpsFloater"
   n.addPragma nnkExprColonExpr.newTree(bindSym"cpsResolver", env.identity)
