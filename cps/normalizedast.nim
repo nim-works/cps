@@ -52,7 +52,7 @@ proc expectIdentDefs*(n: NimNode): IdentDefs =
   return n.IdentDefs
 
 proc newIdentDefs*(n: string, typ: NimNode, val = newEmptyNode()): IdentDefs =
-  newIdentDefs(ident(n), info, val).IdentDefs
+  newIdentDefs(ident(n), typ, val).IdentDefs
 
 func name*(n: IdentDefs): NimNode =
   n[0]
