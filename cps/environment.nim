@@ -232,6 +232,8 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
     result.seen.incl key.strVal
 
 proc set(e: var Env; key: NimNode; val: VarSection): Env =
+  # XXX: not doing an explicit conversion will recursively call this proc over
+  #      and over again and break everything. :(
   set(e, key, cVarSectionToNimNode(val))
 
 iterator addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
