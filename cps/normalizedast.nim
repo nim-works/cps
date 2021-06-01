@@ -15,6 +15,10 @@ type
 
   ProcDef* = distinct NormalizedNimNode
     ## an nnkProcDef node which has been normalized
+  
+  IdentDefs* = distinct NormalizedNimNode
+
+  VarSection* = distinct NormalizedNimNode
 
 proc normalizeProcDef*(n: NimNode): ProcDef =
   expectKind(n, nnkProcDef)
@@ -22,20 +26,71 @@ proc normalizeProcDef*(n: NimNode): ProcDef =
 
 # Converters - because plastering `.NimNode` makes everyone sad
 
-template nimNodeConverter(t: typedesc) =
+template defineToNimNodeConverter(t: typedesc) =
   converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
 
 # fn-NormalizedNimNode
 
-nimNodeConverter(NormalizedNimNode)
+defineToNimNodeConverter(NormalizedNimNode)
 
 proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
   ## desym all occurences of a specific sym
   n.replace(proc(it: NimNode): bool = it == sym, desym sym).NormalizedNimNode
 
+# fn-IdentDefs
+
+defineToNimNodeConverter(IdentDefs)
+
+proc expectIdentDefs*(n: NimNode): IdentDefs =
+  ## return an IdentDef or error out
+  doAssert n.kind == nnkIdentDefs, "not an IdentDefs, got: " & $n.kind
+  if n[0].kind notin {nnkIdent, nnkSym}:
+    error "bad rewrite presented:\n" & repr(n), n
+  elif n.len != 3:
+    error "bad rewrite, failed to set init\n" & repr(n), n
+
+  return n.IdentDefs
+
+proc newIdentDefs*(n: string, typ: NimNode, val = newEmptyNode()): IdentDefs =
+  newIdentDefs(ident(n), typ, val).IdentDefs
+
+func name*(n: IdentDefs): NimNode =
+  n[0]
+
+func typ*(n: IdentDefs): NimNode =
+  n[1]
+
+func val*(n: IdentDefs): NimNode =
+  n[2]
+
+func hasValue*(n: IdentDefs): bool =
+  ## has a non-Empty value defined
+  ##
+  ## Yes, proc, you ARE a good proc. You have value, hasValue, in fact.
+  n.val.kind != nnkEmpty
+
+func hasType*(n: IdentDefs): bool =
+  ## has a non-Empty type (`typ`) defined
+  n.typ.kind != nnkEmpty
+
+func inferTypFromImpl*(n: IdentDefs): NimNode =
+  ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
+  if n.hasType: n.typ else: getTypeImpl(n.val)
+
+# fn-VarSection
+
+defineToNimNodeConverter(VarSection)
+
+proc newVarSection*(i: IdentDefs): VarSection =
+  (nnkVarSection.newTree i).VarSection
+
+proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
+  ## create a var section with an identdef, eg: `n`: `typ` = `val`
+  newVarSection(newIdentDefs(n, typ, val).IdentDefs)
+
 # fn-ProcDef
 
-nimNodeConverter(ProcDef)
+defineToNimNodeConverter(ProcDef)
 
 func returnParam*(n: ProcDef): NimNode =
   ## the return param or empty if void
@@ -45,6 +100,8 @@ func `returnParam=`*(n: ProcDef, ret: NimNode) =
   ## set the return param
   ## XXX: remove normalizingRewrites once this is typed
   n.params[0] = normalizingRewrites ret
+
+func `name=`*(n: ProcDef, name: NimNode) {.borrow.}
 
 proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
@@ -63,3 +120,14 @@ iterator callingParams*(n: ProcDef): NimNode =
     yield a
 
 proc desym*(n: ProcDef, sym: NimNode): ProcDef {.borrow.}
+
+proc addPragma*(n: ProcDef, prag: NimNode) {.borrow.}
+
+proc addPragma*(n: ProcDef, prag: NimNode, pragArg: NimNode) =
+  ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
+  ##
+  ## XXX: there is a bracket form for pragmas, discussion[1] suggests using an
+  ##      openArray for that variant.
+  ##      [1]: https://github.com/disruptek/cps/pull/144#discussion_r642208263
+  n.addPragma:
+    nnkExprColonExpr.newTree(prag, pragArg)

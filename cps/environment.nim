@@ -29,7 +29,7 @@ type
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
-    rs: NimNode                     # the identdefs for the result
+    rs: IdentDefs                   # the identdefs for the result
     ex: NimNode                     # the sym we use for current exception
     mom: NimNode                    # the sym we use for parent continuation
 
@@ -79,6 +79,9 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
     locals
 
 proc set(e: var Env; key: NimNode; val: NimNode): Env
+proc set(e: var Env; key: NimNode; val: VarSection): Env
+# XXX: listen `key` param, you're going to get typed one of these days, mark my
+#      words. Your `NimNode` days are numbered, now wtf do we call you?
 
 proc init(e: var Env) =
   if e.fn.isNil:
@@ -86,8 +89,8 @@ proc init(e: var Env) =
   if e.mom.isNil:
     e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
-  if not e.rs[1].isEmpty:
-    e = e.set(e.rs[0], nnkVarSection.newTree e.rs)
+  if e.rs.hasType:
+    e = e.set(e.rs.name, newVarSection e.rs)
 
 proc definedName(n: NimNode): NimNode =
   ## create an identifier from an typesection/identDef as cached;
@@ -116,7 +119,7 @@ proc populateType(e: Env; n: var NimNode) =
     for defs in section.items:
       # we need either an initialization value or a type field
       if defs[1].isEmpty and defs[2].isEmpty:
-        if name != e.rs[0]:
+        if name != e.rs.name:
           error "local " & repr(name) & " lacks type/initialization"
       else:
         n.add:
@@ -170,7 +173,7 @@ proc firstDef*(e: Env): NimNode =
 
 proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
-  newDotExpr(e.castToChild(e.first), e.rs[0])
+  newDotExpr(e.castToChild(e.first), e.rs.name)
 
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -228,42 +231,23 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
   when cpsReparent:
     result.seen.incl key.strVal
 
-iterator addIdentDef(e: var Env; kind: NimNodeKind; n: NimNode): Pair =
-  ## add `a, b, c: type = default` to the env;
-  ## yields pairs of field, value as added
+proc set(e: var Env; key: NimNode; val: VarSection): Env =
+  # XXX: not doing an explicit conversion will recursively call this proc over
+  #      and over again and break everything. :(
+  set(e, key, cVarSectionToNimNode(val))
+
+iterator addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
+  ## add an IdentDef from a Var|Let Section to the env
   template stripVar(n: NimNode): NimNode =
     ## pull the type out of a VarTy
     if n.kind == nnkVarTy: n[0] else: n
-
-  case n.kind
-  of nnkIdentDefs:
-    if len(n) == 2:
-      # ident: type; we'll add a default for numbering reasons
-      n.add newEmptyNode()
-    if n[0].kind notin {nnkIdent, nnkSym}:
-      error "bad rewrite presented\n" & $kind & ": " & repr(n), n
-    else:
-      # iterate over the identifier names (a, b, c)
-      for name in n[0 ..< len(n)-2]:  # ie. omit (:type) and (=default)
-        # create a new identifier for the object field
-        let field = genField name.strVal
-        let value = newTree(kind,     # ident: <no var> type = default
-                            newIdentDefs(name, stripVar(n[^2]), n[^1]))
-        e = e.set(field, value)
-        yield (key: field, val: value)
-  of nnkVarTuple:
-    # transform tuple to section
-    assert n.last.kind == nnkTupleConstr, "expected tuple: " & treeRepr(n)
-    let tup = n.last
-    for i in 0 ..< len(tup):
-      let name = n[i]
-      let field = genField name.strVal
-      let value = newTree(kind,
-                          newIdentDefs(name, getTypeInst(tup[i]), tup[i]))
-      e = e.set(field, value)
-      yield (key: field, val: value)
-  else:
-    error $n.kind & " is unsupported by cps: \n" & treeRepr(n)
+  
+  let
+    field = genField def.name.strVal
+    value = newTree(kind,     # ident: <no var> type = default
+                    newIdentDefs(def.name, stripVar(def.typ), def.val))
+  e = e.set(field, value)
+  yield (key: field, val: value)
 
 proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   ## the initial version of the environment;
@@ -284,7 +268,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   store.add check
 
   result = Env(c: c, store: store, via: via, id: via)
-  result.rs = newIdentDefs(ident"result", rs, newEmptyNode())
+  result.rs = newIdentDefs("result", rs)
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
@@ -297,7 +281,7 @@ proc identity*(e: var Env): NimNode =
 proc initialization(e: Env; kind: NimNodeKind;
                     field: NimNode; value: NimNode): NimNode =
   ## produce the `x = 34` appropriate given the field and identDefs
-  assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
+  doAssert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
 
   result = newStmtList()
 
@@ -312,13 +296,9 @@ proc initialization(e: Env; kind: NimNodeKind;
       # this is basically env2323(cont).foo34 = "some default"
       result.add newAssignment(newDotExpr(child, field), defs.last)
 
-proc letOrVar(n: NimNode): NimNodeKind =
+proc letOrVar(n: IdentDefs): NimNodeKind =
   ## choose between let or var for proc parameters
-  assert n.kind == nnkIdentDefs
-  if len(n) == 2:
-    # ident: type; we'll add a default for numbering reasons
-    n.add newEmptyNode()
-  case n[^2].kind
+  case n.typ.kind:
   of nnkEmpty:
     error "i need a type: " & repr(n)
   of nnkVarTy:
@@ -326,18 +306,19 @@ proc letOrVar(n: NimNode): NimNodeKind =
   else:
     result = nnkLetSection
 
-iterator addAssignment(e: var Env; kind: NimNodeKind; defs: NimNode): NimNode =
+iterator addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
   ## compose an assignment during addition of identDefs to env
-  assert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
+  ## XXX: `kind` is being used to differentiate between IdentDef in a Var|Let
+  ##       Section vs a parameter, used for assignment. Create a new type
   let section =
     if kind in {nnkVarSection, nnkLetSection}:
       kind
     else:
-      letOrVar(defs)
-  for field, value in e.addIdentDef(section, defs):
+      letOrVar(d)
+  for field, value in e.addIdentDef(section, d):
     #let name = definedName(value)
     when cpsDebug == "Env":
-      echo $kind, "\t", repr(defs)
+      echo $kind, "\t", repr(d)
     yield e.initialization(kind, field, value)
 
 when false:
@@ -394,15 +375,15 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
             let entry = newIdentDefs(name, rhs[index], newEmptyNode())
             # we need to insert the variable and then write a new
             # accessor that plucks the field from the env
-            for field, value in e.addIdentDef(n.kind, entry):
+            for field, value in e.addIdentDef(n.kind, expectIdentDefs(entry)):
               tups.add newDotExpr(child, field)
           maybeAdd newAssignment(tups, defs.last)
         else:
           # an iterator handles `var a, b, c = 3` appropriately
-          for assignment in e.addAssignment(n.kind, defs):
+          for assignment in e.addAssignment(n.kind, expectIdentDefs(defs)):
             maybeAdd assignment
   of nnkIdentDefs:
-    for assignment in e.addAssignment(n.kind, n):
+    for assignment in e.addAssignment(n.kind, expectIdentDefs(n)):
       maybeAdd assignment
   else:
     e.store.add:
@@ -457,7 +438,7 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
-    if field notin [e.fn, e.rs[0], e.mom]:
+    if field notin [e.fn, e.rs.name, e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
         newAssignment(resultdot field, section.last[0])
@@ -470,8 +451,7 @@ proc getException*(e: var Env): NimNode =
   if e.ex.isNil:
     e.ex = genField"ex"
     e = e.set e.ex:
-      nnkVarSection.newTree:
-        newIdentDefs(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+      newVarSection(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
   result = newDotExpr(e.castToChild(e.first), e.ex)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
@@ -499,8 +479,9 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   let c = nskVar.genSym"c"
   result.body.add:
     # declare `var c: Cont`
-    nnkVarSection.newTree:
-      newIdentDefs(c, env.root)
+    # XXX: conversion must be forced otherwise we end up with an ambiguous call
+    #      between the add a single NimNode and add many NimNode (varargs).
+    cVarSectionToNimNode(newVarSection(c, env.root))
 
   # create the continuation using the new variable and point it at the proc
   result.body.add:
@@ -514,12 +495,12 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
     ]
 
   # do an easy static check, and then
-  if env.rs[1] != result.returnParam:
+  if env.rs.typ != result.returnParam:
     result.body.add:
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"
   # if the bootstrap has a return type,
-  elif not env.rs[1].isEmpty:
+  elif env.rs.hasType:
     result.body.add:
       # then at runtime, issue an if statement to
       nnkIfExpr.newTree:
@@ -528,7 +509,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
           newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(ident"result",
-            newDotExpr(env.castToChild(c), env.rs[0]))
+            newDotExpr(env.castToChild(c), env.rs.name))
         ]
 
 proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =
