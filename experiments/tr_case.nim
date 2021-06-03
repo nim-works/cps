@@ -56,7 +56,11 @@ suite "tr":
   ## define foo
   proc foo[R, T](c: C[R, T]; results: static[bool]): C[R, T] =
     # choose a child type dynamically
-    var e = newC[R, T]()
+    var e =
+      when results:
+        newC[R, T]()
+      else:
+        newC[void, T]()
     e.data = c.data
     # run a child with/without result
     var d = bar(e, e.data[])
