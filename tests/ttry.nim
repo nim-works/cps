@@ -81,9 +81,7 @@ suite "try statements":
 
   block:
     ## try statements with a finally clause
-    when true:
-      skip "not working, see #78"
-    else:
+    skip "not working, see #78":
       r = 0
       proc foo() {.cps: Cont.} =
         inc r
@@ -97,10 +95,24 @@ suite "try statements":
       check r == 3
 
   block:
+    ## try statements with a finally and a return
+    skip "not working, see #78":
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+        try:
+          noop()
+          inc r
+          return
+        finally:
+          inc r
+
+      foo()
+      check r == 3
+
+  block:
     ## try statements with an exception and a finally
-    when true:
-      skip "not working, see #78"
-    else:
+    skip "not working, see #78":
       r = 0
       proc foo() {.cps: Cont.} =
         inc r
