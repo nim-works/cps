@@ -106,3 +106,20 @@ suite "hooks":
 
     foo()
     check r == 6, "bzzzt"
+
+  block:
+    ## custom continuation bootstrap hook works
+    var r = 0
+
+    proc bar() {.cps: Cont.} =
+      noop()
+
+    proc boot(c: Cont): Cont =
+      inc r
+      result = c
+
+    proc foo() {.cps: Cont.} =
+      bar()
+
+    foo()
+    check r == 1, "bzzzt"
