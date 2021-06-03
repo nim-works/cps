@@ -105,7 +105,6 @@ proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
         else:
           error "redundant bootstrap pragmas?", n
   if result.isNil:
-    #result = n.errorAst "welping malfunction"
     error "welping malfunction", n
 
 template whelpIt*(input: typed; body: untyped): untyped =
@@ -126,8 +125,6 @@ macro whelp*(call: typed): Continuation =
   ## running it; instead, return the continuation as a value.
   result = whelpIt call:
     it = Head.hook(it)
-  result = newStmtList result
-  result.introduce {Head}
 
 macro whelp*(parent: Continuation; call: typed): Continuation =
   ## As in `whelp(call(...))`, but also links the new continuation to the
@@ -141,14 +138,12 @@ template head*(first: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to configure a continuation
   ## for use when there is no parent continuation available.
   ## The return value specifies the continuation.
-  echo "stock head"
   first
 
 template tail*(parent, child: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to configure a continuation
   ## for use when it has been instantiated from inside another
   ## continuation.  The return value specifies the child continuation.
-  echo "stock tail"
   child.mom = parent
   child
 

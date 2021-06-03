@@ -148,6 +148,14 @@ suite "hooks":
         bar()
         check t == 1, "child triggered second"
 
+    var c = whelp foo()
+    c = cps.trampoline c
+    check "bzzzt":
+      h == t
+      t == 1
+
+    h = 0
+    t = 0
     foo()
     check "bzzzt":
       h == t

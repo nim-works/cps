@@ -2,17 +2,28 @@ import std/macros
 
 import cps/spec
 
+{.experimental: "dynamicBindSym".}
+
+##[
+
+The idea is that you can reimplement one of a few procedures which we will
+perform a late binding to by name.
+
+]##
+
 type
-  Hook* = enum
-    Coop = "coop"
-    Trace = "trace"
-    Alloc = "alloc"
+  Hook* = enum ##
+    ## these are hook procedure names; the string value matches the name
+    ## of the symbol we'll call to perform the hook.
+    Coop    = "coop"
+    Trace   = "trace"
+    Alloc   = "alloc"
     Dealloc = "dealloc"
-    Pass = "pass"
-    Boot = "boot"
-    Unwind = "unwind"
-    Head = "head"
-    Tail = "tail"
+    Pass    = "pass"
+    Boot    = "boot"
+    Unwind  = "unwind"
+    Head    = "head"
+    Tail    = "tail"
 
 proc introduce*(hook: Hook; n: NimNode) =
   ## introduce a hook into the given scope whatfer later use therein
@@ -37,18 +48,25 @@ proc makeLineInfo(n: LineInfo): NimNode =
   result.add newColonExpr(ident"line", n.line.newLit)
   result.add newColonExpr(ident"column", n.column.newLit)
 
+proc sym*(hook: Hook): NimNode =
+  ## produce a symbol|ident for the hook procedure
+  when false:
+    bindSym($hook, brForceOpen)
+  else:
+    ident($hook)
+
 proc hook*(hook: Hook; n: NimNode): NimNode =
   ## execute the given hook on the given node
   case hook
   of Alloc:
     # hook(typedesc[Continuation])
-    newCall(ident $hook, n)
+    newCall(hook.sym, n)
   of Boot, Coop, Head:
     # hook(continuation)
-    newCall(ident $hook, n)
+    newCall(hook.sym, n)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
-    newCall(ident $hook, newLit(repr n.name), makeLineInfo n.lineInfoObj)
+    newCall(hook.sym, newLit(repr n.name), makeLineInfo n.lineInfoObj)
   else:
     n.errorAst "the " & $hook & " hook doesn't take one argument"
 
@@ -57,14 +75,14 @@ proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
   case hook
   of Unwind:
     # hook(continuation, exception)
-    newCall(ident $hook, a, b)
+    newCall(hook.sym, a, b)
   of Pass, Tail:
     # hook(source, destination)
-    newCall(ident $hook, a, b)
+    newCall(hook.sym, a, b)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
-    newCall(ident $hook, a, newLit(repr b.name), makeLineInfo b.lineInfoObj)
+    newCall(hook.sym, a, newLit(repr b.name), makeLineInfo b.lineInfoObj)
   of Dealloc:
-    newStmtList [newCall(ident $hook, a, b), newNilLit()]
+    newStmtList [newCall(hook.sym, a, b), newNilLit()]
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"

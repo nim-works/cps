@@ -48,7 +48,7 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
-  result.introduce {Coop, Pass, Trace, Alloc, Dealloc}    # mix any hooks in
+  result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc}
   result.body.add:                  # insert a hook ahead of the source,
     Trace.hook contParam, result    # hooking against the proc (minus body)
   result.body.add:                  # perform convenience rewrites on source
@@ -84,7 +84,7 @@ macro cpsJump(cont, call, n: typed): untyped =
         newAssignment(newDotExpr(cont, ident"fn"), name)
       it.add:
         # instantiate a new child continuation with the given arguments
-        newLetStmt(c, newCall(ident"whelp", call))
+        newLetStmt(c, newCall(ident"whelp", cont, call))
       it.add:
         # FIXME: softcode mom?  see environment definition...
         # assign our current continuation to the child's parent field
@@ -584,7 +584,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   n.params = nnkFormalParams.newTree(T, env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
-  body.introduce {Pass, Trace, Alloc, Dealloc}   # prepare hooks
+  body.introduce {Coop, Pass, Trace, Head, Tail, Alloc, Dealloc}
   body.add:
     Trace.hook env.first, n    # hooking against the proc (minus cloned body)
   body.add n.body              # add in the cloned body of the original proc
