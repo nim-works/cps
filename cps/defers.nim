@@ -49,7 +49,7 @@ proc rewriteDefer*(n: NimNode): NimNode =
           if xb.isNotNil:
             b.add xb
           # Add nodes coming after the defer to the list of affected nodes
-          if not xa.isNotNil:
+          if xa.isNotNil:
             a.add xa
           if idx < n.len - 1:
             a.add n[idx + 1 .. ^1]
