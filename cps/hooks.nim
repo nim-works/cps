@@ -10,6 +10,9 @@ type
     Dealloc = "dealloc"
     Pass = "pass"
     Boot = "boot"
+    Unwind = "unwind"
+    Head = "head"
+    Tail = "tail"
 
 proc introduce*(hook: Hook; n: NimNode) =
   ## introduce a hook into the given scope whatfer later use therein
@@ -40,7 +43,7 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
   of Alloc:
     # hook(typedesc[Continuation])
     newCall(ident $hook, n)
-  of Boot, Coop:
+  of Boot, Coop, Head:
     # hook(continuation)
     newCall(ident $hook, n)
   of Trace:
@@ -52,7 +55,11 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
 proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
   ## execute the given hook with two arguments
   case hook
-  of Pass:
+  of Unwind:
+    # hook(continuation, exception)
+    newCall(ident $hook, a, b)
+  of Pass, Tail:
+    # hook(source, destination)
     newCall(ident $hook, a, b)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))

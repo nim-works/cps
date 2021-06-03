@@ -123,3 +123,32 @@ suite "hooks":
 
     foo()
     check r == 1, "bzzzt"
+
+  block:
+    ## custom continuation head/tail setup hooks work
+    var h, t = 0
+
+    proc head(c: Cont): Cont =
+      inc h
+      result = c
+
+    proc tail(mom: Cont; c: Cont): Cont =
+      inc t
+      result = c
+      result.mom = mom
+
+    proc bar() {.cps: Cont.} =
+      check h == 1, "parent triggered second"
+      noop()
+
+    expandMacros:
+      proc foo() {.cps: Cont.} =
+        check h == 1, "parent triggered first"
+        check t == 0, "child triggered first"
+        bar()
+        check t == 1, "child triggered second"
+
+    foo()
+    check "bzzzt":
+      h == t
+      t == 1

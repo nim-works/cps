@@ -1,5 +1,5 @@
 import std/[macros]
-import cps/[spec, transform, rewrites]
+import cps/[spec, transform, rewrites, hooks]
 export Continuation, ContinuationProc
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 
@@ -100,35 +100,75 @@ proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
   for n in n.pragma.items:
     if n.kind == nnkExprColonExpr:
       if $n[0] == "cpsBootstrap":
-        result = n[1].newCall args
+        if result.isNil:
+          result = n[1].newCall args        # n[1]: the bootstrap sym to use
+        else:
+          error "redundant bootstrap pragmas?", n
   if result.isNil:
-    result = n.errorAst "welping malfunction"
+    #result = n.errorAst "welping malfunction"
+    error "welping malfunction", n
 
-macro whelp*(n: typed): Continuation =
-  ## Instantiate the given continuation call but do not begin
-  ## running it; instead, return the continuation as a value.
-  var n = normalizingRewrites n
+template whelpIt*(input: typed; body: untyped): untyped =
+  var n = normalizingRewrites input
   if n.kind in nnkCallKinds:
     let p = getImpl n[0]
     if p.hasPragma "cpsBootstrap":
-      return doWhelp(p, n[1..^1])
-  error "the input to whelp must be a .cps. call", n
+      var it {.inject.}: NimNode = doWhelp(p, n[1..^1])
+      body
+      it
+    else:
+      n.errorAst "the input to whelpIt must be a .cps. call"
+  else:
+    n.errorAst "the input to whelpIt must be a .cps. call"
+
+macro whelp*(call: typed): Continuation =
+  ## Instantiate the given continuation call but do not begin
+  ## running it; instead, return the continuation as a value.
+  result = whelpIt call:
+    it = Head.hook(it)
+  result = newStmtList result
+  result.introduce {Head}
+
+macro whelp*(parent: Continuation; call: typed): Continuation =
+  ## As in `whelp(call(...))`, but also links the new continuation to the
+  ## supplied parent for the purposes of exception handling and similar.
+  result = whelpIt call:
+    it = Tail.hook(parent, it)
+  result = newStmtList result
+  result.introduce {Tail}
+
+template head*(first: Continuation): Continuation {.used.} =
+  ## This symbol may be reimplemented to configure a continuation
+  ## for use when there is no parent continuation available.
+  ## The return value specifies the continuation.
+  echo "stock head"
+  first
+
+template tail*(parent, child: Continuation): Continuation {.used.} =
+  ## This symbol may be reimplemented to configure a continuation
+  ## for use when it has been instantiated from inside another
+  ## continuation.  The return value specifies the child continuation.
+  echo "stock tail"
+  child.mom = parent
+  child
 
 template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
   ## a cooperative yield at appropriate continuation exit points.
+  ## The return value specifies the continuation.
   c
 
 template boot*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to refine a continuation after
   ## it has been allocated but before it is first run.
+  ## The return value specifies the continuation.
   c
 
-template pass*(c: Continuation; to: Continuation): Continuation {.used.} =
+template pass*(source, destination: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to introduce logic during
-  ## the calling of new child continuations; it will return the
-  ## continuation to pass control to.
-  to
+  ## the transfer of control between parent and child continuations.
+  ## The return value specifies the destination continuation.
+  destination
 
 template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
   ## This symbol may be reimplemented to introduce control-flow
