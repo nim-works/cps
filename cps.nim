@@ -125,6 +125,9 @@ macro whelp*(call: typed): Continuation =
   ## running it; instead, return the continuation as a value.
   result = whelpIt call:
     it = Head.hook(it)
+  #
+  # unlike the Tail version, introduce at the top of procs to work
+  # around a nim issue with inner mixin calls...?
 
 macro whelp*(parent: Continuation; call: typed): Continuation =
   ## As in `whelp(call(...))`, but also links the new continuation to the
