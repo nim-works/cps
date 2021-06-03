@@ -141,12 +141,11 @@ suite "hooks":
       check h == 1, "parent triggered second"
       noop()
 
-    expandMacros:
-      proc foo() {.cps: Cont.} =
-        check h == 1, "parent triggered first"
-        check t == 0, "child triggered first"
-        bar()
-        check t == 1, "child triggered second"
+    proc foo() {.cps: Cont.} =
+      check h == 1, "parent triggered first"
+      check t == 0, "child triggered first"
+      bar()
+      check t == 1, "child triggered second"
 
     var c = whelp foo()
     c = cps.trampoline c
