@@ -1,5 +1,7 @@
 import std/macros
 
+template isNotNil*(x: untyped): bool = not(isNil(x))
+
 func hasDefer*(n: NimNode): bool =
   ## Return whether there is a `defer` within the given node
   ## that might cause it to be rewritten.
@@ -44,10 +46,10 @@ proc rewriteDefer*(n: NimNode): NimNode =
         if child.hasDefer:
           var xb, xa: NimNode
           (xb, d, xa) = splitDefer child
-          if not xb.isNil:
+          if xb.isNotNil:
             b.add xb
           # Add nodes coming after the defer to the list of affected nodes
-          if not xa.isNil:
+          if not xa.isNotNil:
             a.add xa
           if idx < n.len - 1:
             a.add n[idx + 1 .. ^1]
@@ -68,7 +70,7 @@ proc rewriteDefer*(n: NimNode): NimNode =
     # Construct the try-finally statement
     let tryStmt = newNimNode(nnkTryStmt)
 
-    if not affected.isNil:
+    if affected.isNotNil:
       # Wrap the affected body with the try statement
       tryStmt.add affected
     else:
