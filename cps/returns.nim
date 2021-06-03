@@ -42,7 +42,8 @@ proc maybeReturnParent*(c: NimNode): NimNode =
         c                                   # the current continuation;
       ],
       nnkElseExpr.newTree [                 # else,
-        mom                                 # our parent continuation.
+        Pass.hook(c, mom)                   # hook into pass() and yield
+                                            # our parent continuation.
       ],
     ]
 

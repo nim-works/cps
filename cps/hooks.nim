@@ -8,6 +8,7 @@ type
     Trace = "trace"
     Alloc = "alloc"
     Dealloc = "dealloc"
+    Pass = "pass"
 
 proc introduce*(hook: Hook; n: NimNode) =
   ## introduce a hook into the given scope whatfer later use therein
@@ -50,6 +51,8 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
 proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
   ## execute the given hook with two arguments
   case hook
+  of Pass:
+    newCall(ident $hook, a, b)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
     newCall(ident $hook, a, newLit(repr b.name), makeLineInfo b.lineInfoObj)

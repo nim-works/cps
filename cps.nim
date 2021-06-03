@@ -119,6 +119,12 @@ template coop*(c: Continuation): Continuation {.used.} =
   ## a cooperative yield at appropriate continuation exit points.
   c
 
+template pass*(c: Continuation; to: Continuation): Continuation {.used.} =
+  ## This symbol may be reimplemented to introduce logic during
+  ## the calling of new child continuations; it will return the
+  ## continuation to pass control to.
+  to
+
 template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
   ## This symbol may be reimplemented to introduce control-flow
   ## tracing of the entry to each continuation leg.

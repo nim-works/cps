@@ -86,3 +86,23 @@ suite "hooks":
 
     foo(3)
     check r == 1, "bzzzt"
+
+  block:
+    ## custom continuation passing hook works
+    var r = 0
+    proc pass(a, b: Cont): Cont =
+      inc r
+      result = b
+
+    proc bar() {.cps: Cont.} =
+      inc r
+      noop()
+      inc r
+
+    proc foo() {.cps: Cont.} =
+      inc r
+      bar()
+      inc r
+
+    foo()
+    check r == 6, "bzzzt"
