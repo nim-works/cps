@@ -9,6 +9,7 @@ type
     Alloc = "alloc"
     Dealloc = "dealloc"
     Pass = "pass"
+    Boot = "boot"
 
 proc introduce*(hook: Hook; n: NimNode) =
   ## introduce a hook into the given scope whatfer later use therein
@@ -39,7 +40,7 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
   of Alloc:
     # hook(typedesc[Continuation])
     newCall(ident $hook, n)
-  of Coop:
+  of Boot, Coop:
     # hook(continuation)
     newCall(ident $hook, n)
   of Trace:

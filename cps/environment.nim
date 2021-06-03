@@ -241,7 +241,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
   template stripVar(n: NimNode): NimNode =
     ## pull the type out of a VarTy
     if n.kind == nnkVarTy: n[0] else: n
-  
+
   let
     field = genField def.name.strVal
     value = newTree(kind,     # ident: <no var> type = default
@@ -460,11 +460,16 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   result.addPragma ident"used"  # avoid gratuitous warnings
   result.returnParam = env.root
   result.name = nskProc.genSym"whelp"
-  result.introduce {Alloc}
+  result.introduce {Alloc, Boot}
 
   # create the continuation as the result and point it at the proc
   result.body.add:
     env.createContinuation(ident"result", desym goto)
+
+  # hook the bootstrap
+  result.body.add:
+    newAssignment ident"result":
+      Boot.hook ident"result"
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
@@ -474,7 +479,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   result = clone(n, newStmtList())
   result.addPragma ident"used"  # avoid gratuitous warnings
-  result.introduce {Alloc}
+  result.introduce {Alloc, Boot}
 
   let c = nskVar.genSym"c"
   result.body.add:
@@ -486,6 +491,11 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   # create the continuation using the new variable and point it at the proc
   result.body.add:
     env.createContinuation(c, desym goto)
+
+  # hook the bootstrap
+  result.body.add:
+    newAssignment c:
+      Boot.hook c
 
   # now the trampoline
   result.body.add:

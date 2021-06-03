@@ -119,6 +119,11 @@ template coop*(c: Continuation): Continuation {.used.} =
   ## a cooperative yield at appropriate continuation exit points.
   c
 
+template boot*(c: Continuation): Continuation {.used.} =
+  ## This symbol may be reimplemented to refine a continuation after
+  ## it has been allocated but before it is first run.
+  c
+
 template pass*(c: Continuation; to: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to introduce logic during
   ## the calling of new child continuations; it will return the
