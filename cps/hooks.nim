@@ -51,8 +51,10 @@ proc makeLineInfo(n: LineInfo): NimNode =
 proc sym*(hook: Hook): NimNode =
   ## produce a symbol|ident for the hook procedure
   when false:
+    # this is where we can experiment with .dynamicBindSym
     bindSym($hook, brForceOpen)
   else:
+    # rely on a `mixin $hook` in (high) scope
     ident($hook)
 
 proc hook*(hook: Hook; n: NimNode): NimNode =
