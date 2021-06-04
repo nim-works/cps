@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['macos-latest'] #, 'ubuntu-latest']
+        os: ['macos-latest', 'ubuntu-latest']
         nim: ['devel']
     name: '${{ matrix.os }} (${{ matrix.nim }})'
     runs-on: ${{ matrix.os }}
