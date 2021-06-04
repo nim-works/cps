@@ -147,7 +147,12 @@ template tail*(parent, child: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to configure a continuation
   ## for use when it has been instantiated from inside another
   ## continuation.  The return value specifies the child continuation.
+  echo parent.isNil
+  echo repr(parent)
   child.mom = parent
+  echo parent.isNil
+  echo child.mom.isNil
+  echo repr(child)
   child
 
 template coop*(c: Continuation): Continuation {.used.} =

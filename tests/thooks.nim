@@ -103,9 +103,10 @@ suite "hooks":
       inc r
       bar()
       inc r
+      inc r
 
     foo()
-    check r == 6, "bzzzt"
+    check r == 7, "bzzzt"
 
   block:
     ## custom continuation bootstrap hook works

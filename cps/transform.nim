@@ -86,12 +86,14 @@ macro cpsJump(cont, call, n: typed): untyped =
         # instantiate a new child continuation with the given arguments
         newLetStmt(c, newCall(ident"whelp", cont, call))
       it.add:
-        # FIXME: softcode mom?  see environment definition...
         # assign our current continuation to the child's parent field
-        newAssignment newDotExpr(c, ident"mom"):
-          Pass.hook(c, cont)    # we're basically painting the future
+        newAssignment(newDotExpr(c, ident"mom"), cont)
+      #
+      # NOTE: mom should now be set via the tail() hook from whelp
+      #
       # return the child continuation
-      it = it.makeReturn c
+      it = it.makeReturn:
+        Pass.hook(cont, c)    # we're basically painting the future
     else:
       it.add:
         jumperCall(cont, name, call)
