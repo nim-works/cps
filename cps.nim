@@ -143,14 +143,17 @@ template head*(first: Continuation): Continuation {.used.} =
   ## The return value specifies the continuation.
   first
 
-template tail*(parent, child: Continuation): Continuation {.used.} =
+proc tail*(parent, child: Continuation): Continuation {.used, inline.} =
   ## This symbol may be reimplemented to configure a continuation for
   ## use when it has been instantiated from inside another continuation;
   ## currently, this means assigning the parent to the child's `mom`
   ## field. The return value specifies the child continuation.
-  let result = child
+  ##
+  ## NOTE: If you implement this as a template, be careful that you
+  ##       assign the child to a variable before manipulating its fields,
+  ##       as it may be an expression...
+  result = child
   result.mom = parent
-  result
 
 template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
