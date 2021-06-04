@@ -17,6 +17,7 @@ type
 
 proc push(pool: Pool, c: Work) =
   if c.running:
+    echo "pool was supplied to push"
     c.pool = pool
     pool.workQueue.addLast(c)
 
@@ -30,9 +31,14 @@ proc run(pool: Pool) =
     # During trampolining we need to make sure the continuation always has
     # a proper pointer to the pool, due to momification
     while c.running:
-      c.pool = pool
       c = c.fn(c)
     pool.push c
+
+proc tail(mom, c: Work): Work =
+  echo "tail copied the pool"
+  result = c
+  result.mom = mom
+  result.pool = mom.pool
 
 ###########################################################################
 # Main code
@@ -45,7 +51,7 @@ proc deeper(b: ref int) {.cps:Work.} =
   jield()
   inc total, b[]
   echo "  deeper() out"
-  
+
 proc foo(a: int) {.cps:Work.} =
   echo " foo() in a: ", a
   echo " foo() yield()"
@@ -58,7 +64,7 @@ proc foo(a: int) {.cps:Work.} =
   deeper(b)
   echo " foo() returned from deeper(), b: ", b[]
   echo " foo() out"
-  
+
 proc bar() {.cps:Work.} =
   echo "bar() in"
   echo "bar() yield"

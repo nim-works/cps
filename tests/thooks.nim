@@ -103,9 +103,63 @@ suite "hooks":
       inc r
       bar()
       inc r
+      inc r
 
     foo()
-    check r == 6, "bzzzt"
+    check r == 7, "bzzzt"
+
+  block:
+    ## custom continuation bootstrap hook works
+    var r = 0
+
+    proc bar() {.cps: Cont.} =
+      noop()
+
+    proc boot(c: Cont): Cont =
+      inc r
+      result = c
+
+    proc foo() {.cps: Cont.} =
+      bar()
+
+    foo()
+    check r == 1, "bzzzt"
+
+  block:
+    ## custom continuation head/tail setup hooks work
+    var h, t = 0
+
+    proc head(c: Cont): Cont =
+      inc h
+      result = c
+
+    proc tail(mom: Cont; c: Cont): Cont =
+      inc t
+      result = c
+      result.mom = mom
+
+    proc bar() {.cps: Cont.} =
+      check h == 1, "parent triggered second"
+      noop()
+
+    proc foo() {.cps: Cont.} =
+      check h == 1, "parent triggered first"
+      check t == 0, "child triggered first"
+      bar()
+      check t == 1, "child triggered second"
+
+    var c = whelp foo()
+    c = cps.trampoline c
+    check "bzzzt":
+      h == t
+      t == 1
+
+    h = 0
+    t = 0
+    foo()
+    check "bzzzt":
+      h == t
+      t == 1
 
   block:
     ## custom continuation bootstrap hook works

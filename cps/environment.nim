@@ -495,7 +495,8 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   # hook the bootstrap
   result.body.add:
     newAssignment c:
-      Boot.hook c
+      Head.hook:
+        Boot.hook c
 
   # now the trampoline
   result.body.add:
