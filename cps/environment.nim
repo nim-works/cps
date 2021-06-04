@@ -263,7 +263,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   let check = nnkWhenStmt.newNimNode via
   check.add:
     nnkElifBranch.newTree:
-      [ infix(via, "isnot", bindSym"Continuation"),
+      [ infix(via, "isnot", bindSym"ContinuationConcept"),
         errorAst repr(via) & " does not match the Continuation concept" ]
   store.add check
 

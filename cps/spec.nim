@@ -27,13 +27,16 @@ template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
 
 type
+  Continuation* = ref object of RootObj
+    fn*: proc(c: Continuation): Continuation {.nimcall.}
+    mom*: Continuation
+
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
-  Continuation* = concept c ##
+  ContinuationConcept* = concept c ##
     ## All continuation types must match this `Continuation` concept
     ## in order to be used by the `.cps.` macro.
     c.fn is ContinuationProc[Continuation]
-    c is ref object
-    c of RootObj
+    c of Continuation
 
   Pair* = tuple
     key: NimNode
