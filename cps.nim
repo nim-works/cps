@@ -144,16 +144,13 @@ template head*(first: Continuation): Continuation {.used.} =
   first
 
 template tail*(parent, child: Continuation): Continuation {.used.} =
-  ## This symbol may be reimplemented to configure a continuation
-  ## for use when it has been instantiated from inside another
-  ## continuation.  The return value specifies the child continuation.
-  echo parent.isNil
-  echo repr(parent)
-  child.mom = parent
-  echo parent.isNil
-  echo child.mom.isNil
-  echo repr(child)
-  child
+  ## This symbol may be reimplemented to configure a continuation for
+  ## use when it has been instantiated from inside another continuation;
+  ## currently, this means assigning the parent to the child's `mom`
+  ## field. The return value specifies the child continuation.
+  let result = child
+  result.mom = parent
+  result
 
 template coop*(c: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
