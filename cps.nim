@@ -3,6 +3,16 @@ import cps/[spec, transform, rewrites, hooks]
 export Continuation, ContinuationProc
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 
+# we only support arc/orc due to its eager expr evaluation qualities
+when not(defined(gcArc) or defined(gcOrc)):
+  {.warning: "cps supports --gc:arc or --gc:orc only; " &
+             "see https://github.com/nim-lang/Nim/issues/18099".}
+
+# we only support panics because we don't want to run finally on defect
+when not defined(nimPanics):
+  {.warning: "cps supports --panics:on only; " &
+             " see https://github.com/disruptek/cps/issues/110".}
+
 type
   State* {.pure.} = enum
     ## Representation of the state of a continuation.
@@ -41,25 +51,9 @@ template dismissed*(c: Continuation): bool =
 macro cps*(T: typed, n: typed): untyped =
   ## This is the .cps. macro performing the proc transformation
   when defined(nimdoc):
-    result = n
+    n
   else:
-    result = cpsTransformProc(T, n)
-
-    # we only support arc/orc due to its eager expr evaluation qualities
-    when not(defined(gcArc) or defined(gcOrc)):
-      once:
-        result.add:
-          nnkPragma.newTree:
-            ident"warning".newColonExpr:
-              newLit "cps supports --gc:arc or --gc:orc only; see https://github.com/nim-lang/Nim/issues/18099"
-
-    # we only support panics because we don't want to run finally on defect
-    when not defined(nimPanics):
-      once:
-        result.add:
-          nnkPragma.newTree:
-            ident"warning".newColonExpr:
-              newLit "cps supports --panics:on only; see https://github.com/disruptek/cps/issues/110"
+    cpsTransformProc(T, n)
 
 proc makeErrorShim(n: NimNode): NimNode =
   ## Upgrades a procedure to serve as a CPS primitive, generating
