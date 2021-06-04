@@ -53,4 +53,5 @@ proc level_one() {.cps:C.} =
 var a = whelp level_one()
 
 while a.running:
+  echo "tramp ", a
   a = a.fn(a)
