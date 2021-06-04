@@ -27,6 +27,7 @@ let t1 = howLong "cps iterator":
 
   type Iterator = ref object of RootObj
     fn*: proc(c: Iterator): Iterator {.nimcall.}
+    mom: Iterator
     val: int
 
   proc jield(it: Iterator; val: int): Iterator {.cpsMagic.} =
