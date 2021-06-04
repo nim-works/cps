@@ -160,7 +160,6 @@ suite "hooks":
     check "bzzzt":
       h == t
       t == 1
-    check r == 6, "bzzzt"
 
   block:
     ## custom continuation bootstrap hook works
