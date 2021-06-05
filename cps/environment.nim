@@ -258,7 +258,7 @@ proc set(e: var Env; key: NimNode; val: LetSection): Env =
   #      and over again and break everything. :(
   set(e, key, (val.NimNode))
 
-iterator addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
+proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
   ## add an IdentDef from a Var|Let Section to the env
   template stripVar(n: NimNode): NimNode =
     ## pull the type out of a VarTy
@@ -269,7 +269,7 @@ iterator addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
     value = newTree(kind,     # ident: <no var> type = default
                     newIdentDefs(def.name, stripVar(def.typ), def.val))
   e = e.set(field, value)
-  yield (key: field, val: value)
+  result = (key: field, val: value)
 
 proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   ## the initial version of the environment;
@@ -334,19 +334,20 @@ proc letOrVar(n: IdentDefs): NimNodeKind =
   else:
     result = nnkLetSection
 
-iterator addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
+proc addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
   ## compose an assignment during addition of identDefs to env
   ## XXX: `kind` is being used to differentiate between IdentDef in a Var|Let
   ##       Section vs a parameter, used for assignment. Create a new type
-  let section =
-    if kind in {nnkVarSection, nnkLetSection}:
-      kind
-    else:
-      letOrVar(d)
-  for field, value in e.addIdentDef(section, d):
-    when cpsDebug == "Env":
-      echo $kind, "\t", repr(d)
-    yield e.initialization(kind, field, value)
+  let
+    section =
+      if kind in {nnkVarSection, nnkLetSection}:
+        kind
+      else:
+        letOrVar(d)
+    (field, value) = e.addIdentDef(section, d)
+  when cpsDebug == "Env":
+    echo $kind, "\t", repr(d)
+  return e.initialization(kind, field, value)
 
 when false:
   proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
@@ -387,31 +388,28 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
 
   case n.kind
   of nnkVarSection, nnkLetSection:
-    if n.len != 1:
-      e.store.add:
-        n.errorAst "expected only one var/let section member"
+    doAssert n.len == 1, "Got more than one items:\n" & repr(n)
+    let defs = n[0]
+    if defs.kind == nnkVarTuple:
+      # deconstruct the RHS types into multiple assignments
+      # let (a, b, c) = foo() -> (env.a, env.b, env.c) = foo()
+      let child = e.castToChild(e.first)
+      let rhs = getTypeInst defs.last
+      var tups = nnkTupleConstr.newTree
+      for index, name in defs[0 ..< defs.len-2].pairs:
+        let entry = newIdentDefs(name, rhs[index], newEmptyNode())
+        # we need to insert the variable and then write a new
+        # accessor that plucks the field from the env
+        let (field, _) = e.addIdentDef(n.kind, expectIdentDefs(entry))
+        tups.add newDotExpr(child, field)
+      maybeAdd newAssignment(tups, defs.last)
     else:
-      for defs in n.items:
-        if defs.kind == nnkVarTuple:
-          # deconstruct the RHS types into multiple assignments
-          # let (a, b, c) = foo() -> (env.a, env.b, env.c) = foo()
-          let child = e.castToChild(e.first)
-          let rhs = getTypeInst defs.last
-          var tups = nnkTupleConstr.newTree
-          for index, name in defs[0 ..< defs.len-2].pairs:
-            let entry = newIdentDefs(name, rhs[index], newEmptyNode())
-            # we need to insert the variable and then write a new
-            # accessor that plucks the field from the env
-            for field, value in e.addIdentDef(n.kind, expectIdentDefs(entry)):
-              tups.add newDotExpr(child, field)
-          maybeAdd newAssignment(tups, defs.last)
-        else:
-          # an iterator handles `var a, b, c = 3` appropriately
-          for assignment in e.addAssignment(n.kind, expectIdentDefs(defs)):
-            maybeAdd assignment
-  of nnkIdentDefs:
-    for assignment in e.addAssignment(n.kind, expectIdentDefs(n)):
+      # an iterator handles `var a, b, c = 3` appropriately
+      let assignment = e.addAssignment(n.kind, expectIdentDefs(defs))
       maybeAdd assignment
+  of nnkIdentDefs:
+    let assignment = e.addAssignment(n.kind, expectIdentDefs(n))
+    maybeAdd assignment
   else:
     e.store.add:
       n.errorAst "localSection input"

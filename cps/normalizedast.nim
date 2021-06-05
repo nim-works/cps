@@ -64,15 +64,9 @@ proc expectIdentDefs*(n: NimNode): IdentDefs =
 proc newIdentDefs*(n: string, typ: NimNode, val = newEmptyNode()): IdentDefs =
   newIdentDefs(ident(n), typ, val).IdentDefs
 
-func name*(n: IdentDefs): NimNode =
-  n[0]
-
-func typ*(n: IdentDefs): NimNode =
-  n[1]
-
-func val*(n: IdentDefs): NimNode =
-  # XXX: rename to `value` or 
-  n[2]
+func name*(n: IdentDefs): NimNode = n[0]
+func typ*(n: IdentDefs): NimNode = n[1]
+func val*(n: IdentDefs): NimNode = n[2]
 
 func hasValue*(n: IdentDefs): bool =
   ## has a non-Empty value defined
@@ -94,8 +88,7 @@ proc hasValue(n: LetDef): bool =
   ## has a non-Empty value defined
   n.NimNode[2].kind != nnkEmpty
 
-proc val(n: LetDef): NimNode =
-  n.NimNode[2]
+proc val(n: LetDef): NimNode = n.NimNode[2]
 
 # fn-LetSection
 
