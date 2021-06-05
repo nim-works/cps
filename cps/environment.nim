@@ -92,12 +92,12 @@ proc init(e: var Env) =
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarSection e.rs)
 
-proc definedName(n: VarSection): NimNode =
+proc definedName(n: VarIdentDef): NimNode =
   ## create an identifier from an typesection/identDef as cached;
   ## this is a copy and it is repr'd to ensure gensym compat...
   result = ident(repr(n.name))
 
-proc definedName(n: LetSection): NimNode =
+proc definedName(n: LetIdentDef): NimNode =
   ## create an identifier from an typesection/identDef as cached;
   ## this is a copy and it is repr'd to ensure gensym compat...
   result = ident(repr(n.name))
@@ -116,12 +116,12 @@ iterator pairs(e: Env): Pair =
     # make sure we're actually measuring gensyms for collision
     let
       n = pair.val
-      name: NimNode = # XXX: simplify with a VarLetSection typeclass
+      name: NimNode = # XXX: simplify with a VarLetIdentDef typeclass
         case n.kind
         of nnkLetSection:
-          definedName(expectLetSection(n))
+          definedName(expectLetIdentDef(n))
         of nnkVarSection:
-          definedName(expectVarSection(n))
+          definedName(expectVarIdentDef(n))
         else:
           doAssert false, "use this on env[key]"
           nil # forces this to be an expression
@@ -235,6 +235,7 @@ proc storeType*(e: Env; force = off): Env =
 
 proc set(e: var Env; key: NimNode; val: NimNode): Env =
   ## set [ident|sym] = let/var section
+  ## XXX: clean this up with a typeclass?
   assert key.kind in {nnkSym, nnkIdent}
   assert val.kind in {nnkVarSection, nnkLetSection}
   assert val.len == 1, "too large a section"

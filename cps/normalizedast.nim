@@ -19,8 +19,16 @@ type
   IdentDefs* = distinct NormalizedNimNode
 
   LetSection* = distinct NormalizedNimNode
+  LetDef = distinct NormalizedNimNode # IdentDef or VarTuple
+  # LetVal = distinct NormalizedNimNode # val for an IdentDef or VarTuple
+  LetIdentDef* = distinct LetSection
+  LetTuple* = distinct LetSection
 
   VarSection* = distinct NormalizedNimNode
+  VarDef = distinct NormalizedNimNode # IdentDef or VarTuple
+  # VarVal = distinct NormalizedNimNode # val for an IdentDef or VarTuple
+  VarIdentDef* = distinct VarSection
+  VarTuple* = distinct VarSection
 
 proc normalizeProcDef*(n: NimNode): ProcDef =
   expectKind(n, nnkProcDef)
@@ -80,6 +88,15 @@ func inferTypFromImpl*(n: IdentDefs): NimNode =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
   if n.hasType: n.typ else: getTypeImpl(n.val)
 
+# fn-LetDef
+
+proc hasValue(n: LetDef): bool =
+  ## has a non-Empty value defined
+  n.NimNode[2].kind != nnkEmpty
+
+proc val(n: LetDef): NimNode =
+  n.NimNode[2]
+
 # fn-LetSection
 
 proc expectLetSection*(n: NimNode): LetSection =
@@ -94,21 +111,26 @@ proc expectLetSection*(n: NimNode): LetSection =
 proc newLetSection*(i: IdentDefs): LetSection =
   (nnkLetSection.newTree i).LetSection
 
-proc identdef(n: LetSection): IdentDefs =
-  ## Internal accessor to get the single IdentDefs
-  n.NimNode[0].IdentDefs
-
-proc name*(n: LetSection): NimNode =
-  # we only have a single identdefs, and that'll have the name
-  n.identdef.name
+proc def(n: LetSection): LetDef =
+  ## Internal accessor to get the single IdentDefs or tuple
+  n.NimNode[0].LetDef
 
 proc hasValue*(n: LetSection): bool =
   ## has a non-Empty value defined
-  n.identdef.hasValue
+  n.def.hasValue
 
 proc val*(n: LetSection): NimNode =
   ## the init value of the single identdefs within
-  n.identdef.val
+  n.def.val
+
+# fn-VarDef
+
+proc hasValue(n: VarDef): bool =
+  ## has a non-Empty value defined
+  n.NimNode[2].kind != nnkEmpty
+
+proc val(n: VarDef): NimNode =
+  n.NimNode[2]
 
 # fn-VarSection
 
@@ -130,19 +152,87 @@ proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
   ## create a var section with an identdef, eg: `n`: `typ` = `val`
   newVarSection(newIdentDefs(n, typ, val).IdentDefs)
 
-proc identdef(n: VarSection): IdentDefs =
-  ## Internal accessor to get the single IdentDefs
-  n[0].IdentDefs
-
-proc name*(n: VarSection): NimNode =
-  # we only have a single identdefs, and that'll have the name
-  n.identdef.name
+proc def(n: VarSection): VarDef =
+  ## Internal accessor to get the def part (IdentDef or VarTuple)
+  n[0].VarDef
 
 proc hasValue*(n: VarSection): bool =
   ## has a non-Empty value defined
-  n.identdef.hasValue
+  n.def.hasValue
 
 proc val*(n: VarSection): NimNode =
+  ## the init value of the single identdefs or tuple within
+  n.def.val
+
+# fn-LetIdentDef
+
+proc expectLetIdentDef*(n: NimNode): LetIdentDef =
+  ## return an LetIdentDef or error out
+  if n.kind != nnkLetSection:
+    error "not a let section, got:\n" & repr(n), n
+  elif n.len != 1:
+    error "bad rewrite, let section has " & $n.len &
+          " defines, requires exactly 1:\n" & repr(n), n
+  elif n[0].kind notin {nnkIdentDefs}:
+    error "LetIdentDef requires a single IdentDefs child, got:\n" & repr(n), n
+  return n.LetIdentDef
+
+proc newLetIdentDef*(i: IdentDefs): LetIdentDef =
+  (nnkLetSection.newTree i).LetIdentDef
+
+proc newLetIdentDef*(n, typ: NimNode, val = newEmptyNode()): LetIdentDef =
+  ## create a let section with an identdef, eg: `n`: `typ` = `val`
+  newLetIdentDef(newIdentDefs(n, typ, val).IdentDefs)
+
+proc identdef(n: LetIdentDef): IdentDefs =
+  ## Internal accessor to get the single IdentDefs
+  n.NimNode[0].IdentDefs
+
+proc name*(n: LetIdentDef): NimNode =
+  # we only have a single identdefs, and that'll have the name
+  n.identdef.name
+
+proc hasValue*(n: LetIdentDef): bool =
+  ## has a non-Empty value defined
+  n.identdef.hasValue
+
+proc val*(n: LetIdentDef): NimNode =
+  ## the init value of the single identdefs within
+  n.identdef.val
+
+# fn-VarIdentDef
+
+proc expectVarIdentDef*(n: NimNode): VarIdentDef =
+  ## return an VarIdentDef or error out
+  if n.kind != nnkVarSection:
+    error "not a var section, got:\n" & repr(n), n
+  elif n.len != 1:
+    error "bad rewrite, var section has " & $n.len &
+          " defines, requires exactly 1:\n" & repr(n), n
+  elif n[0].kind notin {nnkIdentDefs}:
+    error "VarIdentDef requires a single IdentDefs child, got:\n" & repr(n), n
+  return n.VarIdentDef
+
+proc newVarIdentDef*(i: IdentDefs): VarIdentDef =
+  (nnkVarSection.newTree i).VarIdentDef
+
+proc newVarIdentDef*(n, typ: NimNode, val = newEmptyNode()): VarIdentDef =
+  ## create a var section with an identdef, eg: `n`: `typ` = `val`
+  newVarIdentDef(newIdentDefs(n, typ, val).IdentDefs)
+
+proc identdef(n: VarIdentDef): IdentDefs =
+  ## Internal accessor to get the single IdentDefs
+  n.NimNode[0].IdentDefs
+
+proc name*(n: VarIdentDef): NimNode =
+  # we only have a single identdefs, and that'll have the name
+  n.identdef.name
+
+proc hasValue*(n: VarIdentDef): bool =
+  ## has a non-Empty value defined
+  n.identdef.hasValue
+
+proc val*(n: VarIdentDef): NimNode =
   ## the init value of the single identdefs within
   n.identdef.val
 
