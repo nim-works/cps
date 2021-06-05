@@ -37,12 +37,13 @@ template finished*(c: Continuation): bool =
   ## `true` if the continuation is finished.
   c.state == Finished
 
-proc trampoline*(c: Continuation): Continuation =
+proc trampoline*[T: Continuation](c: T): T =
   ## This is the basic trampoline: it will continue the continuation
   ## until it is no longer in 'running' state
-  result = c
-  while result.running:
-    result = result.fn(result)
+  var c: Continuation = c
+  while c.running:
+    c = c.fn(c)
+  result = T c
 
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
@@ -119,25 +120,24 @@ macro whelp*(call: typed): Continuation =
   ## running it; instead, return the continuation as a value.
   result = whelpIt call:
     it = Head.hook(it)
-  #
-  # unlike the Tail version, introduce at the top of procs to work
-  # around a nim issue with inner mixin calls...?
 
 macro whelp*(parent: Continuation; call: typed): Continuation =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
   result = whelpIt call:
-    it = Tail.hook(parent, it)
+    it =
+      Tail.hook(newCall(ident"Continuation", parent),
+                newCall(ident"Continuation", it))
   result = newStmtList result
   result.introduce {Tail}
 
-template head*(first: Continuation): Continuation {.used.} =
+template head*[T: Continuation](first: T): T {.used.} =
   ## This symbol may be reimplemented to configure a continuation
   ## for use when there is no parent continuation available.
   ## The return value specifies the continuation.
   first
 
-proc tail*(parent, child: Continuation): Continuation {.used, inline.} =
+proc tail*[T: Continuation](parent, child: T): T {.used, inline.} =
   ## This symbol may be reimplemented to configure a continuation for
   ## use when it has been instantiated from inside another continuation;
   ## currently, this means assigning the parent to the child's `mom`
@@ -149,19 +149,19 @@ proc tail*(parent, child: Continuation): Continuation {.used, inline.} =
   result = child
   result.mom = parent
 
-template coop*(c: Continuation): Continuation {.used.} =
+template coop*[T: Continuation](c: T): T {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
   ## a cooperative yield at appropriate continuation exit points.
   ## The return value specifies the continuation.
   c
 
-template boot*(c: Continuation): Continuation {.used.} =
+template boot*[T: Continuation](c: T): T {.used.} =
   ## This symbol may be reimplemented to refine a continuation after
   ## it has been allocated but before it is first run.
   ## The return value specifies the continuation.
   c
 
-template pass*(source, destination: Continuation): Continuation {.used.} =
+template pass*[T: Continuation](source, destination: T): T {.used.} =
   ## This symbol may be reimplemented to introduce logic during
   ## the transfer of control between parent and child continuations.
   ## The return value specifies the destination continuation.

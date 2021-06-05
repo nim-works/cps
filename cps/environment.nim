@@ -502,7 +502,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   result.body.add:
     nnkWhileStmt.newTree: [
       newCall(ident"running", c),  # XXX: bindSym?  bleh.
-      newAssignment(c, newDotExpr(c, env.fn).newCall(c))
+      newAssignment(c, env.castToRoot newDotExpr(c, env.fn).newCall(c))
     ]
 
   # do an easy static check, and then

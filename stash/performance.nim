@@ -25,9 +25,9 @@ var h: Hash = 0
 
 let t1 = howLong "cps iterator":
 
-  type Iterator = ref object of RootObj
-    fn*: proc(c: Iterator): Iterator {.nimcall.}
-    mom: Iterator
+  type Iterator = ref object of Continuation
+    #fn*: proc(c: Iterator): Iterator {.nimcall.}
+    #mom: Iterator
     val: int
 
   proc jield(it: Iterator; val: int): Iterator {.cpsMagic.} =
@@ -42,9 +42,9 @@ let t1 = howLong "cps iterator":
 
   template finished(x: ref): bool = x == nil or x.fn == nil
 
-  var a = whelp counter(1, iterations)
+  var a: Continuation = whelp counter(1, iterations)
   while not finished(a):
-    h = h !& hash(a.val)
+    h = h !& hash((Iterator a).val)
     a = a.fn(a)
 
 

@@ -34,7 +34,7 @@ proc maybeReturnParent*(c: NimNode): NimNode =
   ## the appropriate target of a `return` statement in a CPS procedure
   ## (that would otherwise return continuation `c`) first performs a
   ## runtime check to see if the parent should be returned instead.
-  let mom = newDotExpr(c, ident"mom")
+  let mom = newCall(newCall(ident"typeof", c), newDotExpr(c, ident"mom"))
   result =                                  # return value is as follows:
     nnkIfExpr.newTree [
       nnkElifExpr.newTree [                 # if
