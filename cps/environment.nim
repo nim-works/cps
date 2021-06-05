@@ -92,11 +92,15 @@ proc init(e: var Env) =
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarSection e.rs)
 
-proc definedName(n: NimNode): NimNode =
+proc definedName(n: VarSection): NimNode =
   ## create an identifier from an typesection/identDef as cached;
   ## this is a copy and it is repr'd to ensure gensym compat...
-  assert n.kind in {nnkVarSection, nnkLetSection}, "use this on env[key]"
-  result = ident(repr(n[0][0]))
+  result = ident(repr(n.name))
+
+proc definedName(n: LetSection): NimNode =
+  ## create an identifier from an typesection/identDef as cached;
+  ## this is a copy and it is repr'd to ensure gensym compat...
+  result = ident(repr(n.name))
 
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
@@ -110,7 +114,19 @@ iterator pairs(e: Env): Pair =
   var seen = initHashSet[string]()
   for pair in e.allPairs:
     # make sure we're actually measuring gensyms for collision
-    if not seen.containsOrIncl definedName(pair.val).strVal:
+    let
+      n = pair.val
+      name: NimNode = # XXX: simplify with a VarLetSection typeclass
+        case n.kind
+        of nnkLetSection:
+          definedName(expectLetSection(n))
+        of nnkVarSection:
+          definedName(expectVarSection(n))
+        else:
+          doAssert false, "use this on env[key]"
+          nil # forces this to be an expression
+
+    if not seen.containsOrIncl name.strVal:
       yield pair
 
 proc populateType(e: Env; n: var NimNode) =
@@ -236,6 +252,11 @@ proc set(e: var Env; key: NimNode; val: VarSection): Env =
   #      and over again and break everything. :(
   set(e, key, cVarSectionToNimNode(val))
 
+proc set(e: var Env; key: NimNode; val: LetSection): Env =
+  # XXX: not doing an explicit conversion will recursively call this proc over
+  #      and over again and break everything. :(
+  set(e, key, (val.NimNode))
+
 iterator addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
   ## add an IdentDef from a Var|Let Section to the env
   template stripVar(n: NimNode): NimNode =
@@ -288,13 +309,19 @@ proc initialization(e: Env; kind: NimNodeKind;
   # this is our continuation type, fully cast
   let child = e.castToChild(e.first)
 
-  # don't attempt to redefine proc params!
-  if kind in {nnkVarSection, nnkLetSection}:
-    # search first|only typedefs in a var/let section
-    let defs = value[0]
-    if len(defs) > 2 and not defs.last.isEmpty:
-      # this is basically env2323(cont).foo34 = "some default"
-      result.add newAssignment(newDotExpr(child, field), defs.last)
+  # let/var sections basically become env2323(cont).foo34 = "some default"
+  case kind
+  of nnkLetSection:
+    let l = expectLetSection(value)
+    if l.hasValue:
+      result.add newAssignment(newDotExpr(child, field), l.val)
+  of nnkVarSection:
+    let v = expectVarSection(value)
+    if v.hasValue:
+      result.add newAssignment(newDotExpr(child, field), v.val)
+  else:
+    # don't attempt to redefine proc params!
+    discard
 
 proc letOrVar(n: IdentDefs): NimNodeKind =
   ## choose between let or var for proc parameters
@@ -316,7 +343,6 @@ iterator addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
     else:
       letOrVar(d)
   for field, value in e.addIdentDef(section, d):
-    #let name = definedName(value)
     when cpsDebug == "Env":
       echo $kind, "\t", repr(d)
     yield e.initialization(kind, field, value)
