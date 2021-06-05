@@ -616,4 +616,3 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   # generated proc bodies, remaining proc, whelp, bootstrap
   result = newStmtList(types, n, whelp, booty)
   result = workaroundRewrites result
-  echo repr(result)
