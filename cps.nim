@@ -91,16 +91,26 @@ macro cpsVoodoo*(n: untyped): untyped =
   shim[1].addPragma ident"cpsVoodooCall"
   shim
 
+proc bootstrapSymbol(n: NimNode): NimNode =
+  case n.kind
+  of nnkProcDef:
+    for n in n.pragma.items:
+      if n.kind == nnkExprColonExpr:
+        if $n[0] == "cpsBootstrap":
+          if result.isNil:
+            result = n[1]
+          else:
+            result = n.errorAst "redundant bootstrap pragmas?"
+    if result.isNil:
+      result = n.errorAst "welping malfunction"
+  of nnkCallKinds:
+    result = bootstrapSymbol(getImpl n[0])
+  else:
+    result = newCall(ident"typeOf", n)
+
 proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
-  for n in n.pragma.items:
-    if n.kind == nnkExprColonExpr:
-      if $n[0] == "cpsBootstrap":
-        if result.isNil:
-          result = n[1].newCall args        # n[1]: the bootstrap sym to use
-        else:
-          error "redundant bootstrap pragmas?", n
-  if result.isNil:
-    error "welping malfunction", n
+  let sym = bootstrapSymbol n
+  result = sym.newCall args
 
 template whelpIt*(input: typed; body: untyped): untyped =
   var n = normalizingRewrites input
@@ -124,12 +134,16 @@ macro whelp*(call: typed): Continuation =
 macro whelp*(parent: Continuation; call: typed): Continuation =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
+  let sym = bootstrapSymbol call
+  #let cont = bootstrapSymbol newDotExpr(parent, ident"mom")
+  let cont = ident"Continuation"
   result = whelpIt call:
-    it =
-      Tail.hook(newCall(ident"Continuation", parent),
-                newCall(ident"Continuation", it))
-  result = newStmtList result
-  result.introduce {Tail}
+    #it =
+    echo:
+      repr:
+        nnkDiscardStmt.newTree:
+          newCall(cont,
+            Tail.hook(newCall(cont, parent), sym.ensimilate it))
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## This symbol may be reimplemented to configure a continuation
@@ -137,7 +151,7 @@ template head*[T: Continuation](first: T): T {.used.} =
   ## The return value specifies the continuation.
   first
 
-proc tail*[T: Continuation](parent, child: T): T {.used, inline.} =
+proc tail*[T: Continuation](parent: Continuation; child: T): T {.used, inline.} =
   ## This symbol may be reimplemented to configure a continuation for
   ## use when it has been instantiated from inside another continuation;
   ## currently, this means assigning the parent to the child's `mom`
@@ -148,6 +162,7 @@ proc tail*[T: Continuation](parent, child: T): T {.used, inline.} =
   ##       as it may be an expression...
   result = child
   result.mom = parent
+  #proc tail*[T: Continuation](parent, child: T): T {.used, inline.} =
 
 template coop*[T: Continuation](c: T): T {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
