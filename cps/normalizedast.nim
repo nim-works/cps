@@ -145,12 +145,27 @@ iterator indexNamePairs*(n: VarLetTuple): (int, NimNode) =
 
 # fn-VarLetIdentDef
 
+proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDefs): VarLetIdentDef =
+  ## create a new VarLetIdentDef
+  doAssert kind in {nnkLetSection, nnkVarSection},
+    "kind must be nnkLetSection nnkVarSection, got: " & repr(kind)
+  newTree(kind, i).VarLetIdentDef
+proc newVarLetIdentDef*(kind: NimNodeKind,
+                        name, typ, val: NimNode): VarLetIdentDef =
+  ## create a new VarLetIdentDef
+  newVarLetIdentDef(kind, newIdentDefs(name, typ, val).IdentDefs)
 proc def(n: VarLetIdentDef): IdentDefs {.borrow.}
 proc identdef*(n: VarLetIdentDef): IdentDefs =  n.def
   ## retrieve the innner IdentDef
   # XXX: might want to remove this proc
 proc name*(n: VarLetIdentDef): NimNode = n.def.name
   ## Name (ident|sym) of the identifer
+func typ(n: VarLetIdentDef): NimNode {.borrow.}
+func rhs(n: VarLetIdentDef): NimNode {.borrow.}
+func hasType(n: VarLetIdentDef): bool = n.def.typ.kind != nnkEmpty
+func inferTypFromImpl*(n: VarLetIdentDef): NimNode =
+  ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
+  if n.hasType: n.typ else: getTypeImpl(n.rhs)
 proc expectVarLetIdentDef*(n: NimNode): VarLetIdentDef =
   ## return a VarLetIdentDef, otherwise error out
   expectVarLet(n).asVarLetIdentDef

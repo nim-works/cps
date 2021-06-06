@@ -15,7 +15,7 @@ const
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
-  LocalCache = OrderedTable[NimNode, NimNode]
+  LocalCache = OrderedTable[NimNode, VarLetIdentDef]
 
   Env* = ref object
     id: NimNode                     # the identifier of our continuation type
@@ -32,6 +32,10 @@ type
     rs: IdentDefs                   # the identdefs for the result
     ex: NimNode                     # the sym we use for current exception
     mom: NimNode                    # the sym we use for parent continuation
+
+  CachePair* = tuple
+    key: NimNode
+    val: VarLetIdentDef
 
 proc len*(e: Env): int = e.locals.len
 
@@ -78,10 +82,7 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   else:
     locals
 
-proc set(e: var Env; key: NimNode; val: NimNode): Env
-proc set(e: var Env; key: NimNode; val: VarSection): Env
-# XXX: listen `key` param, you're going to get typed one of these days, mark my
-#      words. Your `NimNode` days are numbered, now wtf do we call you?
+proc set(e: var Env; key: NimNode; val: VarLetIdentDef): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
@@ -90,9 +91,9 @@ proc init(e: var Env) =
     e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
   if e.rs.hasType:
-    e = e.set(e.rs.name, newVarSection e.rs)
+    e = e.set(e.rs.name, newVarLetIdentDef(nnkVarSection, e.rs))
 
-proc allPairs(e: Env): seq[Pair] =
+proc allPairs(e: Env): seq[CachePair] =
   if not e.isNil:
     result = toSeq e.locals.pairs
     # most-recently-defined comes first
@@ -100,37 +101,21 @@ proc allPairs(e: Env): seq[Pair] =
     # add any inherited types from the parent
     result.add allPairs(e.parent)
 
-iterator pairs(e: Env): Pair =
+iterator pairs(e: Env): CachePair =
   var seen = initHashSet[string]()
   for pair in e.allPairs:
     # make sure we're actually measuring gensyms for collision
-    let
-      n = pair.val
-      isValid = n.kind in {nnkLetSection, nnkVarSection}
-    if not isValid:
-      doAssert false, "use this on env[key]"
-    let
-      section = expectVarLetIdentDef(n)
-      name = ident(repr(section.name))
-        ## create an identifier from an typesection/identDef as cached;
-        ## this is a copy and it is repr'd to ensure gensym compat...
+    let name = ident(repr(pair.val.name))
+      ## create an identifier from an typesection/identDef as cached;
+      ## this is a copy and it is repr'd to ensure gensym compat...
     if not seen.containsOrIncl name.strval:
       yield pair
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
   for name, section in e.locals.pairs:
-    for defs in section.items:
-      # we need either an initialization value or a type field
-      if defs[1].isEmpty and defs[2].isEmpty:
-        if name != e.rs.name:
-          error "local " & repr(name) & " lacks type/initialization"
-      else:
-        n.add:
-          if defs[1].isEmpty:         # get the type of the assignment
-            newIdentDefs(name, getTypeImpl(defs.last), newEmptyNode())
-          else:                       # name is an ident or symbol
-            newIdentDefs(name, defs[1], newEmptyNode())
+    n.add:
+      newIdentDefs(name, section.inferTypFromImpl, newEmptyNode())
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
@@ -185,7 +170,7 @@ proc newEnv*(parent: Env; copy = off): Env =
   if copy:
     result = Env(store: parent.store,
                  via: parent.identity,
-                 locals: initOrderedTable[NimNode, NimNode](),
+                 locals: initOrderedTable[NimNode, VarLetIdentDef](),
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
@@ -221,13 +206,10 @@ proc storeType*(e: Env; force = off): Env =
     result = e
     assert not e.isDirty
 
-proc set(e: var Env; key: NimNode; val: NimNode): Env =
+proc set(e: var Env; key: NimNode; val: VarLetIdentDef): Env =
   ## set [ident|sym] = let/var section
   ## XXX: clean this up with a typeclass?
   assert key.kind in {nnkSym, nnkIdent}
-  assert val.kind in {nnkVarSection, nnkLetSection}
-  assert val.len == 1, "too large a section"
-  assert val[0].len == 3, "too small an identdefs"
   if key in e.locals:
     result = storeType e
   else:
@@ -236,17 +218,7 @@ proc set(e: var Env; key: NimNode; val: NimNode): Env =
   when cpsReparent:
     result.seen.incl key.strVal
 
-proc set(e: var Env; key: NimNode; val: VarSection): Env =
-  # XXX: not doing an explicit conversion will recursively call this proc over
-  #      and over again and break everything. :(
-  set(e, key, cVarSectionToNimNode(val))
-
-proc set(e: var Env; key: NimNode; val: LetSection): Env =
-  # XXX: not doing an explicit conversion will recursively call this proc over
-  #      and over again and break everything. :(
-  set(e, key, (val.NimNode))
-
-proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
+proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
   ## add an IdentDef from a Var|Let Section to the env
   template stripVar(n: NimNode): NimNode =
     ## pull the type out of a VarTy
@@ -254,8 +226,11 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): Pair =
 
   let
     field = genField def.name.strVal
-    value = newTree(kind,     # ident: <no var> type = default
-                    newIdentDefs(def.name, stripVar(def.typ), def.val))
+    value = newVarLetIdentDef(
+              kind,              # XXX: this kind business sucks
+              def.name,
+              stripVar(def.typ), # ident: <no var> type = default
+              def.val)
   e = e.set(field, value)
   result = (key: field, val: value)
 
@@ -335,7 +310,8 @@ proc addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
     (field, value) = e.addIdentDef(section, d)
   when cpsDebug == "Env":
     echo $kind, "\t", repr(d)
-  return e.initialization(kind, field, value)
+  # XXX: remove the `.NimNode`
+  return e.initialization(kind, field, value.NimNode)
 
 when false:
   proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
@@ -436,7 +412,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   for field, section in e.pairs:
     # we don't resym identifiers, which we must have created;
     # these are a side-effect of an open nim bug
-    let sym = section.last[0]
+    let sym = section.name
     if sym.kind == nnkSym:
       result = result.resym(sym, newDotExpr(child, field))
     else:
@@ -455,7 +431,7 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
     if field notin [e.fn, e.rs.name, e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
-        newAssignment(resultdot field, section.last[0])
+        newAssignment(resultdot field, section.name)
   if not goto.isNil:
     result.add:
       newAssignment(resultdot e.fn, goto)
@@ -465,7 +441,9 @@ proc getException*(e: var Env): NimNode =
   if e.ex.isNil:
     e.ex = genField"ex"
     e = e.set e.ex:
-      newVarSection(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+      # XXX: this is ugly
+      newVarLetIdentDef(nnkVarSection, e.ex,
+                        nnkRefTy.newTree(bindSym"Exception"), newNilLit())
   result = newDotExpr(e.castToChild(e.first), e.ex)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
