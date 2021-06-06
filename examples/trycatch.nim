@@ -7,9 +7,7 @@ import cps
 
 
 type
-  Tc = ref object of RootObj
-    fn*: proc(c: Tc): Tc {.nimcall.}
-    mom: Tc
+  Tc = ref object of Continuation
 
 var
   err: bool
@@ -59,6 +57,6 @@ proc foo() {.cps:Tc.} =
 
 # Trampoline
 
-var c = whelp foo()
+var c: Continuation = whelp foo()
 while c.running:
   c = c.fn(c)
