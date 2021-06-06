@@ -62,9 +62,9 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
   case hook
   of Alloc:
     # hook(typedesc[Continuation])
-    #newCall(hook.sym, n)
+    newCall(hook.sym, n)
     # hook[env_234234]()
-    newCall(nnkBracketExpr.newTree [hook.sym, n])
+    #newCall(nnkBracketExpr.newTree [hook.sym, n])
   of Boot, Coop, Head:
     # hook(continuation)
     newCall(hook.sym, n)
@@ -81,7 +81,9 @@ proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
     # hook[Cont](typedesc[env_234234])
     #newCall(nnkBracketExpr.newTree [hook.sym, a], b)
     # Cont(hook(typedesc[env_234234]))
-    newCall(a, newCall(hook.sym, b))
+    #newCall(a, newCall(hook.sym, b))
+    # hook(Cont, env_234234)
+    newCall(hook.sym, a, b)
   of Unwind:
     # hook(continuation, exception)
     newCall(hook.sym, a, b)

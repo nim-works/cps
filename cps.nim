@@ -182,7 +182,12 @@ template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
   ## tracing of the entry to each continuation leg.
   discard
 
-template alloc*[T: Continuation](c: typedesc[T]): T {.used.} =
+proc alloc*[T: Continuation](c: typedesc[T]): T {.used.} =
+  ## This symbol may be reimplemented to customize continuation
+  ## allocation.
+  new c
+
+proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used.} =
   ## This symbol may be reimplemented to customize continuation
   ## allocation.
   new c

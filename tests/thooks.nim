@@ -56,14 +56,22 @@ suite "hooks":
   block:
     ## custom continuation allocators are used automatically
     var r = 0
-    proc alloc[T: Cont](c: typedesc[T]): c =
-      inc r
-      new c
+    macro alloc(root: typed; c: typed): untyped =
+      result = newStmtList()
+      result.add:
+        newCall(ident"inc", bindSym"r")
+      result.add:
+        newCall(ident"new", c)
 
-    proc foo(x: int) {.cps: Cont.} =
-      check x == 3
-      noop()
-      check x == 3
+    macro dumper(n: typed) =
+      result = n
+      debugEcho treeRepr(n)
+
+    dumper:
+      proc foo(x: int) {.cps: Cont.} =
+        check x == 3
+        noop()
+        check x == 3
 
     foo(3)
     check r == 1, "bzzzt"
