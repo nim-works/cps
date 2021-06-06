@@ -61,7 +61,6 @@ func hasPragma*(n: NimNode; s: static[string]): bool =
     result = hasPragma(n.pragma, s)
   of nnkObjectTy:
     result = hasPragma(n[0], s)
-    assert n[0].kind == nnkPragma
   of nnkRefTy:
     result = hasPragma(n.last, s)
   of nnkTypeDef:
