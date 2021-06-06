@@ -107,13 +107,14 @@ func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
 func val*(n: VarLetLike): NimNode = n.def.val
   ## the ident or sym being defined, or tuple being defined
+func kind*(n: VarLetLike): NimNodeKind = n.NimNode.kind
 func hasValue*(n: VarLetLike): bool = n.def.hasValue
   ## whether an initial value has been specified
 func hasType(n: VarLetLike): bool = n.def.typ.kind != nnkEmpty
   ## whether an explicit type is defined
 func isTuple*(n: VarLetLike): bool = n.def.NimNode.kind == nnkVarTuple
 
-func validateAndTransform(n: NimNode, T: typedesc = type VarLet): T =
+func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
   const sectionName =
     when T is LetSectionLike: "let"
     elif T is VarSectionLike: "var"
@@ -140,7 +141,7 @@ func validateAndTransform(n: NimNode, T: typedesc = type VarLet): T =
   elif checkIdentDef:
     if n[0].kind != nnkIdentDefs:
       errorGot sectionName & " section must contain an IdentDefs", n
-    validateIdentDefs(n)
+    validateIdentDefs(n[0])
   elif checkTuple and n[0].kind != nnkVarTuple:
     errorGot sectionName & " section must be a tuple assignment", n
   return n.T
@@ -161,17 +162,17 @@ func inferTypFromImpl*(n: VarLetIdentDefLike): NimNode =
 
 proc expectVarLet*(n: NimNode): VarLet =
   ## return a VarLet if this is a var or let section, otherwise error out
-  validateAndTransform(n)
+  validateAndCoerce(n)
 
 func errorGot(msg: string, n: VarLetLike, got: string = repr(n)) =
   errorGot(msg, n.NimNode, got)
 
 proc asVarLetTuple*(n: VarLet): TupleVarLet =
   ## return a TupleVarLet if the def is a VarTuple, otherwise error out
-  validateAndTransform(n.NimNode, TupleVarLet)
+  validateAndCoerce(n.NimNode, TupleVarLet)
 proc asVarLetIdentDef*(n: VarLet): IdentDefVarLet =
   ## return a IdentDefVarLet if the def is an IdentDef, otherwise error out
-  validateAndTransform(n.NimNode, IdentDefVarLet)
+  validateAndCoerce(n.NimNode, IdentDefVarLet)
 
 # fn-TupleVarLet
 
@@ -194,17 +195,10 @@ proc newVarLetIdentDef*(kind: NimNodeKind,
                         name, typ, val: NimNode): IdentDefVarLet =
   ## create a new IdentDefVarLet
   newVarLetIdentDef(kind, newIdentDefs(name, typ, val).IdentDefs)
-proc expectVarLetIdentDef*(n: NimNode): IdentDefVarLet =
-  ## return a IdentDefVarLet, otherwise error out
-  expectVarLet(n).asVarLetIdentDef
 
 # fn-VarSection
 
 defineToNimNodeConverter(VarSection)
-
-proc expectVarSection*(n: NimNode): VarSection =
-  ## return an VarSection or error out
-  validateAndTransform(n, VarSection)
 
 proc newVarSection*(i: IdentDefs): VarSection =
   (nnkVarSection.newTree i).VarSection
@@ -213,10 +207,6 @@ proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
   newVarSection(newIdentDefs(n, typ, val).IdentDefs)
 
 # fn-IdentDefLet
-
-proc expectIdentDefLet*(n: NimNode): IdentDefLet =
-  ## return an IdentDefLet or error out
-  validateAndTransform(n, IdentDefLet)
 
 proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
   ## create a let section with an identdef
@@ -228,10 +218,6 @@ proc newIdentDefLet*(n, typ: NimNode, val = newEmptyNode()): IdentDefLet =
 
 # fn-IdentDefVar
 
-proc expectIdentDefVar*(n: NimNode): IdentDefVar =
-  ## return an IdentDefVar or error out
-  validateAndTransform(n, IdentDefVar)
-
 proc newIdentDefVar*(i: IdentDefs): IdentDefVar =
   ## create a var section with an identdef
   (nnkVarSection.newTree i).IdentDefVar
@@ -241,7 +227,7 @@ proc newIdentDefVar*(n, typ: NimNode, val = newEmptyNode()): IdentDefVar =
   newIdentDefVar(newIdentDefs(n, typ, val).IdentDefs)
 
 converter identDefVarToIdentDefVarLet*(n: IdentDefVar): IdentDefVarLet =
-  ## allow downgrading
+  # allow downgrading
   n.IdentDefVarLet
 
 # fn-ProcDef

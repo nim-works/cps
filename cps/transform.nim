@@ -380,21 +380,16 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         env.rewriteReturn nc
 
     of nnkVarSection, nnkLetSection:
-      if nc.len != 1:
-        # our rewrite pass should prevent this guard from triggering
-        result.add:
-          nc.errorAst "unexpected section size"
-        return
-
-      if isCpsCall(nc.last.last):
+      let section = expectVarLet(nc)
+      if isCpsCall(section.val):
         result.add:
           nc.last.errorAst "shim is not yet supported"
-      elif isCpsBlock(nc.last.last):
+      elif isCpsBlock(section.val):
         result.add:
           nc.last.errorAst "only calls are supported here"
       else:
         # add definitions into the environment
-        env.localSection(nc, result)
+        env.localSection(section, result)
 
     of nnkForStmt:
       if nc.isCpsBlock:

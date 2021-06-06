@@ -226,7 +226,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
   let
     field = genField def.name.strVal
     value = newVarLetIdentDef(
-              kind,              # XXX: this kind business sucks
+              kind,
               def.name,
               stripVar(def.typ), # ident: <no var> type = default
               def.val)
@@ -338,38 +338,45 @@ when false:
     else:
       n.errorAst "unrecognized input"
 
-proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
+proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
   ## representing assignments to local scope
   template maybeAdd(x) =
     if not into.isNil:
       into.add x
 
+  if n.isTuple:
+    # deconstruct the RHS types into multiple assignments
+    # let (a, b, c) = foo() -> (env.a, env.b, env.c) = foo()
+    let
+      defs = n.asVarLetTuple()
+      child = e.castToChild(e.first)
+      rhs = defs.typ
+      tups = nnkTupleConstr.newTree
+    for index, name in defs.indexNamePairs:
+      let entry = newIdentDefs(name, rhs[index], newEmptyNode())
+      # we need to insert the variable and then write a new
+      # accessor that plucks the field from the env
+      let (field, _) = e.addIdentDef(n.kind, expectIdentDefs(entry))
+      tups.add newDotExpr(child, field)
+    maybeAdd newAssignment(tups, defs.val)
+  else:
+    # an iterator handles `var a, b, c = 3` appropriately
+    let assignment = e.addAssignment(n.kind, n.asVarLetIdentDef().identdef)
+    maybeAdd assignment
+
+proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
+  ## consume a var|let section or ident defs and yield name, node pairs
+  ## representing assignments to local scope
   case n.kind
   of nnkVarSection, nnkLetSection:
-    let varLet = expectVarLet(n)
-    if varLet.isTuple:
-      # deconstruct the RHS types into multiple assignments
-      # let (a, b, c) = foo() -> (env.a, env.b, env.c) = foo()
-      let
-        defs = varLet.asVarLetTuple()
-        child = e.castToChild(e.first)
-        rhs = defs.typ
-        tups = nnkTupleConstr.newTree
-      for index, name in defs.indexNamePairs:
-        let entry = newIdentDefs(name, rhs[index], newEmptyNode())
-        # we need to insert the variable and then write a new
-        # accessor that plucks the field from the env
-        let (field, _) = e.addIdentDef(n.kind, expectIdentDefs(entry))
-        tups.add newDotExpr(child, field)
-      maybeAdd newAssignment(tups, defs.val)
-    else:
-      # an iterator handles `var a, b, c = 3` appropriately
-      let assignment = e.addAssignment(n.kind, varLet.asVarLetIdentDef().identdef)
-      maybeAdd assignment
+    # XXX: this branch goes away once we type procParams, as that's the only
+    #      other use for this proc based on the call sites.
+    doAssert false, "this is a deprecated path and should not be triggered"
   of nnkIdentDefs:
     let assignment = e.addAssignment(n.kind, expectIdentDefs(n))
-    maybeAdd assignment
+    if not into.isNil:
+      into.add assignment
   else:
     e.store.add:
       n.errorAst "localSection input"
