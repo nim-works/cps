@@ -7,13 +7,8 @@ import cps, tables
 
 
 type
-  CFn = proc(c: C): C {.nimcall.}
-
-  C = ref object of RootObj
-    fn: CFn
-    mom: C
-    labels: Table[string, CFn]
-
+  C = ref object of Continuation
+    labels: Table[string, Continuation.fn]
 
 # Define the CPS magic 'label' and 'goto' procs
 
@@ -40,7 +35,7 @@ proc foo() {.cps:C.} =
 # Trampoline
 
 var x = 0
-var c = whelp foo()
+var c: Continuation = whelp foo()
 while c.running and x < 100:
   c = c.fn(c)
   inc x
