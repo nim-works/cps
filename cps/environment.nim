@@ -228,11 +228,8 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
 
   let
     field = genField def.name.strVal
-    value = newVarLetIdentDef(
-              kind,
-              def.name,
-              stripVar(def.typ), # ident: <no var> type = default
-              def.val)
+    value = newVarLetIdentDef( kind, def.name, stripVar(def.typ), def.val)
+    # we stripVar to ident: <no var> type = default
   e = e.set(field, value)
   result = (key: field, val: value)
 
@@ -265,25 +262,20 @@ proc identity*(e: var Env): NimNode =
   assert not e.id.isEmpty
   result = e.id
 
-proc initialization(e: Env; kind: NimNodeKind;
-                    field: NimNode; value: NimNode): NimNode =
+proc initialization(e: Env; kind: NimNodeKind; field: NimNode, section: IdentDefVarLet): NimNode =
   ## produce the `x = 34` appropriate given the field and identDefs
   doAssert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
 
   result = newStmtList()
-
-  # this is our continuation type, fully cast
-  let child = e.castToChild(e.first)
-
+  
+  let isLocalSection = kind in {nnkLetSection, nnkVarSection}
   # let/var sections basically become env2323(cont).foo34 = "some default"
-  case kind
-  of nnkLetSection, nnkVarSection:
-    let v = expectVarLet(value)
-    if v.hasValue:
-      result.add newAssignment(newDotExpr(child, field), v.val)
+  if isLocalSection and section.hasValue:
+    # this is our continuation type, fully cast
+    let child = e.castToChild(e.first)
+    result.add newAssignment(newDotExpr(child, field), section.val)
   else:
-    # don't attempt to redefine proc params!
-    discard
+    discard "don't attempt to redefine proc params!"
 
 proc letOrVar(n: IdentDefs): NimNodeKind =
   ## choose between let or var for proc parameters
@@ -308,8 +300,7 @@ proc addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
     (field, value) = e.addIdentDef(section, d)
   when cpsDebug == "Env":
     echo $kind, "\t", repr(d)
-  # XXX: remove the `.NimNode`
-  return e.initialization(kind, field, value.NimNode)
+  result = e.initialization(kind, field, value)
 
 when false:
   proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
@@ -375,7 +366,7 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
   of nnkVarSection, nnkLetSection:
     # XXX: this branch goes away once we type procParams, as that's the only
     #      other use for this proc based on the call sites.
-    doAssert false, "this is a deprecated path and should not be triggered"
+    error "this is a deprecated path and should not be triggered"
   of nnkIdentDefs:
     let assignment = e.addAssignment(n.kind, expectIdentDefs(n))
     if not into.isNil:
