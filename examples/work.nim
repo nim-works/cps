@@ -6,9 +6,7 @@ import cps, deques
 ###########################################################################
 
 type
-  Work = ref object of RootObj
-    fn*: proc(w: Work): Work {.nimcall.}
-    mom: Work
+  Work = ref object of Continuation
     pool: Pool
 
   Pool = ref object
@@ -20,7 +18,7 @@ proc push(pool: Pool, w: Work) =
     pool.workQueue.addLast(w)
 
 template push(pool: Pool; c: untyped) =
-  let d = whelp c
+  let d = Work: whelp c
   d.pool = pool
   pool.push d
 
