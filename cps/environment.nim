@@ -389,22 +389,25 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
   case n.kind
   of nnkVarSection, nnkLetSection:
     doAssert n.len == 1, "Got more than one items:\n" & repr(n)
-    let defs = n[0]
-    if defs.kind == nnkVarTuple:
+    let varLet = expectVarLet(n)
+    if varLet.isTuple:
       # deconstruct the RHS types into multiple assignments
       # let (a, b, c) = foo() -> (env.a, env.b, env.c) = foo()
-      let child = e.castToChild(e.first)
-      let rhs = getTypeInst defs.last
-      var tups = nnkTupleConstr.newTree
-      for index, name in defs[0 ..< defs.len-2].pairs:
+      let
+        defs = varLet.asVarLetTuple()
+        child = e.castToChild(e.first)
+        rhs = defs.typ
+        tups = nnkTupleConstr.newTree
+      for index, name in defs.indexNamePairs:
         let entry = newIdentDefs(name, rhs[index], newEmptyNode())
         # we need to insert the variable and then write a new
         # accessor that plucks the field from the env
         let (field, _) = e.addIdentDef(n.kind, expectIdentDefs(entry))
         tups.add newDotExpr(child, field)
-      maybeAdd newAssignment(tups, defs.last)
+      maybeAdd newAssignment(tups, defs.val)
     else:
       # an iterator handles `var a, b, c = 3` appropriately
+      let defs = n[0]
       let assignment = e.addAssignment(n.kind, expectIdentDefs(defs))
       maybeAdd assignment
   of nnkIdentDefs:
