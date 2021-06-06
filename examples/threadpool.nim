@@ -78,7 +78,7 @@ proc slow(id: int, n: float) {.cps:Cont.} =
 when defined(gcArc) or defined(gcOrc):
   for i in 1..32:
     pool.work.addLast:
-      Cont: whelp slow(i, 4)
+      whelp slow(i, 4)
 
 
   work(countProcessors())

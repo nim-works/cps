@@ -18,7 +18,7 @@ proc push(pool: Pool, w: Work) =
     pool.workQueue.addLast(w)
 
 template push(pool: Pool; c: untyped) =
-  let d = Work: whelp c
+  let d = whelp c
   d.pool = pool
   pool.push d
 

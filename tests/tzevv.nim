@@ -290,7 +290,7 @@ suite "suite, suite zevv":
         echo i
         inc i
 
-    var c = whelp count()
+    var c: Continuation = whelp count()
     c = c.fn(c) # boot
     check c.state == Running
     c = c.fn(c) # first jield

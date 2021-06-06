@@ -40,8 +40,8 @@ proc fn_coro2() {.cps:Coroutine.} =
     echo val
 
 
-let coro2 = Coroutine: whelp fn_coro2()
-let coro1 = Coroutine: whelp fn_coro1(coro2, true)
+let coro2 = whelp fn_coro2()
+let coro1 = whelp fn_coro1(coro2, true)
 
 coro1.tramp()
 coro2.tramp()

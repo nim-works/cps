@@ -125,19 +125,22 @@ template whelpIt*(input: typed; body: untyped): untyped =
   else:
     n.errorAst "the input to whelpIt must be a .cps. call"
 
-macro whelp*(call: typed): Continuation =
+macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
   ## running it; instead, return the continuation as a value.
+  let sym = bootstrapSymbol call
   result = whelpIt call:
-    it = Head.hook(it)
+    it =
+      sym.ensimilate:
+        Head.hook(it)
 
-macro whelp*(parent: Continuation; call: typed): Continuation =
+macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
   let sym = bootstrapSymbol call
   result = whelpIt call:
     it =
-      newCall ident"Continuation":
+      sym.ensimilate:
         Tail.hook(newCall(ident"Continuation", parent),
                   sym.ensimilate it)
 

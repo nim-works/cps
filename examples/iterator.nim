@@ -45,7 +45,7 @@ proc counter(lo, hi: int) {.cps:Iterator.} =
 
 # Create an instance of the iterator, counting from 3 up to 7
 
-var a = Iterator: whelp counter(3, 7)
+var a = whelp counter(3, 7)
 
 # Resume the iterator a bunch of times
 

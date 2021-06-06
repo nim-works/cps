@@ -21,20 +21,20 @@ proc resume(s: Stream): int =
     var s = Continuation: s
     while s.running:
       s = s.fn(s)
-  result = (Stream s).val
+  result = s.val
 
 macro stream(n: untyped): untyped =
   n.addPragma nnkExprColonExpr.newTree(ident"cps", ident"Stream")
   n
 
 template `->`(ca: Stream, b: typed): Stream =
-  let cb = Stream: whelp(b)
+  let cb = whelp(b)
   cb.sIn = ca
   cb
 
 template `->`(a, b: typed): Stream =
-  let ca = Stream: whelp(a)
-  let cb = Stream: whelp(b)
+  let ca = whelp(a)
+  let cb = whelp(b)
   cb.sIn = ca
   cb
 

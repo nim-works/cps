@@ -78,7 +78,7 @@ proc bar() {.cps:Work.} =
 
 
 var pool = Pool()
-pool.push: Work(whelp bar())
+pool.push: whelp bar()
 pool.run()
 
 echo pool.yields

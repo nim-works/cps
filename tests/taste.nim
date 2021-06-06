@@ -421,7 +421,7 @@ suite "tasteful tests":
     check r == 1
 
   block:
-    ## continuations can return values via bootstrap
+    ## continuations can return values via bootstrap or whelp
     r = 0
     proc foo(x: int): int {.cps: Cont.} =
       noop()

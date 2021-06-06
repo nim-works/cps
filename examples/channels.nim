@@ -95,8 +95,8 @@ proc sink(ch: Channel) {.cps:Cont.} =
 
 block:
   var ch = Channel()
-  ch.cSend = Cont: whelp source(ch, 10, 12)
-  ch.cRecv = Cont: whelp sink(ch)
+  ch.cSend = whelp source(ch, 10, 12)
+  ch.cRecv = whelp sink(ch)
 
   pump(@[ch])
   echo ""
@@ -130,9 +130,9 @@ block:
   var ch1 = Channel()
   var ch2 = Channel()
 
-  let cSource = Cont: whelp source(ch1, 10, 20)
-  let cFilter = Cont: whelp filter(ch1, ch2)
-  let cSink = Cont: whelp sink(ch2)
+  let cSource = whelp source(ch1, 10, 20)
+  let cFilter = whelp filter(ch1, ch2)
+  let cSink = whelp sink(ch2)
 
   ch1.cSend = cSource
   ch1.cRecv = cFilter

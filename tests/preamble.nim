@@ -9,9 +9,9 @@ type
 
 var jumps: int
 
-proc trampoline(c: Continuation) =
+proc trampoline[T: Continuation](c: T) =
   jumps = 0
-  var c = c
+  var c = Continuation c
   while c.running:
     # pretends that an exception is raised and handled elsewhere
     setCurrentException(nil)
