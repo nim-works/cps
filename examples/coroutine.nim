@@ -2,17 +2,16 @@
 import cps, options, deques
 
 type
-  Coroutine = ref object of RootObj
-    fn*: proc(c: Coroutine): Coroutine {.nimcall.}
-    mom: Coroutine
+  Coroutine = ref object of Continuation
     s: int
     cResume: Coroutine
 
 
 proc tramp(c: Coroutine): Coroutine {.discardable.}  =
-  result = c
-  while result.running:
-    result = c.fn(result)
+  var c = Continuation: c
+  while c.running:
+    c = c.fn(c)
+  result = Coroutine: c
 
 proc recv(c: Coroutine): int {.cpsVoodoo.} =
   c.s
@@ -41,8 +40,8 @@ proc fn_coro2() {.cps:Coroutine.} =
     echo val
 
 
-let coro2 = whelp fn_coro2()
-let coro1 = whelp fn_coro1(coro2, true)
+let coro2 = Coroutine: whelp fn_coro2()
+let coro1 = Coroutine: whelp fn_coro1(coro2, true)
 
 coro1.tramp()
 coro2.tramp()
