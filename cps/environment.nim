@@ -15,7 +15,7 @@ const
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
-  LocalCache = OrderedTable[NimNode, VarLetIdentDef]
+  LocalCache = OrderedTable[NimNode, IdentDefVarLet]
 
   Env* = ref object
     id: NimNode                     # the identifier of our continuation type
@@ -35,7 +35,7 @@ type
 
   CachePair* = tuple
     key: NimNode
-    val: VarLetIdentDef
+    val: IdentDefVarLet
 
 proc len*(e: Env): int = e.locals.len
 
@@ -82,7 +82,7 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   else:
     locals
 
-proc set(e: var Env; key: NimNode; val: VarLetIdentDef): Env
+proc set(e: var Env; key: NimNode; val: IdentDefVarLet): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
@@ -170,7 +170,7 @@ proc newEnv*(parent: Env; copy = off): Env =
   if copy:
     result = Env(store: parent.store,
                  via: parent.identity,
-                 locals: initOrderedTable[NimNode, VarLetIdentDef](),
+                 locals: initOrderedTable[NimNode, IdentDefVarLet](),
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
@@ -206,7 +206,7 @@ proc storeType*(e: Env; force = off): Env =
     result = e
     assert not e.isDirty
 
-proc set(e: var Env; key: NimNode; val: VarLetIdentDef): Env =
+proc set(e: var Env; key: NimNode; val: IdentDefVarLet): Env =
   ## set [ident|sym] = let/var section
   ## XXX: clean this up with a typeclass?
   assert key.kind in {nnkSym, nnkIdent}
@@ -278,7 +278,7 @@ proc initialization(e: Env; kind: NimNodeKind;
   of nnkLetSection, nnkVarSection:
     let v = expectVarLet(value)
     if v.hasValue:
-      result.add newAssignment(newDotExpr(child, field), v.rhs.NimNode)
+      result.add newAssignment(newDotExpr(child, field), v.val)
   else:
     # don't attempt to redefine proc params!
     discard
