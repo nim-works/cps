@@ -33,8 +33,10 @@ type
 
   DefLike = IdentDefs | VarLetDef
 
-  VarLetLike = VarLet | TupleVarLet | IdentDefVarLet | LetSection |
-               VarSection | IdentDefLet | IdentDefVar
+  LetSectionLike = LetSection | IdentDefLet
+  VarSectionLike = VarSection | IdentDefVar
+  VarLetLike = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
+               VarSectionLike
   VarLetIdentDefLike = IdentDefVarLet | IdentDefLet | IdentDefVar
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
@@ -79,14 +81,17 @@ func inferTypFromImpl*(n: DefLike): NimNode =
 
 defineToNimNodeConverter(IdentDefs)
 
-proc expectIdentDefs*(n: NimNode): IdentDefs =
-  ## return an IdentDef or error out
+proc validateIdentDefs(n: NimNode): void =
+  ## validators only, afterwards it's safe to cast, allows re-use
   if n.kind != nnkIdentDefs:
     errorGot "not an IdentDefs", n, $n.kind
   elif n[0].kind notin {nnkIdent, nnkSym}:
     errorGot "bad rewrite presented", n
   elif n.len != 3:
     errorGot "bad rewrite, failed to set init", n
+proc expectIdentDefs*(n: NimNode): IdentDefs =
+  ## return an IdentDef or error out
+  validateIdentDefs(n)
   return n.IdentDefs
 
 proc newIdentDefs*(n: string, typ: NimNode, val = newEmptyNode()): IdentDefs =
@@ -108,6 +113,38 @@ func hasType(n: VarLetLike): bool = n.def.typ.kind != nnkEmpty
   ## whether an explicit type is defined
 func isTuple*(n: VarLetLike): bool = n.def.NimNode.kind == nnkVarTuple
 
+func validateAndTransform(n: NimNode, T: typedesc = type VarLet): T =
+  const sectionName =
+    when T is LetSectionLike: "let"
+    elif T is VarSectionLike: "var"
+    elif T is VarLetLike:     "let or var"
+    else:                     {.error.}
+  const sectionKinds =
+    when T is LetSectionLike: {nnkLetSection}
+    elif T is VarSectionLike: {nnkVarSection}
+    elif T is VarLetLike:     {nnkLetSection, nnkVarSection}
+    else:                     {.error.}
+  const checkIdentDef =
+    when T is VarLetIdentDefLike: true
+    elif T is VarLetLike:         false
+    else:                         {.error.}
+  const checkTuple =
+    when T is TupleVarLet: true
+    elif T is VarLetLike:  false
+    else:                  {.error.}
+  
+  if n.kind notin sectionKinds:
+    errorGot "not a " & sectionName & " section", n
+  elif n.len != 1:
+    errorGot sectionName & " has " & $n.len & " defs, requires exactly 1", n
+  elif checkIdentDef:
+    if n[0].kind != nnkIdentDefs:
+      errorGot sectionName & " section must contain an IdentDefs", n
+    validateIdentDefs(n)
+  elif checkTuple and n[0].kind != nnkVarTuple:
+    errorGot sectionName & " section must be a tuple assignment", n
+  return n.T
+
 # fn-VarLetIdentDefLike
 
 func identdef*(n: VarLetIdentDefLike): IdentDefs = n.NimNode[0].IdentDefs
@@ -124,26 +161,17 @@ func inferTypFromImpl*(n: VarLetIdentDefLike): NimNode =
 
 proc expectVarLet*(n: NimNode): VarLet =
   ## return a VarLet if this is a var or let section, otherwise error out
-  if n.kind notin {nnkLetSection, nnkVarSection}:
-    errorGot "not a var or let section", n
-  elif n.len != 1:
-    errorGot "bad rewrite, var or let section has " & $n.len &
-          " items, requires exactly 1", n
-  return n.VarLet
+  validateAndTransform(n)
 
 func errorGot(msg: string, n: VarLetLike, got: string = repr(n)) =
   errorGot(msg, n.NimNode, got)
 
 proc asVarLetTuple*(n: VarLet): TupleVarLet =
   ## return a TupleVarLet if the def is a VarTuple, otherwise error out
-  if n.def.NimNode.kind notin {nnkVarTuple}:
-    errorGot "must be a tuple assignment", n
-  return n.TupleVarLet
+  validateAndTransform(n.NimNode, TupleVarLet)
 proc asVarLetIdentDef*(n: VarLet): IdentDefVarLet =
   ## return a IdentDefVarLet if the def is an IdentDef, otherwise error out
-  if n.def.NimNode.kind notin {nnkIdentDefs}:
-    errorGot "must be an IdentDefs", n
-  return n.IdentDefVarLet
+  validateAndTransform(n.NimNode, IdentDefVarLet)
 
 # fn-TupleVarLet
 
@@ -176,12 +204,7 @@ defineToNimNodeConverter(VarSection)
 
 proc expectVarSection*(n: NimNode): VarSection =
   ## return an VarSection or error out
-  if n.kind != nnkVarSection:
-    errorGot "not a var section", n
-  elif n.len != 1:
-    errorGot "bad rewrite, var section has " & $n.len &
-          " defines, requires exactly 1", n
-  return n.VarSection
+  validateAndTransform(n, VarSection)
 
 proc newVarSection*(i: IdentDefs): VarSection =
   (nnkVarSection.newTree i).VarSection
@@ -193,14 +216,7 @@ proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
 
 proc expectIdentDefLet*(n: NimNode): IdentDefLet =
   ## return an IdentDefLet or error out
-  if n.kind != nnkLetSection:
-    errorGot "not a let section", n
-  elif n.len != 1:
-    errorGot "bad rewrite, let section has " & $n.len &
-          " defines, requires exactly 1", n
-  elif n[0].kind notin {nnkIdentDefs}:
-    errorGot "IdentDefLet requires a single IdentDefs child", n
-  return n.IdentDefLet
+  validateAndTransform(n, IdentDefLet)
 
 proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
   ## create a let section with an identdef
@@ -214,14 +230,7 @@ proc newIdentDefLet*(n, typ: NimNode, val = newEmptyNode()): IdentDefLet =
 
 proc expectIdentDefVar*(n: NimNode): IdentDefVar =
   ## return an IdentDefVar or error out
-  if n.kind != nnkVarSection:
-    errorGot "not a var section", n
-  elif n.len != 1:
-    errorGot "bad rewrite, var section has " & $n.len &
-          " defines, requires exactly 1", n
-  elif n[0].kind notin {nnkIdentDefs}:
-    errorGot "IdentDefVar requires a single IdentDefs child", n
-  return n.IdentDefVar
+  validateAndTransform(n, IdentDefVar)
 
 proc newIdentDefVar*(i: IdentDefs): IdentDefVar =
   ## create a var section with an identdef
