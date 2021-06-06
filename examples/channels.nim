@@ -11,9 +11,7 @@ import macros
 # Basic empty continuation type. The rest of the bookkeeping is done in the
 # Channel type below
 
-type Cont = ref object of RootObj
-  fn*: proc(c: Cont): Cont {.nimcall.}
-  mom: Cont
+type Cont = ref object of Continuation
 
 # A channel connects a sender and a receiver CPS proc; it holds a continuation
 # for each of them, the pump will run either one, depending on the existance of
@@ -46,7 +44,7 @@ proc getval(ch: Channel): int =
 # The lady is a
 
 proc tramp(cont: var Cont) =
-  var c = cont
+  var c = Continuation: cont
   cont = nil
   while c.running:
     c = c.fn(c)
@@ -97,8 +95,8 @@ proc sink(ch: Channel) {.cps:Cont.} =
 
 block:
   var ch = Channel()
-  ch.cSend = whelp source(ch, 10, 12)
-  ch.cRecv = whelp sink(ch)
+  ch.cSend = Cont: whelp source(ch, 10, 12)
+  ch.cRecv = Cont: whelp sink(ch)
 
   pump(@[ch])
   echo ""
@@ -132,9 +130,9 @@ block:
   var ch1 = Channel()
   var ch2 = Channel()
 
-  let cSource = whelp source(ch1, 10, 20)
-  let cFilter = whelp filter(ch1, ch2)
-  let cSink = whelp sink(ch2)
+  let cSource = Cont: whelp source(ch1, 10, 20)
+  let cFilter = Cont: whelp filter(ch1, ch2)
+  let cSink = Cont: whelp sink(ch2)
 
   ch1.cSend = cSource
   ch1.cRecv = cFilter
