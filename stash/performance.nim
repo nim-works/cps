@@ -25,10 +25,9 @@ var h: Hash = 0
 
 let t1 = howLong "cps iterator":
 
-  type Iterator = ref object of Continuation
-    #fn*: proc(c: Iterator): Iterator {.nimcall.}
-    #mom: Iterator
-    val: int
+  type
+    Iterator = ref object of Continuation
+      val: int
 
   proc jield(it: Iterator; val: int): Iterator {.cpsMagic.} =
     it.val = val
@@ -66,4 +65,4 @@ let t2 = howLong "closure iterator":
 
 echo !$h
 
-echo "Nim closure iterators are ", t1 / t2, " times faster"
+echo "Nim closure iterators are ", t2 / t1, " times slower"

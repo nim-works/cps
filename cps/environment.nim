@@ -259,14 +259,6 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
   let rs = if rs.isNil: newEmptyNode() else: rs
   let c = if c.isNil or c.isEmpty: ident"continuation" else: c
 
-  # add a check to make sure the supplied type will work for descendants
-  let check = nnkWhenStmt.newNimNode via
-  check.add:
-    nnkElifBranch.newTree:
-      [ infix(via, "isnot", bindSym"ContinuationConcept"),
-        errorAst repr(via) & " does not match the Continuation concept" ]
-  store.add check
-
   result = Env(c: c, store: store, via: via, id: via)
   result.rs = newIdentDefs("result", rs)
   when cpsReparent:
@@ -434,7 +426,6 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
     newAssignment name:
-      #hook Alloc: e.identity
       Alloc.hook(e.inherits, e.identity)
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding

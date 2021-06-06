@@ -9,8 +9,6 @@ suite "bug #145":
     ## https://github.com/disruptek/cps/issues/145
     type
       C = ref object of Continuation
-        #fn*: proc(c: C): C {.nimcall.}
-        #mom: C
         val: int
 
     proc send(c: C, v: int) {.cpsVoodoo.} =

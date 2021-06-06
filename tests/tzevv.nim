@@ -10,11 +10,7 @@ import cps
 
 
 type
-
   C = ref object of Continuation
-    #fn*: proc(c: C): C {.nimcall.}
-    #mom*: C
-
 
 # Trampoline with count safeguard
 

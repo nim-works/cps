@@ -9,7 +9,7 @@ type
 
 var jumps: int
 
-method trampoline(c: Continuation) {.base.} =
+proc trampoline(c: Continuation) =
   jumps = 0
   var c = c
   while c.running:

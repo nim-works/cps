@@ -32,11 +32,6 @@ type
     mom*: Continuation
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
-  ContinuationConcept* = concept c ##
-    ## All continuation types must match this `Continuation` concept
-    ## in order to be used by the `.cps.` macro.
-    c.fn is ContinuationProc[Continuation]
-    c of Continuation
 
   Pair* = tuple
     key: NimNode

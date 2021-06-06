@@ -139,7 +139,7 @@ macro whelp*(parent: Continuation; call: typed): Continuation =
     it =
       newCall ident"Continuation":
         Tail.hook(newCall(ident"Continuation", parent),
-                  sym.ensimilate it) #newCall(ident"Continuation", it))
+                  sym.ensimilate it)
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## This symbol may be reimplemented to configure a continuation
@@ -182,7 +182,7 @@ template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
   ## tracing of the entry to each continuation leg.
   discard
 
-proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used.} =
+proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used, inline.} =
   ## This symbol may be reimplemented to customize continuation
   ## allocation.
   new c
