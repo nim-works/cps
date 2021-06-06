@@ -92,16 +92,6 @@ proc init(e: var Env) =
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarSection e.rs)
 
-proc definedName(n: VarIdentDef): NimNode =
-  ## create an identifier from an typesection/identDef as cached;
-  ## this is a copy and it is repr'd to ensure gensym compat...
-  result = ident(repr(n.name))
-
-proc definedName(n: LetIdentDef): NimNode =
-  ## create an identifier from an typesection/identDef as cached;
-  ## this is a copy and it is repr'd to ensure gensym compat...
-  result = ident(repr(n.name))
-
 proc allPairs(e: Env): seq[Pair] =
   if not e.isNil:
     result = toSeq e.locals.pairs
@@ -116,17 +106,15 @@ iterator pairs(e: Env): Pair =
     # make sure we're actually measuring gensyms for collision
     let
       n = pair.val
-      name: NimNode = # XXX: simplify with a VarLetIdentDef typeclass
-        case n.kind
-        of nnkLetSection:
-          definedName(expectLetIdentDef(n))
-        of nnkVarSection:
-          definedName(expectVarIdentDef(n))
-        else:
-          doAssert false, "use this on env[key]"
-          nil # forces this to be an expression
-
-    if not seen.containsOrIncl name.strVal:
+      isValid = n.kind in {nnkLetSection, nnkVarSection}
+    if not isValid:
+      doAssert false, "use this on env[key]"
+    let
+      section = expectVarLetIdentDef(n)
+      name = ident(repr(section.name))
+        ## create an identifier from an typesection/identDef as cached;
+        ## this is a copy and it is repr'd to ensure gensym compat...
+    if not seen.containsOrIncl name.strval:
       yield pair
 
 proc populateType(e: Env; n: var NimNode) =
@@ -388,7 +376,6 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
 
   case n.kind
   of nnkVarSection, nnkLetSection:
-    doAssert n.len == 1, "Got more than one items:\n" & repr(n)
     let varLet = expectVarLet(n)
     if varLet.isTuple:
       # deconstruct the RHS types into multiple assignments
@@ -407,8 +394,7 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
       maybeAdd newAssignment(tups, defs.val)
     else:
       # an iterator handles `var a, b, c = 3` appropriately
-      let defs = n[0]
-      let assignment = e.addAssignment(n.kind, expectIdentDefs(defs))
+      let assignment = e.addAssignment(n.kind, varLet.asVarLetIdentDef().identdef)
       maybeAdd assignment
   of nnkIdentDefs:
     let assignment = e.addAssignment(n.kind, expectIdentDefs(n))

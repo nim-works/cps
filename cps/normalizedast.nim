@@ -23,7 +23,9 @@ type
   VarLetDefLhs* = distinct NormalizedNimNode
   VarLetDefType* = distinct NormalizedNimNode
   VarLetDefRhs* = distinct NormalizedNimNode
-  VarLetTuple* = distinct VarLetDef
+
+  VarLetTuple* = distinct VarLet
+  VarLetIdentDef* = distinct VarLet
 
   LetSection* = distinct VarLet
   LetDef = distinct VarLetDef # IdentDef or VarTuple
@@ -32,8 +34,6 @@ type
   LetTuple* = distinct VarLetTuple
 
   VarSection* = distinct VarLet
-  VarDef = distinct VarLetDef # IdentDef or VarTuple
-  # VarVal = distinct NormalizedNimNode # val for an IdentDef or VarTuple
   VarIdentDef* = distinct VarSection
   VarTuple* = distinct VarLetTuple
 
@@ -120,11 +120,17 @@ proc isTuple*(n: VarLet): bool = n.def.NimNode.kind == nnkVarTuple
 proc asVarLetTuple*(n: VarLet): VarLetTuple =
   ## return a VarLetTuple if the def is a VarTuple, otherwise error out
   if n.def.NimNode.kind notin {nnkVarTuple}:
-    error "VarLetTuple must defined a single tuple, got:\n" & repr(n.NimNode), n.NimNode
-  return n.def.VarLetTuple
+    error "must be a tuple assignment, got:\n" & repr(n.NimNode), n.NimNode
+  return n.VarLetTuple
+proc asVarLetIdentDef*(n: VarLet): VarLetIdentDef =
+  ## return a VarLetIdentDef if the def is an IdentDef, otherwise error out
+  if n.def.NimNode.kind notin {nnkIdentDefs}:
+    error "must be an IdentDefs, got:\n" & repr(n.NimNode), n.NimNode
+  return n.VarLetIdentDef
 
 # fn-VarLetTuple
 
+proc def(n: VarLetTuple): NimNode {.borrow.}
 proc rhs(n: VarLetTuple): NimNode {.borrow.}
 proc val*(n: VarLetTuple): NimNode = n.rhs
   ## alias for `rhs`
@@ -133,14 +139,21 @@ proc typ*(n: VarLetTuple): NimNode =
   getTypeInst n.rhs
 iterator indexNamePairs*(n: VarLetTuple): (int, NimNode) =
   ## return the names of fields on the lhs of a var/let tuple assignment
-  for index, name in n.NimNode[0 .. ^3].pairs:
+  for index, name in n.def[0 .. ^3].pairs:
     # echo $index, " ", repr(name)
     yield (index, name)
 
-# fn-LetDef
+# fn-VarLetIdentDef
 
-proc hasValue(n: LetDef): bool {.borrow.}
-proc rhs(n: LetDef): NimNode {.borrow.}
+proc def(n: VarLetIdentDef): IdentDefs {.borrow.}
+proc identdef*(n: VarLetIdentDef): IdentDefs =  n.def
+  ## retrieve the innner IdentDef
+  # XXX: might want to remove this proc
+proc name*(n: VarLetIdentDef): NimNode = n.def.name
+  ## Name (ident|sym) of the identifer
+proc expectVarLetIdentDef*(n: NimNode): VarLetIdentDef =
+  ## return a VarLetIdentDef, otherwise error out
+  expectVarLet(n).asVarLetIdentDef
 
 # fn-LetSection
 
@@ -157,12 +170,6 @@ proc hasValue*(n: LetSection): bool {.borrow.}
 proc rhs(n: LetSection): LetDef {.borrow.}
 proc val*(n: LetSection): NimNode = n.rhs.NimNode
   ## the init value of the single identdefs within
-
-# fn-VarDef
-
-proc hasValue(n: VarDef): bool {.borrow.}
-proc rhs(n: VarDef): NimNode {.borrow.}
-proc val(n: VarDef): NimNode = n.rhs
 
 # fn-VarSection
 
