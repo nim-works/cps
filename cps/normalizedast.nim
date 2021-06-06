@@ -26,18 +26,17 @@ type
   IdentDefVarLet* = distinct VarLet
 
   LetSection* = distinct VarLet
-  IdentDefLet* = distinct LetSection
 
   VarSection* = distinct VarLet
   IdentDefVar* = distinct IdentDefVarLet
 
   DefLike = IdentDefs | VarLetDef
 
-  LetSectionLike = LetSection | IdentDefLet
+  LetSectionLike = LetSection
   VarSectionLike = VarSection | IdentDefVar
   VarLetLike = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
                VarSectionLike
-  VarLetIdentDefLike = IdentDefVarLet | IdentDefLet | IdentDefVar
+  VarLetIdentDefLike = IdentDefVarLet | IdentDefVar
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
   ## useful for error messages
@@ -205,16 +204,6 @@ proc newVarSection*(i: IdentDefs): VarSection =
 proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
   ## create a var section with an identdef, eg: `n`: `typ` = `val`
   newVarSection(newIdentDefs(n, typ, val).IdentDefs)
-
-# fn-IdentDefLet
-
-proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
-  ## create a let section with an identdef
-  (nnkLetSection.newTree i).IdentDefLet
-
-proc newIdentDefLet*(n, typ: NimNode, val = newEmptyNode()): IdentDefLet =
-  ## create a let section with an identdef, eg: `n`: `typ` = `val`
-  newIdentDefLet(newIdentDefs(n, typ, val).IdentDefs)
 
 # fn-IdentDefVar
 
