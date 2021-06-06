@@ -42,10 +42,10 @@ let t1 = howLong "cps iterator":
 
   template finished(x: ref): bool = x == nil or x.fn == nil
 
-  var a: Continuation = whelp counter(1, iterations)
+  var a = Iterator: whelp counter(1, iterations)
   while not finished(a):
-    h = h !& hash((Iterator a).val)
-    a = a.fn(a)
+    h = h !& hash(a.val)
+    a = Iterator a.fn(a)
 
 
 echo !$h
