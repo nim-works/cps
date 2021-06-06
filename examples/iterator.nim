@@ -8,22 +8,21 @@ import cps, options
 # This is our iterator type. It holds the continuation function
 # and an Option[int] to pass the last produced value
 
-type Iterator = ref object of RootObj
-  fn*: proc(c: Iterator): Iterator {.nimcall.}
-  mom: Iterator
+type Iterator = ref object of Continuation
   val: Option[int]
-
-assert Iterator is Continuation
 
 # The `produce` proc is called to pump the iterator. It will trampoline the
 # continuation until a value is available in `val`.
 
 proc produce(c: var Iterator): Option[int] =
-  while c != nil and c.fn != nil and c.val.isNone:
-    c = c.fn(c)
-  if c != nil and c.val.isSome:
-    result = c.val
-    c.val = none(int)
+  block:
+    var c: Continuation = c
+    while c.running and (Iterator c).val.isNone:
+      c = c.fn(c)
+  if not c.dismissed:
+    if c.val.isSome:
+      result = c.val
+      c.val = none(int)
 
 
 # The `jield` proc is cps magic to generate a new value from within an
@@ -46,7 +45,7 @@ proc counter(lo, hi: int) {.cps:Iterator.} =
 
 # Create an instance of the iterator, counting from 3 up to 7
 
-var a = whelp counter(3, 7)
+var a = Iterator: whelp counter(3, 7)
 
 # Resume the iterator a bunch of times
 
