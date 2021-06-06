@@ -21,9 +21,7 @@
 import cps, options, deques
 
 type
-  Coroutine = ref object of RootObj
-    fn*: proc(c: Coroutine): Coroutine {.nimcall.}
-    mom: Coroutine
+  Coroutine = ref object of Continuation
     val: int
 
 # Magic procs for yielding and receiving. Note: we actually want
@@ -49,7 +47,7 @@ proc fn_coro1() {.cps:Coroutine.} =
     sum += recv()
     jield(sum)
 
-var coro = whelp fn_coro1()
+var coro = Coroutine: whelp fn_coro1()
 
 for i in 0..10:
   echo coro.resume(i)
