@@ -34,7 +34,7 @@ type
   DefLike = IdentDefs | VarLetDef
 
   VarLetLike = VarLet | TupleVarLet | IdentDefVarLet | LetSection |
-               IdentDefLet | VarSection | IdentDefVar
+               VarSection | IdentDefLet | IdentDefVar
   VarLetIdentDefLike = IdentDefVarLet | IdentDefLet | IdentDefVar
 
 proc normalizeProcDef*(n: NimNode): ProcDef =
@@ -60,7 +60,6 @@ func typ*(n: DefLike): NimNode = n.NimNode[^2]
 func val*(n: DefLike): NimNode = n.NimNode[^1]
 func hasValue*(n: DefLike): bool =
   ## has a non-Empty initial value defined for the ident, sym or tuple
-  ##
   ## Yes, proc, you ARE a good proc. You have value, hasValue, in fact.
   n.val.kind != nnkEmpty
 
@@ -93,7 +92,7 @@ func name*(n: IdentDefs): NimNode = n[0]
 
 # fn-VarLetLike
 
-func def(n: VarLetLike): VarLetDef = n.NimNode[0].VarLetDef
+func def(n: VarLetLike): VarLetDef = VarLetDef n.NimNode[0]
   ## an IdentDefs or VarTuple
 func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
@@ -107,9 +106,15 @@ func isTuple*(n: VarLetLike): bool = n.def.NimNode.kind == nnkVarTuple
 
 # fn-VarLetIdentDefLike
 
+func identdef*(n: VarLetIdentDefLike): IdentDefs = n.NimNode[0].IdentDefs
+  ## retrieve the innner IdentDef
+  ## XXX: might want to remove this proc
 func name*(n: VarLetIdentDefLike): NimNode = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
   ## will have the name
+func inferTypFromImpl*(n: VarLetIdentDefLike): NimNode =
+  ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
+  if n.hasType: n.typ else: getTypeImpl(n.val)
 
 # fn-VarLet
 
@@ -135,13 +140,12 @@ proc asVarLetIdentDef*(n: VarLet): IdentDefVarLet =
 
 # fn-TupleVarLet
 
-proc def(n: TupleVarLet): NimNode {.borrow.}
 proc typ*(n: TupleVarLet): NimNode =
   ## return the type based on `getTypeInst`
   getTypeInst n.val
 iterator indexNamePairs*(n: TupleVarLet): (int, NimNode) =
   ## return the names of fields on the lhs of a var/let tuple assignment
-  for index, name in n.def[0 .. ^3].pairs:
+  for index, name in n.def.NimNode[0 .. ^3].pairs:
     yield (index, name)
 
 # fn-IdentDefVarLet
@@ -155,13 +159,6 @@ proc newVarLetIdentDef*(kind: NimNodeKind,
                         name, typ, val: NimNode): IdentDefVarLet =
   ## create a new IdentDefVarLet
   newVarLetIdentDef(kind, newIdentDefs(name, typ, val).IdentDefs)
-proc def(n: IdentDefVarLet): IdentDefs {.borrow.}
-func identdef*(n: IdentDefVarLet): IdentDefs =  n.def
-  ## retrieve the innner IdentDef
-  ## XXX: might want to remove this proc
-func inferTypFromImpl*(n: IdentDefVarLet): NimNode =
-  ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  if n.hasType: n.typ else: getTypeImpl(n.val)
 proc expectVarLetIdentDef*(n: NimNode): IdentDefVarLet =
   ## return a IdentDefVarLet, otherwise error out
   expectVarLet(n).asVarLetIdentDef
@@ -199,19 +196,12 @@ proc expectIdentDefLet*(n: NimNode): IdentDefLet =
   return n.IdentDefLet
 
 proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
+  ## create a let section with an identdef
   (nnkLetSection.newTree i).IdentDefLet
 
 proc newIdentDefLet*(n, typ: NimNode, val = newEmptyNode()): IdentDefLet =
   ## create a let section with an identdef, eg: `n`: `typ` = `val`
   newIdentDefLet(newIdentDefs(n, typ, val).IdentDefs)
-
-func identdef(n: IdentDefLet): IdentDefs =
-  ## Internal accessor to get the single IdentDefs
-  n.NimNode[0].IdentDefs
-
-func val*(n: IdentDefLet): NimNode =
-  ## the init value of the single identdefs within
-  n.identdef.val
 
 # fn-IdentDefVar
 
@@ -229,6 +219,7 @@ proc expectIdentDefVar*(n: NimNode): IdentDefVar =
 proc newIdentDefVar*(i: IdentDefs): IdentDefVar =
   ## create a var section with an identdef
   (nnkVarSection.newTree i).IdentDefVar
+
 proc newIdentDefVar*(n, typ: NimNode, val = newEmptyNode()): IdentDefVar =
   ## create a var section with an identdef, eg: `n`: `typ` = `val`
   newIdentDefVar(newIdentDefs(n, typ, val).IdentDefs)
