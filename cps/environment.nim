@@ -275,14 +275,10 @@ proc initialization(e: Env; kind: NimNodeKind;
 
   # let/var sections basically become env2323(cont).foo34 = "some default"
   case kind
-  of nnkLetSection:
-    let l = expectLetSection(value)
-    if l.hasValue:
-      result.add newAssignment(newDotExpr(child, field), l.val)
-  of nnkVarSection:
-    let v = expectVarSection(value)
+  of nnkLetSection, nnkVarSection:
+    let v = expectVarLet(value)
     if v.hasValue:
-      result.add newAssignment(newDotExpr(child, field), v.val)
+      result.add newAssignment(newDotExpr(child, field), v.rhs.NimNode)
   else:
     # don't attempt to redefine proc params!
     discard

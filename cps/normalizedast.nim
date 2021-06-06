@@ -194,22 +194,16 @@ proc expectVarSection*(n: NimNode): VarSection =
   ## return an VarSection or error out
   if n.kind != nnkVarSection:
     error "not a var section, got:\n" & repr(n), n
-  elif n.len > 1:
+  elif n.len != 1:
     error "bad rewrite, var section has " & $n.len &
           " defines, requires exactly 1:\n" & repr(n), n
   return n.VarSection
 
 proc newVarSection*(i: IdentDefs): VarSection =
   (nnkVarSection.newTree i).VarSection
-
 proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
   ## create a var section with an identdef, eg: `n`: `typ` = `val`
   newVarSection(newIdentDefs(n, typ, val).IdentDefs)
-
-proc hasValue*(n: VarSection): bool {.borrow.}
-proc rhs(n: VarSection): NimNode {.borrow.}
-proc val*(n: VarSection): NimNode = n.rhs
-  ## the init value of the single identdefs or tuple within
 
 # fn-LetIdentDef
 
