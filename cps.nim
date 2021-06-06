@@ -135,15 +135,11 @@ macro whelp*(parent: Continuation; call: typed): Continuation =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
   let sym = bootstrapSymbol call
-  #let cont = bootstrapSymbol newDotExpr(parent, ident"mom")
-  let cont = ident"Continuation"
   result = whelpIt call:
-    #it =
-    echo:
-      repr:
-        nnkDiscardStmt.newTree:
-          newCall(cont,
-            Tail.hook(newCall(cont, parent), sym.ensimilate it))
+    it =
+      newCall ident"Continuation":
+        Tail.hook(newCall(ident"Continuation", parent),
+                  sym.ensimilate it) #newCall(ident"Continuation", it))
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## This symbol may be reimplemented to configure a continuation
@@ -162,7 +158,6 @@ proc tail*[T: Continuation](parent: Continuation; child: T): T {.used, inline.} 
   ##       as it may be an expression...
   result = child
   result.mom = parent
-  #proc tail*[T: Continuation](parent, child: T): T {.used, inline.} =
 
 template coop*[T: Continuation](c: T): T {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce

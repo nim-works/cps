@@ -132,7 +132,7 @@ suite "hooks":
       inc h
       result = c
 
-    proc tail(mom: Continuation; c: Cont): Cont =
+    proc tail(mom: Continuation; c: Cont): Continuation =
       checkpoint "inside tail"
       inc t
       result = c
