@@ -91,7 +91,7 @@ proc init(e: var Env) =
     e.mom = ident"mom" # FIXME: use a getter/setter?
   e.id = genSym(nskType, "env")
   if e.rs.hasType:
-    e = e.set(e.rs.name, newVarLetIdentDef(nnkVarSection, e.rs))
+    e = e.set(e.rs.name, newIdentDefVar(e.rs))
 
 proc allPairs(e: Env): seq[CachePair] =
   if not e.isNil:
@@ -208,7 +208,6 @@ proc storeType*(e: Env; force = off): Env =
 
 proc set(e: var Env; key: NimNode; val: IdentDefVarLet): Env =
   ## set [ident|sym] = let/var section
-  ## XXX: clean this up with a typeclass?
   assert key.kind in {nnkSym, nnkIdent}
   if key in e.locals:
     result = storeType e
@@ -437,9 +436,7 @@ proc getException*(e: var Env): NimNode =
   if e.ex.isNil:
     e.ex = genField"ex"
     e = e.set e.ex:
-      # XXX: this is ugly
-      newVarLetIdentDef(nnkVarSection, e.ex,
-                        nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+      newIdentDefVar(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
   result = newDotExpr(e.castToChild(e.first), e.ex)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
