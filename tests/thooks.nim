@@ -128,27 +128,22 @@ suite "hooks":
     var h, t = 0
 
     proc head(c: Cont): Cont =
-      checkpoint "inside head"
       inc h
       result = c
 
     proc tail(mom: Continuation; c: Cont): Continuation =
-      checkpoint "inside tail"
       inc t
       result = c
       result.mom = mom
 
     proc bar() {.cps: Cont.} =
-      checkpoint "in bar"
       check h == 1, "parent triggered second"
       noop()
-      checkpoint "tail of bar"
 
     proc foo() {.cps: Cont.} =
       check h == 1, "parent triggered first"
       check t == 0, "child triggered first"
       bar()
-      checkpoint "bar done"
       check t == 1, "child triggered second"
 
     var c = whelp foo()
