@@ -434,7 +434,8 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
     newAssignment name:
-      hook Alloc: e.identity
+      #hook Alloc: e.identity
+      Alloc.hook(e.inherits, e.identity)
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
