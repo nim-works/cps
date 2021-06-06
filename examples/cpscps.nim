@@ -6,9 +6,7 @@ import cps, deques
 ###########################################################################
 
 type
-  Work = ref object of RootObj
-    fn*: proc(c: Work): Work {.nimcall.}
-    mom: Work
+  Work = ref object of Continuation
     pool: Pool
 
   Pool = ref object
@@ -27,18 +25,18 @@ proc jield(c: Work): Work {.cpsMagic.} =
 
 proc run(pool: Pool) =
   while pool.workQueue.len > 0:
-    var c = pool.workQueue.popFirst
+    var c = Continuation: pool.workQueue.popFirst
     # During trampolining we need to make sure the continuation always has
     # a proper pointer to the pool, due to momification
     while c.running:
       c = c.fn(c)
-    pool.push c
+    pool.push c.Work
 
-proc tail(mom, c: Work): Work =
+proc tail(mom: Continuation; c: Work): Work =
   echo "tail copied the pool"
   result = c
   result.mom = mom
-  result.pool = mom.pool
+  result.pool = mom.Work.pool
 
 ###########################################################################
 # Main code
@@ -80,7 +78,7 @@ proc bar() {.cps:Work.} =
 
 
 var pool = Pool()
-pool.push whelp bar()
+pool.push: Work(whelp bar())
 pool.run()
 
 echo pool.yields
