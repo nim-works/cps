@@ -37,6 +37,10 @@ type
                VarSection | IdentDefLet | IdentDefVar
   VarLetIdentDefLike = IdentDefVarLet | IdentDefLet | IdentDefVar
 
+func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
+  ## useful for error messages
+  error msg & ", got:\n" & repr(got), n
+
 proc normalizeProcDef*(n: NimNode): ProcDef =
   expectKind(n, nnkProcDef)
   result = (normalizingRewrites n).ProcDef
@@ -78,11 +82,11 @@ defineToNimNodeConverter(IdentDefs)
 proc expectIdentDefs*(n: NimNode): IdentDefs =
   ## return an IdentDef or error out
   if n.kind != nnkIdentDefs:
-    error "not an IdentDefs, got: " & $n.kind, n
+    errorGot "not an IdentDefs", n, $n.kind
   elif n[0].kind notin {nnkIdent, nnkSym}:
-    error "bad rewrite presented:\n" & repr(n), n
+    errorGot "bad rewrite presented", n
   elif n.len != 3:
-    error "bad rewrite, failed to set init\n" & repr(n), n
+    errorGot "bad rewrite, failed to set init", n
   return n.IdentDefs
 
 proc newIdentDefs*(n: string, typ: NimNode, val = newEmptyNode()): IdentDefs =
@@ -121,21 +125,24 @@ func inferTypFromImpl*(n: VarLetIdentDefLike): NimNode =
 proc expectVarLet*(n: NimNode): VarLet =
   ## return a VarLet if this is a var or let section, otherwise error out
   if n.kind notin {nnkLetSection, nnkVarSection}:
-    error "not a var or let section, got:\n" & repr(n), n
+    errorGot "not a var or let section", n
   elif n.len != 1:
-    error "bad rewrite, var or let section has " & $n.len &
-          " items, requires exactly 1:\n" & repr(n), n
+    errorGot "bad rewrite, var or let section has " & $n.len &
+          " items, requires exactly 1", n
   return n.VarLet
+
+func errorGot(msg: string, n: VarLetLike, got: string = repr(n)) =
+  errorGot(msg, n.NimNode, got)
 
 proc asVarLetTuple*(n: VarLet): TupleVarLet =
   ## return a TupleVarLet if the def is a VarTuple, otherwise error out
   if n.def.NimNode.kind notin {nnkVarTuple}:
-    error "must be a tuple assignment, got:\n" & repr(n.NimNode), n.NimNode
+    errorGot "must be a tuple assignment", n
   return n.TupleVarLet
 proc asVarLetIdentDef*(n: VarLet): IdentDefVarLet =
   ## return a IdentDefVarLet if the def is an IdentDef, otherwise error out
   if n.def.NimNode.kind notin {nnkIdentDefs}:
-    error "must be an IdentDefs, got:\n" & repr(n.NimNode), n.NimNode
+    errorGot "must be an IdentDefs", n
   return n.IdentDefVarLet
 
 # fn-TupleVarLet
@@ -170,10 +177,10 @@ defineToNimNodeConverter(VarSection)
 proc expectVarSection*(n: NimNode): VarSection =
   ## return an VarSection or error out
   if n.kind != nnkVarSection:
-    error "not a var section, got:\n" & repr(n), n
+    errorGot "not a var section", n
   elif n.len != 1:
-    error "bad rewrite, var section has " & $n.len &
-          " defines, requires exactly 1:\n" & repr(n), n
+    errorGot "bad rewrite, var section has " & $n.len &
+          " defines, requires exactly 1", n
   return n.VarSection
 
 proc newVarSection*(i: IdentDefs): VarSection =
@@ -187,12 +194,12 @@ proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
 proc expectIdentDefLet*(n: NimNode): IdentDefLet =
   ## return an IdentDefLet or error out
   if n.kind != nnkLetSection:
-    error "not a let section, got:\n" & repr(n), n
+    errorGot "not a let section", n
   elif n.len != 1:
-    error "bad rewrite, let section has " & $n.len &
-          " defines, requires exactly 1:\n" & repr(n), n
+    errorGot "bad rewrite, let section has " & $n.len &
+          " defines, requires exactly 1", n
   elif n[0].kind notin {nnkIdentDefs}:
-    error "IdentDefLet requires a single IdentDefs child, got:\n" & repr(n), n
+    errorGot "IdentDefLet requires a single IdentDefs child", n
   return n.IdentDefLet
 
 proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
@@ -208,12 +215,12 @@ proc newIdentDefLet*(n, typ: NimNode, val = newEmptyNode()): IdentDefLet =
 proc expectIdentDefVar*(n: NimNode): IdentDefVar =
   ## return an IdentDefVar or error out
   if n.kind != nnkVarSection:
-    error "not a var section, got:\n" & repr(n), n
+    errorGot "not a var section", n
   elif n.len != 1:
-    error "bad rewrite, var section has " & $n.len &
-          " defines, requires exactly 1:\n" & repr(n), n
+    errorGot "bad rewrite, var section has " & $n.len &
+          " defines, requires exactly 1", n
   elif n[0].kind notin {nnkIdentDefs}:
-    error "IdentDefVar requires a single IdentDefs child, got:\n" & repr(n), n
+    errorGot "IdentDefVar requires a single IdentDefs child", n
   return n.IdentDefVar
 
 proc newIdentDefVar*(i: IdentDefs): IdentDefVar =
