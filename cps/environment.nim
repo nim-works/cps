@@ -37,6 +37,9 @@ type
     key: NimNode
     val: IdentDefVarLet
 
+proc `$`(p: CachePair): string {.used.} =
+  p[0].repr & ": " & p[1].repr
+
 proc len*(e: Env): int = e.locals.len
 
 proc isEmpty*(e: Env): bool = e.len == 0
