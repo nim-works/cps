@@ -12,9 +12,7 @@ import cps, math, std/locks, deques, cpuinfo
 # Implementation of the thread pool
 ###########################################################################
 
-type Cont = ref object of RootObj
-  fn*: proc(c: Cont): Cont {.nimcall.}
-  mom: Cont
+type Cont = ref object of Continuation
 
 
 type Pool = ref object
@@ -37,14 +35,14 @@ proc doWork(pool: Pool) {.thread.} =
       pool.lock.release
       return
 
-    var c = pool.work.popFirst
+    var c = Continuation: pool.work.popFirst
     pool.lock.release
 
-    if c == nil:
+    if c.dismissed:
       break
-
-    while c.running:
-      c = c.fn(c)
+    else:
+      while c.running:
+        c = c.fn(c)
 
 
 proc work(nThreads: int) =
@@ -70,7 +68,7 @@ proc slow(id: int, n: float) {.cps:Cont.} =
   while i < n:
     i += 1
     j = 0
-    while j < 100_000:
+    while j < 10_000:
       j += 0.01
       b += sin(i) + cos(j)
     jield()
@@ -79,7 +77,8 @@ proc slow(id: int, n: float) {.cps:Cont.} =
 
 when defined(gcArc) or defined(gcOrc):
   for i in 1..32:
-    pool.work.addLast whelp slow(i, 4)
+    pool.work.addLast:
+      Cont: whelp slow(i, 4)
 
 
   work(countProcessors())
