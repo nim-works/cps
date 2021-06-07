@@ -20,6 +20,22 @@ suite "locals":
     check r == 2
 
   block:
+    ## local variable multi-assignment
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      var i, j = 2
+      check i == 2
+      check j == 2
+      noop()
+      inc r
+      inc i
+      check i == 3
+      check j == 2
+    foo()
+    check r == 2
+
+  block:
     ## out-of-scope variables operate as expected
     r = 0
     var j = 2

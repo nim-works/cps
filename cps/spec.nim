@@ -35,13 +35,6 @@ type
     c is ref object
     c of RootObj
 
-  Pair* = tuple
-    key: NimNode
-    val: NimNode
-
-proc `$`(p: Pair): string {.used.} =
-  p[0].repr & ": " & p[1].repr
-
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
   case n.kind
