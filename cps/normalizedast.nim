@@ -149,7 +149,6 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
 
 func identdef*(n: VarLetIdentDefLike): IdentDefs = n.NimNode[0].IdentDefs
   ## retrieve the innner IdentDef
-  ## XXX: might want to remove this proc
 func name*(n: VarLetIdentDefLike): NimNode = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
   ## will have the name

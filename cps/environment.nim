@@ -262,20 +262,14 @@ proc identity*(e: var Env): NimNode =
   assert not e.id.isEmpty
   result = e.id
 
-proc initialization(e: Env; kind: NimNodeKind; field: NimNode, section: IdentDefVarLet): NimNode =
-  ## produce the `x = 34` appropriate given the field and identDefs
-  doAssert kind in {nnkVarSection, nnkLetSection, nnkIdentDefs}
-
+proc initialization(e: Env; field: NimNode, section: IdentDefVarLet): NimNode =
+  ## produce the `x = 34`
   result = newStmtList()
-  
-  let isLocalSection = kind in {nnkLetSection, nnkVarSection}
   # let/var sections basically become env2323(cont).foo34 = "some default"
-  if isLocalSection and section.hasValue:
+  if section.hasValue:
     # this is our continuation type, fully cast
     let child = e.castToChild(e.first)
     result.add newAssignment(newDotExpr(child, field), section.val)
-  else:
-    discard "don't attempt to redefine proc params!"
 
 proc letOrVar(n: IdentDefs): NimNodeKind =
   ## choose between let or var for proc parameters
@@ -287,20 +281,21 @@ proc letOrVar(n: IdentDefs): NimNodeKind =
   else:
     result = nnkLetSection
 
-proc addAssignment(e: var Env; kind: NimNodeKind; d: IdentDefs): NimNode =
+proc addAssignment(e: var Env; d: IdentDefs): NimNode =
+  ## compose an assignment during addition of identDefs to env for proc params
+  let section = letOrVar(d)
+  discard e.addIdentDef(section, d)
+  when cpsDebug == "Env":
+    echo $d.kind, "\t", repr(d)
+  # don't attempt to redefine proc params!
+  result = newStmtList()
+
+proc addAssignment(e: var Env; section: IdentDefVarLet): NimNode =
   ## compose an assignment during addition of identDefs to env
-  ## XXX: `kind` is being used to differentiate between IdentDef in a Var|Let
-  ##       Section vs a parameter, used for assignment. Create a new type
-  let
-    section =
-      if kind in {nnkVarSection, nnkLetSection}:
-        kind
-      else:
-        letOrVar(d)
-    (field, value) = e.addIdentDef(section, d)
+  let (field, value) = e.addIdentDef(section.kind, section.identdef())
   when cpsDebug == "Env":
     echo $kind, "\t", repr(d)
-  result = e.initialization(kind, field, value)
+  result = e.initialization(field, value)
 
 when false:
   proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
@@ -356,19 +351,18 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
     maybeAdd newAssignment(tups, defs.val)
   else:
     # an iterator handles `var a, b, c = 3` appropriately
-    let assignment = e.addAssignment(n.kind, n.asVarLetIdentDef().identdef)
-    maybeAdd assignment
+    maybeAdd e.addAssignment(n.asVarLetIdentDef())
 
 proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
-  ## consume a var|let section or ident defs and yield name, node pairs
-  ## representing assignments to local scope
+  ## consume ident defs and yield name, node pairs representing assignments to
+  ## local scope.
   case n.kind
   of nnkVarSection, nnkLetSection:
     # XXX: this branch goes away once we type procParams, as that's the only
     #      other use for this proc based on the call sites.
     error "this is a deprecated path and should not be triggered"
   of nnkIdentDefs:
-    let assignment = e.addAssignment(n.kind, expectIdentDefs(n))
+    let assignment = e.addAssignment(expectIdentDefs(n))
     if not into.isNil:
       into.add assignment
   else:
