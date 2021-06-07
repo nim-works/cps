@@ -14,8 +14,6 @@ proc isCpsBlock(n: NimNode): bool =
       if nc.isCpsCall() or isCpsBlock(nc):
         return true
 
-
-
 proc split(n: Nimnode): NimNode =
 
   let name = $n[0]
@@ -32,9 +30,8 @@ proc split(n: Nimnode): NimNode =
 
     # hack: the prelude now has one hardcoded val, this should be
     # generated from the lifted locals of the proc instead
-    let prelude = nnkVarSection.newTree(
-      nnkIdentDefs.newTree(
-        newIdentNode("j"),
+    let prelude = newVarSection(
+        "j",
         newEmptyNode(),
         newDotExpr(newDotExpr(contId, contT), ident("j"))
       )

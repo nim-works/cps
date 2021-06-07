@@ -10,11 +10,7 @@ import cps
 
 
 type
-
-  C = ref object of RootObj
-    fn*: proc(c: C): C {.nimcall.}
-    mom*: C
-
+  C = ref object of Continuation
 
 # Trampoline with count safeguard
 
@@ -294,7 +290,7 @@ suite "suite, suite zevv":
         echo i
         inc i
 
-    var c = whelp count()
+    var c: Continuation = whelp count()
     c = c.fn(c) # boot
     check c.state == Running
     c = c.fn(c) # first jield

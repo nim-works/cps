@@ -1,7 +1,5 @@
 import std/macros
 import std/strutils
-import balls
-import cps
 
 include preamble
 
@@ -58,7 +56,8 @@ suite "hooks":
   block:
     ## custom continuation allocators are used automatically
     var r = 0
-    proc alloc[T: Cont](c: typedesc[T]): c =
+
+    proc alloc[T](root: typedesc[Cont]; c: typedesc[T]): T =
       inc r
       new c
 
@@ -133,7 +132,7 @@ suite "hooks":
       inc h
       result = c
 
-    proc tail(mom: Cont; c: Cont): Cont =
+    proc tail(mom: Continuation; c: Cont): Continuation =
       inc t
       result = c
       result.mom = mom
@@ -150,14 +149,14 @@ suite "hooks":
 
     var c = whelp foo()
     c = cps.trampoline c
-    check "bzzzt":
+    check "bzzzt whelped":
       h == t
       t == 1
 
     h = 0
     t = 0
     foo()
-    check "bzzzt":
+    check "bzzzt bootstrapped":
       h == t
       t == 1
 

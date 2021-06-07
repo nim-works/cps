@@ -421,12 +421,27 @@ suite "tasteful tests":
     check r == 1
 
   block:
-    ## continuations can return values via bootstrap
+    ## continuations can return values via bootstrap or whelp
     r = 0
     proc foo(x: int): int {.cps: Cont.} =
       noop()
       inc r
       return x * x
+
+    let x = foo(3)
+    check r == 1
+    check x == 9
+    var c = whelp foo(5)
+    trampoline c
+    check r == 2
+
+  block:
+    ## assignments to the special result symbol work
+    r = 0
+    proc foo(x: int): int {.cps: Cont.} =
+      noop()
+      inc r
+      result = x * x
 
     let x = foo(3)
     check r == 1

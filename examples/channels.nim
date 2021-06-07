@@ -11,9 +11,7 @@ import macros
 # Basic empty continuation type. The rest of the bookkeeping is done in the
 # Channel type below
 
-type Cont = ref object of RootObj
-  fn*: proc(c: Cont): Cont {.nimcall.}
-  mom: Cont
+type Cont = ref object of Continuation
 
 # A channel connects a sender and a receiver CPS proc; it holds a continuation
 # for each of them, the pump will run either one, depending on the existance of
@@ -46,7 +44,7 @@ proc getval(ch: Channel): int =
 # The lady is a
 
 proc tramp(cont: var Cont) =
-  var c = cont
+  var c = Continuation: cont
   cont = nil
   while c.running:
     c = c.fn(c)

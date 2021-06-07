@@ -6,21 +6,22 @@ import cps, deques, macros, sugar
 ###########################################################################
 
 type
-  Stream = ref object of RootObj
-    fn*: proc(s: Stream): Stream {.nimcall.}
-    mom: Stream
+  Stream = ref object of Continuation
     val: int
     sIn: Stream
 
 proc jield(s: Stream, val: int = 0): Stream {.cpsMagic.} =
   s.val = val
 
-proc getSin(s: Stream): (Stream) {.cpsVoodoo.} =
+proc getSin(s: Stream): Stream {.cpsVoodoo.} =
   s.sIn
 
-proc resume(s: Stream): int=
-  discard s.trampoline()
-  s.val
+proc resume(s: Stream): int =
+  block:
+    var s = Continuation: s
+    while s.running:
+      s = s.fn(s)
+  result = s.val
 
 macro stream(n: untyped): untyped =
   n.addPragma nnkExprColonExpr.newTree(ident"cps", ident"Stream")
@@ -74,11 +75,12 @@ proc pump() {.stream.} =
   while sIn.running:
     discard sIn.resume()
 
-var s = toStream(1..10) ->
-        map(x => x * 3) ->
-        filter(x => (x mod 2) == 0) ->
-        print() ->
-        pump()
+var s = Continuation:
+  toStream(1..10) ->
+  map(x => x * 3) ->
+  filter(x => (x mod 2) == 0) ->
+  print() ->
+  pump()
 
-discard s.trampoline()
-
+while s.running:
+  s = s.fn(s)

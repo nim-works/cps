@@ -2,17 +2,16 @@
 import cps, options, deques
 
 type
-  Coroutine = ref object of RootObj
-    fn*: proc(c: Coroutine): Coroutine {.nimcall.}
-    mom: Coroutine
+  Coroutine = ref object of Continuation
     s: int
     cResume: Coroutine
 
 
 proc tramp(c: Coroutine): Coroutine {.discardable.}  =
-  result = c
-  while result.running:
-    result = c.fn(result)
+  var c = Continuation: c
+  while c.running:
+    c = c.fn(c)
+  result = Coroutine: c
 
 proc recv(c: Coroutine): int {.cpsVoodoo.} =
   c.s

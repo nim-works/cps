@@ -31,18 +31,19 @@ proc state*(c: Continuation): State =
 
 template running*(c: Continuation): bool =
   ## `true` if the continuation is running.
-  c.state == Running
+  (Continuation c).state == Running
 
 template finished*(c: Continuation): bool =
   ## `true` if the continuation is finished.
-  c.state == Finished
+  (Continuation c).state == Finished
 
-proc trampoline*(c: Continuation): Continuation =
+proc trampoline*[T: Continuation](c: T): T =
   ## This is the basic trampoline: it will continue the continuation
   ## until it is no longer in 'running' state
-  result = c
-  while result.running:
-    result = result.fn(result)
+  var c: Continuation = c
+  while c.running:
+    c = c.fn(c)
+  result = T c
 
 template trampolineIt*[T: Continuation](c: T; body: untyped) =
   ## This trampoline allows the user to interact with the continuation
@@ -56,7 +57,7 @@ template trampolineIt*[T: Continuation](c: T; body: untyped) =
 
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
-  c.state == Dismissed
+  (Continuation c).state == Dismissed
 
 macro cps*(T: typed, n: typed): untyped =
   ## This is the .cps. macro performing the proc transformation
@@ -89,6 +90,10 @@ proc makeErrorShim(n: NimNode): NimNode =
   result.add m
 
 macro cpsMagic*(n: untyped): untyped =
+  ## Applied to a procedure to generate a version which lacks the first
+  ## argument and return value, which are those of a `Continuation`.
+  ## This new magical will compile correctly inside CPS procedures though
+  ## it never takes a `Continuation` argument and produces no return value.
   let shim = n.makeErrorShim()
   shim[1].params[0] = newEmptyNode()
   shim[1].addPragma ident"cpsMustJump"
@@ -96,20 +101,32 @@ macro cpsMagic*(n: untyped): untyped =
   shim
 
 macro cpsVoodoo*(n: untyped): untyped =
+  ## Similar to a `cpsMagic` where the first argument is concerned, but
+  ## may specify a return value which is usable inside the CPS procedure.
   let shim = n.makeErrorShim()
   shim[1].addPragma ident"cpsVoodooCall"
   shim
 
+proc bootstrapSymbol(n: NimNode): NimNode =
+  case n.kind
+  of nnkProcDef:
+    for n in n.pragma.items:
+      if n.kind == nnkExprColonExpr:
+        if $n[0] == "cpsBootstrap":
+          if result.isNil:
+            result = n[1]
+          else:
+            result = n.errorAst "redundant bootstrap pragmas?"
+    if result.isNil:
+      result = n.errorAst "welping malfunction"
+  of nnkCallKinds:
+    result = bootstrapSymbol(getImpl n[0])
+  else:
+    result = newCall(ident"typeOf", n)
+
 proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
-  for n in n.pragma.items:
-    if n.kind == nnkExprColonExpr:
-      if $n[0] == "cpsBootstrap":
-        if result.isNil:
-          result = n[1].newCall args        # n[1]: the bootstrap sym to use
-        else:
-          error "redundant bootstrap pragmas?", n
-  if result.isNil:
-    error "welping malfunction", n
+  let sym = bootstrapSymbol n
+  result = sym.newCall args
 
 template whelpIt*(input: typed; body: untyped): untyped =
   var n = normalizingRewrites input
@@ -124,30 +141,32 @@ template whelpIt*(input: typed; body: untyped): untyped =
   else:
     n.errorAst "the input to whelpIt must be a .cps. call"
 
-macro whelp*(call: typed): Continuation =
+macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
   ## running it; instead, return the continuation as a value.
+  let sym = bootstrapSymbol call
   result = whelpIt call:
-    it = Head.hook(it)
-  #
-  # unlike the Tail version, introduce at the top of procs to work
-  # around a nim issue with inner mixin calls...?
+    it =
+      sym.ensimilate:
+        Head.hook(it)
 
-macro whelp*(parent: Continuation; call: typed): Continuation =
+macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
+  let sym = bootstrapSymbol call
   result = whelpIt call:
-    it = Tail.hook(parent, it)
-  result = newStmtList result
-  result.introduce {Tail}
+    it =
+      sym.ensimilate:
+        Tail.hook(newCall(ident"Continuation", parent),
+                  sym.ensimilate it)
 
-template head*(first: Continuation): Continuation {.used.} =
+template head*[T: Continuation](first: T): T {.used.} =
   ## This symbol may be reimplemented to configure a continuation
   ## for use when there is no parent continuation available.
   ## The return value specifies the continuation.
   first
 
-proc tail*(parent, child: Continuation): Continuation {.used, inline.} =
+proc tail*[T: Continuation](parent: Continuation; child: T): T {.used, inline.} =
   ## This symbol may be reimplemented to configure a continuation for
   ## use when it has been instantiated from inside another continuation;
   ## currently, this means assigning the parent to the child's `mom`
@@ -159,19 +178,19 @@ proc tail*(parent, child: Continuation): Continuation {.used, inline.} =
   result = child
   result.mom = parent
 
-template coop*(c: Continuation): Continuation {.used.} =
+template coop*[T: Continuation](c: T): T {.used.} =
   ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
   ## a cooperative yield at appropriate continuation exit points.
   ## The return value specifies the continuation.
   c
 
-template boot*(c: Continuation): Continuation {.used.} =
+template boot*[T: Continuation](c: T): T {.used.} =
   ## This symbol may be reimplemented to refine a continuation after
   ## it has been allocated but before it is first run.
   ## The return value specifies the continuation.
   c
 
-template pass*(source, destination: Continuation): Continuation {.used.} =
+template pass*[T: Continuation](source, destination: T): T {.used.} =
   ## This symbol may be reimplemented to introduce logic during
   ## the transfer of control between parent and child continuations.
   ## The return value specifies the destination continuation.
@@ -182,7 +201,7 @@ template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
   ## tracing of the entry to each continuation leg.
   discard
 
-template alloc*[T: Continuation](c: typedesc[T]): T {.used.} =
+proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used, inline.} =
   ## This symbol may be reimplemented to customize continuation
   ## allocation.
   new c

@@ -27,20 +27,11 @@ template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
 
 type
+  Continuation* = ref object of RootObj
+    fn*: proc(c: Continuation): Continuation {.nimcall.}
+    mom*: Continuation
+
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
-  Continuation* = concept c ##
-    ## All continuation types must match this `Continuation` concept
-    ## in order to be used by the `.cps.` macro.
-    c.fn is ContinuationProc[Continuation]
-    c is ref object
-    c of RootObj
-
-  Pair* = tuple
-    key: NimNode
-    val: NimNode
-
-proc `$`(p: Pair): string {.used.} =
-  p[0].repr & ": " & p[1].repr
 
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
@@ -63,7 +54,6 @@ func hasPragma*(n: NimNode; s: static[string]): bool =
     result = hasPragma(n.pragma, s)
   of nnkObjectTy:
     result = hasPragma(n[0], s)
-    assert n[0].kind == nnkPragma
   of nnkRefTy:
     result = hasPragma(n.last, s)
   of nnkTypeDef:

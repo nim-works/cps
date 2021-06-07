@@ -7,13 +7,8 @@ import cps, tables
 
 
 type
-  CFn = proc(c: C): C {.nimcall.}
-
-  C = ref object of RootObj
-    fn: CFn
-    mom: C
-    labels: Table[string, CFn]
-
+  C = ref object of Continuation
+    labels: Table[string, Continuation.fn]
 
 # Define the CPS magic 'label' and 'goto' procs
 
