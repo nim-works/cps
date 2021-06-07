@@ -44,6 +44,16 @@ proc trampoline*(c: Continuation): Continuation =
   while result.running:
     result = result.fn(result)
 
+template trampolineIt*[T: Continuation](c: T; body: untyped) =
+  ## This trampoline allows the user to interact with the continuation
+  ## prior to each leg of its execution.  The continuation will be
+  ## exposed by a variable named `it` inside the `body`.
+  var c: Continuation = c
+  while c.running:
+    var it {.inject.}: T = c
+    body
+    c = c.fn(c)
+
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
   c.state == Dismissed
