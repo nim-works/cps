@@ -43,24 +43,22 @@ built and rough edges are identified.
 ## How Do I Use It?
 
 The `cps` macro takes a single argument: the parent type you wish your
-continuations to inherit from.  This type must match the `Continuation` concept, which is defined thusly:
+continuations to inherit from.  This type must be a descendant of the
+`Continuation` type.
 
 ```nim
 type
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
-  Continuation* = concept c
-    c.fn is ContinuationProc[Continuation]
-    # (recursive concepts are not supported by the Nim compiler yet)
-    c.mom is Continuation
-    c is ref object
-    c of RootObj
+  MyContinuation = ref object of Continuation
+    something: string
+
+proc foo() {.cps: MyContinuation.} =
+  ## a very fast continuation based on MyContinuation
+  discard
 ```
 
-If your type matches the above concept, congratulations, you have yourself the
-basis of a continuation.
+All cps programs use the cps macro to perform the transformation.
 
 ```nim
-# All cps programs use the cps macro to perform the transformation.
 import cps
 
 # Each usage of the .cps. macro can have its own continuation type,

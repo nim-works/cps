@@ -84,7 +84,9 @@ macro cpsJump(cont, call, n: typed): untyped =
         newAssignment(newDotExpr(cont, ident"fn"), name)
       it.add:
         # instantiate a new child continuation with the given arguments
-        newLetStmt(c, newCall(ident"whelp", cont, call))
+        newLetStmt c:
+          newCall newCall(ident"typeof", cont):
+            newCall(ident"whelp", cont, call)
       # NOTE: mom should now be set via the tail() hook from whelp
       #
       # return the child continuation

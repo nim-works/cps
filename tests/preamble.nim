@@ -1,15 +1,17 @@
+import balls
+
+import cps except trampoline
+
 type
   EmptyLoop = CatchableError
   InfiniteLoop = CatchableError
-  Cont* = ref object of RootObj
-    fn*: proc(c: Cont): Cont {.nimcall.}
-    mom*: Cont
+  Cont* = ref object of Continuation
 
 var jumps: int
 
-proc trampoline(c: Cont) =
+proc trampoline[T: Continuation](c: T) =
   jumps = 0
-  var c = c
+  var c = Continuation c
   while c.running:
     # pretends that an exception is raised and handled elsewhere
     setCurrentException(nil)

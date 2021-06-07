@@ -60,7 +60,7 @@ proc sym*(hook: Hook): NimNode =
 proc hook*(hook: Hook; n: NimNode): NimNode =
   ## execute the given hook on the given node
   case hook
-  of Alloc:
+  of Alloc: # (unused; see alloc/2)
     # hook(typedesc[Continuation])
     newCall(hook.sym, n)
   of Boot, Coop, Head:
@@ -75,6 +75,9 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
 proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
   ## execute the given hook with two arguments
   case hook
+  of Alloc:
+    # hook(Cont, env_234234)
+    newCall(hook.sym, a, b)
   of Unwind:
     # hook(continuation, exception)
     newCall(hook.sym, a, b)
