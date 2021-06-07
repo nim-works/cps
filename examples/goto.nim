@@ -34,8 +34,9 @@ proc foo() {.cps:C.} =
 
 # Trampoline
 
+var c = whelp foo()
 var x = 0
-var c: Continuation = whelp foo()
-while c.running and x < 100:
-  c = c.fn(c)
+trampolineIt c:
+  if x > 100:
+    break
   inc x
