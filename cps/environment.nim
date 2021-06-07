@@ -37,7 +37,7 @@ type
     val: IdentDefVarLet
 
 proc `$`(p: CachePair): string {.used.} =
-  p[0].repr & ": " & p[1].repr
+  p.val.repr & ": " & p.key.repr
 
 proc len*(e: Env): int = e.locals.len
 
@@ -155,7 +155,7 @@ when cpsReparent:
 
 proc makeType*(e: Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-  nnkTypeDef.newTree(e.id, newEmptyNode(), e.objectType)
+  nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
 
@@ -205,7 +205,7 @@ proc storeType*(e: Env; force = off): Env =
       if not e.parent.isDirty:
         # must store the parent for inheritance ordering reasons;
         # also, we don't want it to be changed under our feet.
-        if e.via == e.parent.id:
+        if e.via == e.parent.identity:
           e.parent = storeType e.parent
     e.store.add:
       nnkTypeSection.newTree e.makeType
