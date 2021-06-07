@@ -996,7 +996,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T, n.returnParam)
+  var env = newEnv(ident"continuation", types, T.asName, n.returnParam)
 
   # add parameters into the environment
   for defs in n.callingParams:
@@ -1075,7 +1075,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
   let processMainContinuation =
     newCall(bindSym"cpsFloater"):
-      newCall(bindSym"cpsResolver", env.identity):
+      newCall(bindSym"cpsResolver", NimNode env.identity):
         newCall(bindSym"cpsManageException"):
           newCall(bindSym"cpsHandleUnhandledException"):
             n

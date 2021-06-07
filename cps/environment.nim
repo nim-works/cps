@@ -15,25 +15,25 @@ const
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
-  LocalCache = OrderedTable[NimNode, IdentDefVarLet]
+  LocalCache = OrderedTable[Name, IdentDefVarLet]
 
   Env* = ref object
-    id: NimNode                     # the identifier of our continuation type
-    via: NimNode                    # the identifier of the type we inherit
+    id: Name                        # the identifier of our continuation type
+    via: Name                       # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
     locals: LocalCache              # locals and their typedefs|generics
     store: NimNode                  # where to put typedefs, a stmtlist
     when cpsReparent:
-      seen: HashSet[string]           # count/measure idents/syms by string
+      seen: HashSet[string]         # count/measure idents/syms by string
 
     # special symbols for cps machinery
     c: NimNode                      # the sym we use for the continuation
-    fn: NimNode                     # the sym we use for the goto target
+    fn: Name                        # the sym we use for the goto target
     rs: IdentDefs                   # the identdefs for the result
-    mom: NimNode                    # the sym we use for parent continuation
+    mom: Name                       # the sym we use for parent continuation
 
   CachePair* = tuple
-    key: NimNode
+    key: Name
     val: IdentDefVarLet
 
 proc `$`(p: CachePair): string {.used.} =
@@ -43,13 +43,13 @@ proc len*(e: Env): int = e.locals.len
 
 proc isEmpty*(e: Env): bool = e.len == 0
 
-proc inherits*(e: Env): NimNode =
+proc inherits*(e: Env): Name =
   if e.parent.isNil:
     e.via
   else:
     e.parent.id
 
-proc identity*(e: Env): NimNode = e.id
+proc identity*(e: Env): Name = e.id
 
 func isWritten(e: Env): bool =
   ## why say in three lines what you can say in six?
@@ -65,17 +65,19 @@ func isDirty*(e: Env): bool =
   ## the type hasn't been written since an add occurred
   (not e.isWritten) or (not e.parent.isNil and e.parent.isDirty)
 
-proc root*(e: Env): NimNode =
+proc root*(e: Env): Name =
   var r = e
   while not r.parent.isNil:
     r = r.parent
   result = r.inherits
 
 proc castToRoot(e: Env; n: NimNode): NimNode =
-  newTree(nnkCall, e.root, n)
+  # XXX: remove NimNode
+  newTree(nnkCall, e.root.NimNode, n)
 
 proc castToChild(e: Env; n: NimNode): NimNode =
-  newTree(nnkCall, e.identity, n)
+  # XXX: remove NimNode
+  newTree(nnkCall, e.identity.NimNode, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -84,14 +86,14 @@ proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   else:
     locals
 
-proc set(e: var Env; key: NimNode; val: IdentDefVarLet): Env
+proc set(e: var Env; key: Name; val: IdentDefVarLet): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
-    e.fn = ident"fn"
+    e.fn = asName"fn"
   if e.mom.isNil:
-    e.mom = ident"mom"
-  e.id = genSym(nskType, "cps environment")
+    e.mom = asName"mom"
+  e.id = newTypeName("cps environment")
   if e.rs.hasType:
     e = e.set(e.rs.name, newIdentDefVar(e.rs))
 
@@ -115,16 +117,18 @@ iterator pairs(e: Env): CachePair =
 
 proc populateType(e: Env; n: var NimNode) =
   ## add fields in the env into a record
+  # XXX: remove NimNode
   for name, section in e.locals.pairs:
     n.add:
-      newIdentDefs(name, section.inferTypFromImpl, newEmptyNode())
+      newIdentDefs(name, section.inferTypFromImpl, newEmptyNode()).NimNode
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
+  # XXX: remove NimNode
   var pragma = newEmptyNode()
-  var record = nnkRecList.newNimNode(e.identity)
+  var record = nnkRecList.newNimNode(e.identity.NimNode)
   e.populateType record
-  var parent = nnkOfInherit.newNimNode(e.root).add e.inherits
+  var parent = nnkOfInherit.newNimNode(e.root.NimNode).add e.inherits.NimNode
   result = nnkRefTy.newTree:
     nnkObjectTy.newTree(pragma, parent, record)
 
@@ -155,16 +159,19 @@ when cpsReparent:
 
 proc makeType*(e: Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-  nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType)
+  # XXX: remove NimNode
+  nnkTypeDef.newTree(e.identity.NimNode, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): NimNode = e.c
 
 proc firstDef*(e: Env): NimNode =
-  newIdentDefs(e.first, e.via, newEmptyNode())
+  # XXX: remove NimNode
+  newIdentDefs(e.first, e.via.NimNode, newEmptyNode())
 
 proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
-  newDotExpr(e.castToChild(e.first), e.rs.name)
+  # XXX: remove NimNode
+  newDotExpr(e.castToChild(e.first), e.rs.name.NimNode)
 
 proc rewriteResult(e: Env; n: NimNode): NimNode =
   ## replaces result symbols with the env's result; this should be
@@ -184,7 +191,7 @@ proc newEnv*(parent: Env; copy = off): Env =
   if copy:
     result = Env(store: parent.store,
                  via: parent.identity,
-                 locals: initOrderedTable[NimNode, IdentDefVarLet](),
+                 locals: initOrderedTable[Name, IdentDefVarLet](),
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
@@ -219,9 +226,8 @@ proc storeType*(e: Env; force = off): Env =
     result = e
     assert not e.isDirty
 
-proc set(e: var Env; key: NimNode; val: IdentDefVarLet): Env =
+proc set(e: var Env; key: Name; val: IdentDefVarLet): Env =
   ## set [ident|sym] = let/var section
-  assert key.kind in {nnkSym, nnkIdent}
   if key in e.locals:
     result = storeType e
   else:
@@ -237,19 +243,20 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
     if n.kind == nnkVarTy: n[0] else: n
 
   let
-    field = genField def.name.strVal
-    value = newVarLetIdentDef( kind, def.name, stripVar(def.typ), def.val)
+    field = asName(genField def.name.strVal)
+    value = newVarLetIdentDef(kind, def.name, stripVar(def.typ), def.val)
     # we stripVar to ident: <no var> type = default
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env =
+proc newEnv*(c: NimNode; store: var NimNode; via: Name, rs: NimNode): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
   ## `via` is the type from which we inherit,
   ## `rs` is the return type (if not nnkEmpty) of the continuation.
-  let via = if via.isNil: errorAst"need a type" else: via
+  # XXX: remove the Name hack
+  let via = if via.isNil: errorAst"need a type".Name else: via
   let rs = if rs.isNil: newEmptyNode() else: rs
   let c = if c.isNil or c.isEmpty: ident"continuation" else: c
 
@@ -259,19 +266,21 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env =
     result.seen = initHashSet[string]()
   init result
 
-proc identity*(e: var Env): NimNode =
+proc identity*(e: var Env): Name =
+  # XXX: replace asserts and remove NimNode
   assert not e.id.isNil
-  assert not e.id.isEmpty
+  assert not e.id.NimNode.isEmpty
   result = e.id
 
-proc initialization(e: Env; field: NimNode, section: IdentDefVarLet): NimNode =
+proc initialization(e: Env; field: Name, section: IdentDefVarLet): NimNode =
   ## produce the `x = 34`
+  # XXX: remove NimNode
   result = newStmtList()
   # let/var sections basically become env2323(cont).foo34 = "some default"
   if section.hasValue:
     # this is our continuation type, fully cast
     let child = e.castToChild(e.first)
-    result.add newAssignment(newDotExpr(child, field), section.val)
+    result.add newAssignment(newDotExpr(child, field.NimNode), section.val)
 
 proc letOrVar(n: IdentDefs): NimNodeKind =
   ## choose between let or var for proc parameters
@@ -313,6 +322,7 @@ when false:
 proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
   ## representing assignments to local scope
+  # XXX: remove NimNode
   template maybeAdd(x) =
     if not into.isNil:
       into.add x
@@ -330,7 +340,7 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
       # we need to insert the variable and then write a new
       # accessor that plucks the field from the env
       let (field, _) = e.addIdentDef(n.kind, expectIdentDefs(entry))
-      tups.add newDotExpr(child, field)
+      tups.add newDotExpr(child, field.NimNode)
     maybeAdd newAssignment(tups, defs.val)
   else:
     # an iterator handles `var a, b, c = 3` appropriately
@@ -354,6 +364,7 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
+  # XXX: remove NimNode
   if n.len != 1:
     result = n.errorAst "return len != 1"
   else:
@@ -384,8 +395,8 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
     # we don't resym identifiers, which we must have created;
     # these are a side-effect of an open nim bug
     let sym = section.name
-    if sym.kind == nnkSym:
-      result = result.resym(sym, newDotExpr(child, field))
+    if sym.isSymbol:
+      result = result.resym(sym.NimNode, newDotExpr(child, field.NimNode))
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
   # make a special rewrite pass to replace the result symbols
@@ -393,31 +404,32 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
 
 proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
+  # XXX: remove NimNode
   proc resultdot(n: NimNode): NimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
     newAssignment name:
-      Alloc.hook(e.inherits, e.identity)
+      Alloc.hook(e.inherits.NimNode, e.identity.NimNode)
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
     if field notin [e.fn, e.rs.name, e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
-        newAssignment(resultdot field, section.name)
+        newAssignment(resultdot field.NimNode, section.name.NimNode)
   if not goto.isNil:
     result.add:
-      newAssignment(resultdot e.fn, goto)
+      newAssignment(resultdot e.fn.NimNode, goto)
 
 proc genException*(e: var Env): NimNode =
   ## generates a new symbol of type ref Exception, then put it in the env.
   ##
   ## returns the access to the exception symbol from the env.
-  let ex = genField("ex")
+  let ex = asName(genField("ex"))
   e = e.set ex:
     # XXX: Should be IdentDefLet but saem haven't wrote it yet
     newIdentDefVar(ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
-  result = newDotExpr(e.castToChild(e.first), ex)
+  result = newDotExpr(e.castToChild(e.first), ex.NimNode)
 
 proc createResult*(env: Env, exported = false): ProcDef =
   ## define a procedure for retrieving the result of a continuation
@@ -437,7 +449,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
     name = postfix(name, "*")
 
   result = ProcDef:
-    genAst(name, field, c = env.first, cont = env.identity, tipe = env.rs.typ,
+    genAst(name, field, c = env.first, cont = env.identity.NimNode, tipe = env.rs.typ,
            dismissed=Dismissed, finished=Finished, running=Running):
       {.push experimental: "callOperator".}
       proc name(c: cont): tipe {.used.} =
@@ -453,9 +465,10 @@ proc createResult*(env: Env, exported = false): ProcDef =
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
+  # XXX: remove NimNode
   result = clone(n, newStmtList())
   result.addPragma ident"used"  # avoid gratuitous warnings
-  result.returnParam = env.identity
+  result.returnParam = env.identity.NimNode
   result.name = nskProc.genSym"whelp"
   result.introduce {Alloc, Boot}
 
@@ -474,6 +487,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 
 proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
+  # XXX: remove NimNode
   result = clone(n, newStmtList())
   result.addPragma ident"used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot}
@@ -483,7 +497,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
     # declare `var c: Cont`
     # XXX: conversion must be forced otherwise we end up with an ambiguous call
     #      between the add a single NimNode and add many NimNode (varargs).
-    cVarSectionToNimNode(newVarSection(c, env.root))
+    cVarSectionToNimNode(newVarSection(c, env.root.NimNode))
 
   # create the continuation using the new variable and point it at the proc
   result.body.add:
@@ -519,7 +533,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
           newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(ident"result",
-            newDotExpr(env.castToChild(c), env.rs.name))
+            newDotExpr(env.castToChild(c), env.rs.name.NimNode))
         ]
 
 proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =

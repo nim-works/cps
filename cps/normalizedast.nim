@@ -1,4 +1,5 @@
 import std/macros
+from std/hashes import Hash, hash
 
 from cps/rewrites import normalizingRewrites, replace, desym
 
@@ -12,6 +13,10 @@ from cps/rewrites import normalizingRewrites, replace, desym
 
 type
   NormalizedNimNode* = distinct NimNode
+
+  Name* = distinct NormalizedNimNode
+  Ident* = distinct Name
+  Sym* = distinct Name
 
   ProcDef* = distinct NormalizedNimNode
     ## an nnkProcDef node which has been normalized
@@ -54,10 +59,48 @@ template defineToNimNodeConverter(t: typedesc) =
 # fn-NormalizedNimNode
 
 defineToNimNodeConverter(NormalizedNimNode)
-
+template hash*(n: NormalizedNimNode) =
+  hash(n.NimNode)
 proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
   ## desym all occurences of a specific sym
   n.replace(proc(it: NimNode): bool = it == sym, desym sym).NormalizedNimNode
+
+# fn-Name
+
+# defineToNimNodeConverter(Name)
+template hash*(n: Name): Hash =
+  hash(n.NimNode)
+func isNil*(n: Name): bool {.borrow.}
+func `==`*(a, b: Name): bool {.borrow.}
+func strVal*(n: Name): string {.borrow.}
+func isSymbol*(n: Name): bool =
+  n.NimNode.kind == nnkSym
+proc asName*(n: NimNode): Name =
+  if n.kind notin {nnkIdent, nnkSym}:
+    errorGot "not an ident or sym", n
+  n.Name
+proc asName*(n: string): Name =
+  (ident n).Name
+proc newTypeName*(n: string): Name =
+  genSym(nskType, n).Name
+
+func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
+  # XXX: either a converter or higher level refactoring will remove the need
+  #      for this func
+  eqIdent(
+    when a isnot NimNode: a.NimNode else: a,
+    when b isnot NimNode: b.NimNode else: b
+  )
+
+# fn-Ident
+
+defineToNimNodeConverter(Ident)
+proc asIdent*(n: NimNode): Ident =
+  if n.kind != nnkIdent:
+    errorGot "not an ident", n
+  n.Ident
+proc asIdent*(n: string): Ident =
+  (ident n).Ident
 
 # fn-DefLike
 
@@ -95,8 +138,10 @@ proc expectIdentDefs*(n: NimNode): IdentDefs =
 
 proc newIdentDefs*(n: string, typ: NimNode, val = newEmptyNode()): IdentDefs =
   newIdentDefs(ident(n), typ, val).IdentDefs
+proc newIdentDefs*(n: Name, typ: NimNode, val = newEmptyNode()): IdentDefs =
+  newIdentDefs(n.NimNode, typ, val).IdentDefs
 
-func name*(n: IdentDefs): NimNode = n[0]
+func name*(n: IdentDefs): Name = n[0].Name
 
 # fn-VarLetLike
 
@@ -149,7 +194,7 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
 
 func identdef*(n: VarLetIdentDefLike): IdentDefs = n.NimNode[0].IdentDefs
   ## retrieve the innner IdentDef
-func name*(n: VarLetIdentDefLike): NimNode = n.identdef.name
+func name*(n: VarLetIdentDefLike): Name = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
   ## will have the name
 func inferTypFromImpl*(n: VarLetIdentDefLike): NimNode =
@@ -209,9 +254,9 @@ proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDefs): IdentDefVarLet =
     "kind must be nnkLetSection nnkVarSection, got: " & repr(kind)
   newTree(kind, i).IdentDefVarLet
 proc newVarLetIdentDef*(kind: NimNodeKind,
-                        name, typ, val: NimNode): IdentDefVarLet =
+                        name: Name, typ, val: NimNode): IdentDefVarLet =
   ## create a new IdentDefVarLet
-  newVarLetIdentDef(kind, newIdentDefs(name, typ, val).IdentDefs)
+  newVarLetIdentDef(kind, newIdentDefs(name.NimNode, typ, val).IdentDefs)
 
 # fn-VarSection
 
@@ -228,10 +273,9 @@ proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
 proc newIdentDefVar*(i: IdentDefs): IdentDefVar =
   ## create a var section with an identdef
   (nnkVarSection.newTree i).IdentDefVar
-
-proc newIdentDefVar*(n, typ: NimNode, val = newEmptyNode()): IdentDefVar =
-  ## create a var section with an identdef, eg: `n`: `typ` = `val`
-  newIdentDefVar(newIdentDefs(n, typ, val).IdentDefs)
+proc newIdentDefVar*(n: Name, t: NimNode, val = newEmptyNode()): IdentDefVar =
+  ## create a var section with an identdef, eg: `n`: `t` = `val`
+  newIdentDefVar(newIdentDefs(n, t, val).IdentDefs)
 
 converter identDefVarToIdentDefVarLet*(n: IdentDefVar): IdentDefVarLet =
   # allow downgrading
@@ -280,3 +324,5 @@ proc addPragma*(n: ProcDef, prag: NimNode, pragArg: NimNode) =
   ##      [1]: https://github.com/disruptek/cps/pull/144#discussion_r642208263
   n.addPragma:
     nnkExprColonExpr.newTree(prag, pragArg)
+proc addPragma*(n: ProcDef, prag: NimNode, pragArg: Name) =
+  addPragma(n, prag, pragArg.NimNode)
