@@ -167,6 +167,18 @@ proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
+proc rewriteResult(e: Env; n: NimNode): NimNode =
+  ## replaces result symbols with the env's result; this should be
+  ## safe to run on sem'd ast (for obvious reasons)
+  proc rewriter(n: NimNode): NimNode =
+    ## Rewrite any result symbols to use the result field from the Env.
+    case n.kind
+    of nnkSym:
+      if n.symKind == nskResult:
+        result = e.get
+    else: discard
+  result = filter(n, rewriter)
+
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
   ## or on-demand in the back-end (with copy = on)
@@ -399,6 +411,8 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
       result = result.resym(sym, newDotExpr(child, field))
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
+  # make a special rewrite pass to replace the result symbols
+  result = e.rewriteResult result
 
 proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`

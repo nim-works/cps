@@ -434,3 +434,19 @@ suite "tasteful tests":
     var c = whelp foo(5)
     trampoline c
     check r == 2
+
+  block:
+    ## assignments to the special result symbol work
+    r = 0
+    expandMacros:
+      proc foo(x: int): int {.cps: Cont.} =
+        noop()
+        inc r
+        result = x * x
+
+    let x = foo(3)
+    check r == 1
+    check x == 9
+    var c = whelp foo(5)
+    trampoline c
+    check r == 2
