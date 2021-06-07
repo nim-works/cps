@@ -51,14 +51,14 @@ proc map(fn: proc(x: int): int) {.stream.} =
   let sIn = getSin()
   while true:
     let v = fn(sIn.resume())
-    if not (Continuation sIn).running: break
+    if not sIn.running: break
     jield(v)
 
 proc filter(fn: proc(x: int): bool) {.stream.} =
   let sIn = getSin()
   while true:
     let v = sIn.resume()
-    if not (Continuation sIn).running: break
+    if not sIn.running: break
     if fn(v):
       jield(v)
 
@@ -66,13 +66,13 @@ proc print() {.stream.} =
   let sIn = getSin()
   while true:
     let v = sIn.resume()
-    if not (Continuation sIn).running: break
+    if not sIn.running: break
     echo v
     jield()
 
 proc pump() {.stream.} =
   let sIn = getSin()
-  while (Continuation sIn).running:
+  while sIn.running:
     discard sIn.resume()
 
 var s = Continuation:
