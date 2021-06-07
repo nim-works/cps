@@ -438,11 +438,10 @@ suite "tasteful tests":
   block:
     ## assignments to the special result symbol work
     r = 0
-    expandMacros:
-      proc foo(x: int): int {.cps: Cont.} =
-        noop()
-        inc r
-        result = x * x
+    proc foo(x: int): int {.cps: Cont.} =
+      noop()
+      inc r
+      result = x * x
 
     let x = foo(3)
     check r == 1
