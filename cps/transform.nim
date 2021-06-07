@@ -73,7 +73,7 @@ macro cpsJump(cont, call, n: typed): untyped =
   ##
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let call = normalizingRewrites call
-  let name = nskProc.genSym"afterCall"
+  let name = nskProc.genSym"Post Call"
   debugAnnotation cpsJump, n:
     it = newStmtList:
       makeContProc(name, cont, it)
@@ -106,7 +106,7 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ##
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` in `n`
   ## with tail calls to `after`.
-  let name = nskProc.genSym"done"
+  let name = nskProc.genSym"Finish"
   let tail = tailCall(desym cont, name)
   debugAnnotation cpsMayJump, n:
     it = it.replace(isCpsPending, tail)
@@ -160,8 +160,9 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` with a
   ## jump to the loop condition and `{.cpsBreak.}` with `{.cpsPending.}`
   ## to the next control-flow.
-  let name = nskProc.genSym"whileLoop"
+  let name = nskProc.genSym"While Loop"
   let tail = tailCall(desym cont, name)
+  tail.copyLineInfo n
   debugAnnotation cpsWhile, n:
     # a key first step is to ensure that the loop body, uh, loops, by
     # issuing a tailcall back to the while proc instead falling through
@@ -175,6 +176,7 @@ macro cpsWhile(cont, cond, n: typed): untyped =
       (isCpsContinue.Matcher, tail),
       (matchCpsBreak(newEmptyNode()), newCpsPending())
     )
+    body.copyLineInfo n
     # we return the while proc and a tailcall to enter it the first time
     it = newStmtList [makeContProc(name, cont, body), tail]
 
@@ -233,7 +235,7 @@ proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
     result = result.filter(consumeException)
 
   # move the exception body into a handler
-  result.cont = makeContProc(genSym(nskProc, "except"), cont, body)
+  result.cont = makeContProc(genSym(nskProc, "Except"), cont, body)
   # rewrite the body of the handler to be exception-aware
   #
   # we perform this after the creation of the continuation to catch any

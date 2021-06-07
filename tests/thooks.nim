@@ -49,9 +49,9 @@ suite "hooks":
 
     foo()
     check found == [ "foo", "4",        "24",
-                     "whileLoop", "24", "24", "afterCall", "8", "24",
-                     "whileLoop", "24", "24", "afterCall", "8", "24",
-                     "whileLoop", "24", "24", "afterCall", "8", "24", ]
+                     "While Loop", "12", "24", "Post Call", "8", "24",
+                     "While Loop", "12", "24", "Post Call", "8", "24",
+                     "While Loop", "12", "24", "Post Call", "8", "24", ]
 
   block:
     ## custom continuation allocators are used automatically
