@@ -80,6 +80,10 @@ proc makeErrorShim(n: NimNode): NimNode =
   result.add m
 
 macro cpsMagic*(n: untyped): untyped =
+  ## Applied to a procedure to generate a version which lacks the first
+  ## argument and return value, which are those of a `Continuation`.
+  ## This new magical will compile correctly inside CPS procedures though
+  ## it never takes a `Continuation` argument and produces no return value.
   let shim = n.makeErrorShim()
   shim[1].params[0] = newEmptyNode()
   shim[1].addPragma ident"cpsMustJump"
@@ -87,6 +91,8 @@ macro cpsMagic*(n: untyped): untyped =
   shim
 
 macro cpsVoodoo*(n: untyped): untyped =
+  ## Similar to a `cpsMagic` where the first argument is concerned, but
+  ## may specify a return value which is usable inside the CPS procedure.
   let shim = n.makeErrorShim()
   shim[1].addPragma ident"cpsVoodooCall"
   shim
