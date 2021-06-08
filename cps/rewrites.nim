@@ -181,6 +181,10 @@ proc normalizingRewrites*(n: NimNode): NimNode =
     proc rewriteHidden(n: NimNode): NimNode =
       ## Unwrap hidden conversion nodes
       case n.kind
+      of nnkHiddenSubConv:
+        # This node have a `nnkEmpty` as the first child, and we are unsure of
+        # its significance.
+        result = normalizingRewrites n[1]
       of nnkHiddenCallConv:
         result = nnkCall.newNimNode(n)
         for child in n.items:
