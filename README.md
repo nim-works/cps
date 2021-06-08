@@ -114,11 +114,6 @@ of continuation-versus-dispatcher common. The reference dispatcher can now be
 found at https://github.com/disruptek/eventqueue and you can also jump directly
 to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
 
-## Hacking
-
-- use `--define:cpsDebug` to get extra debugging output
-- use `--define:cpsTree` to dump AST via `treeRepr` in `cpsDebug` mode
-
 ## Documentation
 
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
