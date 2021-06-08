@@ -18,3 +18,20 @@ suite "hidden":
     foo()
 
     check r == 1
+
+  block:
+    ## implicit conversion between non-objects types
+    var r = 0
+
+    proc foo() {.cps: Continuation.} =
+      inc r
+      let n: Natural = 1
+      # implicit conversion in decl
+      let i: int = n
+      # implicit conversion in assignment
+      var j: int
+      j = n
+
+    foo()
+
+    check r == 1

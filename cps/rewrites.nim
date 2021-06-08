@@ -185,11 +185,20 @@ proc normalizingRewrites*(n: NimNode): NimNode =
         # This node have a `nnkEmpty` as the first child, and we are unsure of
         # its significance.
         result = normalizingRewrites n[1]
+
+      of nnkHiddenStdConv:
+        if n.len == 2 and n[0].kind == nnkEmpty:
+          result = normalizingRewrites n[1]
+        else:
+          raise newException(Defect,
+            "unexpected conversion form:\n" & treeRepr(n))
+
       of nnkHiddenCallConv:
         result = nnkCall.newNimNode(n)
         for child in n.items:
           result.add:
             normalizingRewrites child
+
       of CallNodes - {nnkHiddenCallConv}:
         if n.len > 1 and not n.findChild(it.kind == nnkHiddenStdConv).isNil:
           result = copyNimNode n
@@ -200,27 +209,22 @@ proc normalizingRewrites*(n: NimNode): NimNode =
             else:
               # rewrite varargs conversions; perhaps can be replaced by
               # nnkArgsList if it acquires some special cps call handling
-              if child.last.kind == nnkBracket:
-                if n.kind in {nnkPrefix, nnkInfix, nnkPostfix} or
-                   index < n.len - 1:
-                  # if this varargs is not the last argument
-                  # or if the call node is a binary/unary node, which
-                  # then they can't have more than one/two parameters,
-                  # thus the varargs must be in nnkBracket
-                  result.add:
-                    normalizingRewrites child.last
-                else:
-                  for converted in child.last.items:
-                    result.add:
-                      normalizingRewrites converted
-              # these are implicit conversions the compiler can handle
-              elif child.len > 1 and child[0].kind == nnkEmpty:
-                for converted in child[1 .. ^1]:
-                  result.add:
-                    normalizingRewrites converted
+              let unwrapped = normalizingRewrites child
+
+              # if the unwrapped node is an nnkBracket and
+              # n is a node that can take more than 2 arguments
+              # and this node is the very last children
+              if unwrapped.kind == nnkBracket and
+                 n.kind in {nnkCall, nnkCommand} and
+                 index == n.len - 1:
+                # move everything outside of the bracket and into the call
+                for params in unwrapped.items:
+                  # no need to perform rewrites here since we already did it
+                  result.add params
               else:
-                raise newException(Defect,
-                  "unexpected conversion form:\n" & treeRepr(child))
+                # otherwise add as-is
+                result.add unwrapped
+
       else:
         discard
 
@@ -237,7 +241,7 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       rewriteReturn n
     of nnkFormalParams:
       rewriteFormalParams n
-    of CallNodes:
+    of CallNodes, nnkHiddenSubConv, nnkHiddenStdConv:
       rewriteHidden n
     else:
       nil
