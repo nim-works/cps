@@ -181,12 +181,22 @@ proc normalizingRewrites*(n: NimNode): NimNode =
     proc rewriteHidden(n: NimNode): NimNode =
       ## Unwrap hidden conversion nodes
       case n.kind
-      of nnkHiddenSubConv:
-        # This node have a `nnkEmpty` as the first child, and we are unsure of
-        # its significance.
-        result = normalizingRewrites n[1]
-
-      of nnkHiddenStdConv:
+      of nnkHiddenStdConv, nnkHiddenSubConv:
+        # These are hidden conversion nodes, used when an implicit conversion
+        # happens, like in:
+        #
+        # let x: int = 0.Natural
+        #
+        # 0.Natural has to be converted into `int` before it could be assigned
+        # to x, and this is how it's done in typed ast.
+        #
+        # In the compiler, these nodes are added once the compiler has
+        # determined that the code is semantically correct, thus any
+        # modifications on these node will cause the compiler to not work
+        # correctly since it assumes these nodes correctness.
+        #
+        # Hence we unwrap them here to force the compiler to re-evaluate
+        # the modified nodes.
         if n.len == 2 and n[0].kind == nnkEmpty:
           result = normalizingRewrites n[1]
         else:
@@ -199,31 +209,62 @@ proc normalizingRewrites*(n: NimNode): NimNode =
           result.add:
             normalizingRewrites child
 
-      of CallNodes - {nnkHiddenCallConv}:
-        if n.len > 1 and not n.findChild(it.kind == nnkHiddenStdConv).isNil:
-          result = copyNimNode n
-          for index, child in n.pairs:
-            if child.kind != nnkHiddenStdConv:
-              result.add:
-                normalizingRewrites child
+      of nnkCall, nnkCommand:
+        proc isMagicalVarargs(n: NimNode): bool =
+          ## Check if `n` is a magical varargs type that require special
+          ## processing in a call.
+          ##
+          ## Currently we look for `varargs[typed]`, which is a special type
+          ## that can only be used by magic procedures, specifically
+          ## `echo`.
+          ##
+          ## While this type can be used in macros/templates, those calls
+          ## would already be resolved by the time it reaches us.
+          if n.typeKind == ntyVarargs:
+            # This should give us `varargs[T]`
+            let typ = getTypeInst n
+            # If `T` is of kind Stmt, Expr (which are typed, untyped
+            # respectively), then this node need special processing
+            if typ[1].typeKind in {ntyStmt, ntyExpr}:
+              true
             else:
-              # rewrite varargs conversions; perhaps can be replaced by
-              # nnkArgsList if it acquires some special cps call handling
-              let unwrapped = normalizingRewrites child
+              false
+          else:
+            false
 
-              # if the unwrapped node is an nnkBracket and
-              # n is a node that can take more than 2 arguments
-              # and this node is the very last children
-              if unwrapped.kind == nnkBracket and
-                 n.kind in {nnkCall, nnkCommand} and
-                 index == n.len - 1:
-                # move everything outside of the bracket and into the call
-                for params in unwrapped.items:
-                  # no need to perform rewrites here since we already did it
-                  result.add params
-              else:
-                # otherwise add as-is
-                result.add unwrapped
+        if n.len > 1 and n.findChild(it.isMagicalVarargs) != nil:
+          if n.len > 2:
+            # The only case we know how to rewrite is when there is only
+            # one parameter which is the magical varargs
+            result = n.errorAst("unsupported call with magical varargs that have more than two parameters")
+          else:
+            # We got a magic call, typically echo.
+            #
+            # Calls with `varargs[typed, conv]` is implemented like this:
+            #
+            #   echo 1, 2, 3
+            #
+            # is re-written into:
+            #
+            #   echo HiddenStdConv([conv(1), conv(2), conv(3)])
+            #
+            # where HiddenStdConv bares the type `varargs[typed]`, effectively
+            # stopping the conversion from being done again.
+            #
+            # To correctly unwrap these nodes, we must remove HiddenStdConv
+            # then move everything within the inner array outside as parameters
+            # of the call.
+
+            # Copy our call node
+            result = copyNimNode n
+            # Add the symbol being called
+            result.add:
+              normalizingRewrites n[0]
+            # Unwrap our magical varargs, which will give us an array
+            let unwrapped = normalizingRewrites n[1]
+            # Add everything in this array as parameters of the call
+            for i in unwrapped.items:
+              result.add i
 
       else:
         discard
