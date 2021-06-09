@@ -53,7 +53,7 @@ suite "basic testing assumptions":
     trampoline whelp(foo())
     check r == 2, "who let the smoke out?"
 
-template shouldRun(wanted: int; body: untyped) =
+template shouldRun(wanted: int; body: untyped) {.used.} =
   var measured {.inject.} = 0
   try:
     body
