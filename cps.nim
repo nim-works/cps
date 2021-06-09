@@ -38,8 +38,8 @@ template finished*(c: Continuation): bool =
   (Continuation c).state == Finished
 
 proc trampoline*[T: Continuation](c: T): T =
-  ## This is the basic trampoline: it will continue the continuation
-  ## until it is no longer in 'running' state
+  ## This is the basic trampoline: it will run the continuation
+  ## until the continuation is no longer in the `Running` state.
   var c: Continuation = c
   while c.running:
     c = c.fn(c)
@@ -89,41 +89,50 @@ proc makeErrorShim(n: NimNode): NimNode =
   ## errors out of `.cps.` context and taking continuations as input.
   expectKind(n, nnkProcDef)
 
-  # create a Nim-land version of the proc that throws an exception when called
-  # from outside of CPS-land.
-  var m = copyNimTree n
+  # Create a version of the proc that lacks a first argument or return
+  # value.  While this version will throw an exception at runtime, it
+  # may be used inside CPS as magic(); for better programmer ergonomics.
+  var shim = copyNimTree n
 
-  del(m.params, 1)
-  m.body = newStmtList:
+  del(shim.params, 1)               # delete the 1st Continuation argument
+  shim.body = newStmtList:          # raise a defect when invoked directly
     nnkRaiseStmt.newTree:
       newCall(
         bindSym"newException",
         nnkBracketExpr.newTree(bindSym"typedesc", bindSym"Defect"),
         newLit($n.name & "() is only valid in {.cps.} context")
       )
-
-  result = newStmtList()
-  when not defined(nimdoc):
-    result.add n
-  result.add m
+  result = shim
 
 macro cpsMagic*(n: untyped): untyped =
   ## Applied to a procedure to generate a version which lacks the first
   ## argument and return value, which are those of a `Continuation`.
+  ##
   ## This new magical will compile correctly inside CPS procedures though
   ## it never takes a `Continuation` argument and produces no return value.
-  let shim = n.makeErrorShim()
-  shim[1].params[0] = newEmptyNode()
-  shim[1].addPragma ident"cpsMustJump"
-  shim[1].addPragma ident"cpsMagicCall"
-  shim
+  expectKind(n, nnkProcDef)
+  result = newStmtList n            # preserve the original proc
+  var shim = makeErrorShim n        # create the shim
+  shim.params[0] = newEmptyNode()   # wipe out the return value
+
+  # we use these pragmas to identify the primitive and rewrite it inside
+  # CPS so that it again binds to the version that takes and returns a
+  # continuation.
+  shim.addPragma ident"cpsMustJump"
+  shim.addPragma ident"cpsMagicCall"
+  result.add shim
 
 macro cpsVoodoo*(n: untyped): untyped =
   ## Similar to a `cpsMagic` where the first argument is concerned, but
   ## may specify a return value which is usable inside the CPS procedure.
-  let shim = n.makeErrorShim()
-  shim[1].addPragma ident"cpsVoodooCall"
-  shim
+  expectKind(n, nnkProcDef)
+  result = newStmtList n            # preserve the original proc
+  var shim = makeErrorShim n        # create the shim
+
+  # we use this pragma to identify the primitive and rewrite it inside
+  # CPS so that it again binds to the version that takes a continuation.
+  shim.addPragma ident"cpsVoodooCall"
+  result.add shim
 
 proc bootstrapSymbol(n: NimNode): NimNode =
   case n.kind
