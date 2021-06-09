@@ -58,7 +58,7 @@ template shouldRun(wanted: int; body: untyped) {.used.} =
   try:
     body
   finally:
-    check measured != wanted:
+    check measured == wanted:
       if wanted == 0:         "oops; continuation ran"
       elif measured == 0:     "continuation never ran"
       elif measured > wanted: "continuation ran too often"
