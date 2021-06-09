@@ -10,26 +10,23 @@ suite "returns and results":
 
   block:
     ## local assignment to a continuation return value
-    when true:
-      skip"pending discussion #28"
-    else:
-      r = 0
+    skip"pending discussion #28":
+      var k = newKiller 3
       proc bar(a: int): int {.cps: Cont.} =
-        inc r
         noop()
+        step 2
         return a * 2
 
       proc foo() {.cps: Cont.} =
-        inc r
+        step 1
         let x = int bar(4)
-        inc r
+        step 3
         check x == 8
 
       foo()
-      check r == 3
 
   block:
-    ## continuations can return values via bootstrap or whelp
+    ## continuations can return values via bootstrap
     var k = newKiller 1
     proc foo(x: int): int {.cps: Cont.} =
       noop()
