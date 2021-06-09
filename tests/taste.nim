@@ -147,26 +147,6 @@ suite "tasteful tests":
     check r == 9
 
   block:
-    ## local assignment to a continuation return value
-    when true:
-      skip"pending discussion #28"
-    else:
-      r = 0
-      proc bar(a: int): int {.cps: Cont.} =
-        inc r
-        noop()
-        return a * 2
-
-      proc foo() {.cps: Cont.} =
-        inc r
-        let x = int bar(4)
-        inc r
-        check x == 8
-
-      foo()
-      check r == 3
-
-  block:
     ## calling a function pointer inside an object works
     type Fn = object
       fn: proc(i: int): int
@@ -419,36 +399,6 @@ suite "tasteful tests":
 
     foo()
     check r == 1
-
-  block:
-    ## continuations can return values via bootstrap or whelp
-    r = 0
-    proc foo(x: int): int {.cps: Cont.} =
-      noop()
-      inc r
-      return x * x
-
-    let x = foo(3)
-    check r == 1
-    check x == 9
-    var c = whelp foo(5)
-    trampoline c
-    check r == 2
-
-  block:
-    ## assignments to the special result symbol work
-    r = 0
-    proc foo(x: int): int {.cps: Cont.} =
-      noop()
-      inc r
-      result = x * x
-
-    let x = foo(3)
-    check r == 1
-    check x == 9
-    var c = whelp foo(5)
-    trampoline c
-    check r == 2
 
   block:
     ## implicit up-casting
