@@ -2,31 +2,29 @@ import std/macros
 import std/strutils
 
 include preamble
+import killer
 
 suite "hooks":
 
-  var r = 0
-
   block:
     ## cooperative yield hooks are used automatically
-    proc coop(c: Cont): Cont {.cpsMagic.} =
-      inc r
-      result = c
+    shouldRun 7:
+      proc coop(c: Cont): Cont {.cpsMagic.} =
+        ran()
+        result = c
 
-    r = 0
-    proc foo() {.cps: Cont.} =
-      var i = 0
-      while i < 3:
-        inc r
-        noop()
-        inc i
-        if i == 0:
-          continue
-        if i > 2:
-          break
+      proc foo() {.cps: Cont.} =
+        var i = 0
+        while i < 3:
+          ran()
+          noop()
+          inc i
+          if i == 0:
+            continue
+          if i > 2:
+            break
 
-    foo()
-    check r == 7
+      foo()
 
   block:
     ## control-flow tracing hooks are used automatically
@@ -55,74 +53,67 @@ suite "hooks":
 
   block:
     ## custom continuation allocators are used automatically
-    var r = 0
+    shouldRun 1:
+      proc alloc[T](root: typedesc[Cont]; c: typedesc[T]): T =
+        ran()
+        new c
 
-    proc alloc[T](root: typedesc[Cont]; c: typedesc[T]): T =
-      inc r
-      new c
+      proc foo(x: int) {.cps: Cont.} =
+        check x == 3
+        noop()
+        check x == 3
 
-    proc foo(x: int) {.cps: Cont.} =
-      check x == 3
-      noop()
-      check x == 3
-
-    foo(3)
-    check r == 1, "bzzzt"
+      foo(3)
 
   block:
-    ## custom continuation deallocators are used automatically
-    var r = 0
-    proc dealloc[T: Cont](t: typedesc; c: sink T) =
-      check r == 0
-      inc r
+    ## custom continuation deallocators can nil the continuation
+    shouldRun 1:
+      proc dealloc[T: Cont](t: typedesc; c: sink T) =
+        ran()
+        c.mom = c
 
-    proc foo(x: int) {.cps: Cont.} =
-      check r == 0
-      check x == 3
-      noop()
-      check x == 3
-      check r == 0
+      proc foo(x: int) {.cps: Cont.} =
+        check x == 3
+        noop()
+        check x == 3
 
-    foo(3)
-    check r == 1, "bzzzt"
+      foo(3)
 
   block:
     ## custom continuation passing hook works
-    var r = 0
-    proc pass(a, b: Cont): Cont =
-      inc r
-      result = b
+    shouldRun 7:
+      proc pass(a, b: Cont): Cont =
+        ran()
+        result = b
 
-    proc bar() {.cps: Cont.} =
-      inc r
-      noop()
-      inc r
+      proc bar() {.cps: Cont.} =
+        ran()
+        noop()
+        ran()
 
-    proc foo() {.cps: Cont.} =
-      inc r
-      bar()
-      inc r
-      inc r
+      proc foo() {.cps: Cont.} =
+        ran()
+        bar()
+        ran()
+        ran()
 
-    foo()
-    check r == 7, "bzzzt"
+      foo()
 
   block:
     ## custom continuation bootstrap hook works
-    var r = 0
+    var k = newKiller 1
 
     proc bar() {.cps: Cont.} =
       noop()
 
     proc boot(c: Cont): Cont =
-      inc r
+      step 1
       result = c
 
     proc foo() {.cps: Cont.} =
       bar()
 
     foo()
-    check r == 1, "bzzzt"
 
   block:
     ## custom continuation head/tail setup hooks work
@@ -159,20 +150,3 @@ suite "hooks":
     check "bzzzt bootstrapped":
       h == t
       t == 1
-
-  block:
-    ## custom continuation bootstrap hook works
-    var r = 0
-
-    proc bar() {.cps: Cont.} =
-      noop()
-
-    proc boot(c: Cont): Cont =
-      inc r
-      result = c
-
-    proc foo() {.cps: Cont.} =
-      bar()
-
-    foo()
-    check r == 1, "bzzzt"

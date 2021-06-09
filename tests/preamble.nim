@@ -63,3 +63,5 @@ template shouldRun(wanted: int; body: untyped) {.used.} =
       elif measured == 0:     "continuation never ran"
       elif measured > wanted: "continuation ran too often"
       else:                   "continuation ran too rarely"
+
+template ran {.dirty.} = inc measured
