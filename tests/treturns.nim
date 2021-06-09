@@ -69,3 +69,13 @@ suite "returns and results":
 
       var c = whelp foo(5)
       trampoline c
+
+  block:
+    ## naked returns in continuations are fine
+    var k = newKiller 1
+    proc foo() {.cps: Cont.} =
+      noop()
+      step 1
+      return
+
+    foo()
