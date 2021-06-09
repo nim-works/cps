@@ -71,11 +71,13 @@ suite "returns and results":
       trampoline c
 
   block:
-    ## naked returns in continuations are fine
+    ## naked returns in continuations with a complication are fine
     var k = newKiller 1
     proc foo() {.cps: Cont.} =
       noop()
       step 1
-      return
+      if true:
+        return
+      step 2
 
     foo()

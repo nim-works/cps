@@ -379,9 +379,13 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
     case nc.kind
     of nnkReturnStmt:
       # add a return statement with a potential result assignment
-      # stored in the environment
-      return makeReturn result:
-        env.rewriteReturn nc
+      # stored in the environment; note that we're adding a new
+      # return statement without regard to the contents of `result`
+      # because it may hold, eg. `ElifBranch ...` or similar.
+      result.add:
+        makeReturn:
+          env.rewriteReturn nc
+      return
 
     of nnkVarSection, nnkLetSection:
       let section = expectVarLet(nc)
