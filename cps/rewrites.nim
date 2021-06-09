@@ -6,6 +6,9 @@ type
     ## A proc that returns whether a NimNode should be replaced
 
 proc filter*(n: NimNode; f: NodeFilter): NimNode =
+  ## rewrites a node and its children by passing each node to the filter;
+  ## if the filter yields nil, the node is simply copied.  otherwise, the
+  ## node is replaced.
   result = f(n)
   if result.isNil:
     result = copyNimNode n
