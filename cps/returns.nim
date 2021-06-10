@@ -20,16 +20,6 @@ proc firstReturn*(p: NimNode): NimNode =
   else:
     result = nil
 
-proc isNillish*(n: NimNode): bool =
-  ## unwrap statement lists and see if the end in a literal nil
-  case n.kind
-  of nnkStmtList:
-    isNillish n.last
-  of nnkNilLit:
-    true
-  else:
-    false
-
 proc makeReturn*(n: NimNode): NimNode =
   ## generate a `return` of the node if it doesn't already contain a return
   if n.firstReturn.isNil:
