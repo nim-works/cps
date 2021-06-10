@@ -96,15 +96,11 @@ proc makeErrorShim(n: NimNode): NimNode =
   # value.  While this version will throw an exception at runtime, it
   # may be used inside CPS as magic(); for better programmer ergonomics.
   var shim = copyNimTree n
-
   del(shim.params, 1)               # delete the 1st Continuation argument
-  shim.body = newStmtList:          # raise a defect when invoked directly
-    nnkRaiseStmt.newTree:
-      newCall(
-        bindSym"newException",
-        nnkBracketExpr.newTree(bindSym"typedesc", bindSym"Defect"),
-        newLit($n.name & "() is only valid in {.cps.} context")
-      )
+  let msg = newLit($n.name & "() is only valid in {.cps.} context")
+  shim.body =                       # raise a defect when invoked directly
+    quote:
+      raise Defect.newException: `msg`
   result = shim
 
 macro cpsMagic*(n: untyped): untyped =
