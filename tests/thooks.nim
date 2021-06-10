@@ -1,5 +1,6 @@
 import std/macros
 import std/strutils
+import std/sequtils
 
 include preamble
 import killer
@@ -8,7 +9,7 @@ suite "hooks":
 
   block:
     ## cooperative yield hooks are used automatically
-    shouldRun 7:
+    shouldRun 6:
       proc coop(c: Cont): Cont {.cpsMagic.} =
         ran()
         result = c
@@ -31,9 +32,8 @@ suite "hooks":
     var found: seq[string]
     proc trace(c: Cont; name: string; info: LineInfo) =
       let sub = name.split("_", maxsplit=1)[0]
-      found.add sub
-      found.add $info.column
-      found.add $sizeof(c[])
+      found.add "$#: $# $# $#" % [ $found.len, $sub, $info.column,
+                                   $sizeof(c[]) ]
 
     proc foo() {.cps: Cont.} =
       var i = 0
@@ -46,10 +46,19 @@ suite "hooks":
           break
 
     foo()
-    check found == [ "foo", "4",        "24",
-                     "While Loop", "12", "24", "Post Call", "8", "24",
-                     "While Loop", "12", "24", "Post Call", "8", "24",
-                     "While Loop", "12", "24", "Post Call", "8", "24", ]
+    let s = found.join("\10")
+    const
+      expected = """
+        0: foo 6 24
+        1: While Loop 14 24
+        2: Post Call 10 24
+        3: While Loop 14 24
+        4: Post Call 10 24
+        5: While Loop 14 24
+        6: Post Call 10 24
+      """.dedent(8).strip()
+    check "trace output doesn't match":
+      s == expected
 
   block:
     ## custom continuation allocators are used automatically
@@ -67,17 +76,46 @@ suite "hooks":
 
   block:
     ## custom continuation deallocators can nil the continuation
-    shouldRun 1:
+    shouldRun 4:
       proc dealloc[T: Cont](t: typedesc; c: sink T) =
         ran()
-        c.mom = c
+        c = nil
+
+      proc bar() {.cps: Cont.} =
+        ran()
+        noop()
+        ran()
 
       proc foo(x: int) {.cps: Cont.} =
         check x == 3
         noop()
         check x == 3
+        bar()
+        ran()
 
       foo(3)
+
+  block:
+    ## custom continuation deallocators work with whelp
+    shouldRun 4:
+      proc dealloc[T: Cont](t: typedesc; c: sink T) =
+        ran()
+        c = nil
+
+      proc bar() {.cps: Cont.} =
+        ran()
+        noop()
+        ran()
+
+      proc foo(x: int) {.cps: Cont.} =
+        check x == 3
+        noop()
+        check x == 3
+        bar()
+        ran()
+
+      let c = whelp foo(3)
+      trampoline c
 
   block:
     ## custom continuation passing hook works

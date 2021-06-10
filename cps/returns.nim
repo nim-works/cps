@@ -3,8 +3,8 @@ import std/macros
 import cps/[spec, hooks]
 
 proc firstReturn*(p: NimNode): NimNode =
-  ## find the first control-flow return statement or cps control-flow within
-  ## statement lists, or nil
+  ## Find the first control-flow return statement or cps
+  ## control-flow within statement lists; else, nil.
   case p.kind
   of nnkReturnStmt, nnkRaiseStmt:
     result = p
@@ -19,33 +19,6 @@ proc firstReturn*(p: NimNode): NimNode =
     result = p
   else:
     result = nil
-
-proc isNillish*(n: NimNode): bool =
-  ## unwrap statement lists and see if the end in a literal nil
-  case n.kind
-  of nnkStmtList:
-    isNillish n.last
-  of nnkNilLit:
-    true
-  else:
-    false
-
-proc maybeReturnParent*(c: NimNode): NimNode =
-  ## the appropriate target of a `return` statement in a CPS procedure
-  ## (that would otherwise return continuation `c`) first performs a
-  ## runtime check to see if the parent should be returned instead.
-  let mom = newCall(newCall(ident"typeof", c), newDotExpr(c, ident"mom"))
-  result =                                  # return value is as follows:
-    nnkIfExpr.newTree [
-      nnkElifExpr.newTree [                 # if
-        newCall(bindSym"isNil", mom),       # we have no parent,
-        c                                   # the current continuation;
-      ],
-      nnkElseExpr.newTree [                 # else,
-        Pass.hook(c, mom)                   # hook into pass() and yield
-                                            # our parent continuation.
-      ],
-    ]
 
 proc makeReturn*(n: NimNode): NimNode =
   ## generate a `return` of the node if it doesn't already contain a return
@@ -73,21 +46,47 @@ proc makeReturn*(pre: NimNode; n: NimNode): NimNode =
     #else:
     #  doc "omitted a return of " & repr(n)
 
+template pass*[T: Continuation](source, destination: T): T {.used.} =
+  ## This symbol may be reimplemented to introduce logic during
+  ## the transfer of control between parent and child continuations.
+  ## The return value specifies the destination continuation.
+  destination
+
+proc terminator*(c: NimNode; T: NimNode): NimNode =
+  ## produce the terminating return statement of the continuation;
+  ## this should return control to the mom and dealloc the continuation,
+  ## or simply set the fn to nil and return the continuation.
+  let (dealloc, pass, coop) = (Dealloc.sym, Pass.sym, Coop.sym)
+  quote:
+    if `c`.isNil:
+      result = `c`
+    else:
+      `c`.fn = nil
+      if `c`.mom.isNil:
+        result = `c`
+      else:
+        # we're converting to Cont here for sigmatch reasons despite the
+        # fact that Continuation is probably the only rational type
+        # pass(Cont(continuation), Cont(c.mom))
+        result = `pass`((typeof `c`)(`c`), (typeof `c`)(`c`.mom))
+        if result != `c`:
+          # perform a cooperative yield when we pass control to mom
+          result = `coop` result
+          # dealloc(env_234234, continuation)
+          `dealloc`(`T`, `c`)
+    # critically, terminate control-flow here!
+    return
+
 proc tailCall*(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
-  if to.isNillish and not jump.isNil:
-    return jump.errorAst "where do you think you're going?"
   result = newStmtList:
     newAssignment(newDotExpr(cont, ident"fn"), to)
 
   # figure out what the return value will be...
   result = makeReturn result:
     if jump.isNil:
-      if to.isNillish:             # continuation.fn appears to be nil,
-        maybeReturnParent cont     # we may be returning a parent here.
-      else:
-        cont                       # just return our continuation
+      cont                         # just return our continuation
     else:
       jump                         # return the jump target as requested
 

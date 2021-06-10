@@ -2,6 +2,7 @@ import balls
 import cps
 
 include preamble
+import killer
 
 suite "loops":
 
@@ -166,24 +167,22 @@ suite "loops":
 
   block:
     ## named breaks work from inside a while statement
-    r = 0
+    var k = newKiller 6
     proc foo() {.cps: Cont.} =
-      inc r
+      step 1
       block:
         block found:
-          inc r
+          step 2
           while true:
-            inc r
+            step 3
             noop()
-            inc r
+            step 4
             if true:
-              inc r
+              step 5
               break found
             fail"loop tail should be unreachable"
           fail"post loop should be unreachable"
-        inc r
+        step 6
         break
-        inc r
+        step 7
     foo()
-    check r == 6
-
