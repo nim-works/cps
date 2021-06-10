@@ -67,8 +67,8 @@ proc terminator*(c: NimNode; T: NimNode): NimNode =
       else:
         # we're converting to Cont here for sigmatch reasons despite the
         # fact that Continuation is probably the only rational type
-        # pass(Cont(continuation), Cont(c.mom))
-        result = `pass`((typeof `c`)(`c`), (typeof `c`)(`c`.mom))
+        # pass(continuation, Cont(c.mom))
+        result = `pass`(`c`, (typeof `c`)(`c`.mom))
         if result != `c`:
           # perform a cooperative yield when we pass control to mom
           result = `coop` result

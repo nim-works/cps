@@ -49,13 +49,13 @@ suite "hooks":
     let s = found.join("\10")
     const
       expected = """
-        0: foo 6 24
-        1: While Loop 14 24
-        2: Post Call 10 24
-        3: While Loop 14 24
-        4: Post Call 10 24
-        5: While Loop 14 24
-        6: Post Call 10 24
+        0: foo 4 24
+        1: While Loop 12 24
+        2: Post Call 8 24
+        3: While Loop 12 24
+        4: Post Call 8 24
+        5: While Loop 12 24
+        6: Post Call 8 24
       """.dedent(8).strip()
     check "trace output doesn't match":
       s == expected
