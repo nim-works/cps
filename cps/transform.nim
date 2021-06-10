@@ -513,8 +513,10 @@ macro cpsResolver(T: typed, n: typed): untyped =
   debugAnnotation cpsResolver, n:
     # replace all `pending` with the end of continuation
     it = replacePending it:
-      tailCall cont:
-        Dealloc.hook(T, cont)
+      if n.firstReturn.isNil:
+        terminator(cont, T)
+      else:
+        doc"omitted a return in the resolver"
     it = danglingCheck it
 
 macro cpsFloater(n: typed): untyped =

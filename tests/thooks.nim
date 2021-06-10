@@ -67,17 +67,46 @@ suite "hooks":
 
   block:
     ## custom continuation deallocators can nil the continuation
-    shouldRun 1:
+    shouldRun 4:
       proc dealloc[T: Cont](t: typedesc; c: sink T) =
         ran()
-        c.mom = c
+        c = nil
+
+      proc bar() {.cps: Cont.} =
+        ran()
+        noop()
+        ran()
 
       proc foo(x: int) {.cps: Cont.} =
         check x == 3
         noop()
         check x == 3
+        bar()
+        ran()
 
       foo(3)
+
+  block:
+    ## custom continuation deallocators work with whelp
+    shouldRun 4:
+      proc dealloc[T: Cont](t: typedesc; c: sink T) =
+        ran()
+        c = nil
+
+      proc bar() {.cps: Cont.} =
+        ran()
+        noop()
+        ran()
+
+      proc foo(x: int) {.cps: Cont.} =
+        check x == 3
+        noop()
+        check x == 3
+        bar()
+        ran()
+
+      let c = whelp foo(3)
+      trampoline c
 
   block:
     ## custom continuation passing hook works

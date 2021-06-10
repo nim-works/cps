@@ -3,6 +3,9 @@ import cps/[spec, transform, rewrites, hooks]
 export Continuation, ContinuationProc
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 
+from cps/returns import pass
+export pass
+
 # we only support arc/orc due to its eager expr evaluation qualities
 when not(defined(gcArc) or defined(gcOrc)):
   {.warning: "cps supports --gc:arc or --gc:orc only; " &
@@ -216,12 +219,6 @@ template boot*[T: Continuation](c: T): T {.used.} =
   ## it has been allocated but before it is first run.
   ## The return value specifies the continuation.
   c
-
-template pass*[T: Continuation](source, destination: T): T {.used.} =
-  ## This symbol may be reimplemented to introduce logic during
-  ## the transfer of control between parent and child continuations.
-  ## The return value specifies the destination continuation.
-  destination
 
 template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
   ## This symbol may be reimplemented to introduce control-flow
