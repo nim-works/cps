@@ -484,6 +484,10 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
       Head.hook:
         Boot.hook c
 
+  # rewrite the symbols used in the arguments to identifiers
+  for defs in result.callingParams:
+    result = desym(result, defs[0])
+
   # now the trampoline
   result.body.add:
     nnkWhileStmt.newTree: [
