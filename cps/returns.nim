@@ -75,8 +75,12 @@ proc terminator*(c: NimNode; T: NimNode): NimNode =
       if `c`.mom.isNil:
         result = `c`
       else:
+        # we're converting to Cont here for sigmatch reasons despite the
+        # fact that Continuation is probably the only rational type
+        # pass(Cont(continuation), Cont(c.mom))
         result = `pass`((typeof `c`)(`c`), (typeof `c`)(`c`.mom))
         if result != `c`:
+          # dealloc(env_234234, continuation)
           `dealloc`(`T`, `c`)
 
 proc tailCall*(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
