@@ -53,19 +53,19 @@ type
   IdentDefVar* = distinct IdentDefVarLet
     ## identdef defintion from a var section
 
-  DefLike = IdentDefs | VarLetDef
+  DefLike* = IdentDefs | VarLetDef
     ## IdentDefs could be a singla variable define or a proc def param, while
     ## a VarLetDef is an identdefs or vartuple from a var or let section
 
-  LetSectionLike = LetSection
+  LetSectionLike* = LetSection
     ## abstract over various forms of let sections, used to define operations
     ## over or allow abstracting over this type class further
-  VarSectionLike = VarSection | IdentDefVar
+  VarSectionLike* = VarSection | IdentDefVar
     ## abstract over various var sections types
-  VarLetLike = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
+  VarLetLike* = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
                VarSectionLike
     ## abstract over various let or var sections types
-  VarLetIdentDefLike = IdentDefVarLet | IdentDefVar
+  VarLetIdentDefLike* = IdentDefVarLet | IdentDefVar
     ## abstract over identdefs from let or var sections types
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
