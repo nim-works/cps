@@ -13,35 +13,60 @@ from cps/rewrites import normalizingRewrites, replace, desym
 
 type
   NormalizedNimNode* = distinct NimNode
+    ## a normalized node, but this should not be useed directly, use a
+    ## specialized type instead, see below.
 
-  Name* = distinct NormalizedNimNode
+  # Outside of NormalizedNimNode, nodes fall into a few cateogries:
+  # * one to one to an AST node, but with some invariants (eg: `Ident`)
+  # * over multiple node kinds, but cover common operations (eg: `VarLet`)
+  # * to a normalized type node, but further specialization (eg: `TupleVarLet`)
+
   Ident* = distinct Name
+    ## nnkIdent
   Sym* = distinct Name
+    ## nnkSym
+  Name* = distinct NormalizedNimNode
+    ## either an Ident or Sym
 
   ProcDef* = distinct NormalizedNimNode
     ## an nnkProcDef node which has been normalized
   
   IdentDefs* = distinct NormalizedNimNode
+    ## currently this is IdentDefs mostly in a var let section, in reality
+    ## these are also for routine and generic param definitions
 
   VarLet* = distinct NormalizedNimNode
+    ## a var or let section, with a single define
   VarLetDef = distinct NormalizedNimNode
-    ## identdef or tuple
+    ## identdef or tuple defintion from a var or let section
 
   TupleVarLet* = distinct VarLet
+    ## a var or let section, but with a tuple defintion within
   IdentDefVarLet* = distinct VarLet
+    ## a var or let section, but with a single identdefs, eg: `var a: int = 10`
 
   LetSection* = distinct VarLet
+    ## a let section, with a single identdefs or vartuple
 
   VarSection* = distinct VarLet
+    ## a let or var section, with a single identdefs or vartuple
   IdentDefVar* = distinct IdentDefVarLet
+    ## identdef defintion from a var section
 
   DefLike = IdentDefs | VarLetDef
+    ## IdentDefs could be a singla variable define or a proc def param, while
+    ## a VarLetDef is an identdefs or vartuple from a var or let section
 
   LetSectionLike = LetSection
+    ## abstract over various forms of let sections, used to define operations
+    ## over or allow abstracting over this type class further
   VarSectionLike = VarSection | IdentDefVar
+    ## abstract over various var sections types
   VarLetLike = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
                VarSectionLike
+    ## abstract over various let or var sections types
   VarLetIdentDefLike = IdentDefVarLet | IdentDefVar
+    ## abstract over identdefs from let or var sections types
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
   ## useful for error messages
