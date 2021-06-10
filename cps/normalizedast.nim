@@ -148,7 +148,7 @@ func inferTypFromImpl*(n: DefLike): NimNode =
 
 defineToNimNodeConverter(IdentDefs)
 
-proc validateIdentDefs(n: NimNode): void =
+proc validateIdentDefs(n: NimNode) =
   ## validators only, afterwards it's safe to cast, allows re-use
   if n.kind != nnkIdentDefs:
     errorGot "not an IdentDefs", n, $n.kind
