@@ -66,7 +66,7 @@ proc terminator*(c: NimNode; T: NimNode): NimNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.
-  let (dealloc, pass) = (Dealloc.sym, Pass.sym)
+  let (dealloc, pass, coop) = (Dealloc.sym, Pass.sym, Coop.sym)
   quote:
     if `c`.isNil:
       result = `c`
@@ -80,8 +80,12 @@ proc terminator*(c: NimNode; T: NimNode): NimNode =
         # pass(Cont(continuation), Cont(c.mom))
         result = `pass`((typeof `c`)(`c`), (typeof `c`)(`c`.mom))
         if result != `c`:
+          # perform a cooperative yield when we pass control to mom
+          result = `coop` result
           # dealloc(env_234234, continuation)
           `dealloc`(`T`, `c`)
+    # critically, terminate control-flow here!
+    return
 
 proc tailCall*(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
