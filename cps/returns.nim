@@ -56,24 +56,6 @@ proc makeReturn*(pre: NimNode; n: NimNode): NimNode =
     #else:
     #  doc "omitted a return of " & repr(n)
 
-proc maybeReturnParent*(T: NimNode; c: NimNode): NimNode =
-  ## the appropriate target of a `return` statement in a CPS procedure
-  ## (that would otherwise return continuation `c`) first performs a
-  ## runtime check to see if the parent should be returned instead.
-  let justmom = newDotExpr(c, ident"mom")
-  let convmom = newCall(newCall(ident"typeof", c), justmom)
-  makeReturn:                               # return value is as follows:
-    nnkIfExpr.newTree [
-      nnkElifExpr.newTree [                 # if
-        newCall(bindSym"isNil", justmom),   # we have no parent,
-        c                                   # the current continuation;
-      ],
-      nnkElseExpr.newTree [                 # else,
-        Pass.hook(c, convmom)               # hook into pass() and yield
-                                            # our parent continuation.
-      ],
-    ]
-
 template pass*[T: Continuation](source, destination: T): T {.used.} =
   ## This symbol may be reimplemented to introduce logic during
   ## the transfer of control between parent and child continuations.
