@@ -53,28 +53,14 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
   ## prior to each leg of its execution.  The continuation will be
   ## exposed by a variable named `it` inside the `body`.
   #
-  # this is a terrible workaround for the fact that the compiler pukes
-  # on the conversions otherwise...  sorry!  it's a macro version of:
-  #
-  #       var c: Continuation = c
-  #       while c.running:
-  #         var it {.inject.}: T = c
-  #         body
-  #         c = c.fn(c)
-  #
-  let c = nskVar.genSym"c"
-  let t = ident"Continuation"
-  result = newStmtList [
-    nnkVarSection.newTree(newIdentDefs(c, t, supplied)),
-    nnkWhileStmt.newTree [
-      newCall(ident"running", c),
-      nnkStmtList.newTree [
-        nnkVarSection.newTree(newIdentDefs(ident"it", t, c)),
-        body,
-        newAssignment(c, newCall(newDotExpr(c, ident"fn"), c))
-      ]
-    ]
-  ]
+  # this is a lame workaround for the fact that the compiler pukes
+  # on the conversions in the template version...
+  result = quote:
+    var c: Continuation = `supplied`
+    while c.running:
+      var it {.inject.}: `T` = c
+      `body`
+      c = c.fn(c)
 
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
