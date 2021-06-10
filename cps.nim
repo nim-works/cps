@@ -32,6 +32,8 @@ proc state*(c: Continuation): State =
   else:
     Running
 
+{.push hint[ConvFromXtoItselfNotNeeded]: off.}
+
 template running*(c: Continuation): bool =
   ## `true` if the continuation is running.
   (Continuation c).state == Running
@@ -39,6 +41,12 @@ template running*(c: Continuation): bool =
 template finished*(c: Continuation): bool =
   ## `true` if the continuation is finished.
   (Continuation c).state == Finished
+
+template dismissed*(c: Continuation): bool =
+  ## `true` if the continuation was dimissed.
+  (Continuation c).state == Dismissed
+
+{.pop.}
 
 proc trampoline*[T: Continuation](c: T): T =
   ## This is the basic trampoline: it will run the continuation
@@ -61,10 +69,6 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
       var it {.inject.}: `T` = c
       `body`
       c = c.fn(c)
-
-template dismissed*(c: Continuation): bool =
-  ## `true` if the continuation was dimissed.
-  (Continuation c).state == Dismissed
 
 macro cps*(T: typed, n: typed): untyped =
   ## This is the .cps. macro performing the proc transformation

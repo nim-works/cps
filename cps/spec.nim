@@ -136,16 +136,17 @@ proc isCpsContinue*(n: NimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
 
-template cpsRecover() {.pragma.}   ## the next step in finally recovery path
+when defined(cpsRecover):
+  template cpsRecover() {.pragma.}   ## the next step in finally recovery path
 
-func newCpsRecover(n: NimNode): NimNode =
-  ## Produce a {.cpsRecover.} annotation
-  nnkPragma.newNimNode(n).add:
-    bindSym"cpsRecover"
+  func newCpsRecover(n: NimNode): NimNode =
+    ## Produce a {.cpsRecover.} annotation
+    nnkPragma.newNimNode(n).add:
+      bindSym"cpsRecover"
 
-func isCpsRecover(n: NimNode): bool =
-  ## Return whether a node is a {.cpsRecover.} annotation
-  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsRecover")
+  func isCpsRecover(n: NimNode): bool =
+    ## Return whether a node is a {.cpsRecover.} annotation
+    n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsRecover")
 
 proc breakLabel*(n: NimNode): NimNode =
   ## Return the break label of a `break` statement or a `cpsBreak` annotation
