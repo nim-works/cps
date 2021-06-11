@@ -537,6 +537,8 @@ macro cpsFloater(n: typed): untyped =
 proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
+  # keep the original symbol of the proc
+  let prcSym = n[0]
   # make the AST easier for us to consume
   var n = normalizeProcDef n
   # establish a new environment with the supplied continuation type;
@@ -574,12 +576,17 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   # like magics, the bootstrap must jump
   booty.addPragma ident"cpsMustJump"
 
+  # give the booty the sym we got from the original, which
+  # make the booty take the place of the original proc
+  booty.name = prcSym
+
   # now we'll reset the name of the new proc
-  n.name = name
+  # XXX: not sure why we need to desym, but we have to or it won't be
+  # matched inside booty
+  n.name = desym(name)
 
   # do some pruning of these typed trees.
   for p in [booty, n]:
-    p.name = desym(p.name)
     while len(p) > 7: p.del(7)     # strip out any extra result field
 
   # Replace the proc params: its sole argument and return type is T:
