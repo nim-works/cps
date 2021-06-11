@@ -577,7 +577,10 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   booty.addPragma ident"cpsMustJump"
 
   # give the booty the sym we got from the original, which
-  # make the booty take the place of the original proc
+  # causes the bootstrap symbol to adopt the original procedure's symbol;
+  # this is a workaround for nim bugs:
+  # https://github.com/nim-lang/Nim/issues/18203 (used hints)
+  # https://github.com/nim-lang/Nim/issues/18235 (export leaks)
   booty.name = prcSym
 
   # now we'll reset the name of the new proc
