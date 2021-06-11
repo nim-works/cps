@@ -538,7 +538,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # keep the original symbol of the proc
-  let prcSym = n[0]
+  let originalProcSym = n[0]
   # make the AST easier for us to consume
   var n = normalizeProcDef n
   # establish a new environment with the supplied continuation type;
@@ -581,7 +581,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   # this is a workaround for nim bugs:
   # https://github.com/nim-lang/Nim/issues/18203 (used hints)
   # https://github.com/nim-lang/Nim/issues/18235 (export leaks)
-  booty.name = prcSym
+  booty.name = originalProcSym
 
   # now we'll reset the name of the new proc
   # XXX: not sure why we need to desym, but we have to or it won't be
