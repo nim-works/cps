@@ -17,7 +17,7 @@ proc trampoline[T: Continuation](c: T) =
     setCurrentException(nil)
     c = c.fn(c)
     # no exception should leak outside of the continuation
-    check getCurrentException().isNil
+    check getCurrentException().isNil, "exception leaked from the continuation"
     inc jumps
     if jumps > 1000:
       raise InfiniteLoop.newException: $jumps & " iterations"

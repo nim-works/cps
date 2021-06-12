@@ -19,7 +19,7 @@ suite "try statements":
         fail "this branch should not run"
       inc r
 
-    foo()
+    trampoline whelp(foo())
     check r == 3
 
   block:
@@ -37,7 +37,7 @@ suite "try statements":
         inc r
       inc r
 
-    foo()
+    trampoline whelp(foo())
     check r == 4
 
   block:
@@ -57,7 +57,7 @@ suite "try statements":
         inc r
       inc r
 
-    foo()
+    trampoline whelp(foo())
     check r == 5
 
   block:
@@ -76,7 +76,7 @@ suite "try statements":
         inc r
       inc r
 
-    foo()
+    trampoline whelp(foo())
     check r == 5
 
   block:
@@ -91,7 +91,7 @@ suite "try statements":
         finally:
           inc r
 
-      foo()
+      trampoline whelp(foo())
       check r == 3
 
   block:
@@ -107,7 +107,7 @@ suite "try statements":
         finally:
           inc r
 
-      foo()
+      trampoline whelp(foo())
       check r == 3
 
   block:
@@ -127,7 +127,7 @@ suite "try statements":
           inc r
         inc r
 
-      foo()
+      trampoline whelp(foo())
       check r == 5
 
   block:
@@ -158,5 +158,5 @@ suite "try statements":
 
       inc r
 
-    foo()
+    trampoline whelp(foo())
     check r == 7
