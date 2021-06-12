@@ -218,3 +218,11 @@ proc isVoodooCall*(n: NimNode): bool =
       let callee = n[0]
       if not callee.isNil and callee.kind == nnkSym:
         result = callee.getImpl.hasPragma "cpsVoodooCall"
+
+proc trampoline*[T: Continuation](c: T): T =
+  ## This is the basic trampoline: it will run the continuation
+  ## until the continuation is no longer in the `Running` state.
+  var c: Continuation = c
+  while not c.isNil and not c.fn.isNil:
+    c = c.fn(c)
+  result = T c

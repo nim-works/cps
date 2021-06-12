@@ -489,11 +489,9 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
     result = desym(result, defs[0])
 
   # now the trampoline
+  let tramp = bindSym"trampoline"
   result.body.add:
-    nnkWhileStmt.newTree: [
-      newCall(ident"running", c),  # XXX: bindSym?  bleh.
-      newAssignment(c, env.castToRoot newDotExpr(c, env.fn).newCall(c))
-    ]
+    newAssignment(c, newCall(tramp, c))
 
   # do an easy static check, and then
   if env.rs.typ != result.returnParam:
