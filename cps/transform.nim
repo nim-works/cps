@@ -180,16 +180,113 @@ macro cpsWhile(cont, cond, n: typed): untyped =
     # we return the while proc and a tailcall to enter it the first time
     it = newStmtList [makeContProc(name, cont, body), tail]
 
-proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
-  ## Rewrite the exception branch `n` to use `ex` as the "current"
-  ## exception and move its body into a continuation
-  result.excpt = copyNimNode n
+proc mergeExceptBranches(n, ex: NimNode): NimNode =
+  ## Rewrite the try statement `n` so that all `except` branches are merged
+  ## into one branch, with `ex` assumed to store the exception being handled.
+  ##
+  ## In the case where there is only one except branch and it's a catch-all
+  ## branch, no rewrite will happen.
+  result = n
+  # If there is at least one except branch with a catching constraint
+  if n.findChild(it.kind == nnkExceptBranch and it.len > 1) != nil:
+    # Copy the try statement and the try body
+    result = copyNimNode(n)
+    result.add n[0]
 
-  var body = newStmtList(n.last)
-  # this is `except Type: body`
-  if n.len > 1:
-    # add `Type`
-    result.excpt.add n[0]
+    # To achieve the merge, we perform it like so:
+    #
+    # Assume the AST
+    #
+    # try:
+    #   body
+    # except T:
+    #   handlerT
+    # except:
+    #   handler
+    #
+    # Turn all `except T` branches into: `elif ex of T`.
+    # Turn all `except` branches into: `else`.
+    # Then place all of them under an `if`, like this:
+    #
+    # if ex of T:
+    #   handlerT
+    # else:
+    #   handler
+    #
+    # Then rewrite the AST into:
+    #
+    # try:
+    #   body
+    # except:
+    #   if ex of T:
+    #     handlerT
+    #   else:
+    #     handler
+    let ifStmt = newNimNode(nnkIfStmt)
+
+    for idx in 1 ..< n.len:
+      let branch = n[idx]
+      # Branch has a matching constraint
+      if branch.len > 1:
+        let elifBranch = newNimNode(nnkElifBranch, branch)
+        # Add the constraint
+        elifBranch.add:
+          # ex of
+          nnkInfix.newTree(bindSym"of", ex):
+            # ref T
+            nnkRefTy.newTree:
+              # This should be our type T, assuming normalized ast
+              branch[0]
+        # Add the handler body
+        elifBranch.add branch[1]
+        # Add the branch to the if statement
+        ifStmt.add elifBranch
+      else:
+        # This is a plain except branch
+        let elseBranch = newNimNode(nnkElse, branch)
+        # Add the handler body
+        elseBranch.add branch[0]
+        # Add the branch to the if statement
+        ifStmt.add elseBranch
+
+    # In the case where there are no `else` branch (due to the lack of
+    # an empty except branch)
+    if ifStmt.last.kind != nnkElse:
+      # Since there are no handler for other cases, we reraise the exception
+      ifStmt.add:
+        # else:
+        #   raise ex
+        nnkElse.newTree:
+          newStmtList:
+            nnkRaiseStmt.newTree:
+              ex
+
+    # Add the merged except branch to our try statement
+    result.add:
+      nnkExceptBranch.newTree:
+        newStmtList:
+          ifStmt
+
+macro cpsTryExcept(cont, ex, n: typed): untyped =
+  ## A try statement tainted by a `cpsJump` and
+  ## may require a jump to enter any handler.
+  ##
+  ## Only rewrite try with except branches.
+  {.warning: "compiler workaround here".}
+  let cont = cont
+  result = newStmtList()
+
+  var
+    n = normalizingRewrites n
+    ex = normalizingRewrites ex
+
+  # merge all except branches into one
+  n = n.mergeExceptBranches(ex)
+
+  # grab the merged except branch and collect its body
+  let
+    handlerBody = n.findChild(it.kind == nnkExceptBranch)[0]
+    handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
 
   proc setException(contSym, n: NimNode): NimNode =
     ## Set the exception to `ex` before running any other code
@@ -225,55 +322,33 @@ proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
 
     result = result.filter(consumeException)
 
-  # move the exception body into a handler
-  result.cont = makeContProc(genSym(nskProc, "Except"), cont, body)
-  # rewrite the body of the handler to be exception-aware
-  #
-  # we perform this after the creation of the continuation to catch any
-  # added annotations
-  result.cont.body = setException(desym cont, result.cont.body)
+  # rewrite handler body to set the global exception on every child continuation
+  handler.body = setException(getContSym(handler), handler.body)
 
-  # create the new body for the except clause
-  result.excpt.add newStmtList()
-  # capture the exception into the continuation
-  result.excpt.last.add newAssignment(ex, newCall(bindSym"getCurrentException"))
-  # add the tail call to the created handler
-  result.excpt.last.add tailCall(cont, result.cont.name)
+  # add our handler before the body
+  result.add handler
 
-  discard "workaround for NimNode.add() returning something"
-
-macro cpsTryExcept(cont, ex, n: typed): untyped =
-  ## A try statement tainted by a `cpsJump` and
-  ## may require a jump to enter any handler.
-  ##
-  ## Only rewrite try with except branches.
-  {.warning: "compiler workaround here".}
-  let cont = cont
-  result = newStmtList()
-
-  var
-    n = normalizingRewrites n
-    ex = normalizingRewrites ex
-
-  # the try statement that will be used to wrap all child of `n`
+  # write a try-except clause to wrap on all children continuations so that
+  # they jump to the handler upon an exception
   let tryTemplate = copyNimNode n
 
-  # use an empty node as a stand-in for the real body
+  # use an empty node as the placeholder for the body
   tryTemplate.add newEmptyNode()
 
-  # Turn each handler branch into a continuation leg
-  # For finally we stash it into a variable for rewrite later
-  for i in 1 ..< n.len:
-    let child = n[i]
-    case child.kind
-    of nnkExceptBranch:
-      let (cont, excpt) = rewriteExcept(cont, ex, child)
-      # push the handler continuation to the top
-      result.add cont
+  # add an except node that captures the exception into `ex`, then
+  # jump to handler
+  let jumpBody = newStmtList()
+  jumpBody.add:
+    # captures the exception to ex
+    newAssignment(ex, newCall(bindSym"getCurrentException"))
+  jumpBody.add:
+    # jump to the handler
+    cont.tailCall(handler.name)
 
-      # add the rewritten except branch to the template
-      tryTemplate.add excpt
-    else: result.add errorAst(n[i], "unexpected node in cpsTryExcept")
+  # add this to our template as an except branch
+  tryTemplate.add:
+    nnkExceptBranch.newTree:
+      jumpBody
 
   proc wrapTry(contSym, n: NimNode): NimNode =
     ## Wrap `n` with the `try` template, and replace all `cont` with `contSym`
