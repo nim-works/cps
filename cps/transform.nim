@@ -212,8 +212,7 @@ proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
     result = newStmtList():
       newCall(bindSym"setCurrentException", ex.resym(cont, contSym))
 
-    for i in n.items:
-      result.add i.filter(setContException)
+    result.add n.filter(setContException)
 
     proc consumeException(n: NimNode): NimNode =
       ## Prepend all cpsPending with `setCurrentException nil`
