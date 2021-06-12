@@ -160,3 +160,34 @@ suite "try statements":
 
     trampoline whelp(foo())
     check r == 7
+
+  block:
+    ## except T as e keep the type T in cps
+    r = 0
+
+    type
+      SpecialError = object of CatchableError
+        extra: int ## An extra field so we can verify that we can access it
+
+    proc newSpecialError(msg: string, extra: int): ref SpecialError =
+      result = newException(SpecialError, msg)
+      result.extra = extra
+
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
+        inc r
+        raise newSpecialError("test", 42)
+        fail "statement run after raise"
+      except SpecialError as e:
+        noop()
+        inc r
+        check e.msg == "test"
+        # The reason we test access is because `is` is expanded before `e` is
+        # processed by cps. By testing access we can be sure that even after
+        # cps processing it's still the correct type.
+        check e.extra == 42
+
+    foo()
+    check r == 3

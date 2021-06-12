@@ -188,16 +188,8 @@ proc rewriteExcept(cont, ex, n: NimNode): tuple[cont, excpt: NimNode] =
   var body = newStmtList(n.last)
   # this is `except Type: body`
   if n.len > 1:
-    # this is `except Type as e: body`
-    if n[0].kind == nnkInfix:
-      # replace all occurance of `e` with `ex`
-      body = body.resym(n[0][2], ex)
-
-      # add `Type` to our new except clause
-      result.excpt.add n[0][1]
-    else:
-      # add `Type`
-      result.excpt.add n[0]
+    # add `Type`
+    result.excpt.add n[0]
 
   proc setException(contSym, n: NimNode): NimNode =
     ## Set the exception to `ex` before running any other code
