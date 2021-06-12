@@ -218,3 +218,12 @@ template `()`(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
 {.pop.}
+
+proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
+                                                                cpsMagic.} =
+  ## This symbol may be reimplemented to customize exception handling.
+  if c.mom.isNil:
+    raise e
+  else:
+    result = c.mom
+    result.ex = e

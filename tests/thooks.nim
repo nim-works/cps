@@ -49,13 +49,13 @@ suite "hooks":
     let s = found.join("\10")
     const
       expected = """
-        0: foo 4 24
-        1: While Loop 12 24
-        2: Post Call 8 24
-        3: While Loop 12 24
-        4: Post Call 8 24
-        5: While Loop 12 24
-        6: Post Call 8 24
+        0: foo 4 32
+        1: While Loop 12 32
+        2: Post Call 8 32
+        3: While Loop 12 32
+        4: Post Call 8 32
+        5: While Loop 12 32
+        6: Post Call 8 32
       """.dedent(8).strip()
     check "trace output doesn't match":
       s == expected
@@ -194,3 +194,25 @@ suite "hooks":
     check "bzzzt bootstrapped":
       h == t
       t == 1
+
+  block:
+    ## custom continuation exception handling works
+    skip "🚧 watch your step 🚧"
+    var k = newKiller 3
+
+    proc unwind(c: Cont; ex: ref Exception): Continuation {.cpsMagic.} =
+      step 3
+      result = cps.unwind(c, ex)
+
+    proc bar() {.cps: Cont.} =
+      step 2
+      noop()
+      raise IOError.newException "hol' up"
+
+    proc foo() {.cps: Cont.} =
+      step 1
+      bar()
+      step 4
+
+    expect IOError:
+      foo()

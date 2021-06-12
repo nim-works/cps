@@ -20,7 +20,9 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
-  result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc}
+  result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc, Unwind}
+  result.body.add:                  # perform any possible stack unwind
+    Unwind.hook cont, contType      # before any other activity, then
   result.body.add:                  # insert a hook ahead of the source,
     Trace.hook contParam, result    # hooking against the proc (minus body)
   result.body.add:                  # perform convenience rewrites on source

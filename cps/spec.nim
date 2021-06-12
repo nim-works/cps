@@ -40,6 +40,7 @@ type
     ## If this Continuation was invoked by another Continuation,
     ## the `mom` will hold that parent Continuation to form a
     ## linked-list approximating a stack.
+    ex*: ref Exception
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 

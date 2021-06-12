@@ -79,8 +79,11 @@ proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
     # hook(Cont, env_234234)
     newCall(hook.sym, a, b)
   of Unwind:
-    # hook(continuation, exception)
-    newCall(hook.sym, a, b)
+    # hook(continuation, Cont)
+    let unwind = hook.sym
+    quote:
+      if not `a`.ex.isNil:
+        return `unwind`(`a`, `a`.ex).`b`
   of Pass, Tail:
     # hook(source, destination)
     newCall(hook.sym, a, b)
