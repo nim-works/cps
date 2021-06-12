@@ -30,7 +30,6 @@ type
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
     rs: IdentDefs                   # the identdefs for the result
-    ex: NimNode                     # the sym we use for current exception
     mom: NimNode                    # the sym we use for parent continuation
 
   CachePair* = tuple
@@ -189,7 +188,6 @@ proc newEnv*(parent: Env; copy = off): Env =
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
-                 ex: parent.ex,
                  parent: parent)
     when cpsReparent:
       result.seen = parent.seen
@@ -432,13 +430,15 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
     result.add:
       newAssignment(resultdot e.fn, goto)
 
-proc getException*(e: var Env): NimNode =
-  ## get the current exception from the env, instantiating it if necessary
-  if e.ex.isNil:
-    e.ex = genField"ex"
-    e = e.set e.ex:
-      newIdentDefVar(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
-  result = newDotExpr(e.castToChild(e.first), e.ex)
+proc genException*(e: var Env): NimNode =
+  ## generates a new symbol of type ref Exception, then put it in the env.
+  ##
+  ## returns the access to the exception symbol from the env.
+  let ex = genField("ex")
+  e = e.set ex:
+    # XXX: Should be IdentDefLet but saem haven't wrote it yet
+    newIdentDefVar(ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+  result = newDotExpr(e.castToChild(e.first), ex)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation

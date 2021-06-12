@@ -130,3 +130,33 @@ suite "try statements":
       foo()
       check r == 5
 
+  block:
+    ## nested try statements within the except branch
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
+        inc r
+        raise newException(CatchableError, "test")
+        fail "statement run after raise"
+      except:
+        check getCurrentExceptionMsg() == "test"
+        inc r
+
+        try:
+          noop()
+          inc r
+          raise newException(CatchableError, "test 2")
+          fail "statement run after raise"
+        except:
+          check getCurrentExceptionMsg() == "test 2"
+          inc r
+
+        check getCurrentExceptionMsg() == "test"
+        inc r
+
+      inc r
+
+    foo()
+    check r == 7

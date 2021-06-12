@@ -455,7 +455,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         var jumpCall: NimNode
         if final.isNil:                    # no finally!
           jumpCall = env.newAnnotation(nc, "cpsTryExcept")
-          jumpCall.add env.getException()  # exception access
+          jumpCall.add env.genException()  # exception access
           jumpCall.add:
             newStmtList env.annotate(nc)   # try body
         else:
@@ -465,7 +465,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
             else:
               wrappedFinally(nc, final)    # try/try-except/finally
           jumpCall = env.newAnnotation(nc, "cpsTryFinally")
-          jumpCall.add env.getException()  # exception access
+          jumpCall.add env.genException()  # exception access
           jumpCall.add:
             newStmtList env.annotate(body) # try body
         result.add jumpCall
