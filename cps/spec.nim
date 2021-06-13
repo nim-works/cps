@@ -25,6 +25,7 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
+template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 
 type
   Continuation* = ref object of RootObj
@@ -161,11 +162,18 @@ proc getContSym*(n: NimNode): NimNode =
   else:
     nil
 
+proc newCpsTerminate*(): NimNode =
+  ## Create a new node signifying early termination of the procedure
+  nnkPragma.newTree:
+    bindSym"cpsTerminate"
+
+proc isCpsTerminate*(n: NimNode): bool =
+  ## Return whether `n` is a cpsTerminate annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsTerminate")
+
 proc isScopeExit*(n: NimNode): bool =
-  ## Return whether the given node signify a scope exit
-  ##
-  ## TODO: Handle early exit (ie. `c.fn = nil; return`)
-  n.isCpsPending or n.isCpsBreak or n.isCpsContinue
+  ## Return whether the given node signify a CPS scope exit
+  n.isCpsPending or n.isCpsBreak or n.isCpsContinue or n.isCpsTerminate
 
 template rewriteIt*(n: typed; body: untyped): NimNode =
   var it {.inject.} = normalizingRewrites:

@@ -95,20 +95,22 @@ suite "try statements":
 
   block:
     ## try statements with a finally and a return
-    skip"pending https://github.com/nim-lang/Nim/issues/18254":
-      r = 0
+    r = 0
 
-      proc foo() {.cps: Cont.} =
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
         inc r
-        try:
-          noop()
-          inc r
-          return
-        finally:
-          inc r
+        return
+        fail"statement run after return"
+      finally:
+        inc r
 
-      trampoline whelp(foo())
-      check r == 3
+      fail"statement run after try-finally containing a return"
+
+    trampoline whelp(foo())
+    check r == 3
 
   block:
     ## try statements with an exception and a finally

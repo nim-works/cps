@@ -382,20 +382,18 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
       result = newStmtList()
       # ignore the result symbol and create a new assignment
       result.add newAssignment(e.get, n.last.last)
-      # and just issue an empty `return`
-      result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
-    of nnkEmpty, nnkIdent:
-      # this is `return` or `return continuation`, so that's fine...
-      result = n
+      # and add the termination annotation
+      result.add newCpsTerminate()
+    of nnkEmpty:
+      # this is an empty return
+      result = newCpsTerminate()
     else:
       # okay, it's a return of some rando expr
       result = newStmtList()
       # ignore the result symbol and create a new assignment
       result.add newAssignment(e.get, n.last)
-      # signify the end of the continuation
-      result.add newAssignment(newDotExpr(e.first, e.fn), newNilLit())
-      # and return the continuation
-      result.add nnkReturnStmt.newNimNode(n).add(e.first)
+      # and add the termination annotation
+      result.add newCpsTerminate()
 
 proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   ## swap symbols for those in the continuation

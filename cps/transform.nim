@@ -599,8 +599,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       # return statement without regard to the contents of `result`
       # because it may hold, eg. `ElifBranch ...` or similar.
       result.add:
-        makeReturn:
-          env.rewriteReturn nc
+        env.rewriteReturn nc
       return
 
     of nnkVarSection, nnkLetSection:
@@ -702,37 +701,22 @@ macro cpsResolver(T: typed, n: typed): untyped =
   proc danglingCheck(n: NimNode): NimNode =
     ## look for un-rewritten control-flow then replace them with errors
     proc dangle(n: NimNode): NimNode =
-      if n.kind == nnkPragma and n.len == 1 and
-        (n.hasPragma"cpsContinue" or
-         n.hasPragma"cpsBreak" or
-         n.hasPragma"cpsPending"):
+      if n.isScopeExit:
         errorAst(n, "cps error: un-rewritten cps control-flow")
       else: n
     filter(n, dangle)
-
-  proc replacePending(n, replacement: NimNode): NimNode =
-    ## Replace cpsPending annotations with something else, usually
-    ## a jump to an another location. If `replacement` is nil, remove
-    ## the annotation.
-    proc resolved(n: NimNode): NimNode =
-      if n.isCpsPending:
-        result =
-          if replacement.isNil:
-            newEmptyNode()
-          else:
-            copyNimTree replacement
-    result = filter(n, resolved)
 
   # grabbing the first argument to the proc as an identifier
   let cont = desym n.params[1][0]
 
   debugAnnotation cpsResolver, n:
-    # replace all `pending` with the end of continuation
-    it = replacePending it:
+    # replace all `pending` and `terminate` with the end of continuation
+    it = replace(it, proc(x: NimNode): bool = x.isCpsPending or x.isCpsTerminate):
       if n.firstReturn.isNil:
         terminator(cont, T)
       else:
         doc"omitted a return in the resolver"
+
     it = danglingCheck it
 
 macro cpsFloater(n: typed): untyped =
