@@ -55,7 +55,7 @@ your tests; the API won't break you badly.
 
 ### Architecture
 
-The implementation is comprised of two conceptual entities:
+The implementation is comprised of two concepts:
 
 1. an *environment* is a bespoke type made to carry all locals in a procedure,
 plus a pointer to a continuation leg:
