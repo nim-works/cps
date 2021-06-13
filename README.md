@@ -228,7 +228,7 @@ of CPS composition. Each example runs independently, with no other requirements,
 yet demonstrates different exploits of `cps`.
 
 | Example | Description |
-|:--      | :--         |
+|     --: | :--         |
 |[Channels](https://github.com/disruptek/cps/blob/master/examples/channels.nim)|A channel connects sender and receiver continuations|
 |[Goto](https://github.com/disruptek/cps/blob/master/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
 |[Iterator](https://github.com/disruptek/cps/blob/master/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
