@@ -81,7 +81,7 @@ suite "try statements":
 
   block:
     ## try statements with a finally clause
-    skip "not working, see #78":
+    skip"pending https://github.com/nim-lang/Nim/issues/18254":
       r = 0
       proc foo() {.cps: Cont.} =
         inc r
@@ -96,8 +96,9 @@ suite "try statements":
 
   block:
     ## try statements with a finally and a return
-    skip "not working, see #78":
+    skip"pending https://github.com/nim-lang/Nim/issues/18254":
       r = 0
+
       proc foo() {.cps: Cont.} =
         inc r
         try:
@@ -112,7 +113,7 @@ suite "try statements":
 
   block:
     ## try statements with an exception and a finally
-    skip "not working, see #78":
+    skip"pending https://github.com/nim-lang/Nim/issues/18254":
       r = 0
       proc foo() {.cps: Cont.} =
         inc r
@@ -129,6 +130,25 @@ suite "try statements":
 
       trampoline whelp(foo())
       check r == 5
+
+  block:
+    ## try statements with a split in finally
+    skip"pending https://github.com/nim-lang/Nim/issues/18254":
+      r = 0
+      proc foo() {.cps: Cont.} =
+        inc r
+
+        try:
+          noop()
+          inc r
+        finally:
+          noop()
+          inc r
+
+        inc r
+
+      trampoline whelp(foo())
+      check r == 4
 
   block:
     ## nested try statements within the except branch

@@ -99,8 +99,9 @@ proc stripPragma*(n: NimNode; s: static[string]): NimNode =
     result = n
 
 proc hash*(n: NimNode): Hash =
+  ## Hash a NimNode via it's representation
   var h: Hash = 0
-  h = h !& hash($n)
+  h = h !& hash(repr n)
   result = !$h
 
 func newCpsPending*(): NimNode =
