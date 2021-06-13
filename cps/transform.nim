@@ -404,85 +404,50 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     let finallyBody = tryFinally.last.last
 
     # Turn the finally into a continuation leg.
-    var final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
+    let final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
 
     # A property of `finally` is that it inserts itself in the middle
     # of any scope exit attempt before performing the scope exit.
     #
-    # To implement this we will turn the finally continuation leg into
-    # a generic that specify where to jump to after the leg finishes.
+    # To achieve this, we generates specialized finally legs that
+    # dispatches to each exit points.
     #
-    # Starting with the generic parameter, we will use
-    # `Fn: static ContinuationProc[Continuation]` as our generic param.
-    #
-    # This parameter will specify the function to jump to after this
-    # continuation.
-    let genericDef =
-      # We gotta desym because leaving it as a sym breaks when the symbol
-      # is used inside inner procs. Not sure why but that's how it is
-      newIdentDefs(nskGenericParam.genSym("Fn").desym):
-        # static
-        nnkStaticTy.newTree:
-          # ContinuationProc[Continuation]
-          nnkBracketExpr.newTree(bindSym"ContinuationProc").add:
-            bindSym"Continuation"
+    # XXX: While this generator works perfectly for our usage, it is not
+    # the best way to template. Preferrably we would use generics, which
+    # is blocked by nim-lang/Nim#18254.
+    proc generateContinuation(templ, replace, replacement: NimNode): NimNode =
+      ## Given a continuation template `templ`, replace all `replace` with
+      ## `replacement`, then generate a new set of symbols for all
+      ## continuations within.
+      # The key is the symbol need updating and the value is what to update
+      # it to
+      var replacements: Table[NimNode, NimNode]
+      proc generator(n: NimNode): NimNode =
+        # If it's a continuation
+        if n.isCpsCont:
+          result = copyNimTree(n)
+          # Desym the continuation to unshare it with other copies
+          let cont = result.getContSym
+          replacements[cont] = desym cont
+          # Make sure that we also desym the parameter
+          result.params = result.params.filter(generator)
+          # Generate a new name for this continuation, then add it to our
+          # replacement table
+          replacements[n.name] = genSym(n.name.symKind, n.name.strVal)
+          result.name = replacements[n.name]
+          # Rewrite the body to update the references within it
+          result.body = result.body.filter(generator)
 
-    proc addGenerics(n, genericDef: NimNode): NimNode =
-      # Adds the generic definition `genericDef` to all continuations
-      # in `n` then update all references to those continuation to use
-      # the added generic parameter.
-      let genericSym = genericDef[0]
-      var needUpdate: HashSet[NimNode]
+        elif n in replacements:
+          result = copyNimTree(replacements[n])
 
-      proc addGenericToThings(n: NimNode): NimNode =
-        case n.kind
-        of nnkBracketExpr:
-          # If x in x[something] is in the list of symbols need updating,
-          # append an another generic parameter to it.
-          if n[0] in needUpdate:
-            result = n
-            result.add genericSym
+      replacements[replace] = replacement
+      templ.filter(generator)
 
-        of nnkSym:
-          # If it's a plain sym, make a sym[genericSym]
-          if n in needUpdate:
-            result = nnkBracketExpr.newTree(n):
-              genericSym
+    # Create a symbol to use as the placeholder for the finally leg next jump.
+    let nextJump = nskUnknown.genSym"nextJump"
 
-        elif n.isCpsCont:
-          # If we get a cps continuation
-          result = n
-          # If there are no list of generic parameters
-          if result[2].kind == nnkEmpty:
-            # Make a new one
-            result[2] = newNimNode(nnkGenericParams)
-
-          # Append our generic definition to the generic params
-          result[2].add genericDef
-
-          # Add this continuation symbol to the list of symbols need updating
-          needUpdate.incl result.name
-
-          # Add generics to the continuations within this continuation too
-          result.body = result.body.filter(addGenericToThings)
-
-          # Remove the `result` symbol as it might break the proc if left
-          # as-is
-          if result.len > 7:
-            result.del 7
-
-        else: discard
-
-      n.filter(addGenericToThings)
-
-    # Now we add the generic parameter to our continuation
-    final = final.addGenerics(genericDef)
-
-    # Create the tail call to the next function, which is stored in the added
-    # generic parameter.
-    let nextJump = tailCall(desym(cont), genericDef[0])
-
-    # Replace all cpsPending within the final leg with this tail call
+    # Replace all cpsPending within the final leg with this placeholder
     final.body = final.body.replace(isCpsPending, nextJump)
 
     # Set the global exception to `ex` before running any other code
@@ -490,14 +455,12 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     final.body = final.body.setContinuationException(final.getContSym):
       ex.resym(cont, final.getContSym)
 
-    # Add the finally leg declaration to the AST
-    it.add final
-
     # This is a table of exit points, the key being the exit annotation, and
-    # the value being a continuation containing that annotation
-    var exitPoints: Table[NimNode, NimNode]
+    # the value being the finally leg specialized to that exit.
+    var exitPoints: OrderedTable[NimNode, NimNode]
     proc redirectExits(n, cont, final: NimNode): NimNode =
-      ## Redirect all scope exits in `n` so that they pass through `final`.
+      ## Redirect all scope exits in `n` so that they jump through a
+      ## specialized version of `final`.
       proc redirector(n: NimNode): NimNode =
         if n.isCpsCont:
           let nextCont = n.getContSym
@@ -507,20 +470,19 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
           # If this exit point is not recorded yet
           if n notin exitPoints:
             # Create a new continuation containing the exit point
-            exitPoints[n] = makeContProc(nskProc.genSym"finallyExit", cont):
+            exitPoints[n] = final.generateContinuation(nextJump):
               n
 
           # Replace it with a tail call to finally with the exit point as the
           # destination.
-          result = cont.tailCall:
-            nnkBracketExpr.newTree(final, exitPoints[n].name)
+          result = cont.tailCall exitPoints[n].name
 
       n.filter(redirector)
 
-    # Redirect all exits within the finally body to pass through `final`
-    let body = tryFinally[0].redirectExits(cont, final.name)
+    # Redirect all exits within the finally
+    let body = tryFinally[0].redirectExits(cont, final)
 
-    # Add the exit continuations we collected in the previous pass
+    # Add the specialized finally legs we generated to the AST
     for exit in exitPoints.values:
       it.add exit
 
@@ -528,13 +490,16 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # covered the exits that are not explicitly written in the body, which are
     # unhandled exceptions.
     #
-    # Create a continuation leg to raise the current exception. This is
-    # used to re-raise an unhandled exception.
-    let reraise = makeContProc(nskProc.genSym"Reraise", cont):
-      newStmtList():
-        nnkRaiseStmt.newTree(ex)
+    # Generate a finally leg that raises the current exception. This is used to
+    # re-raise an unhandled exception.
+    let reraise = final.generateContinuation(nextJump):
+      newStmtList:
+        nnkRaiseStmt.newTree:
+          # de-sym our `ex` so that it uses the continuation of where it is
+          # replaced into
+          ex.resym(cont, desym cont)
 
-    # Add this handler to the AST
+    # Add this leg to the AST
     it.add reraise
 
     # Now we create a try-except template to catch any unhandled exception that
@@ -555,7 +520,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
 
     reraiseJump.add:
       # Jump to finally with continuation target `reraise`
-      tailCall(cont, nnkBracketExpr.newTree(final.name, reraise.name))
+      tailCall(cont, reraise.name)
 
     tryTemplate.add:
       nnkExceptBranch.newTree:

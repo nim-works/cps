@@ -81,18 +81,17 @@ suite "try statements":
 
   block:
     ## try statements with a finally clause
-    skip"pending https://github.com/nim-lang/Nim/issues/18254":
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
         inc r
-        try:
-          noop()
-          inc r
-        finally:
-          inc r
+      finally:
+        inc r
 
-      trampoline whelp(foo())
-      check r == 3
+    trampoline whelp(foo())
+    check r == 3
 
   block:
     ## try statements with a finally and a return
@@ -113,42 +112,61 @@ suite "try statements":
 
   block:
     ## try statements with an exception and a finally
-    skip"pending https://github.com/nim-lang/Nim/issues/18254":
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
         inc r
-        try:
-          noop()
-          inc r
-          raise newException(CatchableError, "")
-          fail "statement run after raise"
-        except:
-          inc r
-        finally:
-          inc r
+        raise newException(CatchableError, "")
+        fail "statement run after raise"
+      except:
         inc r
+      finally:
+        inc r
+      inc r
 
-      trampoline whelp(foo())
-      check r == 5
+    trampoline whelp(foo())
+    check r == 5
 
   block:
     ## try statements with a split in finally
-    skip"pending https://github.com/nim-lang/Nim/issues/18254":
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      try:
+        noop()
+        inc r
+      finally:
+        noop()
         inc r
 
-        try:
-          noop()
-          inc r
-        finally:
-          noop()
-          inc r
+      inc r
 
+    trampoline whelp(foo())
+    check r == 4
+
+  block:
+    ## try statements with a split in finally with an unhandled exception
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      try:
+        noop()
+        inc r
+        raise newException(ValueError, "test")
+        fail"code run after raise"
+      finally:
+        noop()
         inc r
 
+      fail"code run after raising try-finally"
+
+    expect ValueError:
       trampoline whelp(foo())
-      check r == 4
+    check r == 3
 
   block:
     ## nested try statements within the except branch
