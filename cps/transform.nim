@@ -824,7 +824,7 @@ macro cpsManageException(n: typed): untyped =
         # they were equal when it was set by withException.
         #
         # We manually swap the symbol here for because of that.
-        ex[0][1] = cont
+        ex[0][0][1] = cont
 
         # Add the manager itself
         result.body.add:
