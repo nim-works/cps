@@ -187,7 +187,7 @@ proc mergeExceptBranches(n, ex: NimNode): NimNode =
   ## In the case where there is only one except branch and it's a catch-all
   ## branch, no rewrite will happen.
   result = n
-  # If there is at least one except branch with a catching constraint
+  # If there is at least one except branch with at least one catching constraint
   if n.findChild(it.kind == nnkExceptBranch and it.len > 1) != nil:
     # Copy the try statement and the try body
     result = copyNimNode(n)
@@ -229,23 +229,47 @@ proc mergeExceptBranches(n, ex: NimNode): NimNode =
       # Branch has a matching constraint
       if branch.len > 1:
         let elifBranch = newNimNode(nnkElifBranch, branch)
-        # Add the constraint
-        elifBranch.add:
-          # ex of
-          nnkInfix.newTree(bindSym"of", ex):
-            # ref T
-            nnkRefTy.newTree:
-              # This should be our type T, assuming normalized ast
-              branch[0]
+
+        # Create the matching condition
+        var cond: NimNode
+        # Collect the exception constraints, which are the nodes before
+        # the very last node
+        for idx in 0 ..< branch.len - 1:
+          # In normalized AST, the matching constraint is the exception
+          # type.
+          #
+          # To check if the exception is of the matched type, we generates:
+          #
+          #     ex of (ref T)
+          #
+          # The reason for using `ref T` is because Nim exception types are
+          # defined as object types.
+          let match =
+            # ex of
+            nnkInfix.newTree(bindSym"of", ex):
+              # ref T
+              nnkRefTy.newTree:
+                branch[idx]
+
+          # If there aren't any condition
+          if cond.isNil:
+            # Set the matching constraint as the condition
+            cond = match
+          else:
+            # Push the matching constraint as an alternative match
+            cond = nnkInfix.newTree(bindSym"or", cond, match)
+
+        # Add the matching condition
+        elifBranch.add cond
         # Add the handler body
-        elifBranch.add branch[1]
+        elifBranch.add branch.last
         # Add the branch to the if statement
         ifStmt.add elifBranch
       else:
         # This is a plain except branch
         let elseBranch = newNimNode(nnkElse, branch)
         # Add the handler body
-        elseBranch.add branch[0]
+        elseBranch.add branch.last
         # Add the branch to the if statement
         ifStmt.add elseBranch
 

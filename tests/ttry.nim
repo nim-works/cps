@@ -80,6 +80,43 @@ suite "try statements":
     check r == 5
 
   block:
+    ## except statement catching multiple exception types across splits
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
+        inc r
+        raise newException(ValueError, "test")
+        fail "statement run after raise"
+      except ValueError, IOError:
+        check getCurrentExceptionMsg() == "test"
+        inc r
+
+      inc r
+
+    proc bar() {.cps: Cont.} =
+      # Same as foo(), but with the constraints switched
+      inc r
+      try:
+        noop()
+        inc r
+        raise newException(ValueError, "test")
+        fail "statement run after raise"
+      except IOError, ValueError:
+        check getCurrentExceptionMsg() == "test"
+        inc r
+
+      inc r
+
+    r = 0
+    trampoline whelp(foo())
+    check r == 4
+
+    r = 0
+    trampoline whelp(bar())
+    check r == 4
+
+  block:
     ## try statements with a finally clause
     r = 0
     proc foo() {.cps: Cont.} =

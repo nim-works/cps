@@ -283,8 +283,8 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       ## We simplify this AST so that our rewrites can capture it.
       case n.kind
       of nnkExceptBranch:
-        # If this except branch has an exception matching clause
-        if n.len > 1:
+        # If this except branch has exactly one exception matching clause
+        if n.len == 2:
           # If the exception matching clause is an infix expression (T as e)
           if n[0].kind == nnkInfix:
             let
