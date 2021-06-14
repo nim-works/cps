@@ -443,8 +443,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
       ## Given a continuation template `templ`, replace all `replace` with
       ## `replacement`, then generate a new set of symbols for all
       ## continuations within.
-      # The key is the symbol need updating and the value is what to update
-      # it to
+      # A simple mapping of node and what to replace it with
       var replacements: Table[NimNode, NimNode]
       proc generator(n: NimNode): NimNode =
         # If it's a continuation
@@ -466,7 +465,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
           result = copyNimTree(replacements[n])
 
       replacements[replace] = replacement
-      templ.filter(generator)
+      result = filter(templ, generator)
 
     # Create a symbol to use as the placeholder for the finally leg next jump.
     let nextJump = nskUnknown.genSym"nextJump"
