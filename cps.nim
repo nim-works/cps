@@ -3,8 +3,9 @@ import cps/[spec, transform, rewrites, hooks]
 export Continuation, ContinuationProc
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 
+# exporting some symbols that we had to bury for bindSym reasons
 from cps/returns import pass
-export pass
+export pass, trampoline
 
 # we only support arc/orc due to its eager expr evaluation qualities
 when not(defined(gcArc) or defined(gcOrc)):
@@ -47,14 +48,6 @@ template dismissed*(c: Continuation): bool =
   (Continuation c).state == Dismissed
 
 {.pop.}
-
-proc trampoline*[T: Continuation](c: T): T =
-  ## This is the basic trampoline: it will run the continuation
-  ## until the continuation is no longer in the `Running` state.
-  var c: Continuation = c
-  while c.running:
-    c = c.fn(c)
-  result = T c
 
 macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
   ## This trampoline allows the user to interact with the continuation

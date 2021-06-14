@@ -30,7 +30,6 @@ type
     c: NimNode                      # the sym we use for the continuation
     fn: NimNode                     # the sym we use for the goto target
     rs: IdentDefs                   # the identdefs for the result
-    ex: NimNode                     # the sym we use for current exception
     mom: NimNode                    # the sym we use for parent continuation
 
   CachePair* = tuple
@@ -189,7 +188,6 @@ proc newEnv*(parent: Env; copy = off): Env =
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
-                 ex: parent.ex,
                  parent: parent)
     when cpsReparent:
       result.seen = parent.seen
@@ -384,20 +382,18 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
       result = newStmtList()
       # ignore the result symbol and create a new assignment
       result.add newAssignment(e.get, n.last.last)
-      # and just issue an empty `return`
-      result.add nnkReturnStmt.newNimNode(n).add newEmptyNode()
-    of nnkEmpty, nnkIdent:
-      # this is `return` or `return continuation`, so that's fine...
-      result = n
+      # and add the termination annotation
+      result.add newCpsTerminate()
+    of nnkEmpty:
+      # this is an empty return
+      result = newCpsTerminate()
     else:
       # okay, it's a return of some rando expr
       result = newStmtList()
       # ignore the result symbol and create a new assignment
       result.add newAssignment(e.get, n.last)
-      # signify the end of the continuation
-      result.add newAssignment(newDotExpr(e.first, e.fn), newNilLit())
-      # and return the continuation
-      result.add nnkReturnStmt.newNimNode(n).add(e.first)
+      # and add the termination annotation
+      result.add newCpsTerminate()
 
 proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   ## swap symbols for those in the continuation
@@ -432,13 +428,15 @@ proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
     result.add:
       newAssignment(resultdot e.fn, goto)
 
-proc getException*(e: var Env): NimNode =
-  ## get the current exception from the env, instantiating it if necessary
-  if e.ex.isNil:
-    e.ex = genField"ex"
-    e = e.set e.ex:
-      newIdentDefVar(e.ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
-  result = newDotExpr(e.castToChild(e.first), e.ex)
+proc genException*(e: var Env): NimNode =
+  ## generates a new symbol of type ref Exception, then put it in the env.
+  ##
+  ## returns the access to the exception symbol from the env.
+  let ex = genField("ex")
+  e = e.set ex:
+    # XXX: Should be IdentDefLet but saem haven't wrote it yet
+    newIdentDefVar(ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+  result = newDotExpr(e.castToChild(e.first), ex)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
@@ -489,11 +487,9 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
     result = desym(result, defs[0])
 
   # now the trampoline
+  let tramp = bindSym"trampoline"
   result.body.add:
-    nnkWhileStmt.newTree: [
-      newCall(ident"running", c),  # XXX: bindSym?  bleh.
-      newAssignment(c, env.castToRoot newDotExpr(c, env.fn).newCall(c))
-    ]
+    newAssignment(c, newCall(tramp, c))
 
   # do an easy static check, and then
   if env.rs.typ != result.returnParam:

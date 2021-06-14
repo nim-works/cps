@@ -214,14 +214,11 @@ suite "suite, suite zevv":
       prim()
 
   test "defer":
-    when true:
-      skip "pending try-finally rewrite"
-    else:
-      expPrims 3: runCps:
+    expPrims 3: runCps:
+      prim()
+      defer:
         prim()
-        defer:
-          prim()
-        prim()
+      prim()
 
   test "nested while":
     expPrims 100: runCps:

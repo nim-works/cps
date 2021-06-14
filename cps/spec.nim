@@ -25,6 +25,7 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
+template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 
 type
   Continuation* = ref object of RootObj
@@ -99,8 +100,9 @@ proc stripPragma*(n: NimNode; s: static[string]): NimNode =
     result = n
 
 proc hash*(n: NimNode): Hash =
+  ## Hash a NimNode via it's representation
   var h: Hash = 0
-  h = h !& hash($n)
+  h = h !& hash(repr n)
   result = !$h
 
 func newCpsPending*(): NimNode =
@@ -136,18 +138,6 @@ proc isCpsContinue*(n: NimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
 
-when defined(cpsRecover):
-  template cpsRecover() {.pragma.}   ## the next step in finally recovery path
-
-  func newCpsRecover(n: NimNode): NimNode =
-    ## Produce a {.cpsRecover.} annotation
-    nnkPragma.newNimNode(n).add:
-      bindSym"cpsRecover"
-
-  func isCpsRecover(n: NimNode): bool =
-    ## Return whether a node is a {.cpsRecover.} annotation
-    n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsRecover")
-
 proc breakLabel*(n: NimNode): NimNode =
   ## Return the break label of a `break` statement or a `cpsBreak` annotation
   if n.isCpsBreak():
@@ -172,11 +162,18 @@ proc getContSym*(n: NimNode): NimNode =
   else:
     nil
 
+proc newCpsTerminate*(): NimNode =
+  ## Create a new node signifying early termination of the procedure
+  nnkPragma.newTree:
+    bindSym"cpsTerminate"
+
+proc isCpsTerminate*(n: NimNode): bool =
+  ## Return whether `n` is a cpsTerminate annotation
+  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsTerminate")
+
 proc isScopeExit*(n: NimNode): bool =
-  ## Return whether the given node signify a scope exit
-  ##
-  ## TODO: Handle early exit (ie. `c.fn = nil; return`)
-  n.isCpsPending or n.isCpsBreak or n.isCpsContinue
+  ## Return whether the given node signify a CPS scope exit
+  n.isCpsPending or n.isCpsBreak or n.isCpsContinue or n.isCpsTerminate
 
 template rewriteIt*(n: typed; body: untyped): NimNode =
   var it {.inject.} = normalizingRewrites:
@@ -218,3 +215,11 @@ proc isVoodooCall*(n: NimNode): bool =
       let callee = n[0]
       if not callee.isNil and callee.kind == nnkSym:
         result = callee.getImpl.hasPragma "cpsVoodooCall"
+
+proc trampoline*[T: Continuation](c: T): T =
+  ## This is the basic trampoline: it will run the continuation
+  ## until the continuation is no longer in the `Running` state.
+  var c: Continuation = c
+  while not c.isNil and not c.fn.isNil:
+    c = c.fn(c)
+  result = T c

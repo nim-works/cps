@@ -272,6 +272,40 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       else:
         discard
 
+    proc rewriteExceptBranch(n: NimNode): NimNode =
+      ## Rewrites except branches in the form of `except T as e` into:
+      ##
+      ## ```
+      ## except T:
+      ##   let e = (ref T)(getCurrentException())
+      ## ```
+      ##
+      ## We simplify this AST so that our rewrites can capture it.
+      case n.kind
+      of nnkExceptBranch:
+        # If this except branch has exactly one exception matching clause
+        if n.len == 2:
+          # If the exception matching clause is an infix expression (T as e)
+          if n[0].kind == nnkInfix:
+            let
+              typ = n[0][1] # T in (T as e)
+              refTyp = nnkRefTy.newTree(typ) # make a (ref T) node
+              ex = n[0][2] # our `e`
+              body = n[1]
+
+            result = copyNimNode(n) # copy the `except`
+            result.add typ # add only `typ`
+            result.add:
+              newStmtList:
+                # let ex: ref T = (ref T)(getCurrentException())
+                nnkLetSection.newTree:
+                  newIdentDefs(ex, refTyp, newCall(refTyp, newCall(bindSym"getCurrentException")))
+
+            # add the rewritten body
+            result.last.add:
+              normalizingRewrites body
+      else: discard
+
     case n.kind
     of nnkIdentDefs:
       rewriteIdentDefs n
@@ -287,6 +321,8 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       rewriteFormalParams n
     of CallNodes, nnkHiddenSubConv, nnkHiddenStdConv:
       rewriteHidden n
+    of nnkExceptBranch:
+      rewriteExceptBranch n
     else:
       nil
 
