@@ -230,3 +230,31 @@ proc trampoline*[T: Continuation](c: T): T =
   while not c.isNil and not c.fn.isNil:
     c = c.fn(c)
   result = T c
+
+proc isCpsCall*(n: NimNode): bool =
+  ## true if this node holds a call to a cps procedure
+  if n.len > 0:
+    if n.kind in nnkCallKinds:
+      let callee = n[0]
+      if not callee.isNil and callee.kind == nnkSym:
+        # what we're looking for here is a jumper; it could
+        # be a magic or it could be another continuation leg
+        # or it could be a completely new continuation
+        result = callee.getImpl.hasPragma("cpsMustJump")
+
+proc isCpsBlock*(n: NimNode): bool =
+  ## `true` if the block `n` contains a cps call anywhere at all;
+  ## this is used to figure out if a block needs tailcall handling...
+  case n.kind
+  of nnkForStmt, nnkBlockStmt, nnkElse, nnkOfBranch, nnkExceptBranch,
+     nnkFinally:
+    return n.last.isCpsBlock
+  of nnkStmtList, nnkIfStmt, nnkCaseStmt, nnkWhileStmt, nnkElifBranch,
+     nnkTryStmt:
+    for n in n.items:
+      if n.isCpsBlock:
+        return true
+  of nnkCallKinds:
+    return n.isCpsCall
+  else:
+    return false
