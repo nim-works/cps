@@ -209,34 +209,35 @@ suite "try statements":
 
   block:
     ## nested try statements within the except branch
-    r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      try:
-        noop()
+    skip"pending https://github.com/nim-lang/Nim/pull/18247":
+      r = 0
+      proc foo() {.cps: Cont.} =
         inc r
-        raise newException(CatchableError, "test")
-        fail "statement run after raise"
-      except:
-        check getCurrentExceptionMsg() == "test"
-        inc r
-
         try:
           noop()
           inc r
-          raise newException(CatchableError, "test 2")
+          raise newException(CatchableError, "test")
           fail "statement run after raise"
         except:
-          check getCurrentExceptionMsg() == "test 2"
+          check getCurrentExceptionMsg() == "test"
           inc r
 
-        check getCurrentExceptionMsg() == "test"
+          try:
+            noop()
+            inc r
+            raise newException(CatchableError, "test 2")
+            fail "statement run after raise"
+          except:
+            check getCurrentExceptionMsg() == "test 2"
+            inc r
+
+          check getCurrentExceptionMsg() == "test"
+          inc r
+
         inc r
 
-      inc r
-
-    trampoline whelp(foo())
-    check r == 7
+      trampoline whelp(foo())
+      check r == 7
 
   block:
     ## except T as e keep the type T in cps
