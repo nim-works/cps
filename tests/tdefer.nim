@@ -9,21 +9,18 @@ suite "defer statements":
 
   block:
     ## a defer statement works across a continuation
-    when true:
-      skip "not working, see #80"
-    else:
-      r = 0
-      proc foo() {.cps: Cont.} =
-        defer:
-          check r == 2, "defer run before end of scope"
-          inc r
-
-        inc r
-        noop()
+    r = 0
+    proc foo() {.cps: Cont.} =
+      defer:
+        check r == 2, "defer run before end of scope"
         inc r
 
-      foo()
-      check r == 3
+      inc r
+      noop()
+      inc r
+
+    foo()
+    check r == 3
 
   block:
     ## a basic defer statement is supported
