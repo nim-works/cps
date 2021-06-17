@@ -58,8 +58,8 @@ your tests; the API won't break you badly.
 The implementation is comprised of two concepts:
 
 1. an *environment* is a bespoke type made to carry all locals in a procedure,
-plus a pointer `fn` to a continuation leg, and a `mom` pointer to the prior
-leg:
+plus a pointer `fn` to a continuation leg, and a `mom` pointer to any parent
+continuation:
 
 ```nim
 type
