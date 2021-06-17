@@ -40,73 +40,164 @@ The macro itself should be considered beta quality.  Corner-cases are being
 nailed down and the API is being adjusted as demonstration applications are
 built and rough edges are identified.
 
-## How Do I Use It?
+## Uh, So Should I Use it?
 
-The `cps` macro takes a single argument: the parent type you wish your
-continuations to inherit from.  This type must be a descendant of the
-`Continuation` type.
+Yes. We need more people building toys and small projects and giving feedback
+on what works well and what doesn't.
+
+The `Continuation` type may be changed into a generic soon. If that doesn't
+scare you, then you are as safe to use CPS in larger projects as the quality of
+your tests; the API won't break you badly.
+
+#### CPS has no runtime library requirements
+
+## Cool, How Do I Use It?
+
+### Architecture
+
+The implementation is comprised of two concepts:
+
+1. an *environment* is a bespoke type made to carry all locals in a procedure,
+plus a pointer `fn` to a continuation leg, and a `mom` pointer to any parent
+continuation:
 
 ```nim
 type
-  MyContinuation = ref object of Continuation
-    something: string
+  Continuation* = ref object of RootObj
+    fn*: proc(c: Continuation): Continuation {.nimcall.}
+    mom*: Continuation
+```
 
-proc foo() {.cps: MyContinuation.} =
-  ## a very fast continuation based on MyContinuation
+2. a *trampoline* is a while loop that looks like this:
+```nim
+result = input_continuation
+while result != nil and result.fn != nil:
+  result = result.fn(result)
+```
+
+We call the instantiated environment with its `fn` pointer a _continuation_,
+and we call anything that invokes a continuation's `fn` pointer a _dispatcher_.
+
+### Application
+
+The `cps` macro is applied to procedure definitions, and it takes a single
+argument: the type you wish your continuations to inherit from. This
+parent type must be a `ref object of Continuation`. You can simply use the
+`Continuation` type itself, if you prefer.
+
+```nim
+type
+  Whoosh = ref object of Continuation
+```
+
+We use a procedure definition to define the continuation. The type we want to
+base the continuation upon is supplied as the only argument to our `cps` pragma
+macro.
+
+```nim
+type
+  Whoosh = ref object of Continuation
+
+proc zoom() {.cps: Whoosh.} =
+  ## a very fast continuation
   discard
 ```
 
-All cps programs use the cps macro to perform the transformation.
+Calling the procedure (with arguments, as required) runs the continuation to
+completion.
 
 ```nim
-import cps
+type
+  Whoosh = ref object of Continuation
 
-# Each usage of the .cps. macro can have its own continuation type,
-# allowing you to implement custom types and logic yourself, or use
-# an existing library implementation.
+proc zoom() {.cps: Whoosh.} =
+  ## a very fast continuation
+  discard
 
-# Here we use a reference dispatcher (see below).
-from eventqueue import sleep, run, spawn, trampoline, Cont
-
-# This procedure is written in a simple synchronous style, but when
-# the .cps. is applied during compilation, it will be rewritten to
-# use the Cont type in a series of continuations.
-
-proc tock(name: string; ms: int) {.cps: Cont.} =
-  ## echo the `name` at `ms` millisecond intervals, ten times
-
-  var count = 10
-
-  # `for` loops are not supported yet
-  while count > 0:
-
-    dec count
-
-    # the dispatcher supplied this primitive which receives the
-    # continuation and returns control to the caller immediately
-    sleep ms
-
-    # subsequent control-flow continues from the dispatcher
-    # when it elects to resume the continuation
-    echo name, " ", count
-
-# NOTE: all the subsequent code is supplied by the chosen dispatcher
-
-# the built-in trampoline repeatedly invokes continuations until they
-# complete or are queued in the dispatcher
-tock("tick", ms = 300)                    # this call does not block!
-
-# you can also send a continuation directly to the dispatcher
-let child = whelp tock("tock", ms = 700)  # this call does not block!
-spawn child                               # this call does not block!
-
-# run the dispatcher to invoke its pending continuations from the queue
-run()  # this is a blocking call that completes when the queue is empty
+zoom()
+echo "that was fast!"
 ```
 
-[The source to the tick-tock test.](https://github.com/disruptek/eventqueue/blob/master/tests/tock.nim)
+You can extend the `Continuation` type to carry state during the execution of
+your continuation.
 
-## Notes on the Example Dispatcher
+```nim
+type
+  Count = ref object of Continuation
+    labels: Table[string, Continuation.fn]
+```
+
+Here we've introduced a table that maps strings to a continuation "leg", or
+slice of control-flow that is executed as a unit.
+
+Now we'll introduce two magical procedures for manipulating the table.
+
+```nim
+proc label(c: Count; name: string): Count {.cpsMagic.} =
+  c.labels[name] = c.fn
+  result = c
+
+proc goto(c: Count; name: string): Count {.cpsMagic.} =
+  c.fn = c.labels[name]
+  result = c
+```
+
+These pragma'd procedures act as continuation legs and we can use them in our
+continuations without supplying the initial `Count` argument.
+
+```nim
+proc count(upto: int) {.cps: Count.} =
+  ## deploy the Count to make counting fun again
+  var number = 0
+  label: "again!"
+  inc number
+  echo number, "!"
+  echo number, " loops, ah ah ah!"
+  if number < upto:
+    goto "again!"
+  echo "whew!"
+
+count(1_000_000_000)  # (this might take awhile to finish)
+```
+
+Sometimes you don't want to do a lot of counting right away, but, y'know, maybe
+a bit later, after your nap.  In that case, you can use `whelp` to instantiate
+your continuation with arguments, without actually running it.
+
+```nim
+var later = whelp count(1_000_000)
+echo "nap time!"
+sleep 30*60*1000
+```
+
+When you're ready, the `trampoline` will run your continuation to completion
+and bounce it back to you.
+
+```nim
+var later = whelp count(1_000_000)
+sleep 30*60*1000
+echo "it's later!  time to count!"
+later = trampoline later
+```
+
+Continuations have a simple `state(c: Continuation): State` enum that is helped
+into `running()`, `finished()`, and `dismissed()` boolean predicates.
+
+```nim
+var later = whelp count(1_000_000)
+sleep 30*60*1000
+echo "it's later!  time to count!"
+later = trampoline later
+assert later.finished, "laws of physics lost their sway"
+```
+
+### TBD
+
+We'll talk about voodoo here and walk through the coroutine demo, since it pulls together prior concepts and adds voodoo and multiple continuations.
+
+## Dispatchers
+
+### Notes on the Example Dispatcher
 
 An example dispatcher was included in the past, but demonstrating dispatch
 conflated the purpose of the `cps` macro and made misconceptions about the role
@@ -114,22 +205,34 @@ of continuation-versus-dispatcher common. The reference dispatcher can now be
 found at https://github.com/disruptek/eventqueue and you can also jump directly
 to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
 
+### Other Available Dispatchers
+
+- https://github.com/alaviss/nim-sys -- next generation OS services
+- https://github.com/disruptek/passenger -- create a graph of continuation runtime
+- https://github.com/disruptek/supervisors -- simple dispatch patterns for composition
+
 ## Documentation
 
 See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
 
-## Tests
+## Examples
 
-The tests provide the best examples of usage and are a great starting point for
-your experiments.
+A small collection of examples provides good demonstration of multiple patterns
+of CPS composition. Each example runs independently, with no other requirements,
+yet demonstrates different exploits of `cps`.
 
-[Here are contrived tests of AST rewrites:](https://github.com/disruptek/cps/blob/master/tests/taste.nim)
-
-![taste tests](docs/taste.svg "taste tests")
-
-[Here are tests that Zevv prepared:](https://github.com/disruptek/cps/blob/master/tests/tzevv.nim)
-
-![zevv tests](docs/tzevv.svg "zevv tests")
+| Example | Description |
+|     --: | :--         |
+|[Channels](https://github.com/disruptek/cps/blob/master/examples/channels.nim)|A channel connects sender and receiver continuations|
+|[Goto](https://github.com/disruptek/cps/blob/master/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
+|[Iterator](https://github.com/disruptek/cps/blob/master/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
+|[Coroutines](https://github.com/disruptek/cps/blob/master/examples/coroutines.nim)|A pair of continuations communicate as coroutines|
+|[Lazy](https://github.com/disruptek/cps/blob/master/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
+|[TryCatch](https://github.com/disruptek/cps/blob/master/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
+|[CpsCps](https://github.com/disruptek/cps/blob/master/examples/cpscps.nim)|Continuations can efficiently call other continuations|
+|[Work](https://github.com/disruptek/cps/blob/master/examples/work.nim)|Implementation of a simple continuation scheduler|
+|[LuaCoroutines](https://github.com/disruptek/cps/blob/master/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
+|[ThreadPool](https://github.com/disruptek/cps/blob/master/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
 
 ## License
 MIT

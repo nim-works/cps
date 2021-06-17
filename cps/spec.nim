@@ -29,8 +29,12 @@ template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 
 type
   Continuation* = ref object of RootObj
-    fn*: proc(c: Continuation): Continuation {.nimcall.}
-    mom*: Continuation
+    fn*: proc(c: Continuation): Continuation {.nimcall.} ##
+    ## The `fn` points to the next continuation leg.
+    mom*: Continuation  ##
+    ## If this Continuation was invoked by another Continuation,
+    ## the `mom` will hold that parent Continuation to form a
+    ## linked-list approximating a stack.
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
