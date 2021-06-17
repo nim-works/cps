@@ -291,49 +291,6 @@ proc mergeExceptBranches(n, ex: NimNode): NimNode =
         newStmtList:
           ifStmt
 
-proc setContinuationException(n, cont, ex: NimNode): NimNode =
-  ## Assume `n` is the exception handler body, set the global exception of
-  ## continuation `cont` in the scope of `n` to `ex` before any code is run.
-  ##
-  ## At the end of the exception handler due to any form of scope exit, `ex`
-  ## will be set to nil.
-  ##
-  ## At the end of any continuation, the exception will be set to `nil` to
-  ## avoid leakage.
-  proc setContException(n: NimNode): NimNode =
-    ## If `n` is a continuation, set the exception to `ex` before
-    ## running any other code.
-    ##
-    ## Also set the exception at any continuation bounce to `nil`, and set
-    ## `ex` to nil before any scope exit.
-    # XXX: need a way to prevent multiple insertions
-    if n.isCpsCont:
-      result = n
-      let nextCont = n.getContSym
-      result.body = result.body.setContinuationException(nextCont):
-        if cont.kind == nnkSym:
-          ex.resym(cont, nextCont)
-        else:
-          ex
-    elif n.isScopeExit:
-      result = newStmtList()
-      # set the global exception to nil
-      result.add newCall(bindSym"setCurrentException", newNilLit())
-      # set our exception symbol to nil too
-      result.add newAssignment(ex, newNilLit())
-      result.add n
-    elif n.kind == nnkReturnStmt:
-      # we are moving to the next continuation
-      result = newStmtList()
-      # set the global exception to nil to prevent leaking it outside
-      result.add newCall(bindSym"setCurrentException", newNilLit())
-      result.add n
-
-  result = newStmtList():
-    newCall(bindSym"setCurrentException", ex)
-
-  result.add n.filter(setContException)
-
 proc wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
   ## replaced with the `n`.
@@ -356,6 +313,63 @@ proc wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
       # wrap all continuations of `n` with the template
       filter(n, wrapCont)
 
+proc withException(n, cont, ex: NimNode): NimNode =
+  ## Given the exception handler continuation `n`, set the global exception of
+  ## continuation `cont` in the scope of `n` to `ex` before any code is run.
+  ##
+  ## At the end of this or its child continuations, the exception will be
+  ## restored to what it was before the continuation was run.
+  proc rewriter(n: NimNode): NimNode =
+    # If n is an unmanaged continuation
+    if n.isCpsCont and not n.hasPragma("cpsHasException"):
+      # Create a copy of this continuation and rename it
+      let inner = n.ProcDef.clone(n.body).NimNode
+      inner.name = nskProc.genSym("Managed_" & inner.name.strVal)
+      # Copy the continuation pragmas
+      inner.pragma = copyNimTree n.pragma
+      # Mark as managed
+      inner.addPragma bindSym"cpsHasException"
+      # Rewrite the continuations contained in `inner` to use `ex` as its
+      # exception
+      inner.body = inner.body.withException(cont, ex)
+
+      # Make an another clone, but with an empty body instead
+      #
+      # This will be the manager and will replace `n`
+      result = n.ProcDef.clone(newStmtList())
+      # Obtain the continuation name to replace it
+      result.name = n.name
+      # Take its pragmas too
+      result.pragma = n.pragma
+      # Mark as managed since it's the manager
+      result.addPragma bindSym"cpsHasException"
+
+      # Desym the continuation symbol
+      result.params[1][0] = desym result.params[1][0]
+
+      # Now let's go down to business
+      # Add the inner continuation inside the manager
+      result.body.add inner
+
+      # Save the "current" exception in `oldException`
+      # TODO: the desym here is because generateContinuation will end up with
+      # the same symbols on every generated continuation, causing a capturing
+      # issue.
+      let oldException = desym nskLet.genSym"oldException"
+      result.body.add:
+        newLetStmt(oldException, newCall(bindSym"getCurrentException"))
+      # Set the continuation exception as current
+      result.body.add:
+        newCall(bindSym"setCurrentException", ex.resym(cont, result.getContSym))
+      # Run the inner continuation
+      result.body.add:
+        newAssignment(ident"result", newCall(inner.name, result.getContSym))
+      # Restore the exception
+      result.body.add:
+        newCall(bindSym"setCurrentException", oldException)
+
+  filter(n, rewriter)
+
 macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
   ## may require a jump to enter any handler.
@@ -371,22 +385,19 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   n = n.mergeExceptBranches(ex)
 
   # grab the merged except branch and collect its body
-  let
-    handlerBody = n.findChild(it.kind == nnkExceptBranch)[0]
-    handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
+  let handlerBody = n.findChild(it.kind == nnkExceptBranch)[0]
+  var handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
 
-  # rewrite handler body to set the global exception on every child continuation
-  handler.body = setContinuationException(handler.body, handler.getContSym):
-    ex.resym(cont, handler.getContSym)
+  # rewrite the handler to use the correct exception
+  handler = handler.withException(cont, ex)
 
   # add our handler before the body
   result.add handler
 
   # write a try-except clause to wrap on all children continuations so that
   # they jump to the handler upon an exception
-  let
-    tryTemplate = copyNimNode n
-    placeholder = genSym()
+  let placeholder = genSym(nskUnknown, "placeholder")
+  let tryTemplate = copyNimNode n
 
   # add the placeholder as the body
   tryTemplate.add placeholder
@@ -428,7 +439,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     let finallyBody = tryFinally.last.last
 
     # Turn the finally into a continuation leg.
-    let final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
+    var final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
 
     # A property of `finally` is that it inserts itself in the middle
     # of any scope exit attempt before performing the scope exit.
@@ -475,8 +486,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
 
     # Set the global exception to `ex` before running any other code
     # in the finally leg
-    final.body = final.body.setContinuationException(final.getContSym):
-      ex.resym(cont, final.getContSym)
+    final = final.withException(cont, ex)
 
     # This is a table of exit points, the key being the exit annotation, and
     # the value being the finally leg specialized to that exit.

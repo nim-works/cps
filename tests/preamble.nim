@@ -13,11 +13,11 @@ proc trampoline[T: Continuation](c: T) =
   jumps = 0
   var c = Continuation c
   while c.running:
-    # pretends that an exception is raised and handled elsewhere
-    setCurrentException(nil)
+    # capture the exception in the environment
+    let exception = getCurrentException()
     c = c.fn(c)
-    # no exception should leak outside of the continuation
-    check getCurrentException().isNil, "exception leaked from the continuation"
+    # the current exception should not change
+    check getCurrentException() == exception
     inc jumps
     if jumps > 1000:
       raise InfiniteLoop.newException: $jumps & " iterations"

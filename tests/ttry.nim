@@ -209,35 +209,82 @@ suite "try statements":
 
   block:
     ## nested try statements within the except branch
-    skip"pending https://github.com/nim-lang/Nim/pull/18247":
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
         inc r
+        raise newException(CatchableError, "test")
+        fail "statement run after raise"
+      except:
+        check getCurrentExceptionMsg() == "test"
+        inc r
+
         try:
           noop()
           inc r
-          raise newException(CatchableError, "test")
+          raise newException(CatchableError, "test 2")
           fail "statement run after raise"
         except:
-          check getCurrentExceptionMsg() == "test"
+          check getCurrentExceptionMsg() == "test 2"
           inc r
 
-          try:
-            noop()
-            inc r
-            raise newException(CatchableError, "test 2")
-            fail "statement run after raise"
-          except:
-            check getCurrentExceptionMsg() == "test 2"
-            inc r
-
-          check getCurrentExceptionMsg() == "test"
-          inc r
-
+        check getCurrentExceptionMsg() == "test"
         inc r
 
+      inc r
+
+    trampoline whelp(foo())
+    check r == 7
+
+  block:
+    ## calling a continuation that handles exception while handling an exception
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      try:
+        noop()
+        inc r
+        raise newException(CatchableError, "test")
+      except CatchableError:
+        noop()
+        inc r
+        check getCurrentExceptionMsg() == "test"
+
+      inc r
+
+    try:
+      raise newException(CatchableError, "outside cps test")
+    except CatchableError:
       trampoline whelp(foo())
-      check r == 7
+
+      check r == 4
+      check getCurrentExceptionMsg() == "outside cps test"
+
+  block:
+    ## calling a continuation with finally while handling an exception
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      try:
+        noop()
+        inc r
+      finally:
+        noop()
+        inc r
+
+      inc r
+
+    try:
+      raise newException(CatchableError, "outside cps test")
+    except CatchableError:
+      trampoline whelp(foo())
+
+      check r == 4
+      check getCurrentExceptionMsg() == "outside cps test"
 
   block:
     ## except T as e keep the type T in cps
