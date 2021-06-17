@@ -58,7 +58,8 @@ your tests; the API won't break you badly.
 The implementation is comprised of two concepts:
 
 1. an *environment* is a bespoke type made to carry all locals in a procedure,
-plus a pointer to a continuation leg:
+plus a pointer `fn` to a continuation leg, and a `mom` pointer to the prior
+leg:
 
 ```nim
 type
@@ -67,14 +68,9 @@ type
     mom*: Continuation
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
-
-type
-  MyEnvironment = ref object of Continuation
-    oneLocal, twoLocal: int
-    redLocal, blueLocal: string
 ```
 
-1. a *trampoline* is a while loop that looks like this:
+2. a *trampoline* is a while loop that looks like this:
 ```nim
 result = input_continuation
 while result != nil and result.fn != nil:
