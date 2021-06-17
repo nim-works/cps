@@ -351,22 +351,24 @@ proc withException(n, cont, ex: NimNode): NimNode =
       # Add the inner continuation inside the manager
       result.body.add inner
 
-      # Save the "current" exception in `oldException`
       # TODO: the desym here is because generateContinuation will end up with
       # the same symbols on every generated continuation, causing a capturing
       # issue.
-      let oldException = desym nskLet.genSym"oldException"
+      let
+        oldException = desym nskLet.genSym"oldException"
+        managerCont = result.getContSym
+        managerEx = ex.resym(cont, managerCont)
+        innerFn = inner.name
       result.body.add:
-        newLetStmt(oldException, newCall(bindSym"getCurrentException"))
-      # Set the continuation exception as current
-      result.body.add:
-        newCall(bindSym"setCurrentException", ex.resym(cont, result.getContSym))
-      # Run the inner continuation
-      result.body.add:
-        newAssignment(ident"result", newCall(inner.name, result.getContSym))
-      # Restore the exception
-      result.body.add:
-        newCall(bindSym"setCurrentException", oldException)
+        genAst(oldException, managerCont, managerEx, innerFn, result = ident"result"):
+          # Save the old exception from the enviroment
+          let oldException = getCurrentException()
+          # Set the exception to what is in the continuation
+          setCurrentException(managerEx)
+          # Run our continuation
+          result = innerFn(managerCont)
+          # Restore the exception
+          setCurrentException(oldException)
 
   filter(n, rewriter)
 
