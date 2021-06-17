@@ -66,8 +66,6 @@ type
   Continuation* = ref object of RootObj
     fn*: proc(c: Continuation): Continuation {.nimcall.}
     mom*: Continuation
-
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 ```
 
 2. a *trampoline* is a while loop that looks like this:
