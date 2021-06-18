@@ -340,6 +340,53 @@ proc withException(n, cont, ex: NimNode): NimNode =
   doAssert cont == ex[0][1]
   result = filter(n, marker)
 
+macro cpsExceptionScope(cont, ex, n: typed): untyped =
+  ## Transform `n` so that if the scope end for any reason, the exception at
+  ## `ex` will be set to nil.
+  ##
+  ## This can be seen as a specialized version of cpsTryFinally.
+  ##
+  ## Implemented as a macro so that we can use it in templated bodies.
+  let ex = normalizingRewrites(ex)
+
+  debugAnnotation cpsExceptionScope, n:
+    proc clearOnScopeExit(n, cont, ex: NimNode): NimNode =
+      ## Wrap all scope exit within `n` to set `ex` to nil.
+      ##
+      ## `cont` is the continuation referred to by `ex`.
+      proc cleaner(n: NimNode): NimNode =
+        # If we found a contination
+        if n.isCpsCont:
+          let nextCont = n.getContSym
+          # Perform rewrite on the continuation body
+          n.body = n.body.clearOnScopeExit(nextCont):
+            ex.resym(cont, nextCont)
+
+          result = n
+        elif n.isScopeExit:
+          # For scope exits, we just prefix it with our nil assignment
+          result = newStmtList()
+          result.add newAssignment(ex, newNilLit())
+          result.add n
+
+      result = filter(n, cleaner)
+
+    it = it.clearOnScopeExit(cont, ex)
+
+    # Wrap all continuations with a template to clear `ex` in case of
+    # an unhandled exception.
+    let placeholder = nskUnknown.genSym("replace me")
+    it = it.wrapContinuationWith(cont, placeholder):
+      genAst(ex, placeholder):
+        try:
+          # Run our body
+          placeholder
+        except:
+          # In case of unhandled exception, set ex to nil
+          ex = nil
+          # Then re-raise
+          raise
+
 macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
   ## may require a jump to enter any handler.
@@ -354,8 +401,14 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   # merge all except branches into one
   n = n.mergeExceptBranches(ex)
 
-  # grab the merged except branch and collect its body
-  let handlerBody = n.findChild(it.kind == nnkExceptBranch)[0]
+  let handlerBody =
+    newStmtList():
+      # put the body under exception scope to clear out the exception on
+      # every scope exit.
+      newCall(bindSym"cpsExceptionScope", cont, ex):
+        # grab the merged except branch and collect its body
+        n.findChild(it.kind == nnkExceptBranch)[0]
+
   var handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
 
   # rewrite the handler to use the correct exception
@@ -404,9 +457,14 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # use a fresh StmtList as our result
     it = newStmtList()
 
-    # The previous pass should give us a try-finally block, thus the last
-    # child is our finally, and the last child of finally is its body.
-    let finallyBody = tryFinally.last.last
+    let finallyBody =
+      newStmtList():
+        # Put the body under exception scope
+        newCall(bindSym"cpsExceptionScope", cont, ex):
+          # The previous pass should give us a try-finally block, thus the
+          # last child is our finally, and the last child of finally is its
+          # body.
+          tryFinally.last.last
 
     # Turn the finally into a continuation leg.
     var final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
