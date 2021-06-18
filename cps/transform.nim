@@ -304,7 +304,10 @@ proc wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
       result = n
       let nextCont = n.getContSym
       result.body = result.body.wrapContinuationWith(nextCont, replace):
-        templ.resym(cont, nextCont)
+        if cont.kind == nnkSym:
+          templ.resym(cont, nextCont)
+        else:
+          templ
 
   result = copyNimTree templ
   # perform body replacement
@@ -319,73 +322,59 @@ proc withException(n, cont, ex: NimNode): NimNode =
   ##
   ## At the end of this or its child continuations, the exception will be
   ## restored to what it was before the continuation was run.
-  proc marker(n: NimNode): NimNode =
-    # If n doesn't have an exception tagged
-    if n.isCpsCont and not n.hasPragma("cpsHasException"):
+  ##
+  ## At the end of the exception handler scope, `ex` will be set to `nil`.
+
+  proc transformer(n: NimNode): NimNode =
+    # For scope exits, we just prefix result with our nil assignment
+    if n.isScopeExit:
+      result = newStmtList()
+      result.add newAssignment(ex, newNilLit())
+      result.add n
+
+    # If n is a continuation
+    elif n.isCpsCont:
       result = n
-      # Tag the continuation with details on where to get
-      # the exception symbol.
-      #
-      # We need to store both the originating continuation and the
-      # access AST since pragmas are considered to be *outside*
-      # of the procedure and thus will bind to symbols outside if they
-      # are not already bound.
-      result.pragma.add:
-        newCall(bindSym"cpsHasException", cont, ex)
-      # Rewrites the inner continuations, too.
-      result = result.withException(cont, ex)
 
-  # XXX: This is just here to verify that the issue we saw in cpsManageException
-  # is not a bug in CPS
-  doAssert cont == ex[0][1]
-  result = filter(n, marker)
-
-macro cpsExceptionScope(cont, ex, n: typed): untyped =
-  ## Transform `n` so that if the scope end for any reason, the exception at
-  ## `ex` will be set to nil.
-  ##
-  ## This can be seen as a specialized version of cpsTryFinally.
-  ##
-  ## Implemented as a macro so that we can use it in templated bodies.
-  let ex = normalizingRewrites(ex)
-
-  debugAnnotation cpsExceptionScope, n:
-    proc clearOnScopeExit(n, cont, ex: NimNode): NimNode =
-      ## Wrap all scope exit within `n` to set `ex` to nil.
-      ##
-      ## `cont` is the continuation referred to by `ex`.
-      proc cleaner(n: NimNode): NimNode =
-        # If we found a contination
-        if n.isCpsCont:
-          let nextCont = n.getContSym
-          # Perform rewrite on the continuation body
-          n.body = n.body.clearOnScopeExit(nextCont):
+      let
+        nextCont = result.getContSym()
+        ex =
+          # In case the continuation is a sym, resym it to this continuation
+          if cont.kind == nnkSym:
             ex.resym(cont, nextCont)
+          else:
+            ex
 
-          result = n
-        elif n.isScopeExit:
-          # For scope exits, we just prefix it with our nil assignment
-          result = newStmtList()
-          result.add newAssignment(ex, newNilLit())
-          result.add n
+      # If the continuation doesn't have an exception tag
+      if not result.hasPragma("cpsHasException"):
+        # Tag the continuation with details on where to get
+        # the exception symbol.
+        #
+        # We need to store both the originating continuation and the
+        # access AST since pragmas are considered to be *outside*
+        # of the procedure and thus will bind to symbols outside if they
+        # are not already bound.
+        result.pragma.add:
+          newCall(bindSym"cpsHasException", cont, ex)
 
-      result = filter(n, cleaner)
+      result.body =
+        # Put the body in a try-except statement to clear `ex` in the case
+        # of an unhandled exception.
+        nnkTryStmt.newTree(
+          # Rewrites the inner continuations, then use it as the try body.
+          result.body.withException(cont, ex),
+          # On an exception not handled by the body.
+          nnkExceptBranch.newTree(
+            newStmtList(
+              # Set `ex` to nil.
+              newAssignment(ex, newNilLit()),
+              # Then re-raise the exception.
+              nnkRaiseStmt.newTree(newEmptyNode())
+            )
+          )
+        )
 
-    it = it.clearOnScopeExit(cont, ex)
-
-    # Wrap all continuations with a template to clear `ex` in case of
-    # an unhandled exception.
-    let placeholder = nskUnknown.genSym("replace me")
-    it = it.wrapContinuationWith(cont, placeholder):
-      genAst(ex, placeholder):
-        try:
-          # Run our body
-          placeholder
-        except:
-          # In case of unhandled exception, set ex to nil
-          ex = nil
-          # Then re-raise
-          raise
+  result = filter(n, transformer)
 
 macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
@@ -401,17 +390,13 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   # merge all except branches into one
   n = n.mergeExceptBranches(ex)
 
-  let handlerBody =
-    newStmtList():
-      # put the body under exception scope to clear out the exception on
-      # every scope exit.
-      newCall(bindSym"cpsExceptionScope", cont, ex):
-        # grab the merged except branch and collect its body
-        n.findChild(it.kind == nnkExceptBranch)[0]
+  # grab the merged except branch and collect its body
+  let handlerBody = n.findChild(it.kind == nnkExceptBranch)[0]
 
   var handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
 
-  # rewrite the handler to use the correct exception
+  # rewrite the handler to use the stashed exception as the current exception,
+  # then clear it on exit
   handler = handler.withException(cont, ex)
 
   # add our handler before the body
@@ -457,14 +442,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # use a fresh StmtList as our result
     it = newStmtList()
 
-    let finallyBody =
-      newStmtList():
-        # Put the body under exception scope
-        newCall(bindSym"cpsExceptionScope", cont, ex):
-          # The previous pass should give us a try-finally block, thus the
-          # last child is our finally, and the last child of finally is its
-          # body.
-          tryFinally.last.last
+    let finallyBody = tryFinally.last.last
 
     # Turn the finally into a continuation leg.
     var final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
@@ -512,10 +490,6 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # Replace all cpsPending within the final leg with this placeholder
     final.body = final.body.replace(isCpsPending, nextJump)
 
-    # Set the global exception to `ex` before running any other code
-    # in the finally leg
-    final = final.withException(cont, ex)
-
     # This is a table of exit points, the key being the exit annotation, and
     # the value being the finally leg specialized to that exit.
     var exitPoints: OrderedTable[NimNode, NimNode]
@@ -551,21 +525,24 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # covered the exits that are not explicitly written in the body, which are
     # unhandled exceptions.
     #
-    # Generate a finally leg that raises the current exception. This is used to
-    # re-raise an unhandled exception.
-    let reraise = final.generateContinuation(nextJump):
+    # Generate a finally leg that serve as an exception handler and will
+    # raise the captured exception on exit
+    var reraise = final.generateContinuation(nextJump):
       newStmtList:
         nnkRaiseStmt.newTree:
           # de-sym our `ex` so that it uses the continuation of where it is
           # replaced into
           ex.resym(cont, desym cont)
 
+    # Make sure the captured exception acts as the current exception in
+    # the finally body, then clear it on exit.
+    reraise = reraise.withException(cont, ex)
+
     # Add this leg to the AST
     it.add reraise
 
     # Now we create a try-except template to catch any unhandled exception that
-    # might occur in the body, then jump to our finally with reraise as
-    # the destination
+    # might occur in the body, then jump to reraise.
     let
       tryTemplate = copyNimNode(tryFinally)
       placeholder = genSym()
@@ -574,18 +551,14 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     tryTemplate.add placeholder
 
     # Add an except branch to jump to our finally
-    let reraiseJump = newStmtList()
-    reraiseJump.add:
-      # Stash the exception to `ex`
-      newAssignment(ex, newCall(bindSym"getCurrentException"))
-
-    reraiseJump.add:
-      # Jump to finally with continuation target `reraise`
-      tailCall(cont, reraise.name)
-
     tryTemplate.add:
       nnkExceptBranch.newTree:
-        reraiseJump
+        newStmtList(
+          # Stash the exception
+          newAssignment(ex, newCall(bindSym"getCurrentException")),
+          # Then jump to reraise
+          cont.tailCall(reraise.name)
+        )
 
     # Wrap the body with this template and we are done
     it.add body.wrapContinuationWith(cont, placeholder, tryTemplate)
