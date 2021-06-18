@@ -291,7 +291,7 @@ proc mergeExceptBranches(n, ex: NimNode): NimNode =
         newStmtList:
           ifStmt
 
-proc wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
+func wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
   ## replaced with the `n`.
   ##
@@ -301,7 +301,7 @@ proc wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
   proc wrapCont(n: NimNode): NimNode =
     ## Wrap the body of continuation `n` with the template
     if n.isCpsCont:
-      result = n
+      result = copyNimTree n
       let nextCont = n.getContSym
       result.body = result.body.wrapContinuationWith(nextCont, replace):
         if cont.kind == nnkSym:
@@ -316,7 +316,7 @@ proc wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
       # wrap all continuations of `n` with the template
       filter(n, wrapCont)
 
-proc withException(n, cont, ex: NimNode): NimNode =
+func withException(n, cont, ex: NimNode): NimNode =
   ## Given the exception handler continuation `n`, set the global exception of
   ## continuation `cont` in the scope of `n` to `ex` before any code is run.
   ##
@@ -334,7 +334,7 @@ proc withException(n, cont, ex: NimNode): NimNode =
 
     # If n is a continuation
     elif n.isCpsCont:
-      result = n
+      result = copyNimTree n
 
       let
         nextCont = result.getContSym()
@@ -447,7 +447,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     let finallyBody = tryFinally.last.last
 
     # Turn the finally into a continuation leg.
-    var final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
+    let final = makeContProc(nskProc.genSym("Finally"), cont, finallyBody)
 
     # A property of `finally` is that it inserts itself in the middle
     # of any scope exit attempt before performing the scope exit.
