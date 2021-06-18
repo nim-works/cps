@@ -404,8 +404,9 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
 
   # write a try-except clause to wrap on all children continuations so that
   # they jump to the handler upon an exception
-  let placeholder = genSym(nskUnknown, "placeholder")
-  let tryTemplate = copyNimNode n
+  let
+    placeholder = genSym(nskUnknown, "placeholder")
+    tryTemplate = copyNimNode n
 
   # add the placeholder as the body
   tryTemplate.add placeholder
