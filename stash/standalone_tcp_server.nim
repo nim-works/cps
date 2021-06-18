@@ -22,8 +22,7 @@ import deques
 
 type
 
-  Cont = ref object of RootObj
-    fn*: proc(c: Cont): Cont {.nimcall.}
+  Cont = ref object of Continuation
 
   Evq = object
     work: Deque[Cont]
@@ -117,13 +116,13 @@ proc doServer(port: int) {.cps:Cont} =
     io(fds, 1.int16)
     let fdc: SocketHandle = sockAccept(fds)
     # Create new client and add to work queue
-    evq.work.addLast doClient(fdc)
+    evq.work.addLast: whelp doClient(fdc)
   echo "remove this line and the while breaks"
 
 
 # Create new http server and add to work queue
 
-evq.work.addLast doServer(8000)
+evq.work.addLast: whelp doServer(8000)
 
 
 # Main event queue worker
@@ -136,7 +135,8 @@ while true:
     let c = evq.work.popFirst
     let c2 = c.fn(c)
     if c2 != nil:
-      evq.work.addLast c2
+      evq.work.addLast:
+        (typeof c) c2
 
   # Wait for all registered file descriptors
 
