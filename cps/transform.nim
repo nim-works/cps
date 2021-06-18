@@ -442,6 +442,8 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # use a fresh StmtList as our result
     it = newStmtList()
 
+    # The previous pass should give us a try-finally block, thus the last
+    # child is our finally, and the last child of finally is its body.
     let finallyBody = tryFinally.last.last
 
     # Turn the finally into a continuation leg.
