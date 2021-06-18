@@ -1,4 +1,4 @@
-import std/[macros, sequtils, sets, tables, hashes]
+import std/[macros, sequtils, sets, tables, hashes, genasts]
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
             normalizedast]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
@@ -319,58 +319,26 @@ proc withException(n, cont, ex: NimNode): NimNode =
   ##
   ## At the end of this or its child continuations, the exception will be
   ## restored to what it was before the continuation was run.
-  proc rewriter(n: NimNode): NimNode =
-    # If n is an unmanaged continuation
+  proc marker(n: NimNode): NimNode =
+    # If n doesn't have an exception tagged
     if n.isCpsCont and not n.hasPragma("cpsHasException"):
-      # Create a copy of this continuation and rename it
-      let inner = n.ProcDef.clone(n.body).NimNode
-      inner.name = nskProc.genSym("Managed_" & inner.name.strVal)
-      # Copy the continuation pragmas
-      inner.pragma = copyNimTree n.pragma
-      # Mark as managed
-      inner.addPragma bindSym"cpsHasException"
-      # Rewrite the continuations contained in `inner` to use `ex` as its
-      # exception
-      inner.body = inner.body.withException(cont, ex)
-
-      # Make an another clone, but with an empty body instead
+      result = n
+      # Tag the continuation with details on where to get
+      # the exception symbol.
       #
-      # This will be the manager and will replace `n`
-      result = n.ProcDef.clone(newStmtList())
-      # Obtain the continuation name to replace it
-      result.name = n.name
-      # Take its pragmas too
-      result.pragma = n.pragma
-      # Mark as managed since it's the manager
-      result.addPragma bindSym"cpsHasException"
+      # We need to store both the originating continuation and the
+      # access AST since pragmas are considered to be *outside*
+      # of the procedure and thus will bind to symbols outside if they
+      # are not already bound.
+      result.pragma.add:
+        newCall(bindSym"cpsHasException", cont, ex)
+      # Rewrites the inner continuations too
+      result = result.withException(cont, ex)
 
-      # Desym the continuation symbol
-      result.params[1][0] = desym result.params[1][0]
-
-      # Now let's go down to business
-      # Add the inner continuation inside the manager
-      result.body.add inner
-
-      # TODO: the desym here is because generateContinuation will end up with
-      # the same symbols on every generated continuation, causing a capturing
-      # issue.
-      let
-        oldException = desym nskLet.genSym"oldException"
-        managerCont = result.getContSym
-        managerEx = ex.resym(cont, managerCont)
-        innerFn = inner.name
-      result.body.add:
-        genAst(oldException, managerCont, managerEx, innerFn, result = ident"result"):
-          # Save the old exception from the enviroment
-          let oldException = getCurrentException()
-          # Set the exception to what is in the continuation
-          setCurrentException(managerEx)
-          # Run our continuation
-          result = innerFn(managerCont)
-          # Restore the exception
-          setCurrentException(oldException)
-
-  filter(n, rewriter)
+  # XXX: This is just here to verify that the issue we saw in cpsManageException
+  # is not a bug in CPS
+  doAssert cont == ex[0][1]
+  filter(n, marker)
 
 macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
@@ -769,6 +737,91 @@ macro cpsFloater(n: typed): untyped =
   result = floater:
     copyNimTree n
 
+macro cpsManageException(n: typed): untyped =
+  ## rewrites all continuations in `n` containing an exception so that exception
+  ## become the "current" exception of that continuation while preserving the
+  ## environment outside cps
+  proc manage(n: NimNode): NimNode =
+    ## Build a manager for every continuation with an exception in `n`.
+    ##
+    ## This manager will:
+    ## - Preserve the exception outside of CPS on enter-exit.
+    ## - Set the exception to what the continuation want for its duration
+    ## - Should the continuation raise, connect the exception to the stack
+    ##   outside of CPS.
+    if n.isCpsCont:
+      let hasException = n.pragma.findChild(it.kind == nnkCall and
+                                            it[0] == bindSym"cpsHasException")
+      # If `n` is a continuation with exception
+      if hasException != nil:
+        # Create a copy of this continuation and rename it
+        let inner = n.ProcDef.clone(n.body)
+        inner.name = nskProc.genSym("Managed_" & inner.name.strVal)
+        # Copy the continuation pragmas, but remove the "has exception" tag
+        inner.pragma = n.pragma.stripPragma("cpsHasException")
+        # Rewrite the continuations contained in `inner` as well
+        inner.body = inner.body.filter(manage)
+
+        # Make an another clone, but with an empty body instead
+        #
+        # This will be the manager and will replace `n`
+        result = n.ProcDef.clone(newStmtList())
+        # Obtain the continuation name to replace it
+        result.name = n.name
+        # Take its pragmas too, but without cpsHasException, of course
+        result.pragma = n.pragma.stripPragma("cpsHasException")
+
+        # Desym the continuation symbol to detach it from the inner
+        # continuation
+        result.params[1][0] = desym result.params[1][0]
+
+        # Now let's go down to business
+        # Add the inner continuation inside the manager
+        result.body.add inner.NimNode
+
+        let
+          cont = result.getContSym
+          innerFn = inner.name
+
+          exCont = hasException[1]
+          ex = hasException[2].resym(exCont, cont)
+
+        {.warning: "Compiler bug walkaround".}
+        # XXX: Depends too much on `ex` implementation
+        # The resym earlier should've swapped the symbol for us, but somehow
+        # exCont wasn't equal to the continuation symbol in ex, even though
+        # they were equal when it was set by withException.
+        #
+        # We manually swap the symbol here for because of that.
+        if ex[0][1] != cont:
+          ex[0][1] = cont
+
+        # Add the manager itself
+        result.body.add:
+          genAst(cont, ex, innerFn, result = ident"result"):
+            # Save the old exception from the enviroment
+            let oldException = getCurrentException()
+            # Set the exception to what is in the continuation
+            setCurrentException(ex)
+            try:
+              # Run our continuation
+              result = innerFn(cont)
+              # Restore the old exception
+              setCurrentException(oldException)
+            except:
+              # If the continuation raise an unhandled exception,
+              # capture it.
+              let e = getCurrentException()
+              # Restore the old exception
+              setCurrentException(oldException)
+              # Now reraise the continuation's exception, which will
+              # make `oldException` as `e`'s parent, preserving the
+              # exception stack outside of CPS
+              raise e
+
+  debugAnnotation cpsManageException, n:
+    it = it.filter(manage)
+
 proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
@@ -857,6 +910,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   # run other stages
   n.addPragma(bindSym"cpsFloater")
   n.addPragma(bindSym"cpsResolver", env.identity)
+  n.addPragma(bindSym"cpsManageException")
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
