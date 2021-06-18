@@ -332,13 +332,13 @@ proc withException(n, cont, ex: NimNode): NimNode =
       # are not already bound.
       result.pragma.add:
         newCall(bindSym"cpsHasException", cont, ex)
-      # Rewrites the inner continuations too
+      # Rewrites the inner continuations, too.
       result = result.withException(cont, ex)
 
   # XXX: This is just here to verify that the issue we saw in cpsManageException
   # is not a bug in CPS
   doAssert cont == ex[0][1]
-  filter(n, marker)
+  result = filter(n, marker)
 
 macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
@@ -753,9 +753,9 @@ macro cpsManageException(n: typed): untyped =
       let hasException = n.pragma.findChild(it.kind == nnkCall and
                                             it[0] == bindSym"cpsHasException")
       # If `n` is a continuation with exception
-      if hasException != nil:
+      if not hasException.isNil:
         # Create a copy of this continuation and rename it
-        let inner = n.ProcDef.clone(n.body)
+        let inner = clone(n.ProcDef, n.body)
         inner.name = nskProc.genSym("Managed_" & inner.name.strVal)
         # Copy the continuation pragmas, but remove the "has exception" tag
         inner.pragma = n.pragma.stripPragma("cpsHasException")
@@ -765,7 +765,7 @@ macro cpsManageException(n: typed): untyped =
         # Make an another clone, but with an empty body instead
         #
         # This will be the manager and will replace `n`
-        result = n.ProcDef.clone(newStmtList())
+        result = clone(n.ProcDef, newStmtList())
         # Obtain the continuation name to replace it
         result.name = n.name
         # Take its pragmas too, but without cpsHasException, of course
@@ -773,7 +773,8 @@ macro cpsManageException(n: typed): untyped =
 
         # Desym the continuation symbol to detach it from the inner
         # continuation
-        result.params[1][0] = desym result.params[1][0]
+        result.params = n.params.replace(desym n.getContSym):
+          it == n.getContSym
 
         # Now let's go down to business
         # Add the inner continuation inside the manager
@@ -783,18 +784,20 @@ macro cpsManageException(n: typed): untyped =
           cont = result.getContSym
           innerFn = inner.name
 
+          # Extract the continuation symbol from the annotation
           exCont = hasException[1]
+          # Take the exception access from the annotation and resym it to
+          # use our symbol
           ex = hasException[2].resym(exCont, cont)
 
-        {.warning: "Compiler bug walkaround".}
+        {.warning: "Compiler bug workaround".}
         # XXX: Depends too much on `ex` implementation
         # The resym earlier should've swapped the symbol for us, but somehow
         # exCont wasn't equal to the continuation symbol in ex, even though
         # they were equal when it was set by withException.
         #
         # We manually swap the symbol here for because of that.
-        if ex[0][1] != cont:
-          ex[0][1] = cont
+        ex[0][1] = cont
 
         # Add the manager itself
         result.body.add:
