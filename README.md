@@ -5,7 +5,7 @@
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.5.1%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/disruptek/cps?style=flat)](#license)
 [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
-[![IRC](https://img.shields.io/badge/IRC-%23cps-brightgreen?style=flat&logo=irc)](ircs://irc.libera.chat:6697/#cps)
+[![IRC](https://img.shields.io/badge/chat-%23cps%20on%20libera.chat-brightgreen?style=flat)](https://web.libera.chat/#cps)
 
 This project provides a `cps` pragma which you can add to a procedure to
 automatically rewrite it to use continuations for control-flow. This provides
