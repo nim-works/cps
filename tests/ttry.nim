@@ -365,3 +365,22 @@ suite "try statements":
 
     foo()
     check r == 3
+
+  block:
+    ## try statement with one cps jump as the body
+    r = 0
+
+    proc noop(c: Cont): Cont {.cpsMagic.} =
+      inc r
+      result = c
+
+    proc foo() {.cps: Cont.} =
+      try:
+        noop()
+      except:
+        fail"this except branch should not run"
+
+      inc r
+
+    trampoline whelp(foo())
+    check r == 2
