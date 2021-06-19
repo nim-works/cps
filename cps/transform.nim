@@ -599,13 +599,34 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
 
     # if it's a cps call,
     if nc.isCpsCall:
-      let jumpCall = env.newAnnotation(nc, "cpsJump")
-      jumpCall.add env.annotate(nc)
-      if i < n.len - 1:
-        jumpCall.add:
-          env.annotate newStmtList(n[i + 1 .. ^1])
-      result.add jumpCall
-      return
+      # if its direct parent is not a try statement
+      if n.kind != nnkTryStmt:
+        let jumpCall = env.newAnnotation(nc, "cpsJump")
+        jumpCall.add env.annotate(nc)
+        if i < n.len - 1:
+          jumpCall.add:
+            env.annotate newStmtList(n[i + 1 .. ^1])
+        result.add jumpCall
+        return
+      else:
+        # otherwise we wrap the child in a statement list and
+        # run annotate on it.
+        #
+        # we have to do this due to the structure of a try statement:
+        #
+        # TryStmt
+        #   <call being tried>
+        #   ExceptBranch
+        #   Finally
+        #
+        # since the call and the except/finally branches are different
+        # execution branches, we wrap it in a statement list so we know
+        # that it is a separated execution branch.
+        result.add:
+          env.annotate newStmtList(nc)
+
+        # we are done with this child
+        continue
 
     # we deal with the body of a try when processing the try itself,
     # so check to see if our parent is a try statement, and if not...
