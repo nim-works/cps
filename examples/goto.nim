@@ -8,28 +8,31 @@ import cps, tables
 
 type
   C = ref object of Continuation
-    labels: Table[string, Continuation.fn]
+    setjmps: Table[string, Continuation.fn]
+    val: int
 
-# Define the CPS magic 'label' and 'goto' procs
+# Define the CPS magic 'setjmp' and 'longjmp' procs
 
-proc label(c: C, id: string): C {.cpsMagic.} =
-  c.labels[id] = c.fn
-  return c
+proc setjmp(c: C, id: string): int {.cpsVoodoo.} =
+  c.setjmps[id] = c.fn
+  c.val
 
-proc goto(c: C, id: string): C {.cpsMagic.} =
-  c.fn = c.labels[id]
-  result = c
+proc longjmp(c: C, id: string, val: int): C {.cpsMagic.} =
+  c.val = val
+  c.fn = c.setjmps[id]
+  c
 
 
 # A  little function with gotos
 
 proc foo() {.cps:C.} =
-  echo "one"
-  label"here"
-  echo "two"
-  echo "three"
-  goto"here"
-  echo "four"
+  echo "call setjmp"
+  let r = setjmp "label"
+  echo "setjmp returned ", r
+  echo "something else"
+  echo "calling longjmp"
+  longjmp "label", 5
+  echo "the end"
 
 
 # Trampoline
@@ -37,6 +40,6 @@ proc foo() {.cps:C.} =
 var c = whelp foo()
 var x = 0
 trampolineIt c:
-  if x > 100:
+  if x > 3:
     break
   inc x
