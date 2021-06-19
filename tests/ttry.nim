@@ -209,35 +209,131 @@ suite "try statements":
 
   block:
     ## nested try statements within the except branch
-    skip"pending https://github.com/nim-lang/Nim/pull/18247":
-      r = 0
-      proc foo() {.cps: Cont.} =
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+      try:
+        noop()
         inc r
+        raise newException(CatchableError, "test")
+        fail "statement run after raise"
+      except:
+        check getCurrentExceptionMsg() == "test"
+        inc r
+
         try:
           noop()
           inc r
-          raise newException(CatchableError, "test")
+          raise newException(CatchableError, "test 2")
           fail "statement run after raise"
         except:
-          check getCurrentExceptionMsg() == "test"
+          check getCurrentExceptionMsg() == "test 2"
           inc r
 
-          try:
-            noop()
-            inc r
-            raise newException(CatchableError, "test 2")
-            fail "statement run after raise"
-          except:
-            check getCurrentExceptionMsg() == "test 2"
-            inc r
-
-          check getCurrentExceptionMsg() == "test"
-          inc r
-
+        check getCurrentExceptionMsg() == "test"
         inc r
 
+      inc r
+
+    trampoline whelp(foo())
+    check r == 7
+
+  block:
+    ## calling a continuation that handles exception while handling an exception
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      try:
+        noop()
+        inc r
+        raise newException(CatchableError, "test")
+      except CatchableError:
+        noop()
+        inc r
+        check getCurrentExceptionMsg() == "test"
+
+      inc r
+
+    try:
+      raise newException(CatchableError, "outside cps test")
+    except CatchableError:
       trampoline whelp(foo())
-      check r == 7
+
+      check r == 4
+      check getCurrentExceptionMsg() == "outside cps test"
+
+  block:
+    ## running a continuation that handles exception then raises while handling
+    ## an exception in the exception handler
+    r = 0
+
+    # This is a very delicate test designed to demonstrate an issue with
+    # Nim's exception stack mechanism and CPS
+
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      try:
+        noop()
+        inc r
+        raise newException(CatchableError, "test")
+      except CatchableError:
+        noop()
+        inc r
+        check getCurrentExceptionMsg() == "test"
+        raise
+
+      fail"this statement cannot be run"
+
+    var c = whelp(foo())
+    # Run two iterations, which should place us right after the raise
+    #
+    # At this point, the parent of our `raise` is `nil`, because there wasn't
+    # any exception being handled at the point of raise.
+    for _ in 1 .. 2:
+      c = Cont c.fn(c)
+
+    try:
+      raise newException(CatchableError, "outside cps test")
+    except CatchableError:
+      # Now we handle an exception, which the current exception is now
+      # "outside cps test"
+      try:
+        # Run the tramp to finish `c`, which will end in a re-raise.
+        trampoline c
+        fail"continuing `c` should raise"
+      except CatchableError:
+        check r == 3
+        # Confirm that this is the exception from cps
+        check getCurrentExceptionMsg() == "test"
+
+      # Confirm that the stack has been fixed and the parent of the inner
+      # exception is the outer.
+      check getCurrentExceptionMsg() == "outside cps test"
+
+  block:
+    ## calling a continuation with finally while handling an exception
+    r = 0
+    proc foo() {.cps: Cont.} =
+      inc r
+
+      try:
+        noop()
+        inc r
+      finally:
+        noop()
+        inc r
+
+      inc r
+
+    try:
+      raise newException(CatchableError, "outside cps test")
+    except CatchableError:
+      trampoline whelp(foo())
+
+      check r == 4
+      check getCurrentExceptionMsg() == "outside cps test"
 
   block:
     ## except T as e keep the type T in cps

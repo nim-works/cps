@@ -26,6 +26,9 @@ template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
 template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
+template cpsHasException*(cont, ex: typed) {.pragma.}  ##
+## the continuation has an exception stored in `ex`, with `cont` being the
+## continuation symbol used.
 
 type
   Continuation* = ref object of RootObj
