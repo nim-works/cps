@@ -112,30 +112,42 @@ proc run(evq: Evq) =
 ############################################################################
 
 proc listen(evq: Evq, port: int): Conn =
-  var sa: Sockaddr_in
-  sa.sin_family = AF_INET.uint16
-  sa.sin_port = htons(port.uint16)
-  sa.sin_addr.s_addr = INADDR_ANY
+  var sa: Sockaddr_in6
+  sa.sin6_family = AF_INET6.uint16
+  sa.sin6_port = htons(port.uint16)
+  sa.sin6_addr = in6addr_any
   var yes: int = 1
-  let fd = socket(AF_INET, SOCK_STREAM, 0);
+  let fd = socket(AF_INET6, SOCK_STREAM, 0);
   checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
   checkSyscall bindSocket(fd, cast[ptr SockAddr](sa.addr), sizeof(sa).SockLen)
   checkSyscall listen(fd, SOMAXCONN)
   return Conn(evq: evq, fd: fd)
 
 proc dial(evq: Evq, ip: string, port: int): Conn =
-  var sa: Sockaddr_in
-  sa.sin_family = AF_INET.uint16
-  sa.sin_port = htons(port.uint16)
-  sa.sin_addr.s_addr = inet_addr(ip)
-  let fd = socket(AF_INET, SOCK_STREAM, 0);
-  checkSyscall connect(fd, cast[ptr SockAddr](sa.addr), sizeof(sa).SockLen)
-  Conn(evq: evq, fd: fd)
+  var res: ptr AddrInfo
+  var hints: AddrInfo
+  hints.ai_family = AF_UNSPEC
+  hints.ai_socktype = SOCK_STREAM
+  let r = getaddrinfo(ip, $port, hints.addr, res)
+  if r == 0:
+    let fd = socket(res.ai_family, res.ai_socktype, 0)
+    checkSyscall connect(fd, res.ai_addr, res.ai_addrlen)
+    freeaddrinfo(res)
+    Conn(evq: evq, fd: fd)
+  else:
+    raise newException(OSError, "dial: " & $gai_strerror(r))
 
 proc send(conn: Conn, s: string): int {.cps:C.} =
   iowait(conn, POLLOUT)
   let r = posix.send(conn.fd, s[0].unsafeAddr, s.len, 0)
   return r
+
+proc recv(conn: Conn, n: int) {.cps:C.} =
+  var s = newString(n)
+  iowait(conn, POLLIN)
+  let r = posix.recv(conn.fd, s[0].addr, n, 0)
+  s.setLen if r > 0: r else: 0
+  conn.s = s
 
 proc sendFull(conn: Conn, s: string) {.cps:C.} =
   var done = 0
@@ -147,13 +159,6 @@ proc sendFull(conn: Conn, s: string) {.cps:C.} =
       break
     done += r
     todo -= r
-
-proc recv(conn: Conn, n: int) {.cps:C.} =
-  var s = newString(n)
-  iowait(conn, POLLIN)
-  let r = posix.recv(conn.fd, s[0].addr, n, 0)
-  s.setLen if r > 0: r else: 0
-  conn.s = s
 
 proc recvFull(conn: Conn, n: int) {.cps:C.} =
   var todo = n
@@ -203,6 +208,7 @@ proc doServer(evq: Evq, port: int) {.cps:C.} =
 
 
 proc ticker(evq: Evq) {.cps:C.} =
+  let conn = dial(evq, "localhost", 8080)
   while true:
     echo "tick"
     sleep(1.0)
@@ -210,7 +216,7 @@ proc ticker(evq: Evq) {.cps:C.} =
 
 var evq = newEvq()
 
-evq.push whelp ticker(evq)
 evq.push whelp doServer(evq, 8080)
+evq.push whelp ticker(evq)
 
 evq.run()
