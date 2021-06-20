@@ -90,8 +90,8 @@ proc init(e: var Env) =
   if e.fn.isNil:
     e.fn = ident"fn"
   if e.mom.isNil:
-    e.mom = ident"mom" # FIXME: use a getter/setter?
-  e.id = genSym(nskType, "env")
+    e.mom = ident"mom"
+  e.id = genSym(nskType, "cps environment")
   if e.rs.hasType:
     e = e.set(e.rs.name, newIdentDefVar(e.rs))
 
