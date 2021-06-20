@@ -420,15 +420,22 @@ proc genException*(e: var Env): NimNode =
 
 proc createResult*(env: Env): ProcDef =
   ## define a procedure for retrieving the result of a continuation
+  let field =
+    if env.rs.typ.isEmpty:
+      newEmptyNode()           # the return value is Empty
+    else:
+      env.get                  # the return value is env.result
+
   ProcDef:
-    genAst(c = env.first, cont = env.identity,
-           tipe = env.rs.typ, field = env.get):
+    genAst(field, c = env.first, cont = env.identity, tipe = env.rs.typ):
       proc `...`(c: cont): tipe =
-        if c.dismissed:
-          raise
-        elif c.finished:
+        case c.state
+        of Dismissed:
+          raise Defect.newException:
+            "dismissed continuations have no result"
+        of Finished:
           field
-        else:
+        of Running:
           var c = trampoline c
           ... c
 
