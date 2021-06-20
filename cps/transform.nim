@@ -973,6 +973,10 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
+  # storing the source environment on helpers
+  for p in [whelp, booty]:
+    p.addPragma(bindSym"cpsEnvironment", env.identity)
+
   # generated proc bodies, remaining proc, whelp, bootstrap
   result = newStmtList(types, n, dots, whelp, booty)
   result = workaroundRewrites result
