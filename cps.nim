@@ -129,23 +129,6 @@ macro cpsVoodoo*(n: untyped): untyped =
   shim.addPragma ident"cpsVoodooCall"
   result.add shim
 
-proc bootstrapSymbol(n: NimNode): NimNode =
-  case n.kind
-  of nnkProcDef:
-    for n in n.pragma.items:
-      if n.kind == nnkExprColonExpr:
-        if $n[0] == "cpsBootstrap":
-          if result.isNil:
-            result = n[1]
-          else:
-            result = n.errorAst "redundant bootstrap pragmas?"
-    if result.isNil:
-      result = n.errorAst "welping malfunction"
-  of nnkCallKinds:
-    result = bootstrapSymbol(getImpl n[0])
-  else:
-    result = newCall(ident"typeOf", n)
-
 proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
   let sym = bootstrapSymbol n
   result = sym.newCall args

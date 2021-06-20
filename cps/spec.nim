@@ -25,6 +25,8 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
+template cpsEnvironment*(tipe: typed) {.pragma.}  ##
+## the environment type that composed the target
 template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## the continuation has an exception stored in `ex`, with `cont` being the
@@ -242,6 +244,7 @@ proc trampoline*[T: Continuation](c: T): T =
     c = c.fn(c)
   result = T c
 
+<<<<<<< HEAD
 proc isCpsCall*(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   if n.len > 0:
@@ -276,3 +279,31 @@ proc isCpsBlock*(n: NimNode): bool =
         return true
   else:
     return false
+
+proc pragmaArgument*(n: NimNode; s: string): NimNode =
+  ## from foo() or proc foo() {.some: Pragma.}, retrieve Pragma
+  case n.kind
+  of nnkProcDef:
+    for n in n.pragma.items:
+      case n.kind
+      of nnkExprColonExpr:
+        if $n[0] == s:
+          if result.isNil:
+            result = n[1]
+          else:
+            result = n.errorAst "redundant " & s & " pragmas?"
+      else:
+        discard
+    if result.isNil:
+      result = n.errorAst "failed to find expected " & s & " form"
+  of nnkCallKinds:
+    result = pragmaArgument(getImpl n[0], s)
+  else:
+    result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
+
+proc bootstrapSymbol*(n: NimNode): NimNode =
+  case n.kind
+  of {nnkProcDef} + nnkCallKinds:
+    pragmaArgument(n, "cpsBootstrap")
+  else:
+    newCall(ident"typeOf", n)
