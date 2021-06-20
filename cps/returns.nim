@@ -77,7 +77,7 @@ proc terminator*(c: NimNode; T: NimNode): NimNode =
     # critically, terminate control-flow here!
     return
 
-proc tailCall*(cont: NimNode; to: Name; jump: NimNode = nil): NimNode =
+proc tailCall*(cont: Name; to: Name; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   result = newStmtList:
@@ -86,17 +86,17 @@ proc tailCall*(cont: NimNode; to: Name; jump: NimNode = nil): NimNode =
   # figure out what the return value will be...
   result = makeReturn result:
     if jump.isNil:
-      cont                         # just return our continuation
+      cont.NimNode                 # just return our continuation
     else:
       jump                         # return the jump target as requested
 
-proc jumperCall*(cont: NimNode; to: Name; via: NimNode): NimNode =
+proc jumperCall*(cont: Name; to: Name; via: NimNode): NimNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   let jump = copyNimTree via
   # we may need to insert an argument if the call is magical
   if getImpl(jump[0]).hasPragma "cpsMagicCall":
-    jump.insert(1, cont)
+    jump.insert(1, cont.NimNode)
   # we need to desym the jumper; it is currently sem-ed to the
   # variant that doesn't take a continuation.
   jump[0] = desym jump[0]

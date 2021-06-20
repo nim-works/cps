@@ -10,12 +10,12 @@ when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
 
 proc annotate(parent: var Env; n: NimNode): NimNode
 
-proc makeContProc(name: Name, cont, source: NimNode): ProcDef =
+proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   ## creates a continuation proc with `name` using continuation
   ## `cont` with the given body.
   let
-    contParam = desym cont
-    contType = getTypeInst cont
+    contParam = desym cont.NimNode
+    contType = cont.typeInst
 
   result = newProcDef(name, [contType, newIdentDefs(contParam, contType)])
   result.copyLineInfo source        # grab lineinfo from the source body
@@ -39,7 +39,7 @@ proc makeContProc(name: Name, cont, source: NimNode): ProcDef =
     normalizingRewrites newStmtList(source)
 
   # replace `cont` in the body with the parameter of the new proc
-  result.body = resym(result.body, cont, contParam)
+  result.body = resym(result.body, cont.NimNode, contParam)
   # if this body doesn't have any continuing control-flow,
   if result.body.firstReturn.isNil:
     # annotate it so that outer macros can fill in as needed.
@@ -59,6 +59,7 @@ macro cpsJump(cont, call, n: typed): untyped =
   let
     call = normalizingRewrites call
     name = newProcName("Post Call")
+    cont = asName(cont)
   debugAnnotation cpsJump, n:
     it = newStmtList:
       makeContProc(name, cont, n)
@@ -71,8 +72,10 @@ macro cpsJump(cont, call: typed): untyped =
 
 macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
+  let
+    name = newProcName("Post Child")
+    cont = asName(cont)
   debugAnnotation cpsContinuationJump, n:
-    let name = newProcName("Post Child")
     it = newStmtList:
       makeContProc(name, cont, n)
     it.add:
@@ -82,13 +85,13 @@ macro cpsContinuationJump(cont, call, c, n: typed): untyped =
       # instantiate a new child continuation with the given arguments
       #newCall newCall(ident"typeof", cont):
       newAssignment c:
-        newCall(ident"whelp", cont, call)
+        newCall("whelp", cont, call)
     # NOTE: mom should now be set via the tail() hook from whelp
     #
     # return the child continuation
     it = it.makeReturn:
-      newCall newCall(ident"typeof", cont):
-        Pass.hook(cont, c)    # we're basically painting the future
+      newCall newCall("typeof", cont):
+        Pass.hook(cont.NimNode, c)    # we're basically painting the future
 
 macro cpsMayJump(cont, n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump
@@ -96,8 +99,10 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ##
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` in `n`
   ## with tail calls to `after`.
-  let name = newProcName("Finish")
-  let tail = tailCall(desym cont, name)
+  let
+    name = newProcName("Finish")
+    cont = asName(cont)
+    tail = tailCall(desym cont, name)
   debugAnnotation cpsMayJump, n:
     it = it.replace(isCpsPending, tail)
     if it.firstReturn.isNil:
@@ -150,8 +155,10 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` with a
   ## jump to the loop condition and `{.cpsBreak.}` with `{.cpsPending.}`
   ## to the next control-flow.
-  let name = newProcName("While Loop")
-  let tail = tailCall(desym cont, name)
+  let
+    name = newProcName("While Loop")
+    cont = asName(cont)
+    tail = tailCall(desym cont, name)
   tail.copyLineInfo n
   debugAnnotation cpsWhile, n:
     # a key first step is to ensure that the loop body, uh, loops, by
@@ -281,7 +288,7 @@ proc mergeExceptBranches(n, ex: NimNode): NimNode =
         newStmtList:
           ifStmt
 
-func wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
+func wrapContinuationWith(n: NimNode, cont: Name, replace, templ: NimNode): NimNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
   ## replaced with the `n`.
   ##
@@ -293,9 +300,9 @@ func wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
     if n.isCpsCont:
       result = copyNimTree n
       let nextCont = n.getContSym
-      result.body = result.body.wrapContinuationWith(nextCont.NimNode, replace):
-        if cont.kind == nnkSym:
-          templ.resym(cont, nextCont.NimNode)
+      result.body = result.body.wrapContinuationWith(nextCont, replace):
+        if cont.isSymbol:
+          templ.resym(cont.NimNode, nextCont.NimNode)
         else:
           templ
 
@@ -371,8 +378,8 @@ macro cpsWithException(cont, ex, n: typed): untyped =
 
     result = filter(n, transformer)
 
-  func withException(n: ProcDef, cont, ex: NimNode): ProcDef =
-    withException(n.NimNode, cont, ex).ProcDef
+  func withException(n: ProcDef, cont: Name, ex: NimNode): ProcDef =
+    withException(n.NimNode, cont.NimNode, ex).ProcDef
 
   debugAnnotation cpsWithException, n:
     it = it[0].withException(cont, ex)
@@ -384,6 +391,7 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## Only rewrite try with except branches.
   ##
   let
+    cont = asName(cont)
     ex = normalizingRewrites ex
     temp = nskUnknown.genSym"placeholder"
     handler = newProcName"Except"
@@ -413,7 +421,7 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
     # the completed rewrite starts with adding our handler
     let rewrote = newStmtList:
       # the handler uses the exception `ex` as its current exception
-      newCall(bindSym"cpsWithException", cont, ex):
+      newCall(bindSym"cpsWithException", NimNode cont, ex):
         # the body of the handler is the merged except branch
         makeContProc(handler, cont):
           it.findChild(it.kind == nnkExceptBranch)[0]
@@ -437,6 +445,9 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # The previous pass should give us a try-finally block, thus the last
     # child is our finally, and the last child of finally is its body.
     let finallyBody = tryFinally.last.last
+
+    # make cont a Name for that typed feeling
+    let cont = asName(cont)
 
     # Turn the finally into a continuation leg.
     let final = makeContProc(newProcName("Finally"), cont, finallyBody)
@@ -487,14 +498,14 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # This is a table of exit points, the key being the exit annotation, and
     # the value being the finally leg specialized to that exit.
     var exitPoints: OrderedTable[NimNode, ProcDef]
-    proc redirectExits(n, cont, final: NimNode): NimNode =
+    proc redirectExits(n: NimNode, cont: Name, final: NimNode): NimNode =
       ## Redirect all scope exits in `n` so that they jump through a
       ## specialized version of `final`.
       proc redirector(n: NimNode): NimNode =
         if n.isCpsCont:
           let nextCont = n.getContSym
           result = n
-          result.body = result.body.redirectExits(nextCont.NimNode, final)
+          result.body = result.body.redirectExits(nextCont, final)
         elif n.isScopeExit:
           # If this exit point is not recorded yet
           if n notin exitPoints:
@@ -531,7 +542,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # Add this leg to the AST
     it.add:
       # Make it uses `ex` as its current exception and clear it on exit
-      newCall(bindSym"cpsWithException", cont, ex):
+      newCall(bindSym"cpsWithException", cont.NimNode, ex):
         reraise
 
     # Now we create a try-except template to catch any unhandled exception that
@@ -890,7 +901,7 @@ macro cpsManageException(n: typed): untyped =
 
         # Desym the continuation symbol to detach it from the inner
         # continuation
-        result.params = n.params.replace(desym n.getContSym.NimNode):
+        result.params = n.params.replace((desym n.getContSym).NimNode):
           it == n.getContSym.NimNode
 
         # Now let's go down to business
@@ -898,18 +909,18 @@ macro cpsManageException(n: typed): untyped =
         result.body.add inner.NimNode
 
         let
-          cont = result.getContSym.NimNode
+          cont = result.getContSym
           innerFn = inner.name.NimNode
 
           # Extract the continuation symbol from the annotation
-          exCont = hasException[1]
+          exCont = asName(hasException[1])
           # Take the exception access from the annotation and resym it to
           # use our symbol
           ex = hasException[2].resym(exCont, cont)
 
         # Add the manager itself
         result.body.add:
-          genAst(cont, ex, innerFn, result = ident"result"):
+          genAst(cont = cont.NimNode, ex, innerFn, result = ident"result"):
             # Save the old exception from the enviroment
             let oldException = getCurrentException()
             # Set the exception to what is in the continuation

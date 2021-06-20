@@ -72,16 +72,11 @@ proc root*(e: Env): Name =
   result = r.inherits
 
 proc castToRoot(e: Env; n: NimNode): NimNode =
-  # XXX: remove NimNode
-  newTree(nnkCall, e.root.NimNode, n)
-
-proc castToChild(e: Env; n: NimNode): NimNode =
-  # XXX: remove NimNode
-  newTree(nnkCall, e.identity.NimNode, n)
+  newCall(e.root, n)
 
 proc castToChild(e: Env; n: Name): NimNode =
   # XXX: remove NimNode
-  newTree(nnkCall, e.identity.NimNode, n.NimNode)
+  newCall(e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -169,13 +164,11 @@ proc makeType*(e: Env): NimNode =
 proc first*(e: Env): Name = e.c
 
 proc firstDef*(e: Env): IdentDefs =
-  # XXX: remove NimNode
   newIdentDefs(e.first, e.via, newEmptyNode())
 
 proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
-  # XXX: remove NimNode
-  newDotExpr(e.castToChild(e.first), e.rs.name.NimNode)
+  newDotExpr(e.castToChild(e.first), e.rs.name)
 
 proc rewriteResult(e: Env; n: NimNode): NimNode =
   ## replaces result symbols with the env's result; this should be
@@ -279,13 +272,12 @@ proc identity*(e: var Env): Name =
 
 proc initialization(e: Env; field: Name, section: IdentDefVarLet): NimNode =
   ## produce the `x = 34`
-  # XXX: remove NimNode
   result = newStmtList()
   # let/var sections basically become env2323(cont).foo34 = "some default"
   if section.hasValue:
     # this is our continuation type, fully cast
     let child = e.castToChild(e.first)
-    result.add newAssignment(newDotExpr(child, field.NimNode), section.val)
+    result.add newAssignment(newDotExpr(child, field), section.val)
 
 proc letOrVar(n: IdentDefs): NimNodeKind =
   ## choose between let or var for proc parameters
@@ -302,17 +294,17 @@ proc addAssignment(e: var Env; d: IdentDefs): NimNode =
   ## purposes of CPS, even though let and var sections contain identdefs this
   ## proc should never handle those directly, see overloads.
   let section = letOrVar(d)
-  discard e.addIdentDef(section, d)
   when cpsDebug == "Env":
-    echo $d.kind, "\t", repr(d)
+    echo $section.kind, "\t", repr(section)
+  discard e.addIdentDef(section, d)
   # don't attempt to redefine proc params!
   result = newStmtList()
 
 proc addAssignment(e: var Env; section: IdentDefVarLet): NimNode =
   ## compose an assignment during addition of var|let identDefs to env
-  let (field, value) = e.addIdentDef(section.kind, section.identdef())
   when cpsDebug == "Env":
-    echo $kind, "\t", repr(d)
+    echo $section.kind, "\t", repr(section)
+  let (field, value) = e.addIdentDef(section.kind, section.identdef())
   result = e.initialization(field, value)
 
 when false:
@@ -406,7 +398,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
 proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
   # XXX: remove NimNode
-  proc resultdot(n: NimNode): NimNode =
+  proc resultdot(n: Name): NimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
     newAssignment name.NimNode:
@@ -417,10 +409,10 @@ proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
     if field notin [e.fn, e.rs.name, e.mom]:
       # the name from identdefs is not gensym'd (usually!)
       result.add:
-        newAssignment(resultdot field.NimNode, section.name.NimNode)
+        newAssignment(resultdot field, section.name)
   if not goto.isNil:
     result.add:
-      newAssignment(resultdot e.fn.NimNode, goto)
+      newAssignment(resultdot e.fn, goto)
 
 proc genException*(e: var Env): NimNode =
   ## generates a new symbol of type ref Exception, then put it in the env.
@@ -468,9 +460,9 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
   # XXX: remove NimNode
   result = clone(n, newStmtList())
-  result.addPragma ident"used"  # avoid gratuitous warnings
+  result.addPragma "used"  # avoid gratuitous warnings
   result.returnParam = env.identity
-  result.name = nskProc.genSym"whelp"
+  result.name = newProcName"whelp"
   result.introduce {Alloc, Boot}
 
   # create the continuation as the result and point it at the proc
@@ -515,9 +507,8 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
     result = desym(result, defs.name)
 
   # now the trampoline
-  let tramp = bindSym"trampoline"
   result.body.add:
-    newAssignment(c.NimNode, newCall(tramp, c.NimNode))
+    newAssignment(c, newCall(bindName"trampoline", c))
 
   # do an easy static check, and then
   if env.rs.typ != result.returnParam:

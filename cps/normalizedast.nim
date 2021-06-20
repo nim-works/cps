@@ -2,7 +2,7 @@ import std/macros
 from std/hashes import Hash, hash
 from std/sequtils import anyIt, toSeq
 
-from cps/rewrites import normalizingRewrites, replace, desym
+from cps/rewrites import normalizingRewrites, replace, desym, resym
 
 # Parts of this module:
 # * distinct types representing normalized/transformed variants of distinct AST
@@ -95,21 +95,6 @@ proc normalizeProcDef*(n: NimNode): ProcDef =
 
 template defineToNimNodeConverter(t: typedesc) =
   converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
-
-# fn-ExprLike
-proc newDotExpr*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
-  ## create a new dot expression, meant for executable code. In the future
-  ## this is unlikely to work for type expressions for example
-  newDotExpr(
-    when l isnot NimNode: l.NimNode else: l,
-    when r isnot NimNode: r.NimNode else: r
-  )
-proc newAssignment*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
-  ## create a new assignment, meant for executable code
-  newAssignment(
-    when l isnot NimNode: l.NimNode else: l,
-    when r isnot NimNode: r.NimNode else: r
-  )
   
 # fn-NormalizedNimNode
 
@@ -133,24 +118,40 @@ func strVal*(n: Name): string {.borrow.}
 func isSymbol*(n: Name): bool =
   n.NimNode.kind == nnkSym
 proc asName*(n: NimNode): Name =
+  ## coerce to `Name`
   if n.kind notin {nnkIdent, nnkSym}:
     errorGot "not an ident or sym", n
   n.Name
 proc asNameAllowEmpty*(n: NimNode): Name =
+  ## coerce to `Name`, allow `nnkEmpty`, error out otherwise
   if n.kind notin {nnkIdent, nnkSym, nnkEmpty}:
     errorGot "not an ident, sym, or empty", n
   n.Name
 proc asName*(n: string): Name =
+  ## `nnkIdent` as `Name`
   (ident n).Name
 proc newTypeName*(n: string): Name =
+  ## `genSym` an `nskType`
   genSym(nskType, n).Name
 proc newVarName*(n: string = ""): Name =
+  ## `genSym` an `nskVar`
   genSym(nskVar, n).Name
 proc newProcName*(n: string): Name =
+  ## `genSym` an `nskProc`
   genSym(nskProc, n).Name
 proc bindName*(n: static string): Name =
+  ## `bindSym` the string as a `Name`
   let r = bindSym(n)
   r.Name
+proc deSym*(n: Name): Name {.borrow.}
+  ## ensures that `Name` is an `nnkIdent`
+proc resym*(fragment: NimNode, sym: Name, replacement: Name): NimNode {.borrow.}
+  ## replace `sym` in the AST `fragment` with the `replacement`
+
+func typeInst*(n: Name): NimNode =
+  ## gets the type via `getTypeInst`
+  ## XXX: this shouldn't be done on name, as these could be bare idents
+  getTypeInst n.NimNode
 
 func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
   # XXX: either a converter or higher level refactoring will remove the need
@@ -163,6 +164,40 @@ func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
 converter nameToNormalizedNimNode*(n: Name): NormalizedNimNode =
   ## allow downgrading
   n.NormalizedNimNode
+
+# fn-ExprLike
+proc newDotExpr*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
+  ## create a new dot expression, meant for executable code. In the future
+  ## this is unlikely to work for type expressions for example
+  newDotExpr(
+    when l isnot NimNode: l.NimNode else: l,
+    when r isnot NimNode: r.NimNode else: r
+  )
+proc newAssignment*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
+  ## create a new assignment, meant for executable code
+  newAssignment(
+    when l isnot NimNode: l.NimNode else: l,
+    when r isnot NimNode: r.NimNode else: r
+  )
+proc newCall*(n: Name, arg: ExprLike): NimNode =
+  ## create a new call with a single arg
+  newCall(
+    when n isnot NimNode: n.NimNode else: n,
+    when arg isnot NimNode: arg.NimNode else: arg
+  )
+proc newCall*(n: string, arg: ExprLike): NimNode =
+  ## create a new call, with `n` as and ident name, and a single arg
+  newCall(
+    asName(n).NimNode,
+    when arg isnot NimNode: arg.NimNode else: arg
+  )
+proc newCall*[A: ExprLike, B: ExprLike](n: string, a: A, b: B): NimNode =
+  ## create a new call, with `n` as and ident name, and two args
+  newCall(
+    asName(n).NimNode,
+    when a isnot NimNode: a.NimNode else: a,
+    when b isnot NimNode: b.NimNode else: b
+  )
 
 # fn-TypeExpr
 proc asTypeExpr*(n: NimNode): TypeExpr =
@@ -437,14 +472,16 @@ proc addPragma*(n: ProcDef, prag: string) =
 
 proc addPragma*(n: ProcDef, prag: Name, pragArg: NimNode) =
   ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
-  ##
-  ## XXX: there is a bracket form for pragmas, discussion[1] suggests using an
-  ##      openArray for that variant.
-  ##      [1]: https://github.com/disruptek/cps/pull/144#discussion_r642208263
   n.addPragma:
     nnkExprColonExpr.newTree(prag.NimNode, pragArg)
+
 proc addPragma*(n: ProcDef, prag: Name, pragArg: Name) =
+  ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
   addPragma(n, prag, pragArg.NimNode)
+
+proc addPragma*(n: ProcDef, prag: Name, pragArgs: openArray[Name]) =
+  ## add pragmas of the form `{.raise: [IOError, OSError].}`
+  addPragma(n, prag, pragArgs)
 
 # XXX: make a pragma type and wrap this up
 
