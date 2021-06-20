@@ -422,11 +422,12 @@ proc createResult*(env: Env): ProcDef =
   ## define a procedure for retrieving the result of a continuation
   let field =
     if env.rs.typ.isEmpty:
-      newEmptyNode()           # the return value is Empty
+      nnkDiscardStmt.newTree:
+        newEmptyNode()         # the return value is void
     else:
       env.get                  # the return value is env.result
 
-  ProcDef:
+  result = ProcDef:
     genAst(field, c = env.first, cont = env.identity, tipe = env.rs.typ):
       proc `...`(c: cont): tipe =
         case c.state
@@ -436,8 +437,7 @@ proc createResult*(env: Env): ProcDef =
         of Finished:
           field
         of Running:
-          var c = trampoline c
-          ... c
+          `...`(trampoline c)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation

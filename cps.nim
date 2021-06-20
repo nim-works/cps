@@ -210,3 +210,5 @@ template dealloc*[T: Continuation](t: typedesc[T];
   ## This symbol may be reimplemented to customize continuation
   ## deallocation.
   discard
+
+template `...`*(c: Continuation): untyped {.used.} = discard
