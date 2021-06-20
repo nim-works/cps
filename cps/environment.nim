@@ -421,7 +421,7 @@ proc genException*(e: var Env): NimNode =
 proc createResult*(env: Env): ProcDef =
   ## define a procedure for retrieving the result of a continuation
   let field =
-    if env.rs.typ.isEmpty:
+    if env.rs.hasType:
       nnkDiscardStmt.newTree:
         newEmptyNode()         # the return value is void
     else:
