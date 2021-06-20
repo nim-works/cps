@@ -253,7 +253,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: NimNode; store: var NimNode; via: Name, rs: NimNode): Env =
+proc newEnv*(c: Name; store: var NimNode; via: Name, rs: NimNode): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
@@ -261,14 +261,15 @@ proc newEnv*(c: NimNode; store: var NimNode; via: Name, rs: NimNode): Env =
   ## `rs` is the return type (if not nnkEmpty) of the continuation.
   # XXX: remove the Name hack
   let via = if via.isNil: errorAst"need a type".Name else: via
-  let rs = if rs.isNil: newEmptyNode() else: rs
-  let c = if c.isNil or c.isEmpty: asName("continuation") else: asName(c)
 
   result = Env(c: c, store: store, via: via, id: via)
   result.rs = newIdentDefs("result", asNameAllowEmpty(rs))
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
+
+proc newEnv*(store: var NimNode; via: Name, rs: NimNode): Env=
+  newEnv(asName("continuation"), store, via, rs)
 
 proc identity*(e: var Env): Name =
   # XXX: replace asserts and remove NimNode

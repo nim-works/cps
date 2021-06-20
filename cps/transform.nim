@@ -1001,7 +1001,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T.asName, n.returnParam)
+  var env = newEnv(types, T.asName, n.returnParam)
 
   # add parameters into the environment
   for defs in n.callingParams:
@@ -1014,7 +1014,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
   # we can't mutate typed nodes, so copy ourselves
   n = clone n
-  n.addPragma ident"used"  # avoid gratuitous warnings
+  n.addPragma "used"  # avoid gratuitous warnings
 
   # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
