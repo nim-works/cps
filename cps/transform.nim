@@ -302,7 +302,7 @@ func wrapContinuationWith(n: NimNode, cont: Name, replace, templ: NimNode): NimN
       let nextCont = n.getContSym
       result.body = result.body.wrapContinuationWith(nextCont, replace):
         if cont.isSymbol:
-          templ.resym(cont.NimNode, nextCont.NimNode)
+          templ.resym(cont, nextCont)
         else:
           templ
 
@@ -838,7 +838,9 @@ macro cpsResolver(T: typed, n: typed): untyped =
     filter(n, dangle)
 
   # grabbing the first argument to the proc as an identifier
-  let cont = desym n.params[1][0]
+  let
+    n = asProcDef(n)
+    cont = desym n.firstCallParam.name
 
   debugAnnotation cpsResolver, n:
     # replace all `pending` and `terminate` with the end of continuation
@@ -906,7 +908,8 @@ macro cpsManageException(n: typed): untyped =
 
         # Now let's go down to business
         # Add the inner continuation inside the manager
-        result.body.add inner.NimNode
+        # XXX: work around converters and ambiguous calls due to varargs
+        result.body.add cProcDefToNimNode(inner)
 
         let
           cont = result.getContSym

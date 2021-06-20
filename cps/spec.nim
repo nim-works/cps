@@ -139,7 +139,7 @@ proc getContSym*(n: NimNode): Name =
   ## Retrieve the continuation symbol from `n`, provided that
   ## `n` is a cpsCont.
   if n.isCpsCont:
-    n.params[1][0].Name
+    asProcDef(n).firstCallParam.name
   else:
     nil.Name
 

@@ -352,7 +352,7 @@ proc localSection*(e: var Env; n: IdentDefs; into: NimNode = nil) =
   if not into.isNil:
     into.add assignment
 
-proc localSection*(e: var Env; n: RoutineParams; into: NimNode = nil) {.borrow.}
+proc localSection*(e: var Env; n: RoutineParam; into: NimNode = nil) {.borrow.}
   ## consume proc definition params and yield name, node pairs representing
   ## assignments to local scope.
 
