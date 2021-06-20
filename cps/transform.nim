@@ -647,8 +647,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
           let c = nskVar.genSym"child"  # XXX: workaround for genAst?
           var shim =
             genAst(c, etype, tipe = assign.typ, store = assign.name,
-                   call = assign.val, label = newLit(repr assign.name)):
-              discard "create a shim for the assignment of " & label
+                   call = assign.val):
               var store: tipe
               block:
                 var c: Continuation = whelp call
@@ -656,7 +655,6 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
                   c = c.fn(c)
                 store = ... etype(c)
                 ## destroy the child continuation
-              discard "continue on with " & label & " as assigned"
 
           # FIXME: we need a rewrite filter here to recover line info
           copyLineInfo(shim, nc)
