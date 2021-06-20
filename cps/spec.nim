@@ -45,47 +45,6 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
-const
-  ConvNodes* = {nnkHiddenStdConv..nnkConv}
-    ## Conversion nodes in typed AST
-
-  AccessNodes* = AtomicNodes + {nnkDotExpr, nnkDerefExpr, nnkHiddenDeref,
-                                nnkAddr, nnkHiddenAddr}
-    ## AST nodes for operations accessing a resource
-
-  ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
-    ## AST nodes for construction operations
-
-proc getPragmaName(n: NimNode): NimNode =
-  ## retrieve the symbol/identifier from the child node of a nnkPragma
-  case n.kind
-  of nnkCall, nnkExprColonExpr:
-    n[0]
-  else:
-    n
-
-func hasPragma*(n: NimNode; s: static[string]): bool =
-  ## `true` if the `n` holds the pragma `s`
-  case n.kind
-  of nnkPragma:
-    for p in n.items:
-      # just skip ColonExprs, etc.
-      result = p.getPragmaName.eqIdent s
-      if result:
-        break
-  of RoutineNodes:
-    result = hasPragma(n.pragma, s)
-  of nnkObjectTy:
-    result = hasPragma(n[0], s)
-  of nnkRefTy:
-    result = hasPragma(n.last, s)
-  of nnkTypeDef:
-    result = hasPragma(n.last, s)
-  of nnkTypeSection:
-    result = anyIt(toSeq items(n), hasPragma(it, s))
-  else:
-    result = false
-
 proc filterPragma*(ns: seq[NimNode], liftee: NimNode): NimNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
   var pragmas = nnkPragma.newNimNode
@@ -176,13 +135,22 @@ proc isCpsCont*(n: NimNode): bool =
   ## Return whether the given procedure is a cps continuation
   n.kind in RoutineNodes and n.hasPragma("cpsCont")
 
-proc getContSym*(n: NimNode): NimNode =
+proc getContSym*(n: NimNode): Name =
   ## Retrieve the continuation symbol from `n`, provided that
   ## `n` is a cpsCont.
   if n.isCpsCont:
-    n.params[1][0]
+    n.params[1][0].Name
   else:
-    nil
+    nil.Name
+
+proc getContSym*(n: ProcDef): Name =
+  ## Retrieve the continuation symbol from `n`, provided that
+  ## `n` is a cpsCont.
+  ## XXX: remove `.Name`
+  if n.NimNode.isCpsCont:
+    toSeq(n.callingParams)[0].Name
+  else:
+    nil.Name
 
 proc newCpsTerminate*(): NimNode =
   ## Create a new node signifying early termination of the procedure

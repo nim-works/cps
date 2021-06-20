@@ -184,7 +184,7 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
 
-func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
+func assignTo*(location, n: NormalizedNimNode): NormalizedNimNode =
   ## Rewrite the expression `n` into a statement assigning to `location`.
   ##
   ## Returns a copy of `n` if `n` is not an expression.
@@ -286,7 +286,7 @@ macro cpsExprToTmp(T, n: typed): untyped =
   debugAnnotation cpsExprToTmp, n:
     let
       # The symbol for our temporary
-      tmp = genSym(nskVar)
+      tmp = newVarName()
 
       # The rewritten expression
       body = assignTo(tmp):
@@ -301,13 +301,13 @@ macro cpsExprToTmp(T, n: typed): untyped =
           # Create a new statement list
           NormalizedNimNode newStmtList(
             # Declare the temporary
-            newVarSection(tmp, T),
+            newVarSection(tmp, T.TypeExpr),
             # Add the rewritten expression
             body
           )
         ),
         # Then emit our temporary as the new expression
-        tmp
+        tmp.NimNode
       )
 
 macro cpsAsgn(dst, src: typed): untyped =
@@ -410,6 +410,7 @@ func lastCpsExprAt(n: NormalizedNimNode): int =
 
 func annotate(n: NormalizedNimNode): NormalizedNimNode =
   ## Annotate expressions requiring flattening in `n`'s children.
+  ## XXX: remove NimNode
 
   result = NormalizedNimNode copyNimNode(n)
 
@@ -443,7 +444,7 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
                       # TODO: normalizedast should know to run infer
                       #       automatically on nnkVarTuple because that type
                       #       doesn't have a type specifier
-                      newCall(bindSym"cpsExprToTmp", copy(child.def.inferTypFromImpl)):
+                      newCall(bindSym"cpsExprToTmp", copy(child.def.inferTypFromImpl.NimNode)):
                         annotate:
                           NormalizedNimNode:
                             # Put the value into a StmtList so analysis starts

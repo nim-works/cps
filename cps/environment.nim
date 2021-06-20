@@ -27,7 +27,7 @@ type
       seen: HashSet[string]         # count/measure idents/syms by string
 
     # special symbols for cps machinery
-    c: NimNode                      # the sym we use for the continuation
+    c: Name                         # the sym we use for the continuation
     fn: Name                        # the sym we use for the goto target
     rs: IdentDefs                   # the identdefs for the result
     mom: Name                       # the sym we use for parent continuation
@@ -78,6 +78,10 @@ proc castToRoot(e: Env; n: NimNode): NimNode =
 proc castToChild(e: Env; n: NimNode): NimNode =
   # XXX: remove NimNode
   newTree(nnkCall, e.identity.NimNode, n)
+
+proc castToChild(e: Env; n: Name): NimNode =
+  # XXX: remove NimNode
+  newTree(nnkCall, e.identity.NimNode, n.NimNode)
 
 proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
@@ -162,11 +166,11 @@ proc makeType*(e: Env): NimNode =
   # XXX: remove NimNode
   nnkTypeDef.newTree(e.identity.NimNode, newEmptyNode(), e.objectType)
 
-proc first*(e: Env): NimNode = e.c
+proc first*(e: Env): Name = e.c
 
-proc firstDef*(e: Env): NimNode =
+proc firstDef*(e: Env): IdentDefs =
   # XXX: remove NimNode
-  newIdentDefs(e.first, e.via.NimNode, newEmptyNode())
+  newIdentDefs(e.first, e.via, newEmptyNode())
 
 proc get*(e: Env): NimNode =
   ## retrieve a continuation's result value from the env
@@ -258,10 +262,10 @@ proc newEnv*(c: NimNode; store: var NimNode; via: Name, rs: NimNode): Env =
   # XXX: remove the Name hack
   let via = if via.isNil: errorAst"need a type".Name else: via
   let rs = if rs.isNil: newEmptyNode() else: rs
-  let c = if c.isNil or c.isEmpty: ident"continuation" else: c
+  let c = if c.isNil or c.isEmpty: asName("continuation") else: asName(c)
 
   result = Env(c: c, store: store, via: via, id: via)
-  result.rs = newIdentDefs("result", rs)
+  result.rs = newIdentDefs("result", asNameAllowEmpty(rs))
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
@@ -402,13 +406,13 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
   # make a special rewrite pass to replace the result symbols
   result = e.rewriteResult result
 
-proc createContinuation*(e: Env; name: NimNode; goto: NimNode): NimNode =
+proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
   # XXX: remove NimNode
   proc resultdot(n: NimNode): NimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
-    newAssignment name:
+    newAssignment name.NimNode:
       Alloc.hook(e.inherits.NimNode, e.identity.NimNode)
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
@@ -427,8 +431,7 @@ proc genException*(e: var Env): NimNode =
   ## returns the access to the exception symbol from the env.
   let ex = asName(genField("ex"))
   e = e.set ex:
-    # XXX: Should be IdentDefLet but saem haven't wrote it yet
-    newIdentDefVar(ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
+    newIdentDefLet(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex.NimNode)
 
 proc createResult*(env: Env, exported = false): ProcDef =
@@ -449,8 +452,9 @@ proc createResult*(env: Env, exported = false): ProcDef =
     name = postfix(name, "*")
 
   result = ProcDef:
-    genAst(name, field, c = env.first, cont = env.identity.NimNode, tipe = env.rs.typ,
-           dismissed=Dismissed, finished=Finished, running=Running):
+    genAst(name, field, c = env.first.NimNode, cont = env.identity.NimNode,
+           tipe = env.rs.typ, dismissed=Dismissed, finished=Finished,
+           running=Running):
       {.push experimental: "callOperator".}
       proc name(c: cont): tipe {.used.} =
         case c.state
@@ -474,7 +478,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 
   # create the continuation as the result and point it at the proc
   result.body.add:
-    env.createContinuation(ident"result", desym goto)
+    env.createContinuation(asName"result", desym goto)
 
   # hook the bootstrap
   result.body.add:
@@ -492,12 +496,12 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   result.addPragma ident"used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot}
 
-  let c = nskVar.genSym"c"
+  let c = newVarName("C")
   result.body.add:
     # declare `var c: Cont`
     # XXX: conversion must be forced otherwise we end up with an ambiguous call
     #      between the add a single NimNode and add many NimNode (varargs).
-    cVarSectionToNimNode(newVarSection(c, env.root.NimNode))
+    cVarSectionToNimNode(newVarSection(c, env.root))
 
   # create the continuation using the new variable and point it at the proc
   result.body.add:
@@ -505,9 +509,9 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 
   # hook the bootstrap
   result.body.add:
-    newAssignment c:
+    newAssignment c.NimNode:
       Head.hook:
-        Boot.hook c
+        Boot.hook c.NimNode
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
@@ -516,7 +520,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   # now the trampoline
   let tramp = bindSym"trampoline"
   result.body.add:
-    newAssignment(c, newCall(tramp, c))
+    newAssignment(c.NimNode, newCall(tramp, c.NimNode))
 
   # do an easy static check, and then
   if env.rs.typ != result.returnParam:
@@ -533,7 +537,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
           newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(ident"result",
-            newDotExpr(env.castToChild(c), env.rs.name.NimNode))
+            newDotExpr(env.castToChild(c), env.rs.name))
         ]
 
 proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =
@@ -543,5 +547,5 @@ proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =
     if n.isVoodooCall:
       result = n.copyNimTree
       result[0] = desym result[0]
-      result.insert(1, env.first)
+      result.insert(1, env.first.NimNode)
   result = filter(n, voodoo)

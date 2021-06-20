@@ -1,6 +1,6 @@
 import std/macros
 
-import cps/[spec, hooks]
+import cps/[spec, hooks, normalizedast]
 
 proc firstReturn*(p: NimNode): NimNode =
   ## Find the first control-flow return statement or cps
@@ -77,7 +77,7 @@ proc terminator*(c: NimNode; T: NimNode): NimNode =
     # critically, terminate control-flow here!
     return
 
-proc tailCall*(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
+proc tailCall*(cont: NimNode; to: Name; jump: NimNode = nil): NimNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   result = newStmtList:
@@ -90,7 +90,7 @@ proc tailCall*(cont: NimNode; to: NimNode; jump: NimNode = nil): NimNode =
     else:
       jump                         # return the jump target as requested
 
-proc jumperCall*(cont: NimNode; to: NimNode; via: NimNode): NimNode =
+proc jumperCall*(cont: NimNode; to: Name; via: NimNode): NimNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   let jump = copyNimTree via

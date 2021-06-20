@@ -1,5 +1,6 @@
 import std/macros
 from std/hashes import Hash, hash
+from std/sequtils import anyIt, toSeq
 
 from cps/rewrites import normalizingRewrites, replace, desym
 
@@ -27,6 +28,8 @@ type
     ## nnkSym
   Name* = distinct NormalizedNimNode
     ## either an Ident or Sym
+  TypeExpr* = distinct NormalizedNimNode
+    ## the type part of a let or var definition or a proc param
 
   ProcDef* = distinct NormalizedNimNode
     ## an nnkProcDef node which has been normalized
@@ -50,6 +53,8 @@ type
 
   VarSection* = distinct VarLet
     ## a let or var section, with a single identdefs or vartuple
+  IdentDefLet* = distinct IdentDefVarLet
+    ## identdef defintion from a let section
   IdentDefVar* = distinct IdentDefVarLet
     ## identdef defintion from a var section
 
@@ -67,6 +72,11 @@ type
     ## abstract over various let or var sections types
   VarLetIdentDefLike* = IdentDefVarLet | IdentDefVar
     ## abstract over identdefs from let or var sections types
+  
+  ExprLike* = Name | NimNode
+    ## abstract over any nim value expression
+    ## XXX: temporarly added NimNode for convenience
+  TypeExprLike* = Name | TypeExpr
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
   ## useful for error messages
@@ -81,6 +91,21 @@ proc normalizeProcDef*(n: NimNode): ProcDef =
 template defineToNimNodeConverter(t: typedesc) =
   converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
 
+# fn-ExprLike
+proc newDotExpr*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
+  ## create a new dot expression, meant for executable code. In the future
+  ## this is unlikely to work for type expressions for example
+  newDotExpr(
+    when l isnot NimNode: l.NimNode else: l,
+    when r isnot NimNode: r.NimNode else: r
+  )
+proc newAssignment*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
+  ## create a new assignment, meant for executable code
+  newAssignment(
+    when l isnot NimNode: l.NimNode else: l,
+    when r isnot NimNode: r.NimNode else: r
+  )
+  
 # fn-NormalizedNimNode
 
 defineToNimNodeConverter(NormalizedNimNode)
@@ -97,6 +122,8 @@ template hash*(n: Name): Hash =
   hash(n.NimNode)
 func isNil*(n: Name): bool {.borrow.}
 func `==`*(a, b: Name): bool {.borrow.}
+func `==`*(a: NimNode, b: Name): bool {.borrow.}
+func `$`*(a: Name): string {.borrow.}
 func strVal*(n: Name): string {.borrow.}
 func isSymbol*(n: Name): bool =
   n.NimNode.kind == nnkSym
@@ -104,10 +131,21 @@ proc asName*(n: NimNode): Name =
   if n.kind notin {nnkIdent, nnkSym}:
     errorGot "not an ident or sym", n
   n.Name
+proc asNameAllowEmpty*(n: NimNode): Name =
+  if n.kind notin {nnkIdent, nnkSym, nnkEmpty}:
+    errorGot "not an ident, sym, or empty", n
+  n.Name
 proc asName*(n: string): Name =
   (ident n).Name
 proc newTypeName*(n: string): Name =
   genSym(nskType, n).Name
+proc newVarName*(n: string = ""): Name =
+  genSym(nskVar, n).Name
+proc newProcName*(n: string): Name =
+  genSym(nskProc, n).Name
+proc bindName*(n: static string): Name =
+  let r = bindSym(n)
+  r.Name
 
 func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
   # XXX: either a converter or higher level refactoring will remove the need
@@ -116,6 +154,19 @@ func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
     when a isnot NimNode: a.NimNode else: a,
     when b isnot NimNode: b.NimNode else: b
   )
+
+converter nameToNormalizedNimNode*(n: Name): NormalizedNimNode =
+  ## allow downgrading
+  n.NormalizedNimNode
+
+# fn-TypeExpr
+proc asTypeExpr*(n: NimNode): TypeExpr =
+  if n.kind notin {nnkIdent, nnkSym, nnkVarTy, nnkRefTy}:
+    # XXX: incomplete list of type kinds
+    errorGot "not a type expression", n
+  n.TypeExpr
+proc newRefType*(n: Name): TypeExpr =
+  nnkRefTy.newTree(n.NimNode).TypeExpr
 
 # fn-Ident
 
@@ -140,9 +191,9 @@ func hasType*(n: DefLike): bool =
   ## has a non-Empty type (`typ`) defined
   n.typ.kind != nnkEmpty
 
-func inferTypFromImpl*(n: DefLike): NimNode =
+func inferTypFromImpl*(n: DefLike): Name =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  if n.hasType: n.typ else: getTypeImpl(n.val)
+  if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
 
 # fn-IdentDefs
 
@@ -161,10 +212,10 @@ proc expectIdentDefs*(n: NimNode): IdentDefs =
   validateIdentDefs(n)
   return n.IdentDefs
 
-proc newIdentDefs*(n: string, typ: NimNode, val = newEmptyNode()): IdentDefs =
-  newIdentDefs(ident(n), typ, val).IdentDefs
-proc newIdentDefs*(n: Name, typ: NimNode, val = newEmptyNode()): IdentDefs =
-  newIdentDefs(n.NimNode, typ, val).IdentDefs
+proc newIdentDefs*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDefs =
+  newIdentDefs(ident(n), t.NimNode, val).IdentDefs
+proc newIdentDefs*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefs =
+  newIdentDefs(n.NimNode, t.NimNode, val).IdentDefs
 
 func name*(n: IdentDefs): Name = n[0].Name
 
@@ -222,9 +273,9 @@ func identdef*(n: VarLetIdentDefLike): IdentDefs = n.NimNode[0].IdentDefs
 func name*(n: VarLetIdentDefLike): Name = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
   ## will have the name
-func inferTypFromImpl*(n: VarLetIdentDefLike): NimNode =
+func inferTypFromImpl*(n: VarLetIdentDefLike): Name =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  if n.hasType: n.typ else: getTypeImpl(n.val)
+  if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
 
 # fn-VarLet
 
@@ -289,18 +340,31 @@ defineToNimNodeConverter(VarSection)
 
 proc newVarSection*(i: IdentDefs): VarSection =
   (nnkVarSection.newTree i).VarSection
-proc newVarSection*(n, typ: NimNode, val = newEmptyNode()): VarSection =
-  ## create a var section with an identdef, eg: `n`: `typ` = `val`
-  newVarSection(newIdentDefs(n, typ, val).IdentDefs)
+proc newVarSection*(n: Name, t: TypeExprLike, val = newEmptyNode()): VarSection =
+  ## create a var section with an identdef, eg: `n`: `t` = `val`
+  newVarSection(newIdentDefs(n, t, val))
+
+# fn-IdentDefLet
+
+proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
+  ## create a var section with an identdef
+  (nnkLetSection.newTree i).IdentDefLet
+proc newIdentDefLet*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefLet =
+  ## create a let section with an identdef, eg: `n`: `t` = `val`
+  newIdentDefLet(newIdentDefs(n, t, val))
+
+converter identDefLetToIdentDefVarLet*(n: IdentDefLet): IdentDefVarLet =
+  # allow downgrading
+  n.IdentDefVarLet
 
 # fn-IdentDefVar
 
 proc newIdentDefVar*(i: IdentDefs): IdentDefVar =
   ## create a var section with an identdef
   (nnkVarSection.newTree i).IdentDefVar
-proc newIdentDefVar*(n: Name, t: NimNode, val = newEmptyNode()): IdentDefVar =
+proc newIdentDefVar*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefVar =
   ## create a var section with an identdef, eg: `n`: `t` = `val`
-  newIdentDefVar(newIdentDefs(n, t, val).IdentDefs)
+  newIdentDefVar(newIdentDefs(n, t, val))
 
 converter identDefVarToIdentDefVarLet*(n: IdentDefVar): IdentDefVarLet =
   # allow downgrading
@@ -309,6 +373,11 @@ converter identDefVarToIdentDefVarLet*(n: IdentDefVar): IdentDefVarLet =
 # fn-ProcDef
 
 defineToNimNodeConverter(ProcDef)
+
+proc newProcDef*(name: Name, formalParams: openArray[NimNode]): ProcDef =
+  ## create a new proc def with name and formal params (includes return type)
+  ## and an empty body (`nnkStmtList`)
+  newProc(name.Nimnode, formalParams, newStmtList()).ProcDef
 
 func returnParam*(n: ProcDef): NimNode =
   ## the return param or empty if void
@@ -319,7 +388,10 @@ func `returnParam=`*(n: ProcDef, ret: NimNode) =
   ## XXX: remove normalizingRewrites once this is typed
   n.params[0] = normalizingRewrites ret
 
-func `name=`*(n: ProcDef, name: NimNode) {.borrow.}
+func name*(n: ProcDef): Name =
+  ## get the name of this ProcDef
+  n.NimNode.name.Name
+func `name=`*(n: ProcDef, name: Name) {.borrow.}
 
 proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
@@ -339,15 +411,65 @@ iterator callingParams*(n: ProcDef): NimNode =
 
 proc desym*(n: ProcDef, sym: NimNode): ProcDef {.borrow.}
 
-proc addPragma*(n: ProcDef, prag: NimNode) {.borrow.}
+proc addPragma*(n: ProcDef, prag: Name) {.borrow.}
+proc addPragma*(n: ProcDef, prag: string) =
+  ## add the pragma (`prag`) as an ident to this procdef
+  n.addPragma asName(prag)
 
-proc addPragma*(n: ProcDef, prag: NimNode, pragArg: NimNode) =
+proc addPragma*(n: ProcDef, prag: Name, pragArg: NimNode) =
   ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
   ##
   ## XXX: there is a bracket form for pragmas, discussion[1] suggests using an
   ##      openArray for that variant.
   ##      [1]: https://github.com/disruptek/cps/pull/144#discussion_r642208263
   n.addPragma:
-    nnkExprColonExpr.newTree(prag, pragArg)
-proc addPragma*(n: ProcDef, prag: NimNode, pragArg: Name) =
+    nnkExprColonExpr.newTree(prag.NimNode, pragArg)
+proc addPragma*(n: ProcDef, prag: Name, pragArg: Name) =
   addPragma(n, prag, pragArg.NimNode)
+
+# XXX: make a pragma type and wrap this up
+
+const
+  ConvNodes* = {nnkHiddenStdConv..nnkConv}
+    ## Conversion nodes in typed AST
+
+  AccessNodes* = AtomicNodes + {nnkDotExpr, nnkDerefExpr, nnkHiddenDeref,
+                                nnkAddr, nnkHiddenAddr}
+    ## AST nodes for operations accessing a resource
+
+  ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
+    ## AST nodes for construction operations
+
+proc getPragmaName*(n: NimNode): NimNode =
+  ## retrieve the symbol/identifier from the child node of a nnkPragma
+  case n.kind
+  of nnkCall, nnkExprColonExpr:
+    n[0]
+  else:
+    n
+
+func hasPragma*(n: NimNode; s: static[string]): bool =
+  ## `true` if the `n` holds the pragma `s`
+  case n.kind
+  of nnkPragma:
+    for p in n.items:
+      # just skip ColonExprs, etc.
+      result = p.getPragmaName.eqIdent s
+      if result:
+        break
+  of RoutineNodes:
+    result = hasPragma(n.pragma, s)
+  of nnkObjectTy:
+    result = hasPragma(n[0], s)
+  of nnkRefTy:
+    result = hasPragma(n.last, s)
+  of nnkTypeDef:
+    result = hasPragma(n.last, s)
+  of nnkTypeSection:
+    result = anyIt(toSeq items(n), hasPragma(it, s))
+  else:
+    result = false
+
+func hasPragma*(n: ProcDef, s: static[string]): bool =
+  ## `true` if the `n` holds the pragma `s`
+  hasPragma(n.NimNode, s)
