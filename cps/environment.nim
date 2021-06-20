@@ -369,7 +369,6 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
-  # XXX: remove NimNode
   if n.len != 1:
     result = n.errorAst "return len != 1"
   else:
@@ -401,7 +400,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
     # these are a side-effect of an open nim bug
     let sym = section.name
     if sym.isSymbol:
-      result = result.resym(sym.NimNode, newDotExpr(child, field.NimNode))
+      result = result.resym(sym.NimNode, newDotExpr(child, field))
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
   # make a special rewrite pass to replace the result symbols

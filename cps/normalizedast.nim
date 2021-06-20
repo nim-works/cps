@@ -379,6 +379,12 @@ proc newProcDef*(name: Name, formalParams: openArray[NimNode]): ProcDef =
   ## and an empty body (`nnkStmtList`)
   newProc(name.Nimnode, formalParams, newStmtList()).ProcDef
 
+func asProcDef*(n: NimNode): ProcDef =
+  ## coerce into a `ProcDef` or error out
+  if n.kind != nnkProcDef:
+    errorGot "not a proc definition", n
+  n.ProcDef
+
 func returnParam*(n: ProcDef): NimNode =
   ## the return param or empty if void
   n.params[0]
