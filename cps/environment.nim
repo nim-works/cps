@@ -402,7 +402,7 @@ proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
     newAssignment name.NimNode:
-      Alloc.hook(e.inherits.NimNode, e.identity.NimNode)
+      Alloc.hook(e.inherits, e.identity.NimNode)
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
@@ -459,6 +459,9 @@ proc createResult*(env: Env, exported = false): ProcDef =
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
   # XXX: remove NimNode
+  let resultName = asName("result")
+    ## the result identifier for the new whelp's proc body
+
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
   result.returnParam = env.identity
@@ -467,12 +470,12 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 
   # create the continuation as the result and point it at the proc
   result.body.add:
-    env.createContinuation(asName"result", desym goto)
+    env.createContinuation(resultName, desym goto)
 
   # hook the bootstrap
   result.body.add:
-    newAssignment ident"result":
-      Boot.hook ident"result"
+    newAssignment resultName:
+      Boot.hook resultName
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
@@ -498,9 +501,9 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 
   # hook the bootstrap
   result.body.add:
-    newAssignment c.NimNode:
+    newAssignment c:
       Head.hook:
-        Boot.hook c.NimNode
+        Boot.hook c
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
@@ -524,7 +527,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
           # check if the continuation is not nil, and if so, to
           newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
           # assign the result from the continuation's result field
-          newAssignment(ident"result",
+          newAssignment(asName"result",
             newDotExpr(env.castToChild(c), env.rs.name))
         ]
 

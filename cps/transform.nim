@@ -14,10 +14,11 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   ## creates a continuation proc with `name` using continuation
   ## `cont` with the given body.
   let
-    contParam = desym cont.NimNode
+    contParam = desym cont
     contType = cont.typeInst
+    contFormalParams = [contType, newIdentDefs(contParam.NimNode, contType)]
 
-  result = newProcDef(name, [contType, newIdentDefs(contParam, contType)])
+  result = newProcDef(name, contFormalParams)
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
   result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc, Unwind}
@@ -39,7 +40,7 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
     normalizingRewrites newStmtList(source)
 
   # replace `cont` in the body with the parameter of the new proc
-  result.body = resym(result.body, cont.NimNode, contParam)
+  result.body = resym(result.body, cont, contParam)
   # if this body doesn't have any continuing control-flow,
   if result.body.firstReturn.isNil:
     # annotate it so that outer macros can fill in as needed.
@@ -602,7 +603,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
   # compose the rewrite as an assignment, a lame effort to dealloc
   # the child, and then any remaining statements we were passed
   var body =
-    genAst(assign, tail, child = child.NimNode, etype, dealloc = Dealloc.sym):
+    genAst(assign, tail, child = child.NimNode, etype, dealloc = Dealloc.sym.NimNode):
       assign
       ##if not child.isNil:
       ##  dealloc(etype, child)
@@ -1068,7 +1069,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   var body = newStmtList()     # a statement list will wrap the body
   body.introduce {Coop, Pass, Trace, Head, Tail, Alloc, Dealloc}
   body.add:
-    Trace.hook env.first.NimNode, n  # hooking against the proc (minus cloned body)
+    Trace.hook env.first, n  # hooking against the proc (minus cloned body)
   body.add n.body                    # add in the cloned body of the original proc
 
   # perform sym substitutions (or whatever)

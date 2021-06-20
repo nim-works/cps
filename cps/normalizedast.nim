@@ -187,6 +187,10 @@ proc bindName*(n: static string): Name =
   ## `bindSym` the string as a `Name`
   let r = bindSym(n)
   r.Name
+proc bindName*(n: static string, rule: static BindSymRule): Name =
+  ## `bindSym` the string as a `Name` and specified bind sym `rule`
+  let r = bindSym(n, rule)
+  r.Name
 proc desym*(n: Name): Name {.borrow.}
   ## ensures that `Name` is an `nnkIdent`
 proc resym*(fragment: NimNode, sym: Name, replacement: Name): NimNode {.borrow.}
@@ -229,6 +233,9 @@ proc newCall*(n: Name, arg: ExprLike): NimNode =
     when n isnot NimNode: n.NimNode else: n,
     when arg isnot NimNode: arg.NimNode else: arg
   )
+proc newCall*(n: Name, args: varargs[NimNode]): NimNode =
+  ## create a new call, with `n` as name some args
+  newCall(n.NimNode, args)
 proc newCall*(n: string, arg: ExprLike): NimNode =
   ## create a new call, with `n` as and ident name, and a single arg
   newCall(

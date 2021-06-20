@@ -1,6 +1,6 @@
 import std/macros
 
-import cps/spec
+import cps/[spec, normalizedast]
 
 {.experimental: "dynamicBindSym".}
 
@@ -48,14 +48,14 @@ proc makeLineInfo(n: LineInfo): NimNode =
   result.add newColonExpr(ident"line", n.line.newLit)
   result.add newColonExpr(ident"column", n.column.newLit)
 
-proc sym*(hook: Hook): NimNode =
+proc sym*(hook: Hook): Name =
   ## produce a symbol|ident for the hook procedure
   when false:
     # this is where we can experiment with .dynamicBindSym
-    bindSym($hook, brForceOpen)
+    bindName($hook, brForceOpen)
   else:
     # rely on a `mixin $hook` in (high) scope
-    ident($hook)
+    asName($hook)
 
 proc hook*(hook: Hook; n: NimNode): NimNode =
   ## execute the given hook on the given node
@@ -71,6 +71,11 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
     newCall(hook.sym, newLit(repr n.name), makeLineInfo n.lineInfoObj)
   else:
     n.errorAst "the " & $hook & " hook doesn't take one argument"
+
+proc hook*(hook: Hook; n: Name): NimNode =
+  ## execute the given hook on the given node
+  ## XXX: work out the correct type class for `n`
+  hook(hook, n.NimNode)
 
 proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
   ## execute the given hook with two arguments
@@ -94,3 +99,8 @@ proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
     newStmtList [newCall(hook.sym, a, b), newNilLit()]
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"
+
+proc hook*(hook: Hook; a: Name; b: NimNode): NimNode =
+  ## execute the given hook with two arguments
+  ## XXX: work out the correct type class for `a` and `b`
+  hook(hook, a.NimNode, b)
