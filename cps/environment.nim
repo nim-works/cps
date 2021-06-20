@@ -422,10 +422,10 @@ proc createResult*(env: Env): ProcDef =
   ## define a procedure for retrieving the result of a continuation
   let field =
     if env.rs.hasType:
+      env.get                  # the return value is env.result
+    else:
       nnkDiscardStmt.newTree:
         newEmptyNode()         # the return value is void
-    else:
-      env.get                  # the return value is env.result
 
   result = ProcDef:
     genAst(field, c = env.first, cont = env.identity, tipe = env.rs.typ):
