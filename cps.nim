@@ -211,4 +211,6 @@ template dealloc*[T: Continuation](t: typedesc[T];
   ## deallocation.
   discard
 
-template `...`*(c: Continuation): untyped {.used.} = discard
+template `...`*(c: Continuation): untyped {.used.} =
+  ## Returns the result, i.e. the return value, of a continuation.
+  discard
