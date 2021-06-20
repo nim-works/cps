@@ -644,8 +644,9 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         else:
           # this is a simple hack to support `let x: int = contProc()`
           let etype = pragmaArgument(assign.val, "cpsEnvironment")
+          let c = nskVar.genSym"child"  # XXX: workaround for genAst?
           var shim =
-            genAst(etype, tipe = assign.typ, store = assign.name,
+            genAst(c, etype, tipe = assign.typ, store = assign.name,
                    call = assign.val, label = newLit(repr assign.name)):
               discard "create a shim for the assignment of " & label
               var store: tipe
