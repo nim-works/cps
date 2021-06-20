@@ -443,7 +443,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
   result = clone(n, newStmtList())
   result.addPragma ident"used"  # avoid gratuitous warnings
-  result.returnParam = env.root
+  result.returnParam = env.identity
   result.name = nskProc.genSym"whelp"
   result.introduce {Alloc, Boot}
 

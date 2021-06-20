@@ -911,9 +911,6 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   n = clone n
   n.addPragma ident"used"  # avoid gratuitous warnings
 
-  # the `...` operator recovers the result of a continuation
-  let dots = env.createResult()
-
   # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)
@@ -979,6 +976,9 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   # storing the source environment on helpers
   for p in [whelp, booty]:
     p.addPragma(bindSym"cpsEnvironment", env.identity)
+
+  # the `...` operator recovers the result of a continuation
+  let dots = env.createResult()
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)

@@ -45,7 +45,8 @@ suite "returns and results":
 
     var c = whelp foo(5)
     trampoline c
-    fail"unimpl"
+    check "dots work correctly":
+      ... c == 25
 
   block:
     ## assignments to the special result symbol work
