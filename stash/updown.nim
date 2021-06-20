@@ -199,7 +199,7 @@ proc doServer(evq: Evq, port: int) {.cps:C.} =
   while true:
     iowait(connServer, POLLIN)
 
-    var sa: Sockaddr_in
+    var sa: Sockaddr_in6
     var saLen: SockLen
     let fd = posix.accept4(connServer.fd, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
 
