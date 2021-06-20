@@ -1,4 +1,4 @@
-import std/[macros, sequtils, sets, tables, hashes, genasts]
+import std/[macros, sequtils, tables, hashes, genasts]
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
             normalizedast]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
@@ -636,22 +636,27 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
     of nnkVarSection, nnkLetSection:
       let section = expectVarLet nc
       if section.val.isCpsCall:
-        if section.isTuple:
+        let assign = section.asVarLetIdentDef
+        if assign.isTuple:
           result.add:
             nc.last.errorAst "cps doesn't support var tuples here yet"
+          discard "add() is dumb"
         else:
           # this is a simple hack to support `let x: int = contProc()`
+          let etype = pragmaArgument(assign.val, "cpsEnvironment")
           var shim =
-            genAst(tipe = section.typ, store = nc.name,
-                   call = section.val):
+            genAst(etype, tipe = assign.typ, store = assign.name,
+                   call = assign.val, label = newLit(repr assign.name)):
+              discard "create a shim for the assignment of " & label
               var store: tipe
               block:
-                var c = whelp call
-                var d: Continuation = c
-                while d.running:
-                  d = d.fn(d)
-                c = (typeof c)(d)
-                store = ... c
+                var c: Continuation = whelp call
+                while c.running:
+                  c = c.fn(c)
+                store = ... etype(c)
+                ## destroy the child continuation
+              discard "continue on with " & label & " as assigned"
+
           # FIXME: we need a rewrite filter here to recover line info
           copyLineInfo(shim, nc)
           # add any remaining statements
