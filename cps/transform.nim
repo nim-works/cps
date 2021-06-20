@@ -11,7 +11,7 @@ when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
 proc annotate(parent: var Env; n: NimNode): NimNode
 
 proc makeContProc(name: Name, cont, source: NimNode): ProcDef =
-  ## creates a continuation proc from with `name` using continuation
+  ## creates a continuation proc with `name` using continuation
   ## `cont` with the given body.
   let
     contParam = desym cont
@@ -561,16 +561,17 @@ func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
   result.copyLineInfo n
   result.add env.first.NimNode
 
-proc setupChildContinuation(env: var Env; call: NimNode): (NimNode, NimNode) =
+proc setupChildContinuation(env: var Env; call: NimNode): (Name, NimNode) =
   ## create a new child continuation variable and add it to the
   ## environment.  return the child's symbol and its environment type.
-  let child = nskVar.genSym"child"
+  let child = newVarName"child"
   let etype = pragmaArgument(call, "cpsEnvironment")
-  env.localSection newIdentDefs(child, etype)
+  env.localSection newIdentDefs(child, etype.TypeExpr)
   result = (child, etype)
 
 proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
   ## this rewrite supports `x = contProc()` and `let x = contProc()`
+  # create the unshimmed assignment
   var assign = newStmtList()
   case store.kind
   of nnkVarSection, nnkLetSection:
@@ -585,12 +586,12 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
 
   # swap the call in the assignment statement(s)
   let (child, etype) = setupChildContinuation(env, call)
-  assign = assign.resymCall(call, newCall child)
+  assign = assign.resymCall(call, newCall child.NimNode)
 
   # compose the rewrite as an assignment, a lame effort to dealloc
   # the child, and then any remaining statements we were passed
   var body =
-    genAst(assign, tail, child, etype, dealloc = Dealloc.sym):
+    genAst(assign, tail, child = child.NimNode, etype, dealloc = Dealloc.sym):
       assign
       ##if not child.isNil:
       ##  dealloc(etype, child)
@@ -599,7 +600,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
   # the shim is simply an annotation comprised of annotations
   let shim = env.newAnnotation(call, "cpsContinuationJump")
   shim.add env.annotate(call)
-  shim.add env.annotate(child)
+  shim.add env.annotate(child.NimNode)
   shim.add env.annotate(body)
   result = shim
 
@@ -644,7 +645,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
           jumpCall = env.newAnnotation(nc, "cpsContinuationJump")
           let (child, _) = setupChildContinuation(env, nc)
           jumpCall.add env.annotate(nc)
-          jumpCall.add env.annotate(child)
+          jumpCall.add env.annotate(child.Nimnode)
         else:
           jumpCall = env.newAnnotation(nc, "cpsJump")
           jumpCall.add env.annotate(nc)
@@ -1005,7 +1006,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
   # add parameters into the environment
   for defs in n.callingParams:
-    if defs[1].kind == nnkVarTy:
+    if defs.typ.kind == nnkVarTy:
       error "cps does not support var parameters", n
     env.localSection(defs)
 

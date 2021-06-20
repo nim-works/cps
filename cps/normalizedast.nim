@@ -38,6 +38,9 @@ type
     ## currently this is IdentDefs mostly in a var let section, in reality
     ## these are also for routine and generic param definitions
 
+  ProcDefParam* = distinct IdentDefs
+    ## each calling params of proc definition is an IdentDefs
+
   VarLet* = distinct NormalizedNimNode
     ## a var or let section, with a single define
   VarLetDef = distinct NormalizedNimNode
@@ -58,8 +61,10 @@ type
   IdentDefVar* = distinct IdentDefVarLet
     ## identdef defintion from a var section
 
-  DefLike* = IdentDefs | VarLetDef
-    ## IdentDefs could be a singla variable define or a proc def param, while
+  IdentDefLike* = IdentDefs | ProcDefParam
+    ## single var, let, or a proc definition's calling param
+  DefLike* = IdentDefLike | VarLetDef
+    ## IdentDefs could be a single variable define or a proc def param, while
     ## a VarLetDef is an identdefs or vartuple from a var or let section
 
   LetSectionLike* = LetSection
@@ -217,7 +222,9 @@ proc newIdentDefs*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDefs 
 proc newIdentDefs*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefs =
   newIdentDefs(n.NimNode, t.NimNode, val).IdentDefs
 
-func name*(n: IdentDefs): Name = n[0].Name
+# fn-IdentDefLike
+
+func name*(n: IdentDefLike): Name = n.NimNode[0].Name
 
 # fn-VarLetLike
 
@@ -370,6 +377,12 @@ converter identDefVarToIdentDefVarLet*(n: IdentDefVar): IdentDefVarLet =
   # allow downgrading
   n.IdentDefVarLet
 
+# fn-ProcDefParams
+
+converter procDefParamToIdentDefs*(n: ProcDefParam): IdentDefs =
+  # allow downgrading
+  n.IdentDefs
+
 # fn-ProcDef
 
 defineToNimNodeConverter(ProcDef)
@@ -387,12 +400,12 @@ func asProcDef*(n: NimNode): ProcDef =
 
 func returnParam*(n: ProcDef): NimNode =
   ## the return param or empty if void
+  ## XXX: should return TypeExpr or Name, need to check rewrite restrictions 
   n.params[0]
 
-func `returnParam=`*(n: ProcDef, ret: NimNode) =
+proc `returnParam=`*(n: ProcDef, ret: Name) =
   ## set the return param
-  ## XXX: remove normalizingRewrites once this is typed
-  n.params[0] = normalizingRewrites ret
+  n.params[0] = ret.NimNode
 
 func name*(n: ProcDef): Name =
   ## get the name of this ProcDef
@@ -411,11 +424,11 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
     if body == nil: copy n.body else: body).ProcDef
   result.copyLineInfo n
 
-iterator callingParams*(n: ProcDef): NimNode =
+iterator callingParams*(n: ProcDef): ProcDefParam =
   for a in n.params[1..^1].items:
-    yield a
+    yield a.ProcDefParam
 
-proc desym*(n: ProcDef, sym: NimNode): ProcDef {.borrow.}
+proc desym*(n: ProcDef, sym: Name): ProcDef {.borrow.}
 
 proc addPragma*(n: ProcDef, prag: Name) {.borrow.}
 proc addPragma*(n: ProcDef, prag: string) =

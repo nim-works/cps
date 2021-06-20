@@ -298,7 +298,9 @@ proc letOrVar(n: IdentDefs): NimNodeKind =
     result = nnkLetSection
 
 proc addAssignment(e: var Env; d: IdentDefs): NimNode =
-  ## compose an assignment during addition of identDefs to env for proc params
+  ## compose an assignment during addition of identdefs to env. For the
+  ## purposes of CPS, even though let and var sections contain identdefs this
+  ## proc should never handle those directly, see overloads.
   let section = letOrVar(d)
   discard e.addIdentDef(section, d)
   when cpsDebug == "Env":
@@ -307,7 +309,7 @@ proc addAssignment(e: var Env; d: IdentDefs): NimNode =
   result = newStmtList()
 
 proc addAssignment(e: var Env; section: IdentDefVarLet): NimNode =
-  ## compose an assignment during addition of identDefs to env
+  ## compose an assignment during addition of var|let identDefs to env
   let (field, value) = e.addIdentDef(section.kind, section.identdef())
   when cpsDebug == "Env":
     echo $kind, "\t", repr(d)
@@ -351,6 +353,17 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
     # an iterator handles `var a, b, c = 3` appropriately
     maybeAdd e.addAssignment(n.asVarLetIdentDef())
 
+proc localSection*(e: var Env; n: IdentDefs; into: NimNode = nil) =
+  ## consume nnkIdentDefs and populate `into` with assignments, even if `into`
+  ## is nil, the `n` will be cached locally
+  let assignment = e.addAssignment(n)
+  if not into.isNil:
+    into.add assignment
+
+proc localSection*(e: var Env; n: ProcDefParam; into: NimNode = nil) {.borrow.}
+  ## consume proc definition params and yield name, node pairs representing
+  ## assignments to local scope.
+
 proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
   ## consume ident defs and yield name, node pairs representing assignments to
   ## local scope.
@@ -358,11 +371,11 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
   of nnkVarSection, nnkLetSection:
     # XXX: this branch goes away once we type procParams, as that's the only
     #      other use for this proc based on the call sites.
-    error "this is a deprecated path and should not be triggered"
+    error "this is a deprecated path and should not be triggered - let/var section"
   of nnkIdentDefs:
-    let assignment = e.addAssignment expectIdentDefs(n)
-    if not into.isNil:
-      into.add assignment
+    # XXX: this branch goes away once we type procParams, as that's the only
+    #      other use for this proc based on the call sites.
+    error "this is a deprecated path and should not be triggered - proc def param"
   else:
     e.store.add:
       n.errorAst "localSection input"
@@ -472,7 +485,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   # XXX: remove NimNode
   result = clone(n, newStmtList())
   result.addPragma ident"used"  # avoid gratuitous warnings
-  result.returnParam = env.identity.NimNode
+  result.returnParam = env.identity
   result.name = nskProc.genSym"whelp"
   result.introduce {Alloc, Boot}
 
@@ -487,13 +500,13 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
-    result = desym(result, defs[0])
+    result = desym(result, defs.name)
 
 proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   # XXX: remove NimNode
   result = clone(n, newStmtList())
-  result.addPragma ident"used"  # avoid gratuitous warnings
+  result.addPragma "used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot}
 
   let c = newVarName("C")
@@ -515,7 +528,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
-    result = desym(result, defs[0])
+    result = desym(result, defs.name)
 
   # now the trampoline
   let tramp = bindSym"trampoline"
