@@ -634,13 +634,37 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       return
 
     of nnkVarSection, nnkLetSection:
-      let section = expectVarLet(nc)
-      if isCpsCall(section.val):
+      let section = expectVarLet nc
+      if section.val.isCpsCall:
+        if section.isTuple:
+          result.add:
+            nc.last.errorAst "cps doesn't support var tuples here yet"
+        else:
+          # this is a simple hack to support `let x: int = contProc()`
+          var shim =
+            genAst(tipe = section.typ, store = nc.name,
+                   call = section.val):
+              var store: tipe
+              block:
+                var c = whelp call
+                var d: Continuation = c
+                while d.running:
+                  d = d.fn(d)
+                c = (typeof c)(d)
+                store = ... c
+          # FIXME: we need a rewrite filter here to recover line info
+          copyLineInfo(shim, nc)
+          # add any remaining statements
+          if i < n.len - 1:
+            shim.add: newStmtList(n[i + 1 .. ^1])
+          # re-process the rewrite and we're done
+          result.add:
+            env.annotate shim
+          return
+      elif section.val.isCpsBlock:
+        # this is supported by what we refer to as `expr flattening`
         result.add:
-          nc.last.errorAst "shim is not yet supported"
-      elif isCpsBlock(section.val):
-        result.add:
-          nc.last.errorAst "only calls are supported here"
+          nc.last.errorAst "cps only supports calls here"
       else:
         # add definitions into the environment
         env.localSection(section, result)
@@ -881,7 +905,10 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   n = clone n
   n.addPragma ident"used"  # avoid gratuitous warnings
 
-  # the whelp is a limited bootstrap that merely makes
+  # the `...` operator recovers the result of a continuation
+  let dots = env.createResult()
+
+  # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)
 
@@ -947,7 +974,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   env = env.storeType(force = off)
 
   # generated proc bodies, remaining proc, whelp, bootstrap
-  result = newStmtList(types, n, whelp, booty)
+  result = newStmtList(types, n, dots, whelp, booty)
   result = workaroundRewrites result
 
 macro cpsTransform*(T, n: typed): untyped =
