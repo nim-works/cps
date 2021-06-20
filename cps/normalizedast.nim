@@ -38,7 +38,7 @@ type
     ## currently this is IdentDefs mostly in a var let section, in reality
     ## these are also for routine and generic param definitions
 
-  ProcDefParam* = distinct IdentDefs
+  RoutineParams* = distinct IdentDefs
     ## each calling params of proc definition is an IdentDefs
 
   VarLet* = distinct NormalizedNimNode
@@ -61,7 +61,7 @@ type
   IdentDefVar* = distinct IdentDefVarLet
     ## identdef defintion from a var section
 
-  IdentDefLike* = IdentDefs | ProcDefParam
+  IdentDefLike* = IdentDefs | RoutineParams
     ## single var, let, or a proc definition's calling param
   DefLike* = IdentDefLike | VarLetDef
     ## IdentDefs could be a single variable define or a proc def param, while
@@ -379,7 +379,7 @@ converter identDefVarToIdentDefVarLet*(n: IdentDefVar): IdentDefVarLet =
 
 # fn-ProcDefParams
 
-converter procDefParamToIdentDefs*(n: ProcDefParam): IdentDefs =
+converter procDefParamToIdentDefs*(n: RoutineParams): IdentDefs =
   # allow downgrading
   n.IdentDefs
 
@@ -424,9 +424,9 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
     if body == nil: copy n.body else: body).ProcDef
   result.copyLineInfo n
 
-iterator callingParams*(n: ProcDef): ProcDefParam =
+iterator callingParams*(n: ProcDef): RoutineParams =
   for a in n.params[1..^1].items:
-    yield a.ProcDefParam
+    yield a.RoutineParams
 
 proc desym*(n: ProcDef, sym: Name): ProcDef {.borrow.}
 

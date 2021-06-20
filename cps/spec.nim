@@ -143,15 +143,6 @@ proc getContSym*(n: NimNode): Name =
   else:
     nil.Name
 
-proc getContSym*(n: ProcDef): Name =
-  ## Retrieve the continuation symbol from `n`, provided that
-  ## `n` is a cpsCont.
-  ## XXX: remove `.Name`
-  if n.NimNode.isCpsCont:
-    toSeq(n.callingParams)[0].Name
-  else:
-    nil.Name
-
 proc newCpsTerminate*(): NimNode =
   ## Create a new node signifying early termination of the procedure
   nnkPragma.newTree:

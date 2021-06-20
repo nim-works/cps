@@ -360,25 +360,9 @@ proc localSection*(e: var Env; n: IdentDefs; into: NimNode = nil) =
   if not into.isNil:
     into.add assignment
 
-proc localSection*(e: var Env; n: ProcDefParam; into: NimNode = nil) {.borrow.}
+proc localSection*(e: var Env; n: RoutineParams; into: NimNode = nil) {.borrow.}
   ## consume proc definition params and yield name, node pairs representing
   ## assignments to local scope.
-
-proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
-  ## consume ident defs and yield name, node pairs representing assignments to
-  ## local scope.
-  case n.kind
-  of nnkVarSection, nnkLetSection:
-    # XXX: this branch goes away once we type procParams, as that's the only
-    #      other use for this proc based on the call sites.
-    error "this is a deprecated path and should not be triggered - let/var section"
-  of nnkIdentDefs:
-    # XXX: this branch goes away once we type procParams, as that's the only
-    #      other use for this proc based on the call sites.
-    error "this is a deprecated path and should not be triggered - proc def param"
-  else:
-    e.store.add:
-      n.errorAst "localSection input"
 
 proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
   ## Rewrite a return statement to use our result field.
