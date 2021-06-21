@@ -302,8 +302,25 @@ proc pragmaArgument*(n: NimNode; s: string): NimNode =
     result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
 
 proc bootstrapSymbol*(n: NimNode): NimNode =
+  ## find the return type of the bootstrap
   case n.kind
   of {nnkProcDef} + nnkCallKinds:
     pragmaArgument(n, "cpsBootstrap")
   else:
     newCall(ident"typeOf", n)
+
+proc enbasen*(n: NimNode): NimNode =
+  ## find the parent type of the given symbol/type
+  case n.kind
+  of nnkOfInherit:
+    n[0]
+  of nnkObjectTy:
+    enbasen: n[1]
+  of nnkRefTy:
+    enbasen: n[0]
+  of nnkTypeDef:
+    enbasen: n.last
+  of nnkSym:
+    enbasen: getImpl n
+  else:
+    n
