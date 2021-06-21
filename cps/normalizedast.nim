@@ -1,8 +1,12 @@
 import std/macros
 from std/hashes import Hash, hash
 from std/sequtils import anyIt, toSeq
+from std/typetraits import distinctBase
 
-from cps/rewrites import normalizingRewrites, replace, desym, resym
+from cps/rewrites import NormalizedNimNode, normalizingRewrites, replace,
+                         desym, resym
+
+export NormalizedNimNode
 
 # Parts of this module:
 # * distinct types representing normalized/transformed variants of distinct AST
@@ -13,21 +17,12 @@ from cps/rewrites import normalizingRewrites, replace, desym, resym
 # * Normalized procs - ensure invariants by centralizing the AST operations
 
 type
-  NormalizedNimNode* = distinct NimNode
-    ## a normalized node, but this should not be useed directly, use a
-    ## specialized type instead, see below.
-
-  # Outside of NormalizedNimNode, nodes fall into a few cateogries:
-  # * one to one to an AST node, but with some invariants (eg: `Ident`)
-  # * over multiple node kinds, but cover common operations (eg: `VarLet`)
-  # * to a normalized type node, but further specialization (eg: `TupleVarLet`)
-
+  Name* = distinct NormalizedNimNode
+    ## either an Ident or Sym
   Ident* = distinct Name
     ## nnkIdent
   Sym* = distinct Name
     ## nnkSym
-  Name* = distinct NormalizedNimNode
-    ## either an Ident or Sym
   TypeExpr* = distinct NormalizedNimNode
     ## the type part of a let or var definition or a proc param
 
@@ -78,9 +73,8 @@ type
   VarLetIdentDefLike* = IdentDefVarLet | IdentDefVar
     ## abstract over identdefs from let or var sections types
   
-  ExprLike* = Name | NimNode
+  ExprLike* = Name | NormalizedNimNode
     ## abstract over any nim value expression
-    ## XXX: temporarly added NimNode for convenience
   TypeExprLike* = Name | TypeExpr
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
@@ -91,6 +85,18 @@ proc normalizeProcDef*(n: NimNode): ProcDef =
   ## ensure this is a normalized procd definition
   expectKind(n, nnkProcDef)
   result = (normalizingRewrites n).ProcDef
+
+proc add*(f, c: NormalizedNimNode): NormalizedNimNode {.discardable.} =
+  ## hopefully this fixes ambiguous call issues
+  f.NimNode.add(c.NimNode).NormalizedNimNode
+proc add*(f: NimNode, c: NormalizedNimNode): NimNode {.borrow, discardable.}
+  ## hopefully this fixes ambiguous call issues
+
+# XXX: Temporary procs until we get more strongly typed versions
+
+proc copy*(n: NormalizedNimNode): NormalizedNimNode {.borrow.}
+proc copyNimNode*(n: NormalizedNimNode): NormalizedNimNode {.borrow.}
+proc copyNimTree*(n: NormalizedNimNode): NormalizedNimNode {.borrow.}
 
 # XXX: make a pragma type and wrap this up
 
@@ -143,11 +149,24 @@ template defineToNimNodeConverter(t: typedesc) =
 # fn-NormalizedNimNode
 
 defineToNimNodeConverter(NormalizedNimNode)
-template hash*(n: NormalizedNimNode) =
+template hash*(n: NormalizedNimNode): Hash =
   hash(n.NimNode)
 proc desym*(n: NormalizedNimNode, sym: NimNode): NormalizedNimNode =
   ## desym all occurences of a specific sym
   n.replace(proc(it: NimNode): bool = it == sym, desym sym).NormalizedNimNode
+func last*(n: NormalizedNimNode): NormalizedNimNode {.borrow.}
+proc onlyNormalizedNimNode*[T: distinct](n: T): NormalizedNimNode =
+  ## used for conversion in an vararg scenarios primarily
+  when distinctBase(T) is NimNode:
+    n
+  else:
+    errorGot "invalid type, expected some NormalizedNimNode", n
+
+proc newStmtList*(stmts: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
+  ## create a new normalized statement
+  result = macros.newStmtList().NormalizedNimNode
+  for s in stmts:
+    result.NimNode.add s.NimNode
 
 # fn-Name
 
@@ -180,9 +199,15 @@ proc newTypeName*(n: string): Name =
 proc newVarName*(n: string = ""): Name =
   ## `genSym` an `nskVar`
   genSym(nskVar, n).Name
+proc newLetName*(n: string): Name =
+  ## `genSym` an `nskLet`
+  genSym(nskLet, n).Name
 proc newProcName*(n: string): Name =
   ## `genSym` an `nskProc`
   genSym(nskProc, n).Name
+proc newUnknownName*(n: string): Name =
+  ## `genSym` an `nskUnknown`
+  genSym(nskUnknown, n).Name
 proc bindName*(n: static string): Name =
   ## `bindSym` the string as a `Name`
   let r = bindSym(n)
@@ -193,7 +218,7 @@ proc bindName*(n: static string, rule: static BindSymRule): Name =
   r.Name
 proc desym*(n: Name): Name {.borrow.}
   ## ensures that `Name` is an `nnkIdent`
-proc resym*(fragment: NimNode, sym: Name, replacement: Name): NimNode {.borrow.}
+proc resym*(fragment: NormalizedNimNode, sym, replacement: Name): NormalizedNimNode {.borrow.}
   ## replace `sym` in the AST `fragment` with the `replacement`
 
 func typeInst*(n: Name): NimNode =
@@ -210,45 +235,57 @@ func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
   )
 
 converter nameToNormalizedNimNode*(n: Name): NormalizedNimNode =
-  ## allow downgrading
+  ## downgrade a `Name` to a `NormalizedNimNode`
   n.NormalizedNimNode
 
 # fn-ExprLike
-proc newDotExpr*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
+proc newDotExpr*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
   ## create a new dot expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
   newDotExpr(
     when l isnot NimNode: l.NimNode else: l,
     when r isnot NimNode: r.NimNode else: r
-  )
-proc newAssignment*[L: ExprLike, R: ExprLike](l: L, r: R): NimNode =
+  ).NormalizedNimNode
+proc newAssignment*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
   ## create a new assignment, meant for executable code
   newAssignment(
     when l isnot NimNode: l.NimNode else: l,
     when r isnot NimNode: r.NimNode else: r
-  )
-proc newCall*(n: Name, arg: ExprLike): NimNode =
+  ).NormalizedNimNode
+proc newCall*(n: Name, arg: ExprLike): NormalizedNimNode =
   ## create a new call with a single arg
   newCall(
     when n isnot NimNode: n.NimNode else: n,
     when arg isnot NimNode: arg.NimNode else: arg
-  )
-proc newCall*(n: Name, args: varargs[NimNode]): NimNode =
+  ).NormalizedNimNode
+proc newCall*(n: Name, args: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
   ## create a new call, with `n` as name some args
-  newCall(n.NimNode, args)
-proc newCall*(n: string, arg: ExprLike): NimNode =
+  result = newCall(n.NimNode).NormalizedNimNode
+  for a in args:
+    result.add a
+proc newCall*(n: string, args: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
+  ## create a new call, with `n` as and ident name, and a single arg
+  result = newCall(asName(n))
+  for a in args:
+    result.add a
+proc newCall*(n: string, arg: ExprLike): NormalizedNimNode =
   ## create a new call, with `n` as and ident name, and a single arg
   newCall(
     asName(n).NimNode,
     when arg isnot NimNode: arg.NimNode else: arg
-  )
-proc newCall*[A: ExprLike, B: ExprLike](n: string, a: A, b: B): NimNode =
+  ).NormalizedNimNode
+proc newCall*[A: ExprLike, B: ExprLike](n: string, a: A, b: B): NormalizedNimNode =
   ## create a new call, with `n` as and ident name, and two args
   newCall(
     asName(n).NimNode,
     when a isnot NimNode: a.NimNode else: a,
     when b isnot NimNode: b.NimNode else: b
-  )
+  ).NormalizedNimNode
+proc newCall*(n: NormalizedNimNode, args: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
+  ## create a new call, with `n` as name some args
+  result = newCall(n.NimNode).NormalizedNimNode
+  for a in args:
+    result.add a
 
 # fn-TypeExpr
 proc asTypeExpr*(n: NimNode): TypeExpr =
@@ -307,6 +344,8 @@ proc newIdentDefs*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDefs 
   newIdentDefs(ident(n), t.NimNode, val).IdentDefs
 proc newIdentDefs*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefs =
   newIdentDefs(n.NimNode, t.NimNode, val).IdentDefs
+proc newIdentDefs*(n: Name, val: NormalizedNimNode): IdentDefs =
+  newIdentDefs(n.NimNode, newEmptyNode(), val).IdentDefs
 
 # fn-IdentDefLike
 
@@ -318,7 +357,7 @@ func def*(n: VarLetLike): VarLetDef = VarLetDef n.NimNode[0]
   ## an IdentDefs or VarTuple
 func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
-func val*(n: VarLetLike): NimNode = n.def.val
+func val*(n: VarLetLike): NormalizedNimNode = n.def.val.NormalizedNimNode
   ## the ident or sym being defined, or tuple being defined
 func kind*(n: VarLetLike): NimNodeKind = n.NimNode.kind
 func hasValue*(n: VarLetLike): bool = n.def.hasValue
@@ -405,6 +444,10 @@ func clone*(n: VarLet, value: NimNode = nil): VarLet =
   result = expectVarLet:
     copyNimNode(n.NimNode).add def
 
+converter varLetToNormalizedNimNode*(n: VarLet): NormalizedNimNode =
+  ## downgrade a `VarLet` to a `NormalizedNimNode`
+  n.NormalizedNimNode
+
 # fn-TupleVarLet
 
 proc typ*(n: TupleVarLet): NimNode =
@@ -427,6 +470,10 @@ proc newVarLetIdentDef*(kind: NimNodeKind,
   ## create a new IdentDefVarLet
   newVarLetIdentDef(kind, newIdentDefs(name.NimNode, typ, val).IdentDefs)
 
+converter identDefVarLetToNormalizedNimNode*(n: IdentDefVarLet): NormalizedNimNode =
+  # allow downgrading
+  n.NormalizedNimNode
+
 # fn-VarSection
 
 defineToNimNodeConverter(VarSection)
@@ -437,11 +484,17 @@ proc newVarSection*(n: Name, t: TypeExprLike, val = newEmptyNode()): VarSection 
   ## create a var section with an identdef, eg: `n`: `t` = `val`
   newVarSection(newIdentDefs(n, t, val))
 
+converter varSectionToNormalizedNimNode*(n: VarSection): NormalizedNimNode =
+  # allow downgrading
+  n.NormalizedNimNode
+
 # fn-IdentDefLet
 
 proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
   ## create a var section with an identdef
   (nnkLetSection.newTree i).IdentDefLet
+proc newIdentDefLet*(n: Name, val: NormalizedNimNode): IdentDefLet =
+  newIdentDefLet(newIdentDefs(n, val))
 proc newIdentDefLet*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefLet =
   ## create a let section with an identdef, eg: `n`: `t` = `val`
   newIdentDefLet(newIdentDefs(n, t, val))
@@ -449,6 +502,10 @@ proc newIdentDefLet*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefLe
 converter identDefLetToIdentDefVarLet*(n: IdentDefLet): IdentDefVarLet =
   # allow downgrading
   n.IdentDefVarLet
+
+converter identDefLetToNormalizedNimNode*(n: IdentDefLet): NormalizedNimNode =
+  # allow downgrading
+  n.NormalizedNimNode
 
 # fn-IdentDefVar
 
@@ -489,6 +546,9 @@ func name*(n: ProcDef): Name =
   n.NimNode.name.Name
 proc `name=`*(n: ProcDef, name: Name) {.borrow.}
 
+proc body*(n: ProcDef): NormalizedNimNode {.borrow.}
+proc `body=`*(n: ProcDef, b: NormalizedNimNode) {.borrow.}
+
 func formalParams(n: ProcDef): NimNode =
   ## first one will be the return, meant to be used internally
   n.NimNode.params
@@ -528,10 +588,10 @@ func hasPragma*(n: ProcDef, s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
   hasPragma(n.NimNode, s)
 
-func returnParam*(n: ProcDef): NimNode =
+func returnParam*(n: ProcDef): NormalizedNimNode =
   ## the return param or empty if void
   ## XXX: should return TypeExpr or Name, need to check rewrite restrictions 
-  n.NimNode.params[0]
+  n.NimNode.params[0].NormalizedNimNode
 
 proc `returnParam=`*(n: ProcDef, ret: Name) =
   ## set the return param
@@ -552,5 +612,10 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
     copy n.params,              # parameter normalization will mutate these
     newEmptyNode(),
     newEmptyNode(),
-    if body == nil: copy n.body else: body).ProcDef
+    if body == nil: macros.copy(n.body) else: body
+  ).ProcDef
   result.copyLineInfo n
+
+converter procDefToNormalizedNimNode*(n: ProcDef): NormalizedNimNode =
+  # allow downgrading
+  n.NormalizedNimNode

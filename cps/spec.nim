@@ -86,12 +86,15 @@ proc hash*(n: NimNode): Hash =
   h = h !& hash(repr n)
   result = !$h
 
-func newCpsPending*(): NimNode =
+func newCpsPending*(): NormalizedNimNode =
   ## Produce a {.cpsPending.} annotation
-  nnkPragma.newTree:
-    bindSym"cpsPending"
+  nnkPragma.newTree(bindSym"cpsPending").NormalizedNimNode
 
-proc isCpsPending*(n: NimNode): bool =
+# proc isCpsPending*(n: NimNode): bool =
+#   ## Return whether a node is a {.cpsPending.} annotation
+#   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
+
+proc isCpsPending*(n: NormalizedNimNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
@@ -110,12 +113,12 @@ proc isCpsBreak*(n: NimNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
 
-func newCpsContinue*(n: NimNode): NimNode =
+func newCpsContinue*(n: NormalizedNimNode): NormalizedNimNode =
   ## Produce a {.cpsContinue.} annotation
-  nnkPragma.newNimNode(n).add:
-    bindSym"cpsContinue"
+  nnkPragma.newNimNode(n).NormalizedNimNode.add:
+    bindName"cpsContinue"
 
-proc isCpsContinue*(n: NimNode): bool =
+proc isCpsContinue*(n: NormalizedNimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
 
@@ -152,11 +155,11 @@ proc isCpsTerminate*(n: NimNode): bool =
   ## Return whether `n` is a cpsTerminate annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsTerminate")
 
-proc isScopeExit*(n: NimNode): bool =
+proc isScopeExit*(n: NormalizedNimNode): bool =
   ## Return whether the given node signify a CPS scope exit
   n.isCpsPending or n.isCpsBreak or n.isCpsContinue or n.isCpsTerminate
 
-template rewriteIt*(n: typed; body: untyped): NimNode =
+template rewriteIt*(n: typed; body: untyped): NormalizedNimNode =
   var it {.inject.} = normalizingRewrites:
     newStmtList n
   body
@@ -168,18 +171,22 @@ template debugAnnotation*(s: typed; n: NimNode; body: untyped) {.dirty.} =
     body
   debug(astToStr s, result, Transformed, n)
 
-func matchCpsBreak*(label: NimNode): Matcher =
+func matchCpsBreak*(label: NormalizedNimNode): NormalizedMatcher =
   ## create a matcher matching cpsBreak with the given label
   ## and cpsBreak without any label
   result =
-    proc (n: NimNode): bool =
+    proc (n: NormalizedNimNode): bool =
       if n.isCpsBreak:
         let breakLabel = n.breakLabel
         breakLabel.kind == nnkEmpty or breakLabel == label
       else:
         false
 
-func wrappedFinally*(n: NimNode; final: NimNode): NimNode =
+func matchCpsBreak*(): NormalizedMatcher =
+  ## create a matcher matching cpsBreak with an empty label
+  matchCpsBreak(newEmptyNode().NormalizedNimNode)
+
+func wrappedFinally*(n, final: NormalizedNimNode): NormalizedNimNode =
   ## rewrite a try/except/finally into try/try-except/finally
   # create a copy of the try statement minus finally
   let newTry = copyNimNode(n).add n[0 .. ^2]

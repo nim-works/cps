@@ -115,7 +115,7 @@ macro whelp*(call: typed): untyped =
     it =
       sym.ensimilate:
         Head.hook:
-          newCall(base, it)
+          newCall(base, it).NormalizedNimNode
 
 macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
@@ -126,8 +126,8 @@ macro whelp*(parent: Continuation; call: typed): untyped =
   result = whelpIt call:
     it =
       sym.ensimilate:
-        Tail.hook(newCall(ident"Continuation", parent),
-                  newCall(base, it))
+        Tail.hook(newCall("Continuation", parent.NormalizedNimNode),
+                  newCall(base, it).NormalizedNimNode)
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## Reimplement this symbol to configure a continuation

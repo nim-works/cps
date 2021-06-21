@@ -1,4 +1,4 @@
-import std/macros
+import std/macros except newStmtList
 
 import cps/[spec, normalizedast]
 
@@ -57,7 +57,7 @@ proc sym*(hook: Hook): Name =
     # rely on a `mixin $hook` in (high) scope
     asName($hook)
 
-proc hook*(hook: Hook; n: NimNode): NimNode =
+proc hook*(hook: Hook; n: NormalizedNimNode): NormalizedNimNode =
   ## execute the given hook on the given node
   case hook
   of Alloc: # (unused; see alloc/2)
@@ -68,16 +68,18 @@ proc hook*(hook: Hook; n: NimNode): NimNode =
     newCall(hook.sym, n)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
-    newCall(hook.sym, newLit(repr n.name), makeLineInfo n.lineInfoObj)
+    newCall(hook.sym,
+            newLit(repr n.name).NormalizedNimNode,
+            makeLineInfo(n.lineInfoObj).NormalizedNimNode)
   else:
-    n.errorAst "the " & $hook & " hook doesn't take one argument"
+    n.errorAst("the " & $hook & " hook doesn't take one argument").NormalizedNimNode
 
-proc hook*(hook: Hook; n: Name): NimNode =
+proc hook*(hook: Hook; n: Name): NormalizedNimNode =
   ## execute the given hook on the given node
   ## XXX: work out the correct type class for `n`
-  hook(hook, n.NimNode)
+  hook(hook, n.NormalizedNimNode)
 
-proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
+proc hook*(hook: Hook; a, b: NormalizedNimNode): NormalizedNimNode =
   ## execute the given hook with two arguments
   case hook
   of Alloc:
@@ -94,13 +96,15 @@ proc hook*(hook: Hook; a: NimNode; b: NimNode): NimNode =
     newCall(hook.sym, a, b)
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
-    newCall(hook.sym, a, newLit(repr b.name), makeLineInfo b.lineInfoObj)
+    newCall(hook.sym, a,
+            newLit(repr b.name).NormalizedNimNode,
+            makeLineInfo(b.lineInfoObj).NormalizedNimNode)
   of Dealloc:
-    newStmtList [newCall(hook.sym, a, b), newNilLit()]
+    newStmtList(newCall(hook.sym, a, b), newNilLit().NormalizedNimNode)
   else:
-    b.errorAst "the " & $hook & " hook doesn't take two arguments"
+    b.errorAst("the " & $hook & " hook doesn't take two arguments").NormalizedNimNode
 
-proc hook*(hook: Hook; a: Name; b: NimNode): NimNode =
+proc hook*(hook: Hook; a: Name; b: NormalizedNimNode): NormalizedNimNode =
   ## execute the given hook with two arguments
   ## XXX: work out the correct type class for `a` and `b`
-  hook(hook, a.NimNode, b)
+  hook(hook, a.NormalizedNimNode, b)

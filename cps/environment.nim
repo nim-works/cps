@@ -5,7 +5,8 @@ they are comprised.
 
 ]##
 
-import std/[sets, sequtils, hashes, tables, macros, algorithm, genasts]
+import std/[sets, sequtils, hashes, tables, algorithm, genasts]
+import std/macros except newStmtList
 import cps/[spec, hooks, help, rewrites, normalizedast]
 
 #{.experimental: "strictNotNil".}
@@ -71,14 +72,14 @@ proc root*(e: Env): Name =
     r = r.parent
   result = r.inherits
 
-proc castToRoot(e: Env; n: NimNode): NimNode =
+proc castToRoot(e: Env; n: NormalizedNimNode): NormalizedNimNode =
   newCall(e.root, n)
 
-proc castToChild(e: Env; n: Name): NimNode =
+proc castToChild(e: Env; n: Name): NormalizedNimNode =
   # XXX: remove NimNode
   newCall(e.identity, n)
 
-proc maybeConvertToRoot*(e: Env; locals: NimNode): NimNode =
+proc maybeConvertToRoot*(e: Env; locals: NormalizedNimNode): NormalizedNimNode =
   ## add an Obj(foo: bar).Other conversion if necessary
   if not eqIdent(locals[0], e.root):
     e.castToRoot(locals)
@@ -166,14 +167,14 @@ proc first*(e: Env): Name = e.c
 proc firstDef*(e: Env): IdentDefs =
   newIdentDefs(e.first, e.via, newEmptyNode())
 
-proc get*(e: Env): NimNode =
+proc get*(e: Env): NormalizedNimNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
-proc rewriteResult(e: Env; n: NimNode): NimNode =
+proc rewriteResult(e: Env; n: NimNode): NormalizedNimNode =
   ## replaces result symbols with the env's result; this should be
   ## safe to run on sem'd ast (for obvious reasons)
-  proc rewriter(n: NimNode): NimNode =
+  proc rewriter(n: NimNode): NormalizedNimNode =
     ## Rewrite any result symbols to use the result field from the Env.
     case n.kind
     of nnkSym:
@@ -246,7 +247,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: Name; store: var NimNode; via: Name, rs: NimNode): Env =
+proc newEnv*(c: Name; store: var NormalizedNimNode; via: Name, rs: NormalizedNimNode): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
@@ -261,7 +262,7 @@ proc newEnv*(c: Name; store: var NimNode; via: Name, rs: NimNode): Env =
     result.seen = initHashSet[string]()
   init result
 
-proc newEnv*(store: var NimNode; via: Name, rs: NimNode): Env=
+proc newEnv*(store: var NormalizedNimNode; via: Name, rs: NormalizedNimNode): Env=
   newEnv(asName("continuation"), store, via, rs)
 
 proc identity*(e: var Env): Name =
@@ -380,7 +381,7 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
       # and add the termination annotation
       result.add newCpsTerminate()
 
-proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
+proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormalizedNimNode): NormalizedNimNode =
   ## swap symbols for those in the continuation
   result = n
   let child = e.castToChild e.first
@@ -389,7 +390,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
     # these are a side-effect of an open nim bug
     let sym = section.name
     if sym.isSymbol:
-      result = result.resym(sym.NimNode, newDotExpr(child, field))
+      result = result.resym(sym, newDotExpr(child, field))
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
   # make a special rewrite pass to replace the result symbols
@@ -398,11 +399,11 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NimNode): NimNode =
 proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
   # XXX: remove NimNode
-  proc resultdot(n: Name): NimNode =
+  proc resultdot(n: Name): NormalizedNimNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
-    newAssignment name.NimNode:
-      Alloc.hook(e.inherits, e.identity.NimNode)
+    newAssignment name:
+      Alloc.hook(e.inherits, e.identity)
   for field, section in e.pairs:
     # omit special fields in the env that we use for holding
     # custom functions, results, exceptions, and parent respectively
@@ -421,7 +422,7 @@ proc genException*(e: var Env): NimNode =
   let ex = asName(genField("ex"))
   e = e.set ex:
     newIdentDefLet(ex, newRefType(bindName("Exception")), newNilLit())
-  result = newDotExpr(e.castToChild(e.first), ex.NimNode)
+  result = newDotExpr(e.castToChild(e.first), ex)
 
 proc createResult*(env: Env, exported = false): ProcDef =
   ## define a procedure for retrieving the result of a continuation
@@ -432,8 +433,9 @@ proc createResult*(env: Env, exported = false): ProcDef =
       if env.rs.hasType:
         env.get                  # the return value is env.result
       else:
-        nnkDiscardStmt.newTree:
-          newEmptyNode()         # the return value is void
+        NormalizedNimNode:
+          nnkDiscardStmt.newTree:
+            newEmptyNode()       # the return value is void
 
   # compose the (exported?) symbol
   var name = nnkAccQuoted.newTree ident"()"
@@ -441,9 +443,9 @@ proc createResult*(env: Env, exported = false): ProcDef =
     name = postfix(name, "*")
 
   result = ProcDef:
-    genAst(name, field, c = env.first.NimNode, cont = env.identity.NimNode,
-           tipe = env.rs.typ, dismissed=Dismissed, finished=Finished,
-           running=Running):
+    genAst(name, field = field.NimNode, c = env.first.NimNode,
+           cont = env.identity.NimNode, tipe = env.rs.typ, dismissed=Dismissed,
+           finished=Finished, running=Running):
       {.push experimental: "callOperator".}
       proc name(c: cont): tipe {.used.} =
         case c.state
@@ -525,7 +527,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
       nnkIfExpr.newTree:
         nnkElifExpr.newTree [
           # check if the continuation is not nil, and if so, to
-          newCall(bindSym"not", newDotExpr(c, ident"dismissed")),
+          newCall(bindSym"not", newDotExpr(c, asName"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(asName"result",
             newDotExpr(env.castToChild(c), env.rs.name))

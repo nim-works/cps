@@ -1,4 +1,4 @@
-import std/macros
+import std/macros except newStmtList
 import cps/[spec, normalizedast, help, rewrites]
 
 template cpsMustLift() {.pragma.} ## signify a code block that has to be lifted
@@ -28,7 +28,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     case n.kind
     of nnkVarSection, nnkLetSection:
       let n = expectVarLet n
-      result = n.val.NormalizedNimNode.hasCpsExpr
+      result = n.val.hasCpsExpr
     of nnkElifBranch, nnkElifExpr, nnkWhileStmt:
       result = n[0].NormalizedNimNode.hasCpsExpr
     of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
@@ -49,8 +49,7 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
   ##
   ## Returns the filtered tree.
   if n.typeKind == ntyNone:
-    return NormalizedNimNode:
-      copy n
+    return copy n
 
   proc rewriteElifOf(branch: NormalizedNimNode): NormalizedNimNode =
     ## Rewrite a singular of/elif/else branch
@@ -62,7 +61,7 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
           copyNimNode(branch).add(branch[0]):
             NimNode:
               # Then rewrite the body
-              filterExpr(NormalizedNimNode(branch.last), transformer)
+              filterExpr(branch.last, transformer)
     of nnkElse, nnkElseExpr:
       result =
         NormalizedNimNode:
@@ -70,16 +69,16 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
           copyNimNode(branch).add:
             NimNode:
               # Then rewrite the body
-              filterExpr(NormalizedNimNode(branch.last), transformer)
+              filterExpr(branch.last, transformer)
     of nnkOfBranch:
-      result = NormalizedNimNode copyNimNode(branch)
+      result = copyNimNode(branch)
       # Copy all matching conditions, which is every children except the last.
       for idx in 0 ..< branch.len - 1:
         result.add copy(branch[idx])
       # Add the rewritten body
       result.add:
         NimNode:
-          filterExpr(NormalizedNimNode(branch.last), transformer)
+          filterExpr(branch.last, transformer)
     else:
       result = NormalizedNimNode:
         n.errorAst "unexpected node kind in case/if expression"
@@ -90,7 +89,7 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
     # just emit the assignment.
     result = transformer(n)
   of nnkStmtList, nnkStmtListExpr:
-    result = NormalizedNimNode copyNimNode(n)
+    result = copyNimNode(n)
 
     # In a statement list, the last node is the expression, so we copy
     # the part before it because we won't touch them.
@@ -104,9 +103,9 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
       # varargs and normal form of add).
       {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
       NimNode:
-        filterExpr(NormalizedNimNode(n.last), transformer)
+        filterExpr(n.last, transformer)
   of nnkBlockStmt, nnkBlockExpr, nnkPragmaBlock:
-    result = NormalizedNimNode copyNimNode(n)
+    result = copyNimNode(n)
     # Copy the label/pragma list
     result.add copy(n[0])
     # Rewrite and add the body
@@ -179,7 +178,7 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
   of ConvNodes - {nnkConv}:
     # Hidden conversion nodes can be reconstructed by the compiler if needed,
     # so we just skip them and rewrite the body instead.
-    result = filterExpr(NormalizedNimNode(n.last), transformer)
+    result = filterExpr(n.last, transformer)
   else:
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
@@ -189,7 +188,7 @@ func assignTo*(location, n: NormalizedNimNode): NormalizedNimNode =
   ##
   ## Returns a copy of `n` if `n` is not an expression.
   proc assign(n: NormalizedNimNode): NormalizedNimNode =
-    NormalizedNimNode newAssignment(copy(location), copy(n))
+    newAssignment(copy(location), copy(n))
 
   filterExpr(n, assign)
 
@@ -299,7 +298,7 @@ macro cpsExprToTmp(T, n: typed): untyped =
         # Mark this part for lifting
         newCpsMustLift(
           # Create a new statement list
-          NormalizedNimNode newStmtList(
+          newStmtList(
             # Declare the temporary
             newVarSection(tmp, T.TypeExpr),
             # Add the rewritten expression
@@ -307,32 +306,33 @@ macro cpsExprToTmp(T, n: typed): untyped =
           )
         ),
         # Then emit our temporary as the new expression
-        tmp.NimNode
+        tmp
       )
 
 macro cpsAsgn(dst, src: typed): untyped =
   ## Flatten the cps expression `src` into explicit assignments to `dst`.
-  let dst = NormalizedNimNode normalizingRewrites(dst)
+  let dst = normalizingRewrites(dst)
   debugAnnotation cpsAsgn, src:
-    if not dst.isSingleStatement:
-      it = dst.errorAst(
-        "The destination (shown below) requires the evaluation of multiple " &
-        "statements, which CPS does not support at the moment.\n" &
-        "To workaround this, assign the expression to a temporary variable, " &
-        "then assign it to your destination."
-      )
-    elif dst.isMutableLocation:
-      it = dst.errorAst(
-        "The destination's address is mutable, as such CPS cannot guarantee" &
-        " that the expression will be assigned to the correct location.\n" &
-        "To workaround this, assign the expression to a temporary variable," &
-        " then assign it to your destination."
-      )
-    else:
-      it = assignTo(dst):
-        # debugAnnotation wrap our typed body in a stmtlist, so we take it
-        # out
-        NormalizedNimNode it[0]
+    it = NormalizedNimNode:
+      if not dst.isSingleStatement:
+        dst.errorAst(
+          "The destination (shown below) requires the evaluation of multiple " &
+          "statements, which CPS does not support at the moment.\n" &
+          "To workaround this, assign the expression to a temporary variable, " &
+          "then assign it to your destination."
+        )
+      elif dst.isMutableLocation:
+        dst.errorAst(
+          "The destination's address is mutable, as such CPS cannot guarantee" &
+          " that the expression will be assigned to the correct location.\n" &
+          "To workaround this, assign the expression to a temporary variable," &
+          " then assign it to your destination."
+        )
+      else:
+        assignTo(dst):
+          # debugAnnotation wrap our typed body in a stmtlist, so we take it
+          # out
+          it[0].NormalizedNimNode
 
 macro cpsExprConv(T, n: typed): untyped =
   ## Apply the conversion to `T` directly into `n`'s trailling expressions.
@@ -341,7 +341,7 @@ macro cpsExprConv(T, n: typed): untyped =
   let T = normalizingRewrites T
   debugAnnotation cpsExprConv, n:
     proc addConv(n: NormalizedNimNode): NormalizedNimNode =
-      NormalizedNimNode newCall(T, copy n)
+      newCall(T, copy n)
 
     it = filterExpr(NormalizedNimNode(it[0]), addConv)
 
@@ -373,15 +373,15 @@ macro cpsExprLifter(n: typed): untyped =
   ## Move cpsMustLift blocks from `n` to before `n`.
   ## Does not create a new scope.
 
-  proc lift(n: NimNode): NimNode =
+  proc lift(n: NormalizedNimNode): NormalizedNimNode =
     let lifted = newStmtList()
-    proc lifter(n: NimNode): NimNode =
+    proc lifter(n: NormalizedNimNode): NormalizedNimNode =
       if n.isCpsMustLift:
         lifted.add:
           # Lift the bodies inside `n` then add it to the list of lifted bodies
-          lift n.last # The body to be lifted is the last child
+          lift n.last # body to be lifted is the last child
         # Replace `n` with an empty node
-        result = newEmptyNode()
+        result = NormalizedNimNode newEmptyNode()
 
     let rewritten = filter(n, lifter)
     # For expressions we have to be a bit more delicate, as an empty nnkStmtList
@@ -412,7 +412,7 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
   ## Annotate expressions requiring flattening in `n`'s children.
   ## XXX: remove NimNode
 
-  result = NormalizedNimNode copyNimNode(n)
+  result = copyNimNode(n)
 
   for idx, child in n.pairs:
     let child = NormalizedNimNode child
@@ -424,46 +424,45 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         result.add:
           # Puts the section under expression lifter in case its value contains
           # expression that requires lifting.
-          newCall(bindSym"cpsExprLifter"):
+          newCall(bindName"cpsExprLifter"):
             newStmtList:
-              NimNode:
-                # Clone the VarLet and replace its value.
-                child.clone:
-                  # In the case where the value is a cps call, we don't have to
-                  # move it outside as later CPS pass can rewrite this.
-                  if child.val.isCpsCall:
+              # Clone the VarLet and replace its value.
+              child.clone:
+                # In the case where the value is a cps call, we don't have to
+                # move it outside as later CPS pass can rewrite this.
+                if child.val.isCpsCall:
+                  annotate:
+                    # Put the value into a StmtList so analysis starts from
+                    # the value as annotate() works on child nodes.
+                    newStmtList:
+                      child.val
+                else:
+                  # Otherwise we transform the expression into a symbol.
+                  # TODO: normalizedast should know to run infer
+                  #       automatically on nnkVarTuple because that type
+                  #       doesn't have a type specifier
+                  newCall(bindName"cpsExprToTmp", copy(child.def.inferTypFromImpl)):
                     annotate:
-                      NormalizedNimNode:
-                        # Put the value into a StmtList so analysis starts from
-                        # the value as annotate() works on child nodes.
-                        newStmtList:
-                          child.val
-                  else:
-                    # Otherwise we transform the expression into a symbol.
-                    NormalizedNimNode:
-                      # TODO: normalizedast should know to run infer
-                      #       automatically on nnkVarTuple because that type
-                      #       doesn't have a type specifier
-                      newCall(bindSym"cpsExprToTmp", copy(child.def.inferTypFromImpl.NimNode)):
-                        annotate:
-                          NormalizedNimNode:
-                            # Put the value into a StmtList so analysis starts
-                            # from the value as annotate() works on child
-                            # nodes.
-                            newStmtList:
-                              child.val
+                      # Put the value into a StmtList so analysis starts
+                      # from the value as annotate() works on child
+                      # nodes.
+                      newStmtList:
+                        child.val
 
       of nnkElifBranch, nnkElifExpr:
         # If the elif branch is the very first branch, tag it for rewrite.
         if idx == 0:
-          result.add:
+          let first = NormalizedNimNode child[0]
+          discard result.add(
             copyNimNode(child).add(
               # Tag the condition for rewrite and annotate it
-              newCall(bindSym"cpsExprToTmp", getTypeInst(child[0]),
-                      annotate(NormalizedNimNode newStmtList(child[0]))),
+              newCall(bindName"cpsExprToTmp",
+                      NormalizedNimNode getTypeInst(first),
+                      annotate(newStmtList(first))),
               # Annotate the branch body too
-              annotate NormalizedNimNode(newStmtList(child.last))
+              annotate newStmtList(child.last)
             )
+          )
 
         # Otherwise, we move the remaining branches into a new if
         # statement and push it as the else branch of this statement.
@@ -471,13 +470,13 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         # The rationale for this is that we can only lift an elif branch
         # condition outside a container like `IfStmt`.
         else:
-          result.add:
+          discard result.add:
             # Create a new else branch and annotate it
-            NimNode:
-              annotate:
-                NormalizedNimNode:
-                  nnkElse.newTree:
-                    newStmtList:
+            annotate:
+              NormalizedNimNode:
+                nnkElse.newTree:
+                  newStmtList:
+                    NormalizedNimNode:
                       # Put every branch from here on into a new if statement.
                       nnkIfStmt.newTree(n[idx .. ^1])
 
@@ -488,7 +487,7 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         # Put the if statement under the expression lifter since it
         # has at least one children with a cps expression as condition.
         result.add:
-          newCall(bindSym"cpsExprLifter"):
+          newCall(bindName"cpsExprLifter"):
             newStmtList:
               annotate child
 
@@ -508,18 +507,18 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
           newCase[0] =
             # Again, we are taking the type from the original since it
             # have the correct type information.
-            newCall(bindSym"cpsExprToTmp", getTypeInst(child[0])):
-              newCase[0]
+            newCall(bindName"cpsExprToTmp", NormalizedNimNode getTypeInst(child[0])):
+              NormalizedNimNode newCase[0]
 
           # Put the new case in the expression lifter to lift the rewritten
           # matching expression.
           result.add:
-            newCall(bindSym"cpsExprLifter"):
+            newCall(bindName"cpsExprLifter"):
               newStmtList:
                 newCase
         else:
           # We can just add the case as-is otherwise.
-          result.add NimNode(newCase)
+          result.add newCase
 
       of nnkWhileStmt:
         # Unlike if and/or case, the condition of a while branch is evaluated
@@ -548,8 +547,8 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
           NimNode:
             # Run annotate on the if statement to rewrite its condition and body
             annotate:
-              NormalizedNimNode:
-                newStmtList:
+              newStmtList:
+                NormalizedNimNode:
                   # A new if statement
                   nnkIfStmt.newTree(
                     # The first branch being the condition and the body
@@ -562,53 +561,47 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
 
       of nnkAsgn:
         if child[0].NormalizedNimNode.hasCpsExpr:
-          result.add:
-            child[0].errorAst(
-              "The left hand side of the following assignment is a CPS expression which is not supported:\n" & repr(child)
-            )
+          NormalizedNimNode:
+            result.add:
+              child[0].errorAst(
+                "The left hand side of the following assignment is a CPS expression which is not supported:\n" & repr(child)
+              )
         else:
-          let asgnCall = newCall(bindSym"cpsAsgn", copy(child[0])):
-            NimNode:
+          let asgnCall = newCall(bindName"cpsAsgn", NormalizedNimNode copy(child[0])):
               annotate:
-                NormalizedNimNode:
-                  newStmtList(child[1])
+                newStmtList(NormalizedNimNode child[1])
 
           asgnCall.copyLineInfo(child)
           result.add asgnCall
 
       of nnkConv:
-        let conv = newCall(bindSym"cpsExprConv", copy(child[0])):
-          NimNode:
+        let conv = newCall(bindName"cpsExprConv", NormalizedNimNode copy(child[0])):
             annotate:
-              NormalizedNimNode:
-                newStmtList(child[1])
+                newStmtList(NormalizedNimNode child[1])
 
         conv.copyLineInfo(child)
         result.add conv
 
       of nnkDiscardStmt:
-        let discrd = newCall(bindSym"cpsExprDiscard"):
-          NimNode:
+        let discrd = newCall(bindName"cpsExprDiscard"):
             annotate:
-              NormalizedNimNode newStmtList(child.last)
+              newStmtList(child.last)
 
         discrd.copyLineInfo(child)
         result.add discrd
 
       of nnkReturnStmt:
-        let ret = newCall(bindSym"cpsExprReturn"):
-          NimNode:
+        let ret = newCall(bindName"cpsExprReturn"):
             annotate:
-              NormalizedNimNode newStmtList(child.last)
+              newStmtList(child.last)
 
         ret.copyLineInfo(child)
         result.add ret
 
       of nnkRaiseStmt:
-        let rase = newCall(bindSym"cpsExprRaise"):
-          NimNode:
-            annotate:
-              NormalizedNimNode newStmtList(child.last)
+        let rase = newCall(bindName"cpsExprRaise"):
+          annotate:
+            newStmtList(child.last)
 
         rase.copyLineInfo(child)
         result.add rase
@@ -619,47 +612,45 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         # evaluation ordering despite using CallNodes
         if magic == "And":
           # To simulate `a and b` short-ciruiting behavior
-          result.add:
-            NimNode:
-              annotate:
+          discard result.add:
+            annotate:
+              newStmtList:
                 NormalizedNimNode:
-                  newStmtList:
-                    nnkIfStmt.newTree(
-                      # We produce an if expression in the form of:
-                      # if `a`:
-                      #   `b`
-                      # else:
-                      #   false
-                      #
-                      # This way `b` is only evaluated if `a` is true
-                      nnkElifBranch.newTree(child[1], child[2]),
-                      nnkElse.newTree(newLit false)
-                    )
+                  nnkIfStmt.newTree(
+                    # We produce an if expression in the form of:
+                    # if `a`:
+                    #   `b`
+                    # else:
+                    #   false
+                    #
+                    # This way `b` is only evaluated if `a` is true
+                    nnkElifBranch.newTree(child[1], child[2]),
+                    nnkElse.newTree(newLit false)
+                  )
 
         elif magic == "Or":
           # To simulate `a or b` short-ciruiting behavior
           result.add:
-            NimNode:
-              annotate:
+            annotate:
+              newStmtList:
                 NormalizedNimNode:
-                  newStmtList:
-                    nnkIfStmt.newTree(
-                      # We produce an if expression in the form of:
-                      # if `a`:
-                      #   true
-                      # else:
-                      #   `b`
-                      #
-                      # This way `b` is only evaluated if `a` is false
-                      nnkElifBranch.newTree(child[1], newLit true),
-                      nnkElse.newTree(child[2])
-                    )
+                  nnkIfStmt.newTree(
+                    # We produce an if expression in the form of:
+                    # if `a`:
+                    #   true
+                    # else:
+                    #   `b`
+                    #
+                    # This way `b` is only evaluated if `a` is false
+                    nnkElifBranch.newTree(child[1], newLit true),
+                    nnkElse.newTree(child[2])
+                  )
 
         else:
           # For these nodes, the evaluation order of each child is the same
           # as their order in the AST.
           let
-            newNode = copyNimNode(child)
+            newNode: NormalizedNimNode = copyNimNode(child)
             lastExpr = child.lastCpsExprAt
 
           template rewriteParam(n: NormalizedNimNode, body: untyped): untyped =
@@ -673,14 +664,14 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
               # This is a named parameter and the expression needs rewriting is
               # the last node
               let it {.inject.} = node.last
-              copyNimNode(node).add(copy node[0]):
+              copyNimNode(node).add(copy(NormalizedNimNode node[0])):
                 body
             else:
               let it {.inject.} = node
               body
 
-          for idx, grandchild in child.pairs:
-            let grandchild = NormalizedNimNode grandchild
+          for idx, gc in child.pairs:
+            let grandchild = NormalizedNimNode gc
             if child.kind == nnkObjConstr and idx == 0:
               # The first node of an object constructor needs to be copied
               # verbatim since it has to be a type symbol and wrapping it in any
@@ -699,26 +690,23 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
               # - Consisted of mutiple statements
               # - Mutable
               if grandchild.hasCpsExpr or grandchild.isMutable or
-                 not grandchild.isSingleStatement:
+                not grandchild.isSingleStatement:
                 newNode.add:
                   rewriteParam(grandchild):
-                    newCall(bindSym"cpsExprToTmp", getTypeInst(it)):
-                      NimNode:
-                        annotate:
-                          NormalizedNimNode newStmtList(it)
+                    newCall(bindName"cpsExprToTmp", NormalizedNimNode getTypeInst(it)):
+                      annotate:
+                        newStmtList(it)
               else:
                 newNode.add:
                   rewriteParam(grandchild):
-                    NimNode:
-                      annotate:
-                        NormalizedNimNode newStmtList(it)
+                    annotate:
+                      newStmtList(it)
             else:
               # Nodes after the last CPS expr doesn't have to be lifted
-              newNode.add:
+              discard newNode.add:
                 rewriteParam(grandchild):
-                  NimNode:
-                    annotate:
-                      NormalizedNimNode newStmtList(it)
+                  annotate:
+                    newStmtList(it)
 
           # Add the newly annotated node to the AST under the expression lifter
           result.add:
@@ -730,11 +718,11 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         # Not the type of nodes that needs flattening, rewrites its child
         # and move on.
         result.add:
-          NimNode annotate(child)
+          annotate(child)
     else:
       # Nothing interesting here, continue.
       result.add:
-        NimNode annotate(child)
+        annotate(child)
 
 macro cpsFlattenExpr*(n: typed): untyped =
   ## Flatten any CPS expression in procedure `n` so that control flow involving
@@ -743,12 +731,12 @@ macro cpsFlattenExpr*(n: typed): untyped =
   debugAnnotation cpsFlattenExpr, n:
     # debugAnnotation puts the rewritten `n` inside a StmtList, so we take it
     # out.
-    it = it[0]
+    it = NormalizedNimNode it[0]
 
     # Annotate the proc body
     it.body = annotate:
-      NormalizedNimNode:
-        # Always put the body under a statement list in the case where there
-        # is only one node in the body.
-        newStmtList:
+      # Always put the body under a statement list in the case where there
+      # is only one node in the body.
+      newStmtList:
+        NormalizedNimNode:
           it.body
