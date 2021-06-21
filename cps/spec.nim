@@ -4,7 +4,8 @@ boring utilities likely useful to multiple pieces of cps machinery
 
 ]##
 
-import std/[hashes, sequtils, macros]
+import std/[hashes, sequtils]
+import std/macros except newStmtList
 
 when (NimMajor, NimMinor) < (1, 5):
   {.fatal: "requires nim-1.5".}
@@ -90,11 +91,7 @@ func newCpsPending*(): NormalizedNimNode =
   ## Produce a {.cpsPending.} annotation
   nnkPragma.newTree(bindSym"cpsPending").NormalizedNimNode
 
-# proc isCpsPending*(n: NimNode): bool =
-#   ## Return whether a node is a {.cpsPending.} annotation
-#   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
-
-proc isCpsPending*(n: NormalizedNimNode): bool =
+func isCpsPending*(n: NormalizedNimNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
@@ -109,8 +106,12 @@ func newCpsBreak*(n: NimNode; label: NimNode = newNilLit()): NimNode =
   nnkPragma.newNimNode(n).add:
     newColonExpr(bindSym"cpsBreak", label)
 
-proc isCpsBreak*(n: NimNode): bool =
+# proc isCpsBreak*(n: NimNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
+  # n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
+proc isCpsBreak*(n: NormalizedNimNode): bool =
+  ## Return whether a node is a {.cpsBreak.} annotation
+  # isCpsBreak(n.NimNode)
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
 
 func newCpsContinue*(n: NormalizedNimNode): NormalizedNimNode =
@@ -122,23 +123,25 @@ proc isCpsContinue*(n: NormalizedNimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
 
-proc breakLabel*(n: NimNode): NimNode =
+proc breakLabel*(n: NormalizedNimNode): NormalizedNimNode =
   ## Return the break label of a `break` statement or a `cpsBreak` annotation
-  if n.isCpsBreak():
-    if n[0].len > 1 and n[0][1].kind != nnkNilLit:
-      n[0][1]
+  let r =
+    if n.isCpsBreak():
+      if n[0].len > 1 and n[0][1].kind != nnkNilLit:
+        n[0][1]
+      else:
+        newEmptyNode()
+    elif n.kind == nnkBreakStmt:
+      n[0]
     else:
-      newEmptyNode()
-  elif n.kind == nnkBreakStmt:
-    n[0]
-  else:
-    raise newException(Defect, "this node is not a break: " & $n.kind)
+      raise newException(Defect, "this node is not a break: " & $n.kind)
+  r.NormalizedNimNode
 
-proc isCpsCont*(n: NimNode): bool =
+proc isCpsCont*(n: NormalizedNimNode): bool =
   ## Return whether the given procedure is a cps continuation
   n.kind in RoutineNodes and n.hasPragma("cpsCont")
 
-proc getContSym*(n: NimNode): Name =
+proc getContSym*(n: NormalizedNimNode): Name =
   ## Retrieve the continuation symbol from `n`, provided that
   ## `n` is a cpsCont.
   if n.isCpsCont:
@@ -146,12 +149,11 @@ proc getContSym*(n: NimNode): Name =
   else:
     nil.Name
 
-proc newCpsTerminate*(): NimNode =
+proc newCpsTerminate*(): NormalizedNimNode =
   ## Create a new node signifying early termination of the procedure
-  nnkPragma.newTree:
-    bindSym"cpsTerminate"
+  nnkPragma.newTree(bindSym"cpsTerminate").NormalizedNimNode
 
-proc isCpsTerminate*(n: NimNode): bool =
+proc isCpsTerminate*(n: NormalizedNimNode): bool =
   ## Return whether `n` is a cpsTerminate annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsTerminate")
 
@@ -161,7 +163,7 @@ proc isScopeExit*(n: NormalizedNimNode): bool =
 
 template rewriteIt*(n: typed; body: untyped): NormalizedNimNode =
   var it {.inject.} = normalizingRewrites:
-    newStmtList n
+    macros.newStmtList n
   body
   workaroundRewrites it
 
@@ -189,7 +191,7 @@ func matchCpsBreak*(): NormalizedMatcher =
 func wrappedFinally*(n, final: NormalizedNimNode): NormalizedNimNode =
   ## rewrite a try/except/finally into try/try-except/finally
   # create a copy of the try statement minus finally
-  let newTry = copyNimNode(n).add n[0 .. ^2]
+  let newTry = copyNimNode(n).add(n[0 .. ^2]).NormalizedNimNode
 
   # wrap the try-finally outside of `nc`
   result = copyNimNode n
@@ -326,9 +328,9 @@ macro cpsMagic*(n: untyped): untyped =
   ## to which control-flow should return; this is _usually_ the same value
   ## passed into the procedure, but this is not required nor is it checked!
   expectKind(n, nnkProcDef)
-  result = newStmtList n            # preserve the original proc
-  var shim = makeErrorShim n        # create the shim
-  shim.params[0] = newEmptyNode()   # wipe out the return value
+  result = newStmtList NormalizedNimNode n # preserve the original proc
+  var shim = makeErrorShim n               # create the shim
+  shim.params[0] = newEmptyNode()          # wipe out the return value
 
   # we use these pragmas to identify the primitive and rewrite it inside
   # CPS so that it again binds to the version that takes and returns a

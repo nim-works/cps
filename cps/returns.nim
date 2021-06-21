@@ -52,7 +52,7 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
-proc terminator*(c: Name; T: NimNode): NormalizedNimNode =
+proc terminator*(c: Name; T: NormalizedNimNode): NormalizedNimNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.

@@ -70,7 +70,7 @@ macro cpsJump(cont, call, n: typed): untyped =
 
 macro cpsJump(cont, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
-  result = getAst(cpsJump(cont, call, newStmtList()))
+  result = getAst(cpsJump(cont, call, macros.newStmtList()))
 
 macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
@@ -171,7 +171,7 @@ macro cpsWhile(cont, cond, n: typed): untyped =
     it.add tail
     var body = newStmtList:
                 nnkIfStmt.newTree(  # a conditional test up top,
-                  nnkElifBranch.newTree [cond, it],         # runs the body if it's true,
+                  nnkElifBranch.newTree [cond, it.NimNode], # runs the body if it's true,
                   nnkElse.newTree newCpsBreak(n)            # else, runs a break clause
                 ).NormalizedNimNode
     let
@@ -577,7 +577,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # Wrap the body with this template and we are done
     it.add body.wrapContinuationWith(cont, placeholder, tryTemplate)
 
-func newAnnotation(env: Env; n: NimNode; a: static[string]): NormalizedNimNode =
+func newAnnotation(env: Env; n: NormalizedNimNode; a: static[string]): NormalizedNimNode =
   result = newCall bindName(a)
   result.copyLineInfo n
   result.add env.first
@@ -778,7 +778,8 @@ proc annotate(parent: var Env; n: NormalizedNimNode): NormalizedNimNode =
       result.add newCpsContinue(nc)
 
     of nnkBreakStmt:
-      result.add newCpsBreak(nc, nc.breakLabel)
+      result.add:
+        NormalizedNimNode newCpsBreak(nc, nc.breakLabel)
 
     of nnkBlockStmt:
       if nc.isCpsBlock:
@@ -787,7 +788,7 @@ proc annotate(parent: var Env; n: NormalizedNimNode): NormalizedNimNode =
           # add label if it exists
           jumpCall.add nc[0]
         jumpCall.add:
-          env.annotate macros.newStmtList(nc[1]).NormalizedNimNode
+          env.annotate newStmtList(nc[1].NormalizedNimNode)
         result.add jumpCall
         return
       else:
@@ -855,7 +856,7 @@ macro cpsResolver(T: typed, n: typed): untyped =
       if n.isScopeExit:
         errorAst(n, "cps error: un-rewritten cps control-flow").NormalizedNimNode
       else: n
-    filter(n, dangle)
+    filter(n, dangle.NormalizedFilter)
 
   # grabbing the first argument to the proc as an identifier
   let
@@ -866,7 +867,7 @@ macro cpsResolver(T: typed, n: typed): untyped =
     # replace all `pending` and `terminate` with the end of continuation
     it = replace(it, proc(x: NormalizedNimNode): bool = x.isCpsPending or x.isCpsTerminate):
       if n.firstReturn.isNil:
-        terminator(cont, T)
+        terminator(cont, T.NormalizedNimNode)
       else:
         doc"omitted a return in the resolver".NormalizedNimNode
 
@@ -891,7 +892,7 @@ macro cpsManageException(n: typed): untyped =
   ## rewrites all continuations in `n` containing an exception so that exception
   ## become the "current" exception of that continuation while preserving the
   ## environment outside cps
-  proc manage(n: NimNode): NormalizedNimNode =
+  proc manage(n: NormalizedNimNode): NormalizedNimNode =
     ## Build a manager for every continuation with an exception in `n`.
     ##
     ## This manager will:
@@ -1001,12 +1002,12 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
 macro cpsHandleUnhandledException(n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
   ## be first copied into the `ex` variable, then raise
-  func handle(n: NimNode): NimNode =
+  func handle(n: NormalizedNimNode): NormalizedNimNode =
     if n.isCpsCont:
       let cont = n.getContSym
       result = copy n
       # Rewrite continuations within this continuation body as well
-      result.body = result.body.filter(handle)
+      result.body = result.body.NormalizedNimNode.filter(handle)
       # Put the body in a try-except to capture the unhandled exception
       result.body = genAstOpt({}, cont = NimNode cont, body = result.body):
         bind getCurrentException
@@ -1022,9 +1023,9 @@ macro cpsHandleUnhandledException(n: typed): untyped =
         return (typeof cont) unwind(cont, cont.ex)
 
   debugAnnotation cpsHandleUnhandledException, n:
-    it = NormalizedNimNode it.filter(handle)
+    it = it.filter(handle)
 
-proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
+proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # keep the original symbol of the proc
@@ -1135,7 +1136,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   env = env.storeType(force = off)
 
   # generated proc bodies, remaining proc, whelp, bootstrap
-  result = macros.newStmtList(types, processMainContinuation, dots, whelp, booty)
+  result = newStmtList(types, NormalizedNimNode processMainContinuation, dots, whelp, booty)
 
   # this is something that happens a lot in cps-generated code, so hide it
   # here to not spam the user with hints.
@@ -1144,10 +1145,11 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   # before they enter cps, so we don't need to care about those.
   #
   # TODO: we should track down why these hints occur.
-  result = quote:
-    {.push hint[ConvFromXtoItselfNotNeeded]: off.}
-    `result`
-    {.pop.}
+  result = NormalizedNimNode:
+    quote:
+      {.push hint[ConvFromXtoItselfNotNeeded]: off.}
+      `result`
+      {.pop.}
 
   result = workaroundRewrites result
 

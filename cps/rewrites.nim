@@ -433,6 +433,10 @@ func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
   
   filter(n, replacer)
 
+func replace*(n: NimNode, match: NormalizedMatcher, replacement: NormalizedNimNode): NormalizedNimNode =
+  ## Replace any node in `n` that is matched by `match` with a copy of
+  ## `replacement`
+  replace(n, match.Matcher, replacement.NimNode).NormalizedNimNode
 func replace*(n: NormalizedNimNode, match: NormalizedMatcher, replacement: NormalizedNimNode): NormalizedNimNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
   ## `replacement`

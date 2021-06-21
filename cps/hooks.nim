@@ -87,10 +87,11 @@ proc hook*(hook: Hook; a, b: NormalizedNimNode): NormalizedNimNode =
     newCall(hook.sym, a, b)
   of Unwind:
     # hook(continuation, Cont)
-    let unwind = hook.sym
-    quote:
-      if not `a`.ex.isNil:
-        return `unwind`(`a`, `a`.ex).`b`
+    let unwind = hook.sym.NimNode
+    NormalizedNimNode:
+      quote:
+        if not `a`.ex.isNil:
+          return `unwind`(`a`, `a`.ex).`b`
   of Pass, Tail:
     # hook(source, destination)
     newCall(hook.sym, a, b)
