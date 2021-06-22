@@ -29,7 +29,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     of nnkStmtList, nnkStmtListExpr:
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
-          return
+          return true
     else:
       result = false
   else:
