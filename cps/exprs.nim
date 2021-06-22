@@ -93,8 +93,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
       result.add copy(n[idx])
 
     # Rewrite the last expression to assign to sym.
-    # XXX: discard added because `add()` returns a NimNode.
-    discard result.add:
+    result.add:
       # Convert back to NimNode explicitly because the compiler
       # can't handle our awesome nodes (our node binds to both
       # varargs and normal form of add).
