@@ -179,3 +179,16 @@ suite "expression flattening":
       step 4
 
     foo()
+
+  test "flatten while condition":
+    var k = newKiller(4)
+    proc foo() {.cps: Cont.} =
+      step 1
+
+      var x = 2
+      while (noop(); step x; inc x; x < 4):
+        discard
+
+      step 4
+
+    foo()

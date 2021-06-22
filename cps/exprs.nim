@@ -26,7 +26,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     of nnkVarSection, nnkLetSection:
       let n = expectVarLet n
       result = n.val.NormalizedNimNode.hasCpsExpr
-    of nnkElifBranch, nnkElifExpr:
+    of nnkElifBranch, nnkElifExpr, nnkWhileStmt:
       result = n[0].NormalizedNimNode.hasCpsExpr
     of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt:
       for child in n.items:
@@ -336,6 +336,45 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         else:
           # We can just add the case as-is otherwise.
           result.add NimNode(newCase)
+
+      of nnkWhileStmt:
+        # Unlike if and/or case, the condition of a while branch is evaluated
+        # on every loop, so we can't just move it out of the branch.
+        #
+        # The solution is to rewrite:
+        #
+        # while cond:
+        #   body
+        #
+        # into:
+        #
+        # while true:
+        #   if cond:
+        #     body
+        #   else:
+        #     break
+        #
+        # Which will let us move `cond` outside of `if` and have it evaluated
+        # before every loop.
+        let newWhile = copyNimNode(child)
+        newWhile.add newLit(true)
+
+        # Add the new loop body
+        newWhile.add:
+          NimNode:
+            # Run annotate on the if statement to rewrite its condition and body
+            annotate:
+              NormalizedNimNode:
+                newStmtList:
+                  # A new if statement
+                  nnkIfStmt.newTree(
+                    # The first branch being the condition and the body
+                    nnkElifBranch.newTree(child[0], child.last),
+                    # The else branch breaks the loop
+                    nnkElse.newTree(nnkBreakStmt.newTree(newEmptyNode()))
+                  )
+
+        result.add newWhile
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child
