@@ -69,3 +69,32 @@ suite "expression flattening":
       check y == 30
 
     foo()
+
+  test "flatten case expression":
+    var k = newKiller(3)
+    proc foo() {.cps: Cont.} =
+      step 1
+
+      let x =
+        case "true"
+        of "truer", "truest", "very true":
+          fail "this branch should not run"
+          0
+        of "false":
+          fail "this branch should not run"
+          -1
+        of "true":
+          noop()
+          step 2
+          42
+        elif true:
+          fail "this branch should not run"
+          -3
+        else:
+          fail "this branch should not run"
+          -2
+
+      step 3
+      check x == 42
+
+    foo()

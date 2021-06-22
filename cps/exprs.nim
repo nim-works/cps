@@ -44,6 +44,41 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     return NormalizedNimNode:
       copy n
 
+  proc rewriteElifOf(sym: NimNode, branch: NormalizedNimNode): NormalizedNimNode =
+    ## Rewrite a singular of/elif/else branch
+    case branch.kind
+    of nnkElifBranch, nnkElifExpr:
+      result =
+        NormalizedNimNode:
+          # Copy the branch and it's condition
+          copyNimNode(branch).add(branch[0]):
+            NimNode:
+              # Then rewrite the body
+              assignTo(sym):
+                NormalizedNimNode branch.last
+    of nnkElse, nnkElseExpr:
+      result =
+        NormalizedNimNode:
+          # Copy the branch
+          copyNimNode(branch).add:
+            NimNode:
+              # Then rewrite the body
+              assignTo(sym):
+                NormalizedNimNode branch.last
+    of nnkOfBranch:
+      result = NormalizedNimNode copyNimNode(branch)
+      # Copy all matching conditions, which is every children except the last.
+      for idx in 0 ..< branch.len - 1:
+        result.add copy(branch[idx])
+      # Add the rewritten body
+      result.add:
+        NimNode:
+          assignTo(sym):
+            NormalizedNimNode branch.last
+    else:
+      result = NormalizedNimNode:
+        n.errorAst "unexpected node kind in case/if expression"
+
   case n.kind
   of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, nnkConv:
     # For calls, conversions, constructions, constants and basic symbols, we
@@ -85,23 +120,25 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
 
     for branch in n.items:
       result.add:
-        case branch.kind
-        of nnkElifBranch, nnkElifExpr:
-          # Copy the branch and it's condition
-          copyNimNode(branch).add(branch[0]):
-            NimNode:
-              # Then rewrite the body
-              assignTo(sym):
-                NormalizedNimNode branch.last
-        of nnkElse, nnkElseExpr:
-          # Copy the branch
-          copyNimNode(branch).add:
-            NimNode:
-              # Then rewrite the body
-              assignTo(sym):
-                NormalizedNimNode branch.last
-        else:
-          n.errorAst "unexpected node kind in if statement/expression"
+        NimNode:
+          rewriteElifOf(sym):
+            NormalizedNimNode branch
+  of nnkCaseStmt:
+    # It appears that the type of the `case` expression remains if we
+    # don't destroy it by creating a new node instead of copying and
+    # causes all sort of errors.
+    {.warning: "compiler workaround here".}
+    result = NormalizedNimNode newNimNode(n.kind, n)
+
+    # Copy the matched expression
+    result.add copy(n[0])
+
+    # Rewrite and add branches
+    for idx in 1 ..< n.len:
+      result.add:
+        NimNode:
+          rewriteElifOf(sym):
+            NormalizedNimNode n[idx]
   else:
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
