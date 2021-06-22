@@ -98,3 +98,30 @@ suite "expression flattening":
       check x == 42
 
     foo()
+
+  test "flatten try statement":
+    var k = newKiller(4)
+    proc foo() {.cps: Cont.} =
+      step 1
+
+      let x =
+        try:
+          raise newException(ValueError, "something")
+          0
+        except ValueError, IOError:
+          noop()
+          let e = getCurrentException()
+          check e of ValueError
+          check e.msg == "something"
+          step 2
+          42
+        except:
+          fail "this branch should not run"
+          -1
+        finally:
+          step 3
+
+      step 4
+      check x == 42
+
+    foo()

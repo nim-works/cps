@@ -138,6 +138,43 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
         NimNode:
           rewriteElifOf(sym):
             NormalizedNimNode n[idx]
+  of nnkTryStmt:
+    # Similar to other node types, we must erase the type attached to this
+    # statement.
+    result = NormalizedNimNode newNimNode(n.kind, n)
+
+    # Rewrite the body
+    result.add:
+      NimNode:
+        assignTo(sym):
+          NormalizedNimNode n[0]
+
+    # Rewrite except/finally branches
+    for idx in 1 ..< n.len:
+      let branch = n[idx]
+      case branch.kind
+      of nnkExceptBranch:
+        let newBranch = copyNimNode(branch)
+        # Copy all exception matching predicates, which is every node but
+        # the last
+        for idx in 0 ..< branch.len - 1:
+          newBranch.add copy(branch[idx])
+
+        # Rewrite and add the body
+        newBranch.add:
+          NimNode:
+            assignTo(sym):
+              NormalizedNimNode branch.last
+
+        # Add the branch to the new try statement
+        result.add newBranch
+      of nnkFinally:
+        # Per Nim manual, a finally branch cannot contain an expression, thus
+        # we can skip the rewrite
+        result.add copy(branch)
+      else:
+        result.add:
+          branch.errorAst "unexpected node in a try expression"
   else:
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
