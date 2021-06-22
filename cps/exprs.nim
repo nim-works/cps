@@ -26,7 +26,9 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     of nnkVarSection, nnkLetSection:
       let n = expectVarLet n
       result = n.val.NormalizedNimNode.hasCpsExpr
-    of nnkStmtList, nnkStmtListExpr:
+    of nnkElifBranch, nnkElifExpr:
+      result = n[0].NormalizedNimNode.hasCpsExpr
+    of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr:
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
           return true
@@ -267,6 +269,45 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
                           annotate:
                             NormalizedNimNode child.val
 
+      of nnkElifBranch, nnkElifExpr:
+        # If the elif branch is the very first branch, tag it for rewrite.
+        if idx == 0:
+          result.add:
+            copyNimNode(child).add(
+              # Tag the condition for rewrite and annotate it
+              newCall(bindSym"cpsExprToTmp", getTypeInst(child[0]),
+                      annotate(NormalizedNimNode child[0])),
+              # Annotate the branch body too
+              annotate NormalizedNimNode(child.last)
+            )
+
+        # Otherwise, we move the remaining branches into a new if
+        # statement and push it as the else branch of this statement.
+        #
+        # The rationale for this is that we can only lift an elif branch
+        # condition outside a container like `IfStmt`.
+        else:
+          result.add:
+            # Create a new else branch and annotate it
+            NimNode:
+              annotate:
+                NormalizedNimNode:
+                  nnkElse.newTree:
+                    newStmtList:
+                      # Put every branch from here on into a new if statement.
+                      nnkIfStmt.newTree(n[idx .. ^1])
+
+          # We are done with this tree.
+          break
+
+      of nnkIfStmt, nnkIfExpr:
+        # Put the if statement under the expression lifter since it
+        # has at least one children with a cps expression as condition.
+        result.add:
+          newCall(bindSym"cpsExprLifter"):
+            newStmtList:
+              annotate child
+
       else:
         # Not the type of nodes that needs flattening, rewrites its child
         # and move on.
@@ -287,4 +328,9 @@ macro cpsFlattenExpr*(n: typed): untyped =
     it = it[0]
 
     # Annotate the proc body
-    it.body = annotate(NormalizedNimNode it.body)
+    it.body = annotate:
+      NormalizedNimNode:
+        # Always put the body under a statement list in the case where there
+        # is only one node in the body.
+        newStmtList:
+          it.body

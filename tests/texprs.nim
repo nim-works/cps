@@ -125,3 +125,21 @@ suite "expression flattening":
       check x == 42
 
     foo()
+
+  test "flatten if condition":
+    var k = newKiller(5)
+    proc foo() {.cps: Cont.} =
+      step 1
+
+      if (noop(); step 2; false):
+        fail "This branch should not be run"
+      elif (noop(); step 3; true):
+        step 4
+      elif (noop(); fail"This expression should not be evaluated"; false):
+        fail "This branch should not be run"
+      else:
+        fail "This branch should not be run"
+
+      step 5
+
+    foo()
