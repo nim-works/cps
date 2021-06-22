@@ -67,6 +67,15 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
       NimNode:
         assignTo(sym):
           n.last.NormalizedNimNode
+  of nnkBlockStmt, nnkBlockExpr:
+    result = NormalizedNimNode copyNimNode(n)
+    # Copy the label
+    result.add copy(n[0])
+    # Rewrite and add the body
+    result.add:
+      NimNode:
+        assignTo(sym):
+          NormalizedNimNode n[1]
   else:
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
