@@ -543,6 +543,27 @@ func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
   result.copyLineInfo n
   result.add env.first
 
+proc shimHack(env: var Env; store, call, n: NimNode; i: int): NimNode =
+  ## this is a simple hack to support `x = contProc()`
+  let etype = pragmaArgument(call, "cpsEnvironment")
+  let c = nskVar.genSym"child"  # XXX: workaround for genAst?
+  var shim =
+    genAst(store, call, c, etype, tipe = getTypeImpl call):
+      block:
+        var c: Continuation = whelp call
+        while c.running:
+          c = c.fn(c)
+        store = ... etype(c)
+        ## destroy the child continuation
+
+  # FIXME: we need a rewrite filter here to recover line info
+  copyLineInfo(shim, store)
+  # add any remaining statements
+  if i < n.len - 1:
+    shim.add: newStmtList(n[i + 1 .. ^1])
+  # re-process the rewrite and we're done
+  result = env.annotate shim
+
 proc annotate(parent: var Env; n: NimNode): NimNode =
   ## annotate `input` or otherwise prepare it for conversion into a
   ## mutually-recursive cps convertible form; the `parent` environment
@@ -637,41 +658,35 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       let section = expectVarLet nc
       if section.val.isCpsCall:
         let assign = section.asVarLetIdentDef
-        if assign.isTuple:
+        if section.isTuple:
           result.add:
-            nc.last.errorAst "cps doesn't support var tuples here yet"
+            nc.errorAst "cps doesn't support var tuples here yet"
           discard "add() is dumb"
         else:
-          # this is a simple hack to support `let x: int = contProc()`
-          let etype = pragmaArgument(assign.val, "cpsEnvironment")
-          let c = nskVar.genSym"child"  # XXX: workaround for genAst?
-          var shim =
-            genAst(c, etype, tipe = assign.typ, store = assign.name,
-                   call = assign.val):
-              var store: tipe
-              block:
-                var c: Continuation = whelp call
-                while c.running:
-                  c = c.fn(c)
-                store = ... etype(c)
-                ## destroy the child continuation
-
-          # FIXME: we need a rewrite filter here to recover line info
-          copyLineInfo(shim, nc)
-          # add any remaining statements
-          if i < n.len - 1:
-            shim.add: newStmtList(n[i + 1 .. ^1])
-          # re-process the rewrite and we're done
-          result.add:
-            env.annotate shim
+          result.add:      # create a new local using the same ident/type
+            env.annotate:  # annotate it to install it in the environment
+              genAst(store = assign.name, tipe = assign.typ):
+                var store: tipe
+          result.add:      # then shim it with the symbol and call
+            env.shimHack(assign.name, assign.val, n, i)
+          echo repr(result)
           return
       elif section.val.isCpsBlock:
         # this is supported by what we refer to as `expr flattening`
         result.add:
-          nc.last.errorAst "cps only supports calls here"
+          nc.errorAst "cps only supports calls here"
       else:
         # add definitions into the environment
         env.localSection(section, result)
+
+    of nnkAsgn:
+      result.add:
+        if nc.last.isCpsCall:
+          env.shimHack(nc[0], nc[1], n, i)     # shimming `x = foo()`
+        elif nc.last.isCpsBlock:
+          nc.errorAst "cps only supports calls here"
+        else:
+          env.annotate(nc)
 
     of nnkForStmt:
       if nc.isCpsBlock:
