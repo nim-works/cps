@@ -14,6 +14,7 @@ proc `=destroy`*(k: var Killer) =
       else: "misused; " & $(k.n - 1) & " uses, expected " & $(k.x - 1)
 
 proc newKiller*(x = 1): Killer =
+  ## FIXME: rename this to initKiller
   Killer(n: 1, x: x + 1)
 
 template step*(k: Killer): int = k.n - 1
