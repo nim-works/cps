@@ -249,8 +249,8 @@ proc isCpsBlock*(n: NimNode): bool =
   of nnkForStmt, nnkBlockStmt, nnkElse, nnkOfBranch, nnkExceptBranch,
      nnkFinally:
     return n.last.isCpsBlock
-  of nnkStmtList, nnkIfStmt, nnkCaseStmt, nnkWhileStmt, nnkElifBranch,
-     nnkTryStmt:
+  of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkCaseStmt, nnkWhileStmt,
+     nnkElifBranch, nnkTryStmt:
     for n in n.items:
       if n.isCpsBlock:
         return true

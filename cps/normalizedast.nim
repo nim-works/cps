@@ -100,7 +100,7 @@ func name*(n: IdentDefs): NimNode = n[0]
 
 # fn-VarLetLike
 
-func def(n: VarLetLike): VarLetDef = VarLetDef n.NimNode[0]
+func def*(n: VarLetLike): VarLetDef = VarLetDef n.NimNode[0]
   ## an IdentDefs or VarTuple
 func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
@@ -171,6 +171,25 @@ proc asVarLetTuple*(n: VarLet): TupleVarLet =
 proc asVarLetIdentDef*(n: VarLet): IdentDefVarLet =
   ## return a IdentDefVarLet if the def is an IdentDef, otherwise error out
   validateAndCoerce(n.NimNode, IdentDefVarLet)
+
+func clone*(n: VarLet, value: NimNode = nil): VarLet =
+  ## clone a `VarLet` but with `value` changed
+  let def = copyNimNode(n.def.NimNode)
+  # copy all nodes in the original definition excluding the last node, which
+  # is the value.
+  for idx in 0 ..< n.def.NimNode.len - 1:
+    def.add copy(n.def.NimNode[idx])
+
+  # add the value replacement
+  # if one is not given we copy the value too
+  if value.isNil:
+    def.add copy(n.def.val)
+  else:
+    def.add copy(value)
+
+  # copy the varlet and add the new def
+  result = expectVarLet:
+    copyNimNode(n.NimNode).add def
 
 # fn-TupleVarLet
 

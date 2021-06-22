@@ -852,7 +852,7 @@ macro cpsManageException(n: typed): untyped =
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
 
-proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
+proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # keep the original symbol of the proc
@@ -948,3 +948,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   # generated proc bodies, remaining proc, whelp, bootstrap
   result = newStmtList(types, n, whelp, booty)
   result = workaroundRewrites result
+
+macro cpsTransform*(T, n: typed): untyped =
+  ## This is the macro performing the main cps transformation
+  cpsTransformProc(T, n)
