@@ -143,3 +143,39 @@ suite "expression flattening":
       step 5
 
     foo()
+
+  test "flatten case matching expression":
+    var k = newKiller(4)
+    proc foo() {.cps: Cont.} =
+      step 1
+
+      case (noop(); step 2; "string")
+      of "str":
+        fail "This branch should not be run"
+      of "string":
+        step 3
+      else:
+        fail "This branch should not be run"
+
+      step 4
+
+    foo()
+
+  test "flatten case elif branches":
+    var k = newKiller(4)
+    proc foo() {.cps: Cont.} =
+      step 1
+
+      case "string"
+      of "str":
+        fail "This branch should not be run"
+      of "String":
+        fail "This branch should not be run"
+      elif (noop(); step 2; true):
+        step 3
+      else:
+        fail "This branch should not be run"
+
+      step 4
+
+    foo()

@@ -28,7 +28,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
       result = n.val.NormalizedNimNode.hasCpsExpr
     of nnkElifBranch, nnkElifExpr:
       result = n[0].NormalizedNimNode.hasCpsExpr
-    of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr:
+    of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt:
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
           return true
@@ -307,6 +307,35 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
           newCall(bindSym"cpsExprLifter"):
             newStmtList:
               annotate child
+
+      of nnkCaseStmt:
+        # Run an annotation pass on the child first so any potential
+        # elif branch is rewritten.
+        let newCase = annotate child
+
+        # If the case matching expression is a cps expression.
+        #
+        # We are checking the original condition because it would have not
+        # went through any rewriting passes and retain type information.
+        if child[0].NormalizedNimNode.hasCpsExpr:
+          # However since the annotation pass above already rewritten the
+          # condition for us, we can just take it and wrap it in
+          # cpsExprToTmp.
+          newCase[0] =
+            # Again, we are taking the type from the original since it
+            # have the correct type information.
+            newCall(bindSym"cpsExprToTmp", getTypeInst(child[0])):
+              newCase[0]
+
+          # Put the new case in the expression lifter to lift the rewritten
+          # matching expression.
+          result.add:
+            newCall(bindSym"cpsExprLifter"):
+              newStmtList:
+                newCase
+        else:
+          # We can just add the case as-is otherwise.
+          result.add NimNode(newCase)
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child
