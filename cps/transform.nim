@@ -609,7 +609,8 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       if i < n.len-1 and nc.isCpsBlock:
 
         case nc.kind
-        of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
+        of nnkOfBranch, nnkElse, nnkElseExpr, nnkElifBranch, nnkElifExpr,
+           nnkExceptBranch, nnkFinally:
           # these nodes will be handled by their respective parent nodes
           discard
         else:

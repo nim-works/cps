@@ -76,6 +76,32 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
       NimNode:
         assignTo(sym):
           NormalizedNimNode n[1]
+  of nnkIfStmt, nnkIfExpr:
+    # It appears that the type of the `if` expression remains if we
+    # don't destroy it by creating a new node instead of copying and
+    # causes all sort of errors.
+    {.warning: "compiler workaround here".}
+    result = NormalizedNimNode newNimNode(n.kind, n)
+
+    for branch in n.items:
+      result.add:
+        case branch.kind
+        of nnkElifBranch, nnkElifExpr:
+          # Copy the branch and it's condition
+          copyNimNode(branch).add(branch[0]):
+            NimNode:
+              # Then rewrite the body
+              assignTo(sym):
+                NormalizedNimNode branch.last
+        of nnkElse, nnkElseExpr:
+          # Copy the branch
+          copyNimNode(branch).add:
+            NimNode:
+              # Then rewrite the body
+              assignTo(sym):
+                NormalizedNimNode branch.last
+        else:
+          n.errorAst "unexpected node kind in if statement/expression"
   else:
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
