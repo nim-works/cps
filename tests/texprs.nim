@@ -192,3 +192,102 @@ suite "expression flattening":
       step 4
 
     foo()
+
+  test "flatten assignments with LHS being a symbol":
+    var k = newKiller(3)
+    proc foo() {.cps: Cont.} =
+      step 1
+      var x: int
+      x =
+        if true:
+          noop()
+          step 2
+          42
+        else:
+          fail "this branch should not be run"
+          -1
+
+      step 3
+
+      check x == 42
+
+    foo()
+
+  test "flatten assignments with LHS being an object access":
+    type
+      A = object
+        i: int
+      O = object
+        a: A
+
+    var k = newKiller(3)
+    proc foo() {.cps: Cont.} =
+      step 1
+      var o: O
+      o.a.i =
+        if true:
+          noop()
+          step 2
+          42
+        else:
+          fail "this branch should not be run"
+          -1
+
+      step 3
+
+      check o.a.i == 42
+
+    foo()
+
+  test "flatten assignments with LHS being a ref access from immutable location":
+    type
+      A = object
+        i: int
+      O = ref object
+        a: A
+
+    var k = newKiller(3)
+    proc foo() {.cps: Cont.} =
+      step 1
+      let o = O()
+      o.a.i =
+        if true:
+          noop()
+          step 2
+          42
+        else:
+          fail "this branch should not be run"
+          return
+
+      step 3
+
+      check o.a.i == 42
+
+    foo()
+
+  test "flatten unpacking assignments":
+    skip"pending conv flattening":
+      type
+        O = object
+          x: int
+          y: int
+
+      var k = newKiller(3)
+      proc foo() {.cps: Cont.} =
+        step 1
+        var o = O()
+        (o.x, o.y) =
+          if true:
+            noop()
+            step 2
+            (42, 10)
+          else:
+            fail "this branch should not be run"
+            return
+
+        step 3
+
+        check o.x == 42
+        check o.y == 10
+
+      foo()

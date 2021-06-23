@@ -41,6 +41,10 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
+const
+  ConvNodes* = {nnkHiddenStdConv..nnkConv}
+    ## Conversion nodes in typed AST
+
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
   case n.kind

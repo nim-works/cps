@@ -28,7 +28,8 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
       result = n.val.NormalizedNimNode.hasCpsExpr
     of nnkElifBranch, nnkElifExpr, nnkWhileStmt:
       result = n[0].NormalizedNimNode.hasCpsExpr
-    of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt:
+    of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
+       nnkAsgn:
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
           return true
@@ -38,15 +39,15 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     # Otherwise check if its a cps block
     result = n.isCpsBlock
 
-func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
-  ## Rewrite the expression `n` into a statement assigning to symbol `sym`.
+func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
+  ## Rewrite the expression `n` into a statement assigning to `location`.
   ##
   ## Returns a copy of `n` if `n` is not an expression.
   if n.typeKind == ntyNone:
     return NormalizedNimNode:
       copy n
 
-  proc rewriteElifOf(sym: NimNode, branch: NormalizedNimNode): NormalizedNimNode =
+  proc rewriteElifOf(location: NimNode, branch: NormalizedNimNode): NormalizedNimNode =
     ## Rewrite a singular of/elif/else branch
     case branch.kind
     of nnkElifBranch, nnkElifExpr:
@@ -56,7 +57,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
           copyNimNode(branch).add(branch[0]):
             NimNode:
               # Then rewrite the body
-              assignTo(sym):
+              assignTo(location):
                 NormalizedNimNode branch.last
     of nnkElse, nnkElseExpr:
       result =
@@ -65,7 +66,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
           copyNimNode(branch).add:
             NimNode:
               # Then rewrite the body
-              assignTo(sym):
+              assignTo(location):
                 NormalizedNimNode branch.last
     of nnkOfBranch:
       result = NormalizedNimNode copyNimNode(branch)
@@ -75,17 +76,17 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
       # Add the rewritten body
       result.add:
         NimNode:
-          assignTo(sym):
+          assignTo(location):
             NormalizedNimNode branch.last
     else:
       result = NormalizedNimNode:
         n.errorAst "unexpected node kind in case/if expression"
 
   case n.kind
-  of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, nnkConv:
+  of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, ConvNodes:
     # For calls, conversions, constructions, constants and basic symbols, we
     # just emit the assignment.
-    result = NormalizedNimNode newAssignment(sym, copy n)
+    result = NormalizedNimNode newAssignment(copy location, copy n)
   of nnkStmtList, nnkStmtListExpr:
     result = NormalizedNimNode copyNimNode n
 
@@ -94,14 +95,14 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     for idx in 0 ..< n.len - 1:
       result.add copy(n[idx])
 
-    # Rewrite the last expression to assign to sym.
+    # Rewrite the last expression to assign to location.
     result.add:
       # Convert back to NimNode explicitly because the compiler
       # can't handle our awesome nodes (our node binds to both
       # varargs and normal form of add).
       {.warning: "Compiler workaround here".}
       NimNode:
-        assignTo(sym):
+        assignTo(location):
           n.last.NormalizedNimNode
   of nnkBlockStmt, nnkBlockExpr:
     result = NormalizedNimNode copyNimNode(n)
@@ -110,7 +111,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     # Rewrite and add the body
     result.add:
       NimNode:
-        assignTo(sym):
+        assignTo(location):
           NormalizedNimNode n[1]
   of nnkIfStmt, nnkIfExpr:
     # It appears that the type of the `if` expression remains if we
@@ -122,7 +123,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     for branch in n.items:
       result.add:
         NimNode:
-          rewriteElifOf(sym):
+          rewriteElifOf(location):
             NormalizedNimNode branch
   of nnkCaseStmt:
     # It appears that the type of the `case` expression remains if we
@@ -138,7 +139,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     for idx in 1 ..< n.len:
       result.add:
         NimNode:
-          rewriteElifOf(sym):
+          rewriteElifOf(location):
             NormalizedNimNode n[idx]
   of nnkTryStmt:
     # Similar to other node types, we must erase the type attached to this
@@ -148,7 +149,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     # Rewrite the body
     result.add:
       NimNode:
-        assignTo(sym):
+        assignTo(location):
           NormalizedNimNode n[0]
 
     # Rewrite except/finally branches
@@ -165,7 +166,7 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
         # Rewrite and add the body
         newBranch.add:
           NimNode:
-            assignTo(sym):
+            assignTo(location):
               NormalizedNimNode branch.last
 
         # Add the branch to the new try statement
@@ -180,6 +181,78 @@ func assignTo*(sym: NimNode, n: NormalizedNimNode): NormalizedNimNode =
   else:
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
+
+func isMutable(n: NormalizedNimNode): bool =
+  ## Determine whether `n` is mutable, as in if `n` value can be mutated.
+  case n.kind
+  of nnkSym:
+    result = n.symKind notin {
+      nskGenericParam, nskParam, nskModule, nskType, nskLet, nskConst, nskProc,
+      nskFunc, nskMethod, nskIterator, nskConverter, nskMacro, nskTemplate,
+      nskEnumField, nskField, nskLabel
+    }
+  of AtomicNodes - {nnkSym}:
+    result = false
+  of nnkAddr, nnkHiddenAddr:
+    # An expression's address always allow it to be mutated
+    result = true
+  of nnkDotExpr:
+    # The mutability of a dot expression (field access in typed AST) relies
+    # solely on its first operand (ie. `o.i` is mutable if `o` is mutable)
+    result = n[0].NormalizedNimNode.isMutable
+  of CallNodes:
+    # TODO: analyze calls, might only require mutability analysis on
+    # params + whether the call has side effects.
+    #
+    # For now we assume that all calls produce an expression that can be
+    # mutated by other statements.
+    result = true
+  of ConvNodes:
+    # For conversions the mutability depends on the converted expression
+    result = n[1].NormalizedNimNode.isMutable
+  else:
+    for child in n:
+      if child.NormalizedNimNode.isMutable:
+        return true
+
+func isMutableLocation(location: NormalizedNimNode): bool =
+  ## Determine whether `location` is mutable, that is, the address of it
+  ## can be modified by other statements.
+  case location.kind
+  of nnkHiddenDeref, nnkDerefExpr:
+    # This node produces the location that is stored in its child, thus the
+    # location is mutable if the child is mutable.
+    result = location[0].NormalizedNimNode.isMutable
+  of nnkAddr, nnkHiddenAddr:
+    # This node produces the location of its child, thus it is mutable if the
+    # child's location is mutable.
+    result = location[0].NormalizedNimNode.isMutableLocation
+  else:
+    for child in location:
+      if child.NormalizedNimNode.isMutableLocation:
+        return true
+
+func isComplexStatement(n: NormalizedNimNode): bool =
+  ## Determine whether `n` is a complex statement.
+  ##
+  ## A complex statement is any statement that can't be copy-pasted across the
+  ## AST without causing trouble, which includes:
+  ## - Calls
+  ## - Assignments
+  ## - Conditonals
+  ## - Loops
+  ## - ProcDefs
+  case n.kind
+  of AtomicNodes:
+    result = false
+  of CallNodes, nnkAsgn, nnkBreakStmt, nnkContinueStmt, nnkReturnStmt,
+     nnkIfStmt, nnkTryStmt, nnkCaseStmt, nnkWhileStmt, nnkRaiseStmt,
+     nnkYieldStmt, RoutineNodes:
+    result = true
+  else:
+    for child in n:
+      if child.NormalizedNimNode.isComplexStatement:
+        return true
 
 macro cpsExprToTmp(T, n: typed): untyped =
   ## Create a temporary variable with type `T` and rewrite `n` so that the
@@ -213,6 +286,30 @@ macro cpsExprToTmp(T, n: typed): untyped =
         # Then emit our temporary as the new expression
         tmp
       )
+
+macro cpsAsgn(dst, src: typed): untyped =
+  ## Flatten the cps expression `src` into explicit assignments to `dst`.
+  let dst = NormalizedNimNode normalizingRewrites(dst)
+  debugAnnotation cpsAsgn, src:
+    if dst.isComplexStatement:
+      it = dst.errorAst(
+        "The destination is a complex statement, which CPS does not support" &
+        " at the moment.\n" &
+        "To workaround this, assign the expression to a temporary variable," &
+        " then assign it to your destination."
+      )
+    elif dst.isMutableLocation:
+      it = dst.errorAst(
+        "The destination's address is mutable, as such CPS cannot guarantee" &
+        " that the expression will be assigned to the correct location.\n" &
+        "To workaround this, assign the expression to a temporary variable," &
+        " then assign it to your destination."
+      )
+    else:
+      it = assignTo(dst):
+        # debugAnnotation wrap our typed body in a stmtlist, so we take it
+        # out
+        NormalizedNimNode it[0]
 
 macro cpsExprLifter(n: typed): untyped =
   ## Move cpsMustLift blocks from `n` to before `n`.
@@ -375,6 +472,19 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
                   )
 
         result.add newWhile
+
+      of nnkAsgn:
+        if child[0].NormalizedNimNode.hasCpsExpr:
+          result.add:
+            child[0].errorAst(
+              "The left hand side of the following assignment is a CPS expression which is not supported:\n" & repr(child)
+            )
+        else:
+          let asgnCall = newCall(bindSym"cpsAsgn", copy(child[0])):
+            NimNode annotate(NormalizedNimNode child[1])
+
+          asgnCall.copyLineInfo(child)
+          result.add asgnCall
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child
