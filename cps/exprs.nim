@@ -33,6 +33,8 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
           return true
+    of nnkExprColonExpr:
+      result = n[1].NormalizedNimNode.hasCpsExpr
     else:
       result = false
   else:
@@ -253,7 +255,7 @@ func isSingleStatement(n: NormalizedNimNode): bool =
   of AtomicNodes:
     ## These are always singular since they can't contain any other statements
     result = true
-  of ConvNodes, AccessNodes - AtomicNodes, ConstructNodes:
+  of ConvNodes, AccessNodes - AtomicNodes, ConstructNodes, nnkExprColonExpr:
     ## These are singular iff their operands are singular
     for child in n.items:
       if not child.NormalizedNimNode.isSingleStatement:
@@ -379,6 +381,7 @@ func lastCpsExprAt(n: NormalizedNimNode): int =
 
 func annotate(n: NormalizedNimNode): NormalizedNimNode =
   ## Annotate expressions requiring flattening in `n`'s children.
+
   result = NormalizedNimNode copyNimNode(n)
 
   for idx, child in n.pairs:
@@ -578,21 +581,44 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         ret.copyLineInfo(child)
         result.add ret
 
-      of nnkBracket:
+      of nnkBracket, nnkTupleConstr, nnkObjConstr:
         # For these nodes, the evaluation order of each child is the same
         # as their order in the AST.
         let
           newNode = copyNimNode(child)
           lastExpr = child.lastCpsExprAt
 
+        template rewriteParam(n: NormalizedNimNode, body: untyped): untyped =
+          ## Given the parameter `n`, transform its expression via `body`.
+          ##
+          ## The variable `it` is injected into the body as the expression
+          ## to be transformed.
+          let node = n
+          case node.kind
+          of nnkExprColonExpr:
+            # This is a named parameter and the expression needs rewriting is
+            # the last node
+            let it {.inject.} = node.last
+            copyNimNode(node).add(copy node[0]):
+              body
+          else:
+            let it {.inject.} = node
+            body
+
         for idx, grandchild in child.pairs:
           let grandchild = NormalizedNimNode grandchild
-          if idx <= lastExpr:
+          if child.kind == nnkObjConstr and idx == 0:
+            # The first node of an object constructor needs to be copied
+            # verbatim since it has to be a type symbol and wrapping it in any
+            # container like nnkStmtList will cause sem issues.
+            newNode.add copy(grandchild)
+
+          elif idx <= lastExpr:
             # For all nodes up to the last position with a cps expression,
             # we need to lift them so that they are executed before the cps
             # expression.
             #
-            # We need to lift them if one of the following condition is true:
+            # We need to lift them if one of the following conditions is true:
             #
             # The child is:
             # - A CPS expression or contains a CPS expression
@@ -601,21 +627,24 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
             if grandchild.hasCpsExpr or grandchild.isMutable or
                not grandchild.isSingleStatement:
               newNode.add:
-                newCall(bindSym"cpsExprToTmp", getTypeInst(grandchild)):
-                  NimNode:
-                    annotate:
-                      NormalizedNimNode newStmtList(grandchild)
+                rewriteParam(grandchild):
+                  newCall(bindSym"cpsExprToTmp", getTypeInst(it)):
+                    NimNode:
+                      annotate:
+                        NormalizedNimNode newStmtList(it)
             else:
               newNode.add:
-                NimNode:
-                  annotate:
-                    NormalizedNimNode newStmtList(grandchild)
+                rewriteParam(grandchild):
+                  NimNode:
+                    annotate:
+                      NormalizedNimNode newStmtList(it)
           else:
             # Nodes after the last CPS expr doesn't have to be lifted
             newNode.add:
-              NimNode:
-                annotate:
-                  NormalizedNimNode newStmtList(grandchild)
+              rewriteParam(grandchild):
+                NimNode:
+                  annotate:
+                    NormalizedNimNode newStmtList(it)
 
         # Add the newly annotated node to the AST under the expression lifter
         result.add:
