@@ -262,7 +262,7 @@ proc isCpsBlock*(n: NimNode): bool =
   case n.kind
   of nnkForStmt, nnkBlockStmt, nnkBlockExpr, nnkElse, nnkElseExpr,
      nnkOfBranch, nnkExceptBranch, nnkFinally, ConvNodes, nnkExprColonExpr,
-     nnkPragmaBlock:
+     nnkPragmaBlock, nnkIdentDefs, nnkVarSection, nnkLetSection:
     return n.last.isCpsBlock
   of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
      nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt, nnkBracket,
