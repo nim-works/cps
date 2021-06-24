@@ -29,7 +29,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     of nnkElifBranch, nnkElifExpr, nnkWhileStmt:
       result = n[0].NormalizedNimNode.hasCpsExpr
     of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
-       nnkAsgn:
+       nnkAsgn, CallNodes:
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
           return true
@@ -39,15 +39,17 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     # Otherwise check if its a cps block
     result = n.isCpsBlock
 
-func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
-  ## Rewrite the expression `n` into a statement assigning to `location`.
+
+func filterExpr(n: NormalizedNimNode,
+                transformer: proc(n: NormalizedNimNode): NormalizedNimNode): NormalizedNimNode =
+  ## Given the expression `n`, run `transformer` on every expression tail.
   ##
-  ## Returns a copy of `n` if `n` is not an expression.
+  ## Returns the filtered tree.
   if n.typeKind == ntyNone:
     return NormalizedNimNode:
       copy n
 
-  proc rewriteElifOf(location: NimNode, branch: NormalizedNimNode): NormalizedNimNode =
+  proc rewriteElifOf(branch: NormalizedNimNode): NormalizedNimNode =
     ## Rewrite a singular of/elif/else branch
     case branch.kind
     of nnkElifBranch, nnkElifExpr:
@@ -57,8 +59,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
           copyNimNode(branch).add(branch[0]):
             NimNode:
               # Then rewrite the body
-              assignTo(location):
-                NormalizedNimNode branch.last
+              filterExpr(NormalizedNimNode(branch.last), transformer)
     of nnkElse, nnkElseExpr:
       result =
         NormalizedNimNode:
@@ -66,8 +67,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
           copyNimNode(branch).add:
             NimNode:
               # Then rewrite the body
-              assignTo(location):
-                NormalizedNimNode branch.last
+              filterExpr(NormalizedNimNode(branch.last), transformer)
     of nnkOfBranch:
       result = NormalizedNimNode copyNimNode(branch)
       # Copy all matching conditions, which is every children except the last.
@@ -76,19 +76,18 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
       # Add the rewritten body
       result.add:
         NimNode:
-          assignTo(location):
-            NormalizedNimNode branch.last
+          filterExpr(NormalizedNimNode(branch.last), transformer)
     else:
       result = NormalizedNimNode:
         n.errorAst "unexpected node kind in case/if expression"
 
   case n.kind
-  of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, ConvNodes:
+  of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, nnkConv:
     # For calls, conversions, constructions, constants and basic symbols, we
     # just emit the assignment.
-    result = NormalizedNimNode newAssignment(copy location, copy n)
+    result = transformer(n)
   of nnkStmtList, nnkStmtListExpr:
-    result = NormalizedNimNode copyNimNode n
+    result = NormalizedNimNode copyNimNode(n)
 
     # In a statement list, the last node is the expression, so we copy
     # the part before it because we won't touch them.
@@ -102,8 +101,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
       # varargs and normal form of add).
       {.warning: "Compiler workaround here".}
       NimNode:
-        assignTo(location):
-          n.last.NormalizedNimNode
+        filterExpr(NormalizedNimNode(n.last), transformer)
   of nnkBlockStmt, nnkBlockExpr:
     result = NormalizedNimNode copyNimNode(n)
     # Copy the label
@@ -111,8 +109,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     # Rewrite and add the body
     result.add:
       NimNode:
-        assignTo(location):
-          NormalizedNimNode n[1]
+        filterExpr(NormalizedNimNode(n[1]), transformer)
   of nnkIfStmt, nnkIfExpr:
     # It appears that the type of the `if` expression remains if we
     # don't destroy it by creating a new node instead of copying and
@@ -123,7 +120,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     for branch in n.items:
       result.add:
         NimNode:
-          rewriteElifOf(location):
+          rewriteElifOf:
             NormalizedNimNode branch
   of nnkCaseStmt:
     # It appears that the type of the `case` expression remains if we
@@ -139,7 +136,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     for idx in 1 ..< n.len:
       result.add:
         NimNode:
-          rewriteElifOf(location):
+          rewriteElifOf:
             NormalizedNimNode n[idx]
   of nnkTryStmt:
     # Similar to other node types, we must erase the type attached to this
@@ -149,8 +146,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
     # Rewrite the body
     result.add:
       NimNode:
-        assignTo(location):
-          NormalizedNimNode n[0]
+        filterExpr(NormalizedNimNode(n[0]), transformer)
 
     # Rewrite except/finally branches
     for idx in 1 ..< n.len:
@@ -166,8 +162,7 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
         # Rewrite and add the body
         newBranch.add:
           NimNode:
-            assignTo(location):
-              NormalizedNimNode branch.last
+            filterExpr(NormalizedNimNode(branch.last), transformer)
 
         # Add the branch to the new try statement
         result.add newBranch
@@ -178,9 +173,22 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
       else:
         result.add:
           branch.errorAst "unexpected node in a try expression"
+  of ConvNodes - {nnkConv}:
+    # Hidden conversion nodes can be reconstructed by the compiler if needed,
+    # so we just skip them and rewrite the body instead.
+    result = filterExpr(NormalizedNimNode(n.last), transformer)
   else:
     result = NormalizedNimNode:
       n.errorAst "cps doesn't know how to rewrite this into assignment"
+
+func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
+  ## Rewrite the expression `n` into a statement assigning to `location`.
+  ##
+  ## Returns a copy of `n` if `n` is not an expression.
+  proc assign(n: NormalizedNimNode): NormalizedNimNode =
+    NormalizedNimNode newAssignment(copy(location), copy(n))
+
+  filterExpr(n, assign)
 
 func isMutable(n: NormalizedNimNode): bool =
   ## Determine whether `n` is mutable, as in if `n` value can be mutated.
@@ -311,6 +319,14 @@ macro cpsAsgn(dst, src: typed): untyped =
         # out
         NormalizedNimNode it[0]
 
+macro cpsExprConv(T, n: typed): untyped =
+  ## Apply the conversion to `T` directly into `n`'s trailling expressions.
+  debugAnnotation cpsExprConv, n:
+    proc addConv(n: NormalizedNimNode): NormalizedNimNode =
+      NormalizedNimNode newCall(T, copy n)
+
+    it = filterExpr(NormalizedNimNode(it), addConv)
+
 macro cpsExprLifter(n: typed): untyped =
   ## Move cpsMustLift blocks from `n` to before `n`.
   ## Does not create a new scope.
@@ -332,7 +348,7 @@ macro cpsExprLifter(n: typed): untyped =
     it = lift it
 
 func annotate(n: NormalizedNimNode): NormalizedNimNode =
-  ## Annotate expressions requiring flattening in `n`.
+  ## Annotate expressions requiring flattening in `n`'s children.
   result = NormalizedNimNode copyNimNode(n)
 
   for idx, child in n.pairs:
@@ -496,6 +512,23 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
 
           asgnCall.copyLineInfo(child)
           result.add asgnCall
+
+      of nnkConv:
+        let conv = newCall(bindSym"cpsExprConv", copy(child[0])):
+          NimNode:
+            annotate:
+              NormalizedNimNode:
+                newStmtList(child[1])
+
+        conv.copyLineInfo(child)
+        result.add conv
+
+      of ConvNodes - {nnkConv}:
+        # For hidden conversion node, the compiler can easily recreate
+        # them, thus we ignore them and only take what's inside
+        result.add:
+          # Rewrite the conversion and take its body
+          annotate(child).last
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child

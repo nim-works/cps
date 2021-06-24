@@ -251,7 +251,7 @@ proc isCpsBlock*(n: NimNode): bool =
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
   of nnkForStmt, nnkBlockStmt, nnkBlockExpr, nnkElse, nnkElseExpr,
-     nnkOfBranch, nnkExceptBranch, nnkFinally:
+     nnkOfBranch, nnkExceptBranch, nnkFinally, ConvNodes:
     return n.last.isCpsBlock
   of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
      nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt:
