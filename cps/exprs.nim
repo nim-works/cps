@@ -82,7 +82,7 @@ func filterExpr(n: NormalizedNimNode,
         n.errorAst "unexpected node kind in case/if expression"
 
   case n.kind
-  of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, nnkConv:
+  of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, nnkConv, nnkBracket:
     # For calls, conversions, constructions, constants and basic symbols, we
     # just emit the assignment.
     result = transformer(n)
@@ -190,8 +190,11 @@ func assignTo*(location: NimNode, n: NormalizedNimNode): NormalizedNimNode =
 
   filterExpr(n, assign)
 
+func isMutableLocation(location: NormalizedNimNode): bool
+
 func isMutable(n: NormalizedNimNode): bool =
-  ## Determine whether `n` is mutable, as in if `n` value can be mutated.
+  ## Determine whether `n` is mutable, as in if `n` value can be mutated by
+  ## changes in the program state.
   case n.kind
   of nnkSym:
     result = n.symKind notin {
@@ -202,7 +205,11 @@ func isMutable(n: NormalizedNimNode): bool =
   of AtomicNodes - {nnkSym}:
     result = false
   of nnkAddr, nnkHiddenAddr:
-    # An expression's address always allow it to be mutated
+    # An expression address is mutable only if it's location is mutable
+    result = n[0].NormalizedNimNode.isMutableLocation
+  of nnkDerefExpr, nnkHiddenDeref:
+    # A dereference of a pointer/hidden address is a mutable value as
+    # Nim does not have reference immutability.
     result = true
   of nnkDotExpr:
     # The mutability of a dot expression (field access in typed AST) relies
@@ -240,27 +247,22 @@ func isMutableLocation(location: NormalizedNimNode): bool =
       if child.NormalizedNimNode.isMutableLocation:
         return true
 
-func isComplexStatement(n: NormalizedNimNode): bool =
-  ## Determine whether `n` is a complex statement.
-  ##
-  ## A complex statement is any statement that can't be copy-pasted across the
-  ## AST without causing trouble, which includes:
-  ## - Calls
-  ## - Assignments
-  ## - Conditonals
-  ## - Loops
-  ## - ProcDefs
+func isSingleStatement(n: NormalizedNimNode): bool =
+  ## Determine whether `n` is consisted of exactly one statement.
   case n.kind
   of AtomicNodes:
-    result = false
-  of CallNodes, nnkAsgn, nnkBreakStmt, nnkContinueStmt, nnkReturnStmt,
-     nnkIfStmt, nnkTryStmt, nnkCaseStmt, nnkWhileStmt, nnkRaiseStmt,
-     nnkYieldStmt, RoutineNodes:
+    ## These are always singular since they can't contain any other statements
+    result = true
+  of ConvNodes, AccessNodes - AtomicNodes, ConstructNodes:
+    ## These are singular iff their operands are singular
+    for child in n.items:
+      if not child.NormalizedNimNode.isSingleStatement:
+        return false
+
     result = true
   else:
-    for child in n:
-      if child.NormalizedNimNode.isComplexStatement:
-        return true
+    ## Assume that everything else is complex
+    result = false
 
 macro cpsExprToTmp(T, n: typed): untyped =
   ## Create a temporary variable with type `T` and rewrite `n` so that the
@@ -299,12 +301,12 @@ macro cpsAsgn(dst, src: typed): untyped =
   ## Flatten the cps expression `src` into explicit assignments to `dst`.
   let dst = NormalizedNimNode normalizingRewrites(dst)
   debugAnnotation cpsAsgn, src:
-    if dst.isComplexStatement:
+    if not dst.isSingleStatement:
       it = dst.errorAst(
-        "The destination is a complex statement, which CPS does not support" &
-        " at the moment.\n" &
-        "To workaround this, assign the expression to a temporary variable," &
-        " then assign it to your destination."
+        "The destination (shown below) requires the evaluation of multiple " &
+        "statements, which CPS does not support at the moment.\n" &
+        "To workaround this, assign the expression to a temporary variable, " &
+        "then assign it to your destination."
       )
     elif dst.isMutableLocation:
       it = dst.errorAst(
@@ -365,6 +367,15 @@ macro cpsExprLifter(n: typed): untyped =
 
   debugAnnotation cpsExprLifter, n:
     it = lift it
+
+func lastCpsExprAt(n: NormalizedNimNode): int =
+  ## Return the index of which the last cps expression is found
+  ##
+  ## -1 is returned if there are no cps expression within `n`
+  result = -1
+  for idx, child in n.pairs:
+    if child.NormalizedNimNode.hasCpsExpr:
+      result = idx
 
 func annotate(n: NormalizedNimNode): NormalizedNimNode =
   ## Annotate expressions requiring flattening in `n`'s children.
@@ -566,6 +577,51 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
 
         ret.copyLineInfo(child)
         result.add ret
+
+      of nnkBracket:
+        # For these nodes, the evaluation order of each child is the same
+        # as their order in the AST.
+        let
+          newNode = copyNimNode(child)
+          lastExpr = child.lastCpsExprAt
+
+        for idx, grandchild in child.pairs:
+          let grandchild = NormalizedNimNode grandchild
+          if idx <= lastExpr:
+            # For all nodes up to the last position with a cps expression,
+            # we need to lift them so that they are executed before the cps
+            # expression.
+            #
+            # We need to lift them if one of the following condition is true:
+            #
+            # The child is:
+            # - A CPS expression or contains a CPS expression
+            # - Consisted of mutiple statements
+            # - Mutable
+            if grandchild.hasCpsExpr or grandchild.isMutable or
+               not grandchild.isSingleStatement:
+              newNode.add:
+                newCall(bindSym"cpsExprToTmp", getTypeInst(grandchild)):
+                  NimNode:
+                    annotate:
+                      NormalizedNimNode newStmtList(grandchild)
+            else:
+              newNode.add:
+                NimNode:
+                  annotate:
+                    NormalizedNimNode newStmtList(grandchild)
+          else:
+            # Nodes after the last CPS expr doesn't have to be lifted
+            newNode.add:
+              NimNode:
+                annotate:
+                  NormalizedNimNode newStmtList(grandchild)
+
+        # Add the newly annotated node to the AST under the expression lifter
+        result.add:
+          newCall(bindSym"cpsExprLifter"):
+            newStmtList:
+              newNode
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child

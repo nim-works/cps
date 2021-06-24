@@ -370,3 +370,15 @@ suite "expression flattening":
       return (block: (noop(); step 2; 42.Natural))
 
     check foo() == 42
+
+  test "flatten array construction":
+    var k = newKiller(5)
+    proc foo() {.cps: Cont.} =
+      step 1
+
+      let x = [1, 2, (step 2; 42), (noop(); step 3; 10), (step 4; 20)]
+
+      step 5
+      check x == [1, 2, 42, 10, 20]
+
+    foo()

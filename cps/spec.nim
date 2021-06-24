@@ -45,6 +45,13 @@ const
   ConvNodes* = {nnkHiddenStdConv..nnkConv}
     ## Conversion nodes in typed AST
 
+  AccessNodes* = AtomicNodes + {nnkDotExpr, nnkDerefExpr, nnkHiddenDeref,
+                                nnkAddr, nnkHiddenAddr}
+    ## AST nodes for operations accessing a resource
+
+  ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
+    ## AST nodes for construction operations
+
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
   case n.kind
@@ -254,7 +261,7 @@ proc isCpsBlock*(n: NimNode): bool =
      nnkOfBranch, nnkExceptBranch, nnkFinally, ConvNodes:
     return n.last.isCpsBlock
   of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
-     nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt:
+     nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt, nnkBracket:
     for n in n.items:
       if n.isCpsBlock:
         return true
