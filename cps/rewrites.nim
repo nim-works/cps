@@ -44,6 +44,19 @@ proc genField*(ident = ""): NimNode
   ## generate a unique field to put inside an object definition
   desym genSym(nskField, ident)
 
+proc resymCall*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
+  ## this is used to rewrite continuation calls into their results
+  if sym.kind notin nnkCallKinds:
+    raise Defect.newException: "resymCall is for calls, not " & $sym.kind
+  proc resymify(n: NimNode): NimNode =
+    case n.kind
+    of nnkCallKinds:
+      if n == sym:
+        result = field
+    else:
+      discard
+  result = filter(n, resymify)
+
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## seems we only use this for rewriting local symbols into symbols
   ## in the env, so we'll do custom handling of identDefs here also
