@@ -321,11 +321,14 @@ macro cpsAsgn(dst, src: typed): untyped =
 
 macro cpsExprConv(T, n: typed): untyped =
   ## Apply the conversion to `T` directly into `n`'s trailling expressions.
+  # If we don't shadow this parameter, it will be nnkNilLit.
+  {.warning: "compiler workaround here".}
+  let T = normalizingRewrites T
   debugAnnotation cpsExprConv, n:
     proc addConv(n: NormalizedNimNode): NormalizedNimNode =
       NormalizedNimNode newCall(T, copy n)
 
-    it = filterExpr(NormalizedNimNode(it), addConv)
+    it = filterExpr(NormalizedNimNode(it[0]), addConv)
 
 macro cpsExprLifter(n: typed): untyped =
   ## Move cpsMustLift blocks from `n` to before `n`.
