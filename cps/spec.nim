@@ -245,7 +245,7 @@ proc trampoline*[T: Continuation](c: T): T =
 proc isCpsCall*(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   if n.len > 0:
-    if n.kind in nnkCallKinds:
+    if n.kind in CallNodes:
       let callee = n[0]
       if not callee.isNil and callee.kind == nnkSym:
         # what we're looking for here is a jumper; it could
