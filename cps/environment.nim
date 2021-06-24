@@ -299,15 +299,15 @@ proc addAssignment(e: var Env; section: IdentDefVarLet): NimNode =
     echo $kind, "\t", repr(d)
   result = e.initialization(field, value)
 
-when false:
-  proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
-    ## get a field from the env using a local symbol as input
-    for field, defs in e.allPairs:
-      if defs[0] == n:
+proc getFieldViaLocal*(e: Env; n: NimNode): NimNode =
+  ## get a field from the env using a local symbol as input
+  block found:
+    for field, sym in e.locals.pairs:
+      if sym.name == n:
         result = field
-        break
-    if result.isNil:
-      result = n.errorAst "unable to find field for symbol " & n.repr
+        break found
+    result = n.errorAst:
+      "unable to find field for symbol " & n.repr
 
 proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
@@ -344,7 +344,7 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
     #      other use for this proc based on the call sites.
     error "this is a deprecated path and should not be triggered"
   of nnkIdentDefs:
-    let assignment = e.addAssignment(expectIdentDefs(n))
+    let assignment = e.addAssignment expectIdentDefs(n)
     if not into.isNil:
       into.add assignment
   else:
@@ -429,7 +429,7 @@ proc createResult*(env: Env): ProcDef =
 
   result = ProcDef:
     genAst(field, c = env.first, cont = env.identity, tipe = env.rs.typ):
-      proc `...`(c: cont): tipe =
+      proc `...`(c: cont): tipe {.used.} =
         case c.state
         of Dismissed:
           raise Defect.newException:
