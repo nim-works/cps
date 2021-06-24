@@ -45,32 +45,39 @@ macro cpsJump(cont, call, n: typed): untyped =
   ##
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let call = normalizingRewrites call
-  let name = nskProc.genSym"Post Call"
-  debugAnnotation cpsJump, n:
-    it = newStmtList:
-      makeContProc(name, cont, it)
-    if getImpl(call[0]).hasPragma "cpsBootstrap":
-      let c = nskLet.genSym"c"
-      it.add:
-        # install the return point in the current continuation
-        newAssignment(newDotExpr(cont, ident"fn"), name)
-      it.add:
-        # instantiate a new child continuation with the given arguments
-        newLetStmt c:
-          newCall newCall(ident"typeof", cont):
-            newCall(ident"whelp", cont, call)
-      # NOTE: mom should now be set via the tail() hook from whelp
-      #
-      # return the child continuation
-      it = it.makeReturn:
-        Pass.hook(cont, c)    # we're basically painting the future
-    else:
+  if getImpl(call[0]).hasPragma "cpsBootstrap":
+    raise
+  else:
+    debugAnnotation cpsJump, n:
+      let name = nskProc.genSym"Post Call"
+      it = newStmtList:
+        makeContProc(name, cont, n)
       it.add:
         jumperCall(cont, name, call)
 
 macro cpsJump(cont, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
   result = getAst(cpsJump(cont, call, newStmtList()))
+
+macro cpsContinuationJump(cont, call, c, n: typed): untyped =
+  ## a jump to another continuation that must be instantiated
+  debugAnnotation cpsContinuationJump, n:
+    let name = nskProc.genSym"Post Child"
+    it = newStmtList:
+      makeContProc(name, cont, n)
+    it.add:
+      # install the return point in the current continuation
+      newAssignment(newDotExpr(cont, ident"fn"), name)
+    it.add:
+      # instantiate a new child continuation with the given arguments
+      #newCall newCall(ident"typeof", cont):
+      newAssignment c:
+        newCall(ident"whelp", cont, call)
+    # NOTE: mom should now be set via the tail() hook from whelp
+    #
+    # return the child continuation
+    it = it.makeReturn:
+      Pass.hook(cont, c)    # we're basically painting the future
 
 macro cpsMayJump(cont, n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump
@@ -543,26 +550,40 @@ func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
   result.copyLineInfo n
   result.add env.first
 
-proc shimHack(env: var Env; store, call, n: NimNode; i: int): NimNode =
-  ## this is a simple hack to support `x = contProc()`
-  let etype = pragmaArgument(call, "cpsEnvironment")
-  let c = nskVar.genSym"child"  # XXX: workaround for genAst?
-  var shim =
-    genAst(store, call, c, etype, tipe = getTypeImpl call):
-      block:
-        var c: Continuation = whelp call
-        while c.running:
-          c = c.fn(c)
-        store = ... etype(c)
-        ## destroy the child continuation
+proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
+  ## this is a simple rewrite to support `x = contProc()`
+  var assign = newStmtList()
+  case store.kind
+  of nnkVarSection, nnkLetSection:
+    # stuff the local into the env
+    env.localSection(store.VarLet, assign)
+  of nnkSym, nnkIdent:
+    # perform a normal assignment
+    assign.add:
+      newAssignment(store, call)
+  of nnkIdentDefs:
+    env.localSection(expectIdentDefs(store).newVarSection, assign)
+  else:
+    raise Defect.newException "not supported"
 
-  # FIXME: we need a rewrite filter here to recover line info
-  copyLineInfo(shim, store)
-  # add any remaining statements
-  if i < n.len - 1:
-    shim.add: newStmtList(n[i + 1 .. ^1])
-  # re-process the rewrite and we're done
-  result = env.annotate shim
+  # swap the call in the assignment statement(s)
+  let child = nskVar.genSym"child"
+  let etype = pragmaArgument(call, "cpsEnvironment")
+  env.localSection newIdentDefs(child, etype)
+  assign = assign.resymCall(call, newCall(ident"...", child))
+
+  var body =
+    genAst(assign, tail, child, etype, dealloc = Dealloc.sym):
+      assign
+      if not child.isNil:
+        dealloc(etype, child)
+      tail
+
+  let shim = env.newAnnotation(call, "cpsContinuationJump")
+  shim.add env.annotate(call)
+  shim.add env.annotate(child)
+  shim.add env.annotate(body)
+  result = shim
 
 proc annotate(parent: var Env; n: NimNode): NimNode =
   ## annotate `input` or otherwise prepare it for conversion into a
@@ -663,13 +684,9 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
             nc.errorAst "cps doesn't support var tuples here yet"
           discard "add() is dumb"
         else:
-          result.add:      # create a new local using the same ident/type
-            env.annotate:  # annotate it to install it in the environment
-              genAst(store = assign.name, tipe = assign.typ):
-                var store: tipe
-          result.add:      # then shim it with the symbol and call
-            env.shimHack(assign.name, assign.val, n, i)
-          echo repr(result)
+          result.add:     # shimming `let x = foo()`
+            env.shimAssign(assign.NimNode, assign.val):
+              newStmtList(n[i + 1 .. ^1])
           return
       elif section.val.isCpsBlock:
         # this is supported by what we refer to as `expr flattening`
@@ -680,12 +697,19 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         env.localSection(section, result)
 
     of nnkAsgn:
-      result.add:
-        if nc.last.isCpsCall:
-          env.shimHack(nc[0], nc[1], n, i)     # shimming `x = foo()`
-        elif nc.last.isCpsBlock:
+      if nc.last.isCpsCall:
+        result.add:
+          if nc.len < 2:
+            env.shimAssign(nc[0], nc[1]):     # shimming `x = foo()`
+              newStmtList(n[i + 1 .. ^1])
+          else:
+            nc.errorAst "i expected at least two kids on an nkAsgn"
+        return
+      elif nc.last.isCpsBlock:
+        result.add:
           nc.errorAst "cps only supports calls here"
-        else:
+      else:
+        result.add:
           env.annotate(nc)
 
     of nnkForStmt:
