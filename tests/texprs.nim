@@ -352,3 +352,21 @@ suite "expression flattening":
       check i == 42
 
     foo()
+
+  test "flatten discard statements":
+    var k = newKiller(3)
+    proc foo() {.cps: Cont.} =
+      step 1
+      discard (block: (noop(); step 2; 42.Natural))
+
+      step 3
+
+    foo()
+
+  test "flatten return statements":
+    var k = newKiller(2)
+    proc foo(): int {.cps: Cont.} =
+      step 1
+      return (block: (noop(); step 2; 42.Natural))
+
+    check foo() == 42

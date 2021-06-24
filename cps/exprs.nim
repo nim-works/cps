@@ -29,7 +29,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     of nnkElifBranch, nnkElifExpr, nnkWhileStmt:
       result = n[0].NormalizedNimNode.hasCpsExpr
     of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
-       nnkAsgn, CallNodes:
+       nnkAsgn, CallNodes, nnkDiscardStmt, nnkReturnStmt:
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
           return true
@@ -330,6 +330,22 @@ macro cpsExprConv(T, n: typed): untyped =
 
     it = filterExpr(NormalizedNimNode(it[0]), addConv)
 
+macro cpsExprDiscard(n: typed): untyped =
+  ## Apply `discard` directly into `n`'s trailling expressions.
+  debugAnnotation cpsExprDiscard, n:
+    proc addDiscard(n: NormalizedNimNode): NormalizedNimNode =
+      NormalizedNimNode nnkDiscardStmt.newTree(copy n)
+
+    it = filterExpr(NormalizedNimNode(it[0]), addDiscard)
+
+macro cpsExprReturn(n: typed): untyped =
+  ## Apply `return` directly into `n`'s trailling expressions.
+  debugAnnotation cpsExprReturn, n:
+    proc addReturn(n: NormalizedNimNode): NormalizedNimNode =
+      NormalizedNimNode nnkReturnStmt.newTree(copy n)
+
+    it = filterExpr(NormalizedNimNode(it[0]), addReturn)
+
 macro cpsExprLifter(n: typed): untyped =
   ## Move cpsMustLift blocks from `n` to before `n`.
   ## Does not create a new scope.
@@ -532,6 +548,24 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         result.add:
           # Rewrite the conversion and take its body
           annotate(child).last
+
+      of nnkDiscardStmt:
+        let discrd = newCall(bindSym"cpsExprDiscard"):
+          NimNode:
+            annotate:
+              NormalizedNimNode newStmtList(child.last)
+
+        discrd.copyLineInfo(child)
+        result.add discrd
+
+      of nnkReturnStmt:
+        let ret = newCall(bindSym"cpsExprReturn"):
+          NimNode:
+            annotate:
+              NormalizedNimNode newStmtList(child.last)
+
+        ret.copyLineInfo(child)
+        result.add ret
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child
