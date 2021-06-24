@@ -354,7 +354,11 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
                   # move it outside as later CPS pass can rewrite this.
                   if child.val.isCpsCall:
                     annotate:
-                      NormalizedNimNode child.val
+                      NormalizedNimNode:
+                        # Put the value into a StmtList so analysis starts from
+                        # the value as annotate() works on child nodes.
+                        newStmtList:
+                          child.val
                   else:
                     # Otherwise we transform the expression into a symbol.
                     NormalizedNimNode:
@@ -362,9 +366,13 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
                       #       automatically on nnkVarTuple because that type
                       #       doesn't have a type specifier
                       newCall(bindSym"cpsExprToTmp", copy(child.def.inferTypFromImpl)):
-                        newStmtList:
-                          annotate:
-                            NormalizedNimNode child.val
+                        annotate:
+                          NormalizedNimNode:
+                            # Put the value into a StmtList so analysis starts
+                            # from the value as annotate() works on child
+                            # nodes.
+                            newStmtList:
+                              child.val
 
       of nnkElifBranch, nnkElifExpr:
         # If the elif branch is the very first branch, tag it for rewrite.
@@ -373,9 +381,9 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
             copyNimNode(child).add(
               # Tag the condition for rewrite and annotate it
               newCall(bindSym"cpsExprToTmp", getTypeInst(child[0]),
-                      annotate(NormalizedNimNode child[0])),
+                      annotate(NormalizedNimNode newStmtList(child[0]))),
               # Annotate the branch body too
-              annotate NormalizedNimNode(child.last)
+              annotate NormalizedNimNode(newStmtList(child.last))
             )
 
         # Otherwise, we move the remaining branches into a new if
@@ -481,7 +489,10 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
             )
         else:
           let asgnCall = newCall(bindSym"cpsAsgn", copy(child[0])):
-            NimNode annotate(NormalizedNimNode child[1])
+            NimNode:
+              annotate:
+                NormalizedNimNode:
+                  newStmtList(child[1])
 
           asgnCall.copyLineInfo(child)
           result.add asgnCall
