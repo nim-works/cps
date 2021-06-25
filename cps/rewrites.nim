@@ -73,7 +73,8 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
   result = filter(n, desymifier)
 
 proc normalizingRewrites*(n: NimNode): NimNode =
-  ## Rewrite AST into a safe form for manipulation
+  ## Rewrite AST into a safe form for manipulation without removing semantic
+  ## data.
   proc rewriter(n: NimNode): NimNode =
     proc rewriteIdentDefs(n: NimNode): NimNode =
       ## Rewrite an identDefs to ensure it has three children.
@@ -111,25 +112,6 @@ proc normalizingRewrites*(n: NimNode): NimNode =
           else:
             result.add:
               child.errorAst "unexpected"
-
-    proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
-      ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
-      case n.kind
-      of nnkHiddenAddr, nnkHiddenDeref:
-        result = normalizingRewrites n[0]
-      else: discard
-
-    proc rewriteConv(n: NimNode): NimNode =
-      ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
-      ## This is because nnkConv nodes are only valid if produced by sem.
-      case n.kind
-      of nnkConv:
-        result = newNimNode(nnkCall, n)
-        result.add:
-          normalizingRewrites n[0]
-        result.add:
-          normalizingRewrites n[1]
-      else: discard
 
     proc rewriteReturn(n: NimNode): NimNode =
       ## Inside procs, the compiler might produce an AST structure like this:
@@ -181,38 +163,47 @@ proc normalizingRewrites*(n: NimNode): NimNode =
       else:
         discard
 
-    proc rewriteHidden(n: NimNode): NimNode =
-      ## Unwrap hidden conversion nodes
+    proc rewriteExceptBranch(n: NimNode): NimNode =
+      ## Rewrites except branches in the form of `except T as e` into:
+      ##
+      ## ```
+      ## except T:
+      ##   let e = (ref T)(getCurrentException())
+      ## ```
+      ##
+      ## We simplify this AST so that our rewrites can capture it.
       case n.kind
-      of nnkHiddenStdConv, nnkHiddenSubConv:
-        # These are hidden conversion nodes, used when an implicit conversion
-        # happens, like in:
-        #
-        # let x: int = 0.Natural
-        #
-        # 0.Natural has to be converted into `int` before it could be assigned
-        # to x, and this is how it's done in typed ast.
-        #
-        # In the compiler, these nodes are added once the compiler has
-        # determined that the code is semantically correct, thus any
-        # modifications on these node will cause the compiler to not work
-        # correctly since it assumes these nodes correctness.
-        #
-        # Hence we unwrap them here to force the compiler to re-evaluate
-        # the modified nodes.
-        if n.len == 2 and n[0].kind == nnkEmpty:
-          result = normalizingRewrites n[1]
-        else:
-          raise newException(Defect,
-            "unexpected conversion form:\n" & treeRepr(n))
+      of nnkExceptBranch:
+        # If this except branch has exactly one exception matching clause
+        if n.len == 2:
+          # If the exception matching clause is an infix expression (T as e)
+          if n[0].kind == nnkInfix:
+            let
+              typ = n[0][1] # T in (T as e)
+              refTyp = nnkRefTy.newTree(typ) # make a (ref T) node
+              ex = n[0][2] # our `e`
+              body = n[1]
 
-      of nnkHiddenCallConv:
-        result = nnkCall.newNimNode(n)
-        for child in n.items:
-          result.add:
-            normalizingRewrites child
+            result = copyNimNode(n) # copy the `except`
+            result.add typ # add only `typ`
+            result.add:
+              newStmtList:
+                # let ex: ref T = (ref T)(getCurrentException())
+                nnkLetSection.newTree:
+                  newIdentDefs(ex, refTyp, newCall(refTyp, newCall(bindSym"getCurrentException")))
 
-      of nnkCall, nnkCommand:
+            # add the rewritten body
+            result.last.add:
+              normalizingRewrites body
+      else: discard
+
+    proc rewriteVarargsTypedCalls(n: NimNode): NimNode =
+      # Unpack `varargs[typed]` calls, usually `echo`.
+      #
+      # There is little value in keeping the packed form of varargs[typed]
+      # parameters, as we cannot replicate them in any transformation,
+      # and the compiler will rebuild the typed array every time we unpack it.
+      if n.kind in {nnkCall, nnkCommand}:
         proc isMagicalVarargs(n: NimNode): bool =
           ## Check if `n` is a magical varargs type that require special
           ## processing in a call.
@@ -263,66 +254,25 @@ proc normalizingRewrites*(n: NimNode): NimNode =
             # Add the symbol being called
             result.add:
               normalizingRewrites n[0]
-            # Unwrap our magical varargs, which will give us an array
-            let unwrapped = normalizingRewrites n[1]
+            # Retrieve the array from the magical conversion
+            let unwrapped = n[1].last
             # Add everything in this array as parameters of the call
             for i in unwrapped.items:
               result.add i
-
-      else:
-        discard
-
-    proc rewriteExceptBranch(n: NimNode): NimNode =
-      ## Rewrites except branches in the form of `except T as e` into:
-      ##
-      ## ```
-      ## except T:
-      ##   let e = (ref T)(getCurrentException())
-      ## ```
-      ##
-      ## We simplify this AST so that our rewrites can capture it.
-      case n.kind
-      of nnkExceptBranch:
-        # If this except branch has exactly one exception matching clause
-        if n.len == 2:
-          # If the exception matching clause is an infix expression (T as e)
-          if n[0].kind == nnkInfix:
-            let
-              typ = n[0][1] # T in (T as e)
-              refTyp = nnkRefTy.newTree(typ) # make a (ref T) node
-              ex = n[0][2] # our `e`
-              body = n[1]
-
-            result = copyNimNode(n) # copy the `except`
-            result.add typ # add only `typ`
-            result.add:
-              newStmtList:
-                # let ex: ref T = (ref T)(getCurrentException())
-                nnkLetSection.newTree:
-                  newIdentDefs(ex, refTyp, newCall(refTyp, newCall(bindSym"getCurrentException")))
-
-            # add the rewritten body
-            result.last.add:
-              normalizingRewrites body
-      else: discard
 
     case n.kind
     of nnkIdentDefs:
       rewriteIdentDefs n
     of nnkLetSection, nnkVarSection:
       rewriteVarLet n
-    of nnkHiddenAddr, nnkHiddenDeref:
-      rewriteHiddenAddrDeref n
-    of nnkConv:
-      rewriteConv n
     of nnkReturnStmt:
       rewriteReturn n
     of nnkFormalParams:
       rewriteFormalParams n
-    of CallNodes, nnkHiddenSubConv, nnkHiddenStdConv:
-      rewriteHidden n
     of nnkExceptBranch:
       rewriteExceptBranch n
+    of CallNodes:
+      rewriteVarargsTypedCalls n
     else:
       nil
 
@@ -343,6 +293,8 @@ proc workaroundRewrites*(n: NimNode): NimNode =
         result.add child
 
   proc workaroundSigmatchSkip(n: NimNode): NimNode =
+    ## `sigmatch` skips any call nodes whose parameters have a type attached.
+    ## We rewrites all call nodes to remove this data.
     if n.kind in nnkCallKinds:
       # We recreate the nodes here, to set their .typ to nil
       # so that sigmatch doesn't decide to skip it
@@ -354,7 +306,75 @@ proc workaroundRewrites*(n: NimNode): NimNode =
           rewriteContainer:
             workaroundRewrites child
 
-  result = filter(n, workaroundSigmatchSkip)
+  proc workaroundCompilerBugs(n: NimNode): NimNode =
+    proc rewriteHiddenAddrDeref(n: NimNode): NimNode =
+      ## Remove nnkHiddenAddr/Deref because they cause the carnac bug
+      case n.kind
+      of nnkHiddenAddr, nnkHiddenDeref:
+        workaroundRewrites(n[0])
+      else:
+        nil
+
+    proc rewriteConv(n: NimNode): NimNode =
+      ## Rewrite a nnkConv (which is a specialized nnkCall) back into nnkCall.
+      ## This is because nnkConv nodes are only valid if produced by sem.
+      case n.kind
+      of nnkConv:
+        result = newNimNode(nnkCall, n)
+        for child in n:
+          result.add:
+            workaroundRewrites(child)
+      else: discard
+
+    proc rewriteHiddenConv(n: NimNode): NimNode =
+      ## Unwrap hidden conversion nodes
+      case n.kind
+      of nnkHiddenStdConv, nnkHiddenSubConv:
+        # These are hidden conversion nodes, used when an implicit conversion
+        # happens, like in:
+        #
+        # let x: int = 0.Natural
+        #
+        # 0.Natural has to be converted into `int` before it could be assigned
+        # to x, and this is how it's done in typed ast.
+        #
+        # In the compiler, these nodes are added once the compiler has
+        # determined that the code is semantically correct, thus any
+        # modifications on these node will cause the compiler to not work
+        # correctly since it assumes these nodes correctness.
+        #
+        # Hence we unwrap them here to force the compiler to re-evaluate
+        # the modified nodes.
+        if n.len == 2 and n[0].kind == nnkEmpty:
+          result = workaroundRewrites n[1]
+        else:
+          raise newException(Defect,
+            "unexpected conversion form:\n" & treeRepr(n))
+
+      of nnkHiddenCallConv:
+        result = nnkCall.newNimNode(n)
+        for child in n.items:
+          result.add:
+            workaroundRewrites child
+
+      else:
+        discard
+
+
+    case n.kind
+    of nnkHiddenAddr, nnkHiddenDeref:
+      rewriteHiddenAddrDeref(n)
+    of nnkConv:
+      rewriteConv(n)
+    of nnkHiddenStdConv, nnkHiddenSubConv, nnkHiddenCallConv:
+      rewriteHiddenConv(n)
+    else:
+      nil
+
+  result = filter(n, workaroundCompilerBugs)
+  # The previous pass will produce more call nodes, which have to be processed
+  # by this pass
+  result = filter(result, workaroundSigmatchSkip)
 
 func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
   ## Replace any node in `n` that is matched by `match` with a copy of

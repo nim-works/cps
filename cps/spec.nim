@@ -41,6 +41,17 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
+const
+  ConvNodes* = {nnkHiddenStdConv..nnkConv}
+    ## Conversion nodes in typed AST
+
+  AccessNodes* = AtomicNodes + {nnkDotExpr, nnkDerefExpr, nnkHiddenDeref,
+                                nnkAddr, nnkHiddenAddr}
+    ## AST nodes for operations accessing a resource
+
+  ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
+    ## AST nodes for construction operations
+
 proc getPragmaName(n: NimNode): NimNode =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
   case n.kind
@@ -230,3 +241,38 @@ proc trampoline*[T: Continuation](c: T): T =
   while not c.isNil and not c.fn.isNil:
     c = c.fn(c)
   result = T c
+
+proc isCpsCall*(n: NimNode): bool =
+  ## true if this node holds a call to a cps procedure
+  if n.len > 0:
+    if n.kind in CallNodes:
+      let callee = n[0]
+      if not callee.isNil and callee.kind == nnkSym:
+        # what we're looking for here is a jumper; it could
+        # be a magic or it could be another continuation leg
+        # or it could be a completely new continuation
+        result = callee.getImpl.hasPragma("cpsMustJump")
+
+proc isCpsBlock*(n: NimNode): bool =
+  ## `true` if the block `n` contains a cps call anywhere at all;
+  ## this is used to figure out if a block needs tailcall handling...
+  case n.kind
+  of nnkForStmt, nnkBlockStmt, nnkBlockExpr, nnkElse, nnkElseExpr,
+     nnkOfBranch, nnkExceptBranch, nnkFinally, ConvNodes, nnkExprColonExpr,
+     nnkPragmaBlock:
+    return n.last.isCpsBlock
+  of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
+     nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt, nnkBracket,
+     nnkTupleConstr, nnkObjConstr:
+    for n in n.items:
+      if n.isCpsBlock:
+        return true
+  of CallNodes:
+    if n.isCpsCall:
+      return true
+
+    for n in n.items:
+      if n.isCpsBlock:
+        return true
+  else:
+    return false

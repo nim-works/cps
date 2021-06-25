@@ -1,5 +1,5 @@
 import std/[macros]
-import cps/[spec, transform, rewrites, hooks]
+import cps/[spec, transform, rewrites, hooks, exprs]
 export Continuation, ContinuationProc
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 
@@ -68,7 +68,20 @@ macro cps*(T: typed, n: typed): untyped =
   when defined(nimdoc):
     n
   else:
-    cpsTransformProc(T, n)
+    case n.kind
+    of nnkProcDef:
+      # Typically we would add these as pragmas, however it appears
+      # that the compiler will run through macros in proc pragmas
+      # one-by-one without re-seming the body in between...
+      {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
+      result =
+        # Add the main transform phase
+        newCall(bindSym"cpsTransform", T):
+          # Add the flattening phase which will be run first
+          newCall(bindSym"cpsFlattenExpr"):
+            n
+    else:
+      result = getAst(cpsTransform(T, n))
 
 proc makeErrorShim(n: NimNode): NimNode =
   ## Upgrades a procedure to serve as a CPS primitive, generating

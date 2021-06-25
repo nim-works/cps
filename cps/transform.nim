@@ -8,34 +8,6 @@ export Continuation, ContinuationProc, cpsCall, cpsMustJump
 when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
   {.error: "i'm afraid of what you may have become".}
 
-proc isCpsCall(n: NimNode): bool =
-  ## true if this node holds a call to a cps procedure
-  if n.len > 0:
-    if n.kind in nnkCallKinds:
-      let callee = n[0]
-      if not callee.isNil and callee.kind == nnkSym:
-        # what we're looking for here is a jumper; it could
-        # be a magic or it could be another continuation leg
-        # or it could be a completely new continuation
-        result = callee.getImpl.hasPragma("cpsMustJump")
-
-proc isCpsBlock(n: NimNode): bool =
-  ## `true` if the block `n` contains a cps call anywhere at all;
-  ## this is used to figure out if a block needs tailcall handling...
-  case n.kind
-  of nnkForStmt, nnkBlockStmt, nnkElse, nnkOfBranch, nnkExceptBranch,
-     nnkFinally:
-    return n.last.isCpsBlock
-  of nnkStmtList, nnkIfStmt, nnkCaseStmt, nnkWhileStmt, nnkElifBranch,
-     nnkTryStmt:
-    for n in n.items:
-      if n.isCpsBlock:
-        return true
-  of nnkCallKinds:
-    return n.isCpsCall
-  else:
-    return false
-
 proc annotate(parent: var Env; n: NimNode): NimNode
 
 proc makeContProc(name, cont, source: NimNode): NimNode =
@@ -637,7 +609,8 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       if i < n.len-1 and nc.isCpsBlock:
 
         case nc.kind
-        of nnkOfBranch, nnkElse, nnkElifBranch, nnkExceptBranch, nnkFinally:
+        of nnkOfBranch, nnkElse, nnkElseExpr, nnkElifBranch, nnkElifExpr,
+           nnkExceptBranch, nnkFinally:
           # these nodes will be handled by their respective parent nodes
           discard
         else:
@@ -852,7 +825,7 @@ macro cpsManageException(n: typed): untyped =
         # they were equal when it was set by withException.
         #
         # We manually swap the symbol here for because of that.
-        ex[0][1] = cont
+        ex[0][0][1] = cont
 
         # Add the manager itself
         result.body.add:
@@ -880,7 +853,7 @@ macro cpsManageException(n: typed): untyped =
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
 
-proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
+proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # keep the original symbol of the proc
@@ -976,3 +949,7 @@ proc cpsTransformProc*(T: NimNode, n: NimNode): NimNode =
   # generated proc bodies, remaining proc, whelp, bootstrap
   result = newStmtList(types, n, whelp, booty)
   result = workaroundRewrites result
+
+macro cpsTransform*(T, n: typed): untyped =
+  ## This is the macro performing the main cps transformation
+  cpsTransformProc(T, n)

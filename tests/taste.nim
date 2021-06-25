@@ -430,3 +430,19 @@ suite "tasteful tests":
     foo()
 
     check r == 1
+
+  block:
+    ## splitting within pragma blocks
+    r = 0
+
+    proc foo() {.cps: Cont.} =
+      {.cast(gcsafe).}:
+        noop()
+        inc r
+
+      noop()
+      inc r
+
+    foo()
+
+    check r == 2
