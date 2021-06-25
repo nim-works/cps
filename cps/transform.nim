@@ -551,7 +551,7 @@ func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
   result.add env.first
 
 proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
-  ## this is a simple rewrite to support `x = contProc()`
+  ## this rewrite supports `x = contProc()` and `let x = contProc()`
   var assign = newStmtList()
   case store.kind
   of nnkVarSection, nnkLetSection:
@@ -562,6 +562,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
     assign.add:
       newAssignment(store, call)
   of nnkIdentDefs:
+    # consume a new local section and turn it into an assignment
     env.localSection(expectIdentDefs(store).newVarSection, assign)
   else:
     raise Defect.newException "not supported"
@@ -572,6 +573,8 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
   env.localSection newIdentDefs(child, etype)
   assign = assign.resymCall(call, newCall(ident"...", child))
 
+  # compose the rewrite as an assignment, a lame effort to dealloc
+  # the child, and then any remaining statements we were passed
   var body =
     genAst(assign, tail, child, etype, dealloc = Dealloc.sym):
       assign
@@ -579,6 +582,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
         dealloc(etype, child)
       tail
 
+  # the shim is simply an annotation comprised of annotations
   let shim = env.newAnnotation(call, "cpsContinuationJump")
   shim.add env.annotate(call)
   shim.add env.annotate(child)
