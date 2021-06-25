@@ -13,9 +13,9 @@ proc firstReturn*(p: NimNode): NimNode =
       result = child.firstReturn
       if not result.isNil:
         break
-  of nnkBlockStmt, nnkBlockExpr, nnkFinally:
+  of nnkBlockStmt, nnkBlockExpr, nnkFinally, nnkPragmaBlock:
     result = p.last.firstReturn
-  elif p.isCpsPending or p.isCpsBreak or p.isCpsContinue:
+  elif p.isScopeExit:
     result = p
   else:
     result = nil
