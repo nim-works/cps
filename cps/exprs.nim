@@ -41,7 +41,6 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     # Otherwise check if its a cps block
     result = n.isCpsBlock
 
-
 func filterExpr(n: NormalizedNimNode,
                 transformer: proc(n: NormalizedNimNode): NormalizedNimNode): NormalizedNimNode =
   ## Given the expression `n`, run `transformer` on every expression tail.
@@ -265,6 +264,20 @@ func isSingleStatement(n: NormalizedNimNode): bool =
   else:
     ## Assume that everything else is complex
     result = false
+
+func getMagic(n: NormalizedNimNode): string =
+  ## Obtain the magic name of the call `n`
+  if n.kind in CallNodes:
+    if n[0].kind == nnkSym:
+      let impl = getImpl(n[0])
+      if impl.hasPragma("magic"):
+        for pragma in impl.pragma.items:
+          case pragma.kind
+          of nnkExprColonExpr:
+            if pragma[0].eqIdent("magic"):
+              return pragma.last.strVal
+          else:
+            discard
 
 macro cpsExprToTmp(T, n: typed): untyped =
   ## Create a temporary variable with type `T` and rewrite `n` so that the
@@ -581,76 +594,118 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         ret.copyLineInfo(child)
         result.add ret
 
-      of nnkBracket, nnkTupleConstr, nnkObjConstr:
-        # For these nodes, the evaluation order of each child is the same
-        # as their order in the AST.
-        let
-          newNode = copyNimNode(child)
-          lastExpr = child.lastCpsExprAt
+      of nnkBracket, nnkTupleConstr, nnkObjConstr, CallNodes:
+        let magic = child.getMagic
+        # These are boolean `and` or `or` operators, which have a special
+        # evaluation ordering despite using CallNodes
+        if magic == "And":
+          # To simulate `a and b` short-ciruiting behavior
+          result.add:
+            NimNode:
+              annotate:
+                NormalizedNimNode:
+                  newStmtList:
+                    nnkIfStmt.newTree(
+                      # We produce an if expression in the form of:
+                      # if `a`:
+                      #   `b`
+                      # else:
+                      #   false
+                      #
+                      # This way `b` is only evaluated if `a` is true
+                      nnkElifBranch.newTree(child[1], child[2]),
+                      nnkElse.newTree(newLit false)
+                    )
 
-        template rewriteParam(n: NormalizedNimNode, body: untyped): untyped =
-          ## Given the parameter `n`, transform its expression via `body`.
-          ##
-          ## The variable `it` is injected into the body as the expression
-          ## to be transformed.
-          let node = n
-          case node.kind
-          of nnkExprColonExpr:
-            # This is a named parameter and the expression needs rewriting is
-            # the last node
-            let it {.inject.} = node.last
-            copyNimNode(node).add(copy node[0]):
+        elif magic == "Or":
+          # To simulate `a or b` short-ciruiting behavior
+          result.add:
+            NimNode:
+              annotate:
+                NormalizedNimNode:
+                  newStmtList:
+                    nnkIfStmt.newTree(
+                      # We produce an if expression in the form of:
+                      # if `a`:
+                      #   true
+                      # else:
+                      #   `b`
+                      #
+                      # This way `b` is only evaluated if `a` is false
+                      nnkElifBranch.newTree(child[1], newLit true),
+                      nnkElse.newTree(child[2])
+                    )
+
+        else:
+          # For these nodes, the evaluation order of each child is the same
+          # as their order in the AST.
+          let
+            newNode = copyNimNode(child)
+            lastExpr = child.lastCpsExprAt
+
+          template rewriteParam(n: NormalizedNimNode, body: untyped): untyped =
+            ## Given the parameter `n`, transform its expression via `body`.
+            ##
+            ## The variable `it` is injected into the body as the expression
+            ## to be transformed.
+            let node = n
+            case node.kind
+            of nnkExprColonExpr:
+              # This is a named parameter and the expression needs rewriting is
+              # the last node
+              let it {.inject.} = node.last
+              copyNimNode(node).add(copy node[0]):
+                body
+            else:
+              let it {.inject.} = node
               body
-          else:
-            let it {.inject.} = node
-            body
 
-        for idx, grandchild in child.pairs:
-          let grandchild = NormalizedNimNode grandchild
-          if child.kind == nnkObjConstr and idx == 0:
-            # The first node of an object constructor needs to be copied
-            # verbatim since it has to be a type symbol and wrapping it in any
-            # container like nnkStmtList will cause sem issues.
-            newNode.add copy(grandchild)
+          for idx, grandchild in child.pairs:
+            let grandchild = NormalizedNimNode grandchild
+            if child.kind == nnkObjConstr and idx == 0:
+              # The first node of an object constructor needs to be copied
+              # verbatim since it has to be a type symbol and wrapping it in any
+              # container like nnkStmtList will cause sem issues.
+              newNode.add copy(grandchild)
 
-          elif idx <= lastExpr:
-            # For all nodes up to the last position with a cps expression,
-            # we need to lift them so that they are executed before the cps
-            # expression.
-            #
-            # We need to lift them if one of the following conditions is true:
-            #
-            # The child is:
-            # - A CPS expression or contains a CPS expression
-            # - Consisted of mutiple statements
-            # - Mutable
-            if grandchild.hasCpsExpr or grandchild.isMutable or
-               not grandchild.isSingleStatement:
-              newNode.add:
-                rewriteParam(grandchild):
-                  newCall(bindSym"cpsExprToTmp", getTypeInst(it)):
+            elif idx <= lastExpr:
+              # For all nodes up to the last position with a cps expression,
+              # we need to lift them so that they are executed before the cps
+              # expression.
+              #
+              # We need to lift them if one of the following conditions is true:
+              #
+              # The child is:
+              # - A CPS expression or contains a CPS expression
+              # - Consisted of mutiple statements
+              # - Mutable
+              if grandchild.hasCpsExpr or grandchild.isMutable or
+                 not grandchild.isSingleStatement:
+                newNode.add:
+                  rewriteParam(grandchild):
+                    newCall(bindSym"cpsExprToTmp", getTypeInst(it)):
+                      NimNode:
+                        annotate:
+                          NormalizedNimNode newStmtList(it)
+              else:
+                newNode.add:
+                  rewriteParam(grandchild):
                     NimNode:
                       annotate:
                         NormalizedNimNode newStmtList(it)
             else:
+              # Nodes after the last CPS expr doesn't have to be lifted
               newNode.add:
                 rewriteParam(grandchild):
                   NimNode:
                     annotate:
                       NormalizedNimNode newStmtList(it)
-          else:
-            # Nodes after the last CPS expr doesn't have to be lifted
-            newNode.add:
-              rewriteParam(grandchild):
-                NimNode:
-                  annotate:
-                    NormalizedNimNode newStmtList(it)
 
-        # Add the newly annotated node to the AST under the expression lifter
-        result.add:
-          newCall(bindSym"cpsExprLifter"):
-            newStmtList:
-              newNode
+          # Add the newly annotated node to the AST under the expression lifter
+          result.add:
+            newCall(bindSym"cpsExprLifter"):
+              newStmtList:
+                newNode
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child

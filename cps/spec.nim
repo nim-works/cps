@@ -267,7 +267,12 @@ proc isCpsBlock*(n: NimNode): bool =
     for n in n.items:
       if n.isCpsBlock:
         return true
-  of nnkCallKinds:
-    return n.isCpsCall
+  of CallNodes:
+    if n.isCpsCall:
+      return true
+
+    for n in n.items:
+      if n.isCpsBlock:
+        return true
   else:
     return false

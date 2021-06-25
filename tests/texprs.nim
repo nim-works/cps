@@ -416,3 +416,38 @@ suite "expression flattening":
       check x == O(x: 42, y: 10, z: 20)
 
     foo()
+
+  test "flatten calls":
+    var k = newKiller(5)
+
+    proc bar(a, b: int) =
+      step 3
+      check a == 42
+      check b == 10
+
+    proc barvar(a: var int, b: int) =
+      step 5
+      check a == 20
+      check b == 20
+
+    proc foo() {.cps: Cont.} =
+      step 1
+      var x = 42
+      bar(x, (noop(); step 2; x = 10; x))
+
+      x = 42
+      barvar(x, (noop(); step 4; x = 20; x))
+
+    foo()
+
+  test "flatten and/or with short circuiting":
+    var k = newKiller(7)
+
+    proc foo() {.cps: Cont.} =
+      step 1
+      check (noop(); step 2; true) and (noop(); step 3; true)
+      check not((noop(); step 4; false) and (noop(); fail "this should not run"; true))
+      check (noop(); step 5; false) or (noop(); step 6; true)
+      check (noop(); step 7; true) or (noop(); fail "this should not run"; false)
+
+    foo()
