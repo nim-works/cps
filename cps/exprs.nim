@@ -29,7 +29,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     of nnkElifBranch, nnkElifExpr, nnkWhileStmt:
       result = n[0].NormalizedNimNode.hasCpsExpr
     of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
-       nnkAsgn, CallNodes, nnkDiscardStmt, nnkReturnStmt:
+       nnkAsgn, CallNodes, nnkDiscardStmt, nnkReturnStmt, nnkRaiseStmt:
       for child in n.items:
         if child.NormalizedNimNode.hasCpsExpr:
           return true
@@ -363,6 +363,14 @@ macro cpsExprReturn(n: typed): untyped =
 
     it = filterExpr(NormalizedNimNode(it[0]), addReturn)
 
+macro cpsExprRaise(n: typed): untyped =
+  ## Apply `return` directly into `n`'s trailling expressions.
+  debugAnnotation cpsExprRaise, n:
+    proc addRaise(n: NormalizedNimNode): NormalizedNimNode =
+      NormalizedNimNode nnkRaiseStmt.newTree(copy n)
+
+    it = filterExpr(NormalizedNimNode(it[0]), addRaise)
+
 macro cpsExprLifter(n: typed): untyped =
   ## Move cpsMustLift blocks from `n` to before `n`.
   ## Does not create a new scope.
@@ -593,6 +601,15 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
 
         ret.copyLineInfo(child)
         result.add ret
+
+      of nnkRaiseStmt:
+        let rase = newCall(bindSym"cpsExprRaise"):
+          NimNode:
+            annotate:
+              NormalizedNimNode newStmtList(child.last)
+
+        rase.copyLineInfo(child)
+        result.add rase
 
       of nnkBracket, nnkTupleConstr, nnkObjConstr, CallNodes:
         let magic = child.getMagic

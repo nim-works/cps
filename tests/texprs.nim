@@ -451,3 +451,16 @@ suite "expression flattening":
       check (noop(); step 7; true) or (noop(); fail "this should not run"; false)
 
     foo()
+
+  test "flatten raise statement":
+    var k = newKiller(3)
+
+    proc foo() {.cps: Cont.} =
+      step 1
+      try:
+        raise (noop(); step 2; newException(CatchableError, "test"))
+      except CatchableError as e:
+        step 3
+        check e.msg == "test"
+
+    foo()
