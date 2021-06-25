@@ -83,7 +83,7 @@ func filterExpr(n: NormalizedNimNode,
         n.errorAst "unexpected node kind in case/if expression"
 
   case n.kind
-  of AtomicNodes, CallNodes, nnkTupleConstr, nnkObjConstr, nnkConv, nnkBracket:
+  of AtomicNodes, CallNodes, ConstructNodes, nnkConv:
     # For calls, conversions, constructions, constants and basic symbols, we
     # just emit the assignment.
     result = transformer(n)
