@@ -100,7 +100,7 @@ func filterExpr(n: NormalizedNimNode,
       # Convert back to NimNode explicitly because the compiler
       # can't handle our awesome nodes (our node binds to both
       # varargs and normal form of add).
-      {.warning: "Compiler workaround here".}
+      {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
       NimNode:
         filterExpr(NormalizedNimNode(n.last), transformer)
   of nnkBlockStmt, nnkBlockExpr:
@@ -115,7 +115,7 @@ func filterExpr(n: NormalizedNimNode,
     # It appears that the type of the `if` expression remains if we
     # don't destroy it by creating a new node instead of copying and
     # causes all sort of errors.
-    {.warning: "compiler workaround here".}
+    {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18351".}
     result = NormalizedNimNode newNimNode(n.kind, n)
 
     for branch in n.items:
@@ -127,7 +127,7 @@ func filterExpr(n: NormalizedNimNode,
     # It appears that the type of the `case` expression remains if we
     # don't destroy it by creating a new node instead of copying and
     # causes all sort of errors.
-    {.warning: "compiler workaround here".}
+    {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18351".}
     result = NormalizedNimNode newNimNode(n.kind, n)
 
     # Copy the matched expression
@@ -339,7 +339,7 @@ macro cpsAsgn(dst, src: typed): untyped =
 macro cpsExprConv(T, n: typed): untyped =
   ## Apply the conversion to `T` directly into `n`'s trailling expressions.
   # If we don't shadow this parameter, it will be nnkNilLit.
-  {.warning: "compiler workaround here".}
+  {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18352".}
   let T = normalizingRewrites T
   debugAnnotation cpsExprConv, n:
     proc addConv(n: NormalizedNimNode): NormalizedNimNode =

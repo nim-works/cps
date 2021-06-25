@@ -73,7 +73,7 @@ macro cps*(T: typed, n: typed): untyped =
       # Typically we would add these as pragmas, however it appears
       # that the compiler will run through macros in proc pragmas
       # one-by-one without re-seming the body in between...
-      {.warning: "compiler bug workaround".}
+      {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
       result =
         # Add the main transform phase
         newCall(bindSym"cpsTransform", T):
