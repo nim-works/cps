@@ -198,11 +198,7 @@ func isMutable(n: NormalizedNimNode): bool =
   ## changes in the program state.
   case n.kind
   of nnkSym:
-    result = n.symKind notin {
-      nskGenericParam, nskParam, nskModule, nskType, nskLet, nskConst, nskProc,
-      nskFunc, nskMethod, nskIterator, nskConverter, nskMacro, nskTemplate,
-      nskEnumField, nskField, nskLabel
-    }
+    result = n.symKind in {nskVar, nskResult}
   of AtomicNodes - {nnkSym}:
     result = false
   of nnkAddr, nnkHiddenAddr:
