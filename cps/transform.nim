@@ -496,7 +496,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
           result = copyNimTree(replacements[n])
 
       replacements[replace] = replacement
-      result = filter(templ, generator).ProcDef
+      result = asProcDef(filter(templ, generator))
 
     # Create a symbol to use as the placeholder for the finally leg next jump.
     let nextJump = newUnknownName"nextJump"
@@ -856,7 +856,7 @@ macro cpsResolver(T: typed, n: typed): untyped =
       if n.isScopeExit:
         errorAst(n, "cps error: un-rewritten cps control-flow").NormalizedNimNode
       else: n
-    filter(n, dangle.NormalizedFilter)
+    filter(n, dangle)
 
   # grabbing the first argument to the proc as an identifier
   let

@@ -95,20 +95,17 @@ func isCpsPending*(n: NormalizedNimNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
 
-func newCpsBreak*(n: NimNode; label: NimNode = newNilLit()): NimNode =
+func newCpsBreak*(n: NimNode; label: NormalizedNimNode = newNilLit().NormalizedNimNode): NormalizedNimNode =
   ## Produce a {.cpsBreak.} annotation with the given label
   let label =
     if label.kind == nnkEmpty:
-      newNilLit()
+      newNilLit().NormalizedNimNode
     else:
       label
 
-  nnkPragma.newNimNode(n).add:
-    newColonExpr(bindSym"cpsBreak", label)
+  nnkPragma.newNimNode(n).NormalizedNimNode.add:
+    newColonExpr(bindName"cpsBreak", label)
 
-# proc isCpsBreak*(n: NimNode): bool =
-  ## Return whether a node is a {.cpsBreak.} annotation
-  # n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
 proc isCpsBreak*(n: NormalizedNimNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   # isCpsBreak(n.NimNode)

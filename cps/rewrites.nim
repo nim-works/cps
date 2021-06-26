@@ -28,13 +28,16 @@ proc filter*(n: NimNode; f: NormalizingFilter): NormalizedNimNode =
   ## rewrites a node and its children by passing each node to the filter;
   ## if the filter yields nil, the node is simply copied.  otherwise, the
   ## node is replaced.
-  filter(n, f.NodeFilter).NormalizedNimNode
+  filter(n, proc (n: NimNode): NimNode = f(n).NimNode).NormalizedNimNode
 
 proc filter*(n: NormalizedNimNode, f: NormalizedFilter): NormalizedNimNode =
   ## rewrites a node and its children by passing each node to the filter;
   ## if the filter yields nil, the node is simply copied.  otherwise, the
   ## node is replaced.
-  filter(n.NimNode, f.NodeFilter).NormalizedNimNode
+  filter(
+    n.NimNode,
+    proc (n: NimNode): NimNode = f(n.NormalizedNimNode).NimNode
+  ).NormalizedNimNode
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
@@ -119,7 +122,7 @@ converter normalizedNimNodeToNimNode(n: NormalizedNimNode): NimNode =
 proc normalizingRewrites*(n: NimNode): NormalizedNimNode =
   ## Rewrite AST into a safe form for manipulation without removing semantic
   ## data.
-  proc rewriter(n: NimNode): NormalizedNimNode =
+  proc rewriter(n: NimNode): NimNode =
     proc rewriteIdentDefs(n: NimNode): NimNode =
       ## Rewrite an identDefs to ensure it has three children.
       if n.kind == nnkIdentDefs:
@@ -304,7 +307,7 @@ proc normalizingRewrites*(n: NimNode): NormalizedNimNode =
             for i in unwrapped.items:
               result.add i
 
-    (case n.kind
+    case n.kind
     of nnkIdentDefs:
       rewriteIdentDefs n
     of nnkLetSection, nnkVarSection:
@@ -318,11 +321,11 @@ proc normalizingRewrites*(n: NimNode): NormalizedNimNode =
     of CallNodes:
       rewriteVarargsTypedCalls n
     else:
-      nil).NormalizedNimNode
+      nil
 
-  filter(n, rewriter)
+  filter(n, rewriter).NormalizedNimNode
 
-proc workaroundRewrites*(n: NimNode): NimNode =
+proc workaroundRewrites(n: NimNode): NimNode =
   ## Rewrite AST after modification to ensure that sem doesn't
   ## skip any nodes we introduced.
   proc rewriteContainer(n: NimNode): NimNode =
@@ -432,15 +435,22 @@ func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
       nil
   
   filter(n, replacer)
-
 func replace*(n: NimNode, match: NormalizedMatcher, replacement: NormalizedNimNode): NormalizedNimNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
   ## `replacement`
-  replace(n, match.Matcher, replacement.NimNode).NormalizedNimNode
+  replace(
+    n,
+    proc (n: NimNode): bool = match(n.NormalizedNimNode),
+    replacement.NimNode
+  ).NormalizedNimNode
 func replace*(n: NormalizedNimNode, match: NormalizedMatcher, replacement: NormalizedNimNode): NormalizedNimNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
   ## `replacement`
-  replace(n.NimNode, match.Matcher, replacement.NimNode).NormalizedNimNode
+  replace(
+    n.NimNode,
+    proc (n: NimNode): bool = match(n.NormalizedNimNode),
+    replacement.NimNode
+  ).NormalizedNimNode
 
 template replace*(n, noob: NimNode; body: untyped): NimNode {.dirty.} =
   ## requires --define:nimWorkaround14447 so...  yeah.
@@ -468,14 +478,14 @@ proc multiReplace*(n: NormalizedNimNode;
   ## with a copy of the accompanying NimNode.
   # Nim's closure capture algo strikes again
   let replacements = @replacements
-  proc replacer(n: NimNode): NormalizedNimNode =
+  proc replacer(n: NimNode): NimNode =
     result = nil
     for (match, replacement) in replacements:
       if match(n):
         result = copyNimTree(replacement).NormalizedNimNode
         break
 
-  filter(n, replacer)
+  filter(n, replacer).NormalizedNimNode
 
 proc multiReplace*(n: NormalizedNimNode;
                    replacements: varargs[(NormalizedMatcher, NormalizedNimNode)]): NormalizedNimNode =
@@ -483,14 +493,14 @@ proc multiReplace*(n: NormalizedNimNode;
   ## with a copy of the accompanying NimNode.
   # Nim's closure capture algo strikes again
   let replacements = @replacements
-  proc replacer(n: NormalizedNimNode): NormalizedNimNode =
+  proc replacer(n: NimNode): NimNode =
     result = nil
     for (match, replacement) in replacements:
-      if match(n):
+      if match(n.NormalizedNimNode):
         result = copyNimTree(replacement).NormalizedNimNode
         break
 
-  filter(n, replacer)
+  filter(n, replacer).NormalizedNimNode
 
 proc ensimilate*(source: NimNode; destination: NimNode): NimNode =
   ## perform a call to convert the destination to the source's type;

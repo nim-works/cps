@@ -161,6 +161,8 @@ proc onlyNormalizedNimNode*[T: distinct](n: T): NormalizedNimNode =
     n
   else:
     errorGot "invalid type, expected some NormalizedNimNode", n
+func kind*(n: NormalizedNimNode): NimNodeKind {.borrow.}
+func len*(n: NormalizedNimNode): int {.borrow.}
 
 proc newStmtList*(stmts: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
   ## create a new normalized statement
@@ -243,6 +245,13 @@ proc newDotExpr*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
   ## create a new dot expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
   newDotExpr(
+    when l isnot NimNode: l.NimNode else: l,
+    when r isnot NimNode: r.NimNode else: r
+  ).NormalizedNimNode
+proc newColonExpr*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
+  ## create a new colon expression, meant for executable code. In the future
+  ## this is unlikely to work for type expressions for example
+  newColonExpr(
     when l isnot NimNode: l.NimNode else: l,
     when r isnot NimNode: r.NimNode else: r
   ).NormalizedNimNode
@@ -548,6 +557,8 @@ proc `name=`*(n: ProcDef, name: Name) {.borrow.}
 
 proc body*(n: ProcDef): NormalizedNimNode {.borrow.}
 proc `body=`*(n: ProcDef, b: NormalizedNimNode) {.borrow.}
+
+func len*(n: ProcDef): int {.borrow.}
 
 func formalParams(n: ProcDef): NimNode =
   ## first one will be the return, meant to be used internally
