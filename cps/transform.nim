@@ -717,7 +717,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
     of nnkAsgn:
       if nc.last.isCpsCall:
         result.add:
-          if nc.len < 2:
+          if nc.len >= 2:
             env.shimAssign(nc[0], nc[1]):     # shimming `x = foo()`
               anyTail()
           else:

@@ -98,3 +98,20 @@ suite "returns and results":
       check x == 8
 
     foo()
+
+  block:
+    ## assignment to a continuation return value
+    var k = newKiller 3
+    proc bar(a: int): int {.cps: Cont.} =
+      noop()
+      step 2
+      return a * 2
+
+    proc foo() {.cps: Cont.} =
+      step 1
+      var x: int
+      x = bar(4)
+      step 3
+      check x == 8
+
+    foo()
