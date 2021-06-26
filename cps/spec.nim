@@ -265,7 +265,7 @@ proc isCpsBlock*(n: NimNode): bool =
     return n.last.isCpsBlock
   of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
      nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt, nnkBracket,
-     nnkTupleConstr, nnkObjConstr:
+     nnkTupleConstr, nnkObjConstr, nnkAsgn:
     for n in n.items:
       if n.isCpsBlock:
         return true
