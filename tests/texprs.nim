@@ -480,3 +480,12 @@ suite "expression flattening":
       check x == 10
 
     foo()
+
+  test "flatten result expressions":
+    var k = newKiller(1)
+    proc foo(): int {.cps: Cont.} =
+      noop()
+      step 1
+      42.Natural
+
+    check foo() == 42
