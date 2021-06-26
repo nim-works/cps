@@ -570,7 +570,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
     # consume a new local section and turn it into an assignment
     env.localSection(expectIdentDefs(store).newVarSection, assign)
   else:
-    raise Defect.newException "not supported"
+    raise Defect.newException "unsupported store kind: " & $store.kind
 
   # swap the call in the assignment statement(s)
   let (child, etype) = setupChildContinuation(env, call)

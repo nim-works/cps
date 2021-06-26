@@ -106,5 +106,4 @@ suite "cps api":
 
   block:
     ## exporting CPS procedures works
-    skip"i mean, it will some day"
     check entry() == 42

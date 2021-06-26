@@ -4,15 +4,13 @@ type
   C = ref object of Continuation
     val: int
 
-proc send(c: C, v: int) {.cpsVoodoo.} =
-  c.val = v
+proc noop(c: C): C {.cpsMagic.} =
+  result = c
 
-proc recv(c: C): int {.cpsVoodoo.} =
-  c.val
-
-proc level_two() {.cps:C.} =
-  send(42)
+proc level_two(): int {.cps:C.} =
+  noop()
+  result = 42
+  noop()
 
 proc entry*(): int {.cps:C.} =
-  level_two()
-  result = recv()
+  result = level_two()
