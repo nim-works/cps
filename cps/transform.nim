@@ -45,15 +45,12 @@ macro cpsJump(cont, call, n: typed): untyped =
   ##
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let call = normalizingRewrites call
-  if getImpl(call[0]).hasPragma "cpsBootstrap":
-    raise
-  else:
-    debugAnnotation cpsJump, n:
-      let name = nskProc.genSym"Post Call"
-      it = newStmtList:
-        makeContProc(name, cont, n)
-      it.add:
-        jumperCall(cont, name, call)
+  debugAnnotation cpsJump, n:
+    let name = nskProc.genSym"Post Call"
+    it = newStmtList:
+      makeContProc(name, cont, n)
+    it.add:
+      jumperCall(cont, name, call)
 
 macro cpsJump(cont, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
@@ -550,6 +547,14 @@ func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
   result.copyLineInfo n
   result.add env.first
 
+proc setupChildContinuation(env: var Env; call: NimNode): (NimNode, NimNode) =
+  ## create a new child continuation variable and add it to the
+  ## environment.  return the child's symbol and its environment type.
+  let child = nskVar.genSym"child"
+  let etype = pragmaArgument(call, "cpsEnvironment")
+  env.localSection newIdentDefs(child, etype)
+  result = (child, etype)
+
 proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
   ## this rewrite supports `x = contProc()` and `let x = contProc()`
   var assign = newStmtList()
@@ -568,9 +573,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
     raise Defect.newException "not supported"
 
   # swap the call in the assignment statement(s)
-  let child = nskVar.genSym"child"
-  let etype = pragmaArgument(call, "cpsEnvironment")
-  env.localSection newIdentDefs(child, etype)
+  let (child, etype) = setupChildContinuation(env, call)
   assign = assign.resymCall(call, newCall(ident"...", child))
 
   # compose the rewrite as an assignment, a lame effort to dealloc
@@ -578,8 +581,8 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
   var body =
     genAst(assign, tail, child, etype, dealloc = Dealloc.sym):
       assign
-      if not child.isNil:
-        dealloc(etype, child)
+      ##if not child.isNil:
+      ##  dealloc(etype, child)
       tail
 
   # the shim is simply an annotation comprised of annotations
@@ -615,15 +618,26 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       result.add nc
       continue
 
+    template anyTail(): untyped {.dirty.} =
+      if i < n.len - 1:
+        newStmtList(n[i+1 .. ^1])
+      else:
+        newStmtList()
+
     # if it's a cps call,
     if nc.isCpsCall:
       # if its direct parent is not a try statement
       if n.kind != nnkTryStmt:
-        let jumpCall = env.newAnnotation(nc, "cpsJump")
-        jumpCall.add env.annotate(nc)
-        if i < n.len - 1:
-          jumpCall.add:
-            env.annotate newStmtList(n[i + 1 .. ^1])
+        var jumpCall: NimNode
+        if nc.len > 0 and (getImpl nc[0]).hasPragma"cpsBootstrap":
+          jumpCall = env.newAnnotation(nc, "cpsContinuationJump")
+          let (child, etype) = setupChildContinuation(env, nc)
+          jumpCall.add env.annotate(nc)
+          jumpCall.add env.annotate(child)
+        else:
+          jumpCall = env.newAnnotation(nc, "cpsJump")
+          jumpCall.add env.annotate(nc)
+        jumpCall.add env.annotate(anyTail())
         result.add jumpCall
         return
       else:
@@ -681,7 +695,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
 
     of nnkVarSection, nnkLetSection:
       let section = expectVarLet nc
-      if section.val.isCpsCall:
+      if section.val.isCpsCall or section.val.isCpsBlock: # XXX: temporary
         let assign = section.asVarLetIdentDef
         if section.isTuple:
           result.add:
@@ -690,7 +704,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         else:
           result.add:     # shimming `let x = foo()`
             env.shimAssign(assign.NimNode, assign.val):
-              newStmtList(n[i + 1 .. ^1])
+              anyTail()
           return
       elif section.val.isCpsBlock:
         # this is supported by what we refer to as `expr flattening`
@@ -705,7 +719,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         result.add:
           if nc.len < 2:
             env.shimAssign(nc[0], nc[1]):     # shimming `x = foo()`
-              newStmtList(n[i + 1 .. ^1])
+              anyTail()
           else:
             nc.errorAst "i expected at least two kids on an nkAsgn"
         return
