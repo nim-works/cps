@@ -372,7 +372,7 @@ macro cpsExprLifter(n: typed): untyped =
   ## Does not create a new scope.
 
   proc lift(n: NimNode): NimNode =
-    var lifted = newStmtList()
+    let lifted = newStmtList()
     proc lifter(n: NimNode): NimNode =
       if n.isCpsMustLift:
         lifted.add:
@@ -381,8 +381,18 @@ macro cpsExprLifter(n: typed): untyped =
         # Replace `n` with an empty node
         result = newEmptyNode()
 
-    result = newStmtList(lifted):
-      filter(n, lifter)
+    let rewritten = filter(n, lifter)
+    # For expressions we have to be a bit more delicate, as an empty nnkStmtList
+    # might turn the expression into:
+    #   StmtList
+    #     StmtList
+    #     <Expr>
+    #
+    # Which the compiler will *not* flatten, making it a "complex" statement.
+    if lifted.len == 0:
+      result = rewritten
+    else:
+      result = newStmtList(lifted, rewritten)
 
   debugAnnotation cpsExprLifter, n:
     it = lift it
