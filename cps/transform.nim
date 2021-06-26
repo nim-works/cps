@@ -951,7 +951,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T, n.returnParam)
+  var env = newEnv(ident"continuation", types, T, n.returnParam, originalProcSym.isExported)
 
   # add parameters into the environment
   for defs in n.callingParams:
@@ -1044,4 +1044,6 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
 macro cpsTransform*(T, n: typed): untyped =
   ## This is the macro performing the main cps transformation
-  cpsTransformProc(T, n)
+  debug("cpsTransform", n, Original)
+  result = cpsTransformProc(T, n)
+  debug("cpsTransform", result, Transformed, n)

@@ -18,6 +18,7 @@ type
   LocalCache = OrderedTable[NimNode, IdentDefVarLet]
 
   Env* = ref object
+    exported: bool                  # whether `...` should be exported
     id: NimNode                     # the identifier of our continuation type
     via: NimNode                    # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
@@ -243,17 +244,18 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env=
+proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode; exported = false): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
   ## `via` is the type from which we inherit,
   ## `rs` is the return type (if not nnkEmpty) of the continuation.
+  ## `exported` is whether the `...` operator should be exported.
   let via = if via.isNil: errorAst"need a type" else: via
   let rs = if rs.isNil: newEmptyNode() else: rs
   let c = if c.isNil or c.isEmpty: ident"continuation" else: c
 
-  result = Env(c: c, store: store, via: via, id: via)
+  result = Env(exported: exported, c: c, store: store, via: via, id: via)
   result.rs = newIdentDefs("result", rs)
   when cpsReparent:
     result.seen = initHashSet[string]()
@@ -421,16 +423,25 @@ proc genException*(e: var Env): NimNode =
 
 proc createResult*(env: Env): ProcDef =
   ## define a procedure for retrieving the result of a continuation
-  let field =
-    if env.rs.hasType:
-      env.get                  # the return value is env.result
-    else:
-      nnkDiscardStmt.newTree:
-        newEmptyNode()         # the return value is void
+  let
+    field =
+      if env.rs.hasType:
+        env.get                  # the return value is env.result
+      else:
+        nnkDiscardStmt.newTree:
+          newEmptyNode()         # the return value is void
+    name =
+      if env.exported:
+        nnkPostfix.newTree(
+          ident"*",
+          nnkAccQuoted.newTree(ident"...")
+        )
+      else:
+        nnkAccQuoted.newTree(ident"...")
 
   result = ProcDef:
-    genAst(field, c = env.first, cont = env.identity, tipe = env.rs.typ):
-      proc `...`(c: cont): tipe {.used.} =
+    genAst(name, field, c = env.first, cont = env.identity, tipe = env.rs.typ):
+      proc name(c: cont): tipe {.used.} =
         case c.state
         of Dismissed:
           raise Defect.newException:
