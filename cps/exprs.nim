@@ -103,9 +103,9 @@ func filterExpr(n: NormalizedNimNode,
       {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
       NimNode:
         filterExpr(NormalizedNimNode(n.last), transformer)
-  of nnkBlockStmt, nnkBlockExpr:
+  of nnkBlockStmt, nnkBlockExpr, nnkPragmaBlock:
     result = NormalizedNimNode copyNimNode(n)
-    # Copy the label
+    # Copy the label/pragma list
     result.add copy(n[0])
     # Rewrite and add the body
     result.add:
