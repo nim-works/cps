@@ -25,6 +25,8 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
+template cpsEnvironment*(tipe: typed) {.pragma.}  ##
+## the environment type that composed the target
 template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## the continuation has an exception stored in `ex`, with `cont` being the
@@ -259,7 +261,7 @@ proc isCpsBlock*(n: NimNode): bool =
   case n.kind
   of nnkForStmt, nnkBlockStmt, nnkBlockExpr, nnkElse, nnkElseExpr,
      nnkOfBranch, nnkExceptBranch, nnkFinally, ConvNodes, nnkExprColonExpr,
-     nnkPragmaBlock:
+     nnkPragmaBlock, nnkIdentDefs, nnkVarSection, nnkLetSection:
     return n.last.isCpsBlock
   of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
      nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt, nnkBracket,
@@ -276,3 +278,48 @@ proc isCpsBlock*(n: NimNode): bool =
         return true
   else:
     return false
+
+proc pragmaArgument*(n: NimNode; s: string): NimNode =
+  ## from foo() or proc foo() {.some: Pragma.}, retrieve Pragma
+  case n.kind
+  of nnkProcDef:
+    for n in n.pragma.items:
+      case n.kind
+      of nnkExprColonExpr:
+        if $n[0] == s:
+          if result.isNil:
+            result = n[1]
+          else:
+            result = n.errorAst "redundant " & s & " pragmas?"
+      else:
+        discard
+    if result.isNil:
+      result = n.errorAst "failed to find expected " & s & " form"
+  of nnkCallKinds:
+    result = pragmaArgument(getImpl n[0], s)
+  else:
+    result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
+
+proc bootstrapSymbol*(n: NimNode): NimNode =
+  ## find the return type of the bootstrap
+  case n.kind
+  of {nnkProcDef} + nnkCallKinds:
+    pragmaArgument(n, "cpsBootstrap")
+  else:
+    newCall(ident"typeOf", n)
+
+proc enbasen*(n: NimNode): NimNode =
+  ## find the parent type of the given symbol/type
+  case n.kind
+  of nnkOfInherit:
+    n[0]
+  of nnkObjectTy:
+    enbasen: n[1]
+  of nnkRefTy:
+    enbasen: n[0]
+  of nnkTypeDef:
+    enbasen: n.last
+  of nnkSym:
+    enbasen: getImpl n
+  else:
+    n

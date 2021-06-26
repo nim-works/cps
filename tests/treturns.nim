@@ -10,20 +10,19 @@ suite "returns and results":
 
   block:
     ## local assignment to a continuation return value
-    skip"pending discussion #28":
-      var k = newKiller 3
-      proc bar(a: int): int {.cps: Cont.} =
-        noop()
-        step 2
-        return a * 2
+    var k = newKiller 3
+    proc bar(a: int): int {.cps: Cont.} =
+      noop()
+      step 2
+      return a * 2
 
-      proc foo() {.cps: Cont.} =
-        step 1
-        let x = int bar(4)
-        step 3
-        check x == 8
+    proc foo() {.cps: Cont.} =
+      step 1
+      let x = bar(4)
+      step 3
+      check x == 8
 
-      foo()
+    foo()
 
   block:
     ## continuations can return values via bootstrap
@@ -38,7 +37,6 @@ suite "returns and results":
 
   block:
     ## continuations can return values via whelp
-    skip "not a thing yet"
     var k = newKiller 1
     proc foo(x: int): int {.cps: Cont.} =
       noop()
@@ -47,6 +45,8 @@ suite "returns and results":
 
     var c = whelp foo(5)
     trampoline c
+    check "dots work correctly":
+      ... c == 25
 
   block:
     ## assignments to the special result symbol work

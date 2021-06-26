@@ -4,6 +4,8 @@ import cps
 include preamble
 import killer
 
+import tests/exports
+
 suite "cps api":
 
   block:
@@ -101,3 +103,8 @@ suite "cps api":
       return 3
 
     check foo() == 3
+
+  block:
+    ## exporting CPS procedures works
+    skip"i mean, it will some day"
+    check entry() == 42

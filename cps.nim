@@ -129,23 +129,6 @@ macro cpsVoodoo*(n: untyped): untyped =
   shim.addPragma ident"cpsVoodooCall"
   result.add shim
 
-proc bootstrapSymbol(n: NimNode): NimNode =
-  case n.kind
-  of nnkProcDef:
-    for n in n.pragma.items:
-      if n.kind == nnkExprColonExpr:
-        if $n[0] == "cpsBootstrap":
-          if result.isNil:
-            result = n[1]
-          else:
-            result = n.errorAst "redundant bootstrap pragmas?"
-    if result.isNil:
-      result = n.errorAst "welping malfunction"
-  of nnkCallKinds:
-    result = bootstrapSymbol(getImpl n[0])
-  else:
-    result = newCall(ident"typeOf", n)
-
 proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
   let sym = bootstrapSymbol n
   result = sym.newCall args
@@ -167,20 +150,25 @@ macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
   ## running it; instead, return the continuation as a value.
   let sym = bootstrapSymbol call
+  let base = enbasen:  # find the parent type of the environment
+    (getImpl sym).pragmaArgument"cpsEnvironment"
   result = whelpIt call:
     it =
       sym.ensimilate:
-        Head.hook(it)
+        Head.hook:
+          newCall(base, it)
 
 macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
   let sym = bootstrapSymbol call
+  let base = enbasen:  # find the parent type of the environment
+    (getImpl sym).pragmaArgument"cpsEnvironment"
   result = whelpIt call:
     it =
       sym.ensimilate:
         Tail.hook(newCall(ident"Continuation", parent),
-                  sym.ensimilate it)
+                  newCall(base, it))
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## This symbol may be reimplemented to configure a continuation
@@ -226,4 +214,8 @@ template dealloc*[T: Continuation](t: typedesc[T];
                                    c: sink Continuation) {.used.} =
   ## This symbol may be reimplemented to customize continuation
   ## deallocation.
+  discard
+
+template `...`*(c: Continuation): untyped {.used.} =
+  ## Returns the result, i.e. the return value, of a continuation.
   discard

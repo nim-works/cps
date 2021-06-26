@@ -5,7 +5,7 @@ they are comprised.
 
 ]##
 
-import std/[sets, sequtils, hashes, tables, macros, algorithm]
+import std/[sets, sequtils, hashes, tables, macros, algorithm, genasts]
 import cps/[spec, hooks, help, rewrites, normalizedast]
 
 #{.experimental: "strictNotNil".}
@@ -90,8 +90,8 @@ proc init(e: var Env) =
   if e.fn.isNil:
     e.fn = ident"fn"
   if e.mom.isNil:
-    e.mom = ident"mom" # FIXME: use a getter/setter?
-  e.id = genSym(nskType, "env")
+    e.mom = ident"mom"
+  e.id = genSym(nskType, "cps environment")
   if e.rs.hasType:
     e = e.set(e.rs.name, newIdentDefVar(e.rs))
 
@@ -300,34 +300,15 @@ proc addAssignment(e: var Env; section: IdentDefVarLet): NimNode =
   result = e.initialization(field, value)
 
 when false:
-  proc getFieldViaLocal(e: Env; n: NimNode): NimNode =
+  proc getFieldViaLocal*(e: Env; n: NimNode): NimNode =
     ## get a field from the env using a local symbol as input
-    for field, defs in e.allPairs:
-      if defs[0] == n:
-        result = field
-        break
-    if result.isNil:
-      result = n.errorAst "unable to find field for symbol " & n.repr
-
-  proc findJustOneAssignmentName*(e: Env; n: NimNode): NimNode
-    {.deprecated: "not used yet".} =
-    case n.kind
-    of nnkVarSection, nnkLetSection:
-      if n.len != 1:
-        n.errorAst "only one assignment per section is supported"
-      else:
-        e.findJustOneAssignmentName n[0]
-    of nnkIdentDefs:
-      if n.len != 3:
-        n.errorAst "only one identifier per assignment is supported"
-      elif n[0].kind notin {nnkIdent, nnkSym}:
-        n.errorAst "bad rewrite presented bogus input"
-      else:
-        e.getFieldViaLocal n
-    of nnkVarTuple:
-      n.errorAst "tuples not supported yet"
-    else:
-      n.errorAst "unrecognized input"
+    block found:
+      for field, sym in e.locals.pairs:
+        if sym.name == n:
+          result = field
+          break found
+      result = n.errorAst:
+        "unable to find field for symbol " & n.repr
 
 proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
@@ -364,7 +345,7 @@ proc localSection*(e: var Env; n: NimNode; into: NimNode = nil) =
     #      other use for this proc based on the call sites.
     error "this is a deprecated path and should not be triggered"
   of nnkIdentDefs:
-    let assignment = e.addAssignment(expectIdentDefs(n))
+    let assignment = e.addAssignment expectIdentDefs(n)
     if not into.isNil:
       into.add assignment
   else:
@@ -438,11 +419,32 @@ proc genException*(e: var Env): NimNode =
     newIdentDefVar(ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
 
+proc createResult*(env: Env): ProcDef =
+  ## define a procedure for retrieving the result of a continuation
+  let field =
+    if env.rs.hasType:
+      env.get                  # the return value is env.result
+    else:
+      nnkDiscardStmt.newTree:
+        newEmptyNode()         # the return value is void
+
+  result = ProcDef:
+    genAst(field, c = env.first, cont = env.identity, tipe = env.rs.typ):
+      proc `...`(c: cont): tipe {.used.} =
+        case c.state
+        of Dismissed:
+          raise Defect.newException:
+            "dismissed continuations have no result"
+        of Finished:
+          field
+        of Running:
+          `...`(trampoline c)
+
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation
   result = clone(n, newStmtList())
   result.addPragma ident"used"  # avoid gratuitous warnings
-  result.returnParam = env.root
+  result.returnParam = env.identity
   result.name = nskProc.genSym"whelp"
   result.introduce {Alloc, Boot}
 

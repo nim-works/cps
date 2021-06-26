@@ -464,3 +464,19 @@ suite "expression flattening":
         check e.msg == "test"
 
     foo()
+
+  test "flatten pragma block expression":
+    var k = newKiller(3)
+
+    proc foo() {.cps: Cont.} =
+      step 1
+      let x =
+        block:
+          {.cast(gcsafe).}:
+            noop()
+            step 2
+            10
+      step 3
+      check x == 10
+
+    foo()

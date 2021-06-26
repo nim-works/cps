@@ -286,13 +286,13 @@ suite "try statements":
 
       fail"this statement cannot be run"
 
-    var c = whelp(foo())
+    var c: Continuation = whelp foo()
     # Run two iterations, which should place us right after the raise
     #
     # At this point, the parent of our `raise` is `nil`, because there wasn't
     # any exception being handled at the point of raise.
     for _ in 1 .. 2:
-      c = Cont c.fn(c)
+      c = c.fn(c)
 
     try:
       raise newException(CatchableError, "outside cps test")

@@ -1,4 +1,4 @@
-import std/[macros, sequtils, sets, tables, hashes, genasts]
+import std/[macros, sequtils, tables, hashes, genasts]
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
             normalizedast]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
@@ -45,32 +45,36 @@ macro cpsJump(cont, call, n: typed): untyped =
   ##
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let call = normalizingRewrites call
-  let name = nskProc.genSym"Post Call"
   debugAnnotation cpsJump, n:
+    let name = nskProc.genSym"Post Call"
     it = newStmtList:
-      makeContProc(name, cont, it)
-    if getImpl(call[0]).hasPragma "cpsBootstrap":
-      let c = nskLet.genSym"c"
-      it.add:
-        # install the return point in the current continuation
-        newAssignment(newDotExpr(cont, ident"fn"), name)
-      it.add:
-        # instantiate a new child continuation with the given arguments
-        newLetStmt c:
-          newCall newCall(ident"typeof", cont):
-            newCall(ident"whelp", cont, call)
-      # NOTE: mom should now be set via the tail() hook from whelp
-      #
-      # return the child continuation
-      it = it.makeReturn:
-        Pass.hook(cont, c)    # we're basically painting the future
-    else:
-      it.add:
-        jumperCall(cont, name, call)
+      makeContProc(name, cont, n)
+    it.add:
+      jumperCall(cont, name, call)
 
 macro cpsJump(cont, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
   result = getAst(cpsJump(cont, call, newStmtList()))
+
+macro cpsContinuationJump(cont, call, c, n: typed): untyped =
+  ## a jump to another continuation that must be instantiated
+  debugAnnotation cpsContinuationJump, n:
+    let name = nskProc.genSym"Post Child"
+    it = newStmtList:
+      makeContProc(name, cont, n)
+    it.add:
+      # install the return point in the current continuation
+      newAssignment(newDotExpr(cont, ident"fn"), name)
+    it.add:
+      # instantiate a new child continuation with the given arguments
+      #newCall newCall(ident"typeof", cont):
+      newAssignment c:
+        newCall(ident"whelp", cont, call)
+    # NOTE: mom should now be set via the tail() hook from whelp
+    #
+    # return the child continuation
+    it = it.makeReturn:
+      Pass.hook(cont, c)    # we're basically painting the future
 
 macro cpsMayJump(cont, n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump
@@ -543,6 +547,51 @@ func newAnnotation(env: Env; n: NimNode; a: static[string]): NimNode =
   result.copyLineInfo n
   result.add env.first
 
+proc setupChildContinuation(env: var Env; call: NimNode): (NimNode, NimNode) =
+  ## create a new child continuation variable and add it to the
+  ## environment.  return the child's symbol and its environment type.
+  let child = nskVar.genSym"child"
+  let etype = pragmaArgument(call, "cpsEnvironment")
+  env.localSection newIdentDefs(child, etype)
+  result = (child, etype)
+
+proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
+  ## this rewrite supports `x = contProc()` and `let x = contProc()`
+  var assign = newStmtList()
+  case store.kind
+  of nnkVarSection, nnkLetSection:
+    # stuff the local into the env
+    env.localSection(store.VarLet, assign)
+  of nnkSym, nnkIdent:
+    # perform a normal assignment
+    assign.add:
+      newAssignment(store, call)
+  of nnkIdentDefs:
+    # consume a new local section and turn it into an assignment
+    env.localSection(expectIdentDefs(store).newVarSection, assign)
+  else:
+    raise Defect.newException "not supported"
+
+  # swap the call in the assignment statement(s)
+  let (child, etype) = setupChildContinuation(env, call)
+  assign = assign.resymCall(call, newCall(ident"...", child))
+
+  # compose the rewrite as an assignment, a lame effort to dealloc
+  # the child, and then any remaining statements we were passed
+  var body =
+    genAst(assign, tail, child, etype, dealloc = Dealloc.sym):
+      assign
+      ##if not child.isNil:
+      ##  dealloc(etype, child)
+      tail
+
+  # the shim is simply an annotation comprised of annotations
+  let shim = env.newAnnotation(call, "cpsContinuationJump")
+  shim.add env.annotate(call)
+  shim.add env.annotate(child)
+  shim.add env.annotate(body)
+  result = shim
+
 proc annotate(parent: var Env; n: NimNode): NimNode =
   ## annotate `input` or otherwise prepare it for conversion into a
   ## mutually-recursive cps convertible form; the `parent` environment
@@ -569,15 +618,26 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       result.add nc
       continue
 
+    template anyTail(): untyped {.dirty.} =
+      if i < n.len - 1:
+        newStmtList(n[i+1 .. ^1])
+      else:
+        newStmtList()
+
     # if it's a cps call,
     if nc.isCpsCall:
       # if its direct parent is not a try statement
       if n.kind != nnkTryStmt:
-        let jumpCall = env.newAnnotation(nc, "cpsJump")
-        jumpCall.add env.annotate(nc)
-        if i < n.len - 1:
-          jumpCall.add:
-            env.annotate newStmtList(n[i + 1 .. ^1])
+        var jumpCall: NimNode
+        if nc.len > 0 and (getImpl nc[0]).hasPragma"cpsBootstrap":
+          jumpCall = env.newAnnotation(nc, "cpsContinuationJump")
+          let (child, etype) = setupChildContinuation(env, nc)
+          jumpCall.add env.annotate(nc)
+          jumpCall.add env.annotate(child)
+        else:
+          jumpCall = env.newAnnotation(nc, "cpsJump")
+          jumpCall.add env.annotate(nc)
+        jumpCall.add env.annotate(anyTail())
         result.add jumpCall
         return
       else:
@@ -634,16 +694,41 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
       return
 
     of nnkVarSection, nnkLetSection:
-      let section = expectVarLet(nc)
-      if isCpsCall(section.val):
+      let section = expectVarLet nc
+      if section.val.isCpsCall or section.val.isCpsBlock: # XXX: temporary
+        let assign = section.asVarLetIdentDef
+        if section.isTuple:
+          result.add:
+            nc.errorAst "cps doesn't support var tuples here yet"
+          discard "add() is dumb"
+        else:
+          result.add:     # shimming `let x = foo()`
+            env.shimAssign(assign.NimNode, assign.val):
+              anyTail()
+          return
+      elif section.val.isCpsBlock:
+        # this is supported by what we refer to as `expr flattening`
         result.add:
-          nc.last.errorAst "shim is not yet supported"
-      elif isCpsBlock(section.val):
-        result.add:
-          nc.last.errorAst "only calls are supported here"
+          nc.errorAst "cps only supports calls here"
       else:
         # add definitions into the environment
         env.localSection(section, result)
+
+    of nnkAsgn:
+      if nc.last.isCpsCall:
+        result.add:
+          if nc.len < 2:
+            env.shimAssign(nc[0], nc[1]):     # shimming `x = foo()`
+              anyTail()
+          else:
+            nc.errorAst "i expected at least two kids on an nkAsgn"
+        return
+      elif nc.last.isCpsBlock:
+        result.add:
+          nc.errorAst "cps only supports calls here"
+      else:
+        result.add:
+          env.annotate(nc)
 
     of nnkForStmt:
       if nc.isCpsBlock:
@@ -881,7 +966,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   n = clone n
   n.addPragma ident"used"  # avoid gratuitous warnings
 
-  # the whelp is a limited bootstrap that merely makes
+  # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)
 
@@ -943,11 +1028,18 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   n.addPragma(bindSym"cpsResolver", env.identity)
   n.addPragma(bindSym"cpsManageException")
 
+  # storing the source environment on helpers
+  for p in [whelp, booty]:
+    p.addPragma(bindSym"cpsEnvironment", env.identity)
+
+  # the `...` operator recovers the result of a continuation
+  let dots = env.createResult()
+
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
   # generated proc bodies, remaining proc, whelp, bootstrap
-  result = newStmtList(types, n, whelp, booty)
+  result = newStmtList(types, n, dots, whelp, booty)
   result = workaroundRewrites result
 
 macro cpsTransform*(T, n: typed): untyped =

@@ -17,10 +17,8 @@ proc push(pool: Pool, w: Work) =
     w.pool = pool
     pool.workQueue.addLast(w)
 
-template push(pool: Pool; c: untyped) =
-  let d = whelp c
-  d.pool = pool
-  pool.push d
+template push(pool: Pool; c: typed) =
+  pool.push(Work whelp c)
 
 proc jield(c: Work): Work {.cpsMagic.} =
   c.pool.push c
