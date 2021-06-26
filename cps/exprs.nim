@@ -103,9 +103,9 @@ func filterExpr(n: NormalizedNimNode,
       {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
       NimNode:
         filterExpr(NormalizedNimNode(n.last), transformer)
-  of nnkBlockStmt, nnkBlockExpr:
+  of nnkBlockStmt, nnkBlockExpr, nnkPragmaBlock:
     result = NormalizedNimNode copyNimNode(n)
-    # Copy the label
+    # Copy the label/pragma list
     result.add copy(n[0])
     # Rewrite and add the body
     result.add:
@@ -372,7 +372,7 @@ macro cpsExprLifter(n: typed): untyped =
   ## Does not create a new scope.
 
   proc lift(n: NimNode): NimNode =
-    var lifted = newStmtList()
+    let lifted = newStmtList()
     proc lifter(n: NimNode): NimNode =
       if n.isCpsMustLift:
         lifted.add:
@@ -381,8 +381,18 @@ macro cpsExprLifter(n: typed): untyped =
         # Replace `n` with an empty node
         result = newEmptyNode()
 
-    result = newStmtList(lifted):
-      filter(n, lifter)
+    let rewritten = filter(n, lifter)
+    # For expressions we have to be a bit more delicate, as an empty nnkStmtList
+    # might turn the expression into:
+    #   StmtList
+    #     StmtList
+    #     <Expr>
+    #
+    # Which the compiler will *not* flatten, making it a "complex" statement.
+    if lifted.len == 0:
+      result = rewritten
+    else:
+      result = newStmtList(lifted, rewritten)
 
   debugAnnotation cpsExprLifter, n:
     it = lift it
@@ -572,13 +582,6 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
 
         conv.copyLineInfo(child)
         result.add conv
-
-      of ConvNodes - {nnkConv}:
-        # For hidden conversion node, the compiler can easily recreate
-        # them, thus we ignore them and only take what's inside
-        result.add:
-          # Rewrite the conversion and take its body
-          annotate(child).last
 
       of nnkDiscardStmt:
         let discrd = newCall(bindSym"cpsExprDiscard"):
