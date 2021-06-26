@@ -20,7 +20,10 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
   ## (ie. the block has a type) and that these expression might need to be
   ## moved outside of `n` for the purpose of transformation.
   # If this node doesn't have a type
-  if n.typeKind == ntyNone:
+  #
+  # XXX: I'm not even sure what is ntyStmt... but `result = expr` generated
+  # by the compiler have it
+  if n.typeKind in {ntyNone, ntyStmt}:
     # Check if its children have any
     case n.kind
     of nnkVarSection, nnkLetSection:
