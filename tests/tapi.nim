@@ -109,10 +109,11 @@ suite "cps api":
     check entry() == 42
 
   block:
-    ## accessing exported CPS procedures value from a continuation works
-    var k = newKiller(1)
+    ## accessing exported continuation's result from a continuation works
+    var k = newKiller 2
     proc foo() {.cps: Cont.} =
       step 1
       check entry() == 42
+      step 2
 
     foo()

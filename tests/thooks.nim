@@ -119,9 +119,16 @@ suite "hooks":
 
   block:
     ## custom continuation passing hook works
-    shouldRun 7:
-      proc pass(a, b: Cont): Cont =
-        ran()
+    shouldRun 34:
+      proc pass(a: Cont; b: Continuation): Continuation =
+        echo "pass to parent"
+        for n in 0..9: ran()
+        result = b
+
+      proc pass(a: Cont; b: Cont): Continuation =
+        echo "pass to child"
+        for n in 0..9: ran()
+        for n in 0..9: ran()
         result = b
 
       proc bar() {.cps: Cont.} =
@@ -132,7 +139,6 @@ suite "hooks":
       proc foo() {.cps: Cont.} =
         ran()
         bar()
-        ran()
         ran()
 
       foo()

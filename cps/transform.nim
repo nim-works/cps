@@ -74,7 +74,8 @@ macro cpsContinuationJump(cont, call, c, n: typed): untyped =
     #
     # return the child continuation
     it = it.makeReturn:
-      Pass.hook(cont, c)    # we're basically painting the future
+      newCall newCall(ident"typeof", cont):
+        Pass.hook(cont, c)    # we're basically painting the future
 
 macro cpsMayJump(cont, n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump

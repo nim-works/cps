@@ -46,11 +46,11 @@ proc makeReturn*(pre: NimNode; n: NimNode): NimNode =
     #else:
     #  doc "omitted a return of " & repr(n)
 
-template pass*[T: Continuation](source, destination: T): T {.used.} =
+template pass*(source: Continuation; destination: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to introduce logic during
   ## the transfer of control between parent and child continuations.
   ## The return value specifies the destination continuation.
-  destination
+  Continuation destination
 
 proc terminator*(c: NimNode; T: NimNode): NimNode =
   ## produce the terminating return statement of the continuation;
@@ -68,7 +68,7 @@ proc terminator*(c: NimNode; T: NimNode): NimNode =
         # we're converting to Cont here for sigmatch reasons despite the
         # fact that Continuation is probably the only rational type
         # pass(continuation, Cont(c.mom))
-        result = `pass`(`c`, (typeof `c`)(`c`.mom))
+        result = (typeof `c`) `pass`(`c`, Continuation `c`.mom)
         if result != `c`:
           # perform a cooperative yield when we pass control to mom
           result = `coop` result
