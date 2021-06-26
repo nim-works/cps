@@ -244,7 +244,6 @@ proc trampoline*[T: Continuation](c: T): T =
     c = c.fn(c)
   result = T c
 
-<<<<<<< HEAD
 proc isCpsCall*(n: NimNode): bool =
   ## true if this node holds a call to a cps procedure
   if n.len > 0:
