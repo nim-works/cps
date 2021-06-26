@@ -299,15 +299,16 @@ proc addAssignment(e: var Env; section: IdentDefVarLet): NimNode =
     echo $kind, "\t", repr(d)
   result = e.initialization(field, value)
 
-proc getFieldViaLocal*(e: Env; n: NimNode): NimNode =
-  ## get a field from the env using a local symbol as input
-  block found:
-    for field, sym in e.locals.pairs:
-      if sym.name == n:
-        result = field
-        break found
-    result = n.errorAst:
-      "unable to find field for symbol " & n.repr
+when false:
+  proc getFieldViaLocal*(e: Env; n: NimNode): NimNode =
+    ## get a field from the env using a local symbol as input
+    block found:
+      for field, sym in e.locals.pairs:
+        if sym.name == n:
+          result = field
+          break found
+      result = n.errorAst:
+        "unable to find field for symbol " & n.repr
 
 proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
