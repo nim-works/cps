@@ -573,13 +573,6 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
         conv.copyLineInfo(child)
         result.add conv
 
-      of ConvNodes - {nnkConv}:
-        # For hidden conversion node, the compiler can easily recreate
-        # them, thus we ignore them and only take what's inside
-        result.add:
-          # Rewrite the conversion and take its body
-          annotate(child).last
-
       of nnkDiscardStmt:
         let discrd = newCall(bindSym"cpsExprDiscard"):
           NimNode:
