@@ -81,3 +81,20 @@ suite "returns and results":
       step 2
 
     foo()
+
+  block:
+    ## dismissing a child continuation is fun
+    var k = newKiller 2
+    proc bar(a: int): int {.cps: Cont.} =
+      noop()
+      step 2
+      result = a * 2
+      dismiss()
+
+    proc foo() {.cps: Cont.} =
+      step 1
+      let x = bar(4)
+      step 3
+      check x == 8
+
+    foo()

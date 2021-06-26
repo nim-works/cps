@@ -26,6 +26,7 @@ proc trampoline[T: Continuation](c: T) =
       "continuations test best when they, uh, bounce"
 
 proc noop*(c: Cont): Cont {.cpsMagic.} = c
+proc dismiss*(c: Cont): Cont {.cpsMagic.} = nil
 
 # We have a lot of these for the purpose of control-flow validation
 {.warning[UnreachableCode]: off.}
