@@ -562,7 +562,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
   of nnkVarSection, nnkLetSection:
     # stuff the local into the env
     env.localSection(store.VarLet, assign)
-  of nnkSym, nnkIdent:
+  of nnkSym, nnkIdent, nnkDotExpr:
     # perform a normal assignment
     assign.add:
       newAssignment(store, call)
