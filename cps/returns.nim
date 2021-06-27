@@ -62,15 +62,19 @@ proc terminator*(c: Name; T: NormalizedNimNode): NormalizedNimNode =
       if `c`.isNil:
         result = `c`
       else:
-        # we're converting to Cont here for sigmatch reasons despite the
-        # fact that Continuation is probably the only rational type
-        # pass(continuation, Cont(c.mom))
-        result = (typeof `c`) `pass`(`c`, Continuation `c`.mom)
-        if result != `c`:
-          # perform a cooperative yield when we pass control to mom
-          result = `coop` result
-          # dealloc(env_234234, continuation)
-          `dealloc`(`T`, `c`)
+        `c`.fn = nil
+        if `c`.mom.isNil:
+          result = `c`
+        else:
+          # we're converting to Cont here for sigmatch reasons despite the
+          # fact that Continuation is probably the only rational type
+          # pass(continuation, Cont(c.mom))
+          result = (typeof `c`) `pass`(`c`, Continuation `c`.mom)
+          if result != `c`:
+            # perform a cooperative yield when we pass control to mom
+            result = `coop` result
+            # dealloc(env_234234, continuation)
+            `dealloc`(`T`, `c`)
       # critically, terminate control-flow here!
       return
 

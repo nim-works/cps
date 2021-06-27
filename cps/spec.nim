@@ -114,7 +114,7 @@ proc isCpsBreak*(n: NormalizedNimNode): bool =
 func newCpsContinue*(n: NormalizedNimNode): NormalizedNimNode =
   ## Produce a {.cpsContinue.} annotation
   nnkPragma.newNimNode(n).NormalizedNimNode.add:
-    bindName"cpsContinue"
+    NormalizedNimNode bindName"cpsContinue"
 
 proc isCpsContinue*(n: NormalizedNimNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
@@ -127,12 +127,12 @@ proc breakLabel*(n: NormalizedNimNode): NormalizedNimNode =
       if n[0].len > 1 and n[0][1].kind != nnkNilLit:
         n[0][1]
       else:
-        newEmptyNode()
+        newEmptyNormalizedNode()
     elif n.kind == nnkBreakStmt:
       n[0]
     else:
       raise newException(Defect, "this node is not a break: " & $n.kind)
-  r.NormalizedNimNode
+  r
 
 proc isCpsCont*(n: NormalizedNimNode): bool =
   ## Return whether the given procedure is a cps continuation
@@ -188,7 +188,7 @@ func matchCpsBreak*(): NormalizedMatcher =
 func wrappedFinally*(n, final: NormalizedNimNode): NormalizedNimNode =
   ## rewrite a try/except/finally into try/try-except/finally
   # create a copy of the try statement minus finally
-  let newTry = copyNimNode(n).add(n[0 .. ^2]).NormalizedNimNode
+  let newTry = copyNimNode(n).add(n[0 .. ^2])
 
   # wrap the try-finally outside of `nc`
   result = copyNimNode n

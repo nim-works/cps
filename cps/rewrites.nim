@@ -43,16 +43,17 @@ func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
   result = not n.isNil and n.kind == nnkEmpty
 
-proc errorAst*(s: string, info: NimNode = nil): NimNode =
+proc errorAst*(s: string, info: NimNode = nil): NormalizedNimNode =
   ## produce {.error: s.} in order to embed errors in the ast
   ##
   ## optionally take a node to set the error line information
-  result = nnkPragma.newTree:
-    ident"error".newColonExpr: newLit s
+  result = NormalizedNimNode:
+    nnkPragma.newTree:
+      ident"error".newColonExpr: newLit s
   if not info.isNil:
-    result[0].copyLineInfo info
+    result.NimNode[0].copyLineInfo info
 
-proc errorAst*(n: NimNode; s = "creepy ast"): NimNode =
+proc errorAst*(n: NimNode; s = "creepy ast"): NormalizedNimNode =
   ## embed an error with a message,
   ## the line info is copied from the node
   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
@@ -158,7 +159,7 @@ proc normalizingRewrites*(n: NimNode): NormalizedNimNode =
                   newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
           else:
             result.add:
-              child.errorAst "unexpected"
+              NimNode child.errorAst "unexpected"
 
     proc rewriteReturn(n: NimNode): NimNode =
       ## Inside procs, the compiler might produce an AST structure like this:

@@ -72,7 +72,7 @@ proc hook*(hook: Hook; n: NormalizedNimNode): NormalizedNimNode =
             newLit(repr n.name).NormalizedNimNode,
             makeLineInfo(n.lineInfoObj).NormalizedNimNode)
   else:
-    n.errorAst("the " & $hook & " hook doesn't take one argument").NormalizedNimNode
+    n.errorAst("the " & $hook & " hook doesn't take one argument")
 
 proc hook*(hook: Hook; n: Name): NormalizedNimNode =
   ## execute the given hook on the given node
@@ -103,7 +103,7 @@ proc hook*(hook: Hook; a, b: NormalizedNimNode): NormalizedNimNode =
   of Dealloc:
     newStmtList(newCall(hook.sym, a, b), newNilLit().NormalizedNimNode)
   else:
-    b.errorAst("the " & $hook & " hook doesn't take two arguments").NormalizedNimNode
+    b.errorAst("the " & $hook & " hook doesn't take two arguments")
 
 proc hook*(hook: Hook; a: Name; b: NormalizedNimNode): NormalizedNimNode =
   ## execute the given hook with two arguments
