@@ -103,26 +103,10 @@ type
   IdentDefVar* = distinct IdentDefVarLet
     ## identdef defintion from a var section
 
-  IdentDefLike* = IdentDef | RoutineParam
-    ## abstract over a single var or let sections IdentDef, or a routine param
-    ## definition
-  DefLike* = IdentDefLike | VarLetDef
-    ## abstract over any IdentDef or VarTuple from a VarLet or a RoutineParam
-
-  LetSectionLike* = LetSection
-    ## abstract over various forms of let sections, used to define operations
-    ## over or allow abstracting over this type class further
-  VarSectionLike* = VarSection | IdentDefVar
-    ## abstract over various var sections types
-  VarLetLike* = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
-               VarSectionLike
-    ## abstract over various let or var sections types
-  VarLetIdentDefLike* = IdentDefVarLet | IdentDefVar
-    ## abstract over identdefs from let or var sections types
-  
-  ExprLike* = Name | NormalizedNimNode
-    ## abstract over any nim value expression
+  # unlike the other `XyzLike` types, this is sprinkled all over the place
   TypeExprLike* = Name | TypeExpr
+    ## Any expression that could go into the type part of a routine parameter,
+    ## the identdef of a var or let section, etc.
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
   ## useful for error messages
@@ -288,6 +272,10 @@ converter nameToNormalizedNimNode*(n: Name): NormalizedNimNode =
   n.NormalizedNimNode
 
 # fn-ExprLike
+type
+  ExprLike* = Name | NormalizedNimNode
+    ## abstract over any nim value expression
+
 proc newDotExpr*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
   ## create a new dot expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
@@ -362,7 +350,19 @@ proc asIdent*(n: NimNode): Ident =
 proc asIdent*(n: string): Ident =
   (ident n).Ident
 
+# fn-IdentDefLike
+type
+  IdentDefLike* = IdentDef | RoutineParam
+    ## abstract over a single var or let sections IdentDef, or a routine param
+    ## definition
+
+func name*(n: IdentDefLike): Name = n.NimNode[0].Name
+
 # fn-DefLike
+
+type
+  DefLike* = IdentDefLike | VarLetDef
+    ## abstract over any IdentDef or VarTuple from a VarLet or a RoutineParam
 
 func typ*(n: DefLike): NimNode = n.NimNode[^2]
 func val*(n: DefLike): NimNode = n.NimNode[^1]
@@ -403,11 +403,23 @@ proc newIdentDefs*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDef =
 proc newIdentDefs*(n: Name, val: NormalizedNimNode): IdentDef =
   newIdentDefs(n.NimNode, newEmptyNode(), val).IdentDef
 
-# fn-IdentDefLike
+#########################################
+# Start All the Let and Var Section Stuff
+#########################################
 
-func name*(n: IdentDefLike): Name = n.NimNode[0].Name
+type
+  LetSectionLike* = LetSection | IdentDefLet
+    ## abstract over various forms of let sections, used to define operations
+    ## over or allow abstracting over this type class further
+  VarSectionLike* = VarSection | IdentDefVar
+    ## abstract over various var sections types
 
 # fn-VarLetLike
+
+type
+  VarLetLike* = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
+               VarSectionLike
+    ## abstract over various let or var sections types
 
 func def*(n: VarLetLike): VarLetDef = VarLetDef n.NimNode[0]
   ## an IdentDef or VarTuple
@@ -421,6 +433,23 @@ func hasValue*(n: VarLetLike): bool = n.def.hasValue
 func hasType(n: VarLetLike): bool = n.def.typ.kind != nnkEmpty
   ## whether an explicit type is defined
 func isTuple*(n: VarLetLike): bool = n.def.NimNode.kind == nnkVarTuple
+
+# fn-VarLetIdentDefLike
+
+type
+  VarLetIdentDefLike* = IdentDefVarLet | IdentDefVar
+    ## abstract over identdefs from let or var sections types
+
+func identdef*(n: VarLetIdentDefLike): IdentDef = n.NimNode[0].IdentDef
+  ## retrieve the innner IdentDef
+func name*(n: VarLetIdentDefLike): Name = n.identdef.name
+  ## Name (ident|sym) of the identifer, as we only have a single identdefs it
+  ## will have the name
+func inferTypFromImpl*(n: VarLetIdentDefLike): Name =
+  ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
+  if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
+
+# fn-VarLet
 
 func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
   const sectionName =
@@ -453,19 +482,6 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
   elif checkTuple and n[0].kind != nnkVarTuple:
     errorGot sectionName & " section must be a tuple assignment", n
   return n.T
-
-# fn-VarLetIdentDefLike
-
-func identdef*(n: VarLetIdentDefLike): IdentDef = n.NimNode[0].IdentDef
-  ## retrieve the innner IdentDef
-func name*(n: VarLetIdentDefLike): Name = n.identdef.name
-  ## Name (ident|sym) of the identifer, as we only have a single identdefs it
-  ## will have the name
-func inferTypFromImpl*(n: VarLetIdentDefLike): Name =
-  ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
-
-# fn-VarLet
 
 proc expectVarLet*(n: NimNode): VarLet =
   ## return a VarLet if this is a var or let section, otherwise error out
