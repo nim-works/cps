@@ -280,6 +280,7 @@ the compiler.
 ```nim
 type
   MyContinuation[T] = ref object of Continuation
+    something: T
 ```
 
 ### Performance
@@ -291,7 +292,7 @@ performance considerations really aren't your primary consideration, right?
 
 Add `--define:cpsDebug=SomePass` where `SomePass` matches on of the CPS
 transformation passes; this will output Nim codegen corresponding to the
-rewrite phase. Interested places to start include the following:
+rewrite phase. Interesting places to start include the following:
 
 - `cpsTransform`
 - `cpsResolver`
