@@ -16,7 +16,7 @@ const
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
-  LocalCache = OrderedTable[Name, IdentDefVarLet]
+  LocalCache = OrderedTable[Name, VarLetIdentDef]
 
   Env* = ref object
     id: Name                        # the identifier of our continuation type
@@ -35,7 +35,7 @@ type
 
   CachePair* = tuple
     key: Name
-    val: IdentDefVarLet
+    val: VarLetIdentDef
 
 proc `$`(p: CachePair): string {.used.} =
   p.val.repr & ": " & p.key.repr
@@ -86,7 +86,7 @@ proc maybeConvertToRoot*(e: Env; locals: NormalizedNode): NormalizedNode =
   else:
     locals
 
-proc set(e: var Env; key: Name; val: IdentDefVarLet): Env
+proc set(e: var Env; key: Name; val: VarLetIdentDef): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
@@ -189,7 +189,7 @@ proc newEnv*(parent: Env; copy = off): Env =
   if copy:
     result = Env(store: parent.store,
                  via: parent.identity,
-                 locals: initOrderedTable[Name, IdentDefVarLet](),
+                 locals: initOrderedTable[Name, VarLetIdentDef](),
                  c: parent.c,
                  rs: parent.rs,
                  fn: parent.fn,
@@ -224,7 +224,7 @@ proc storeType*(e: Env; force = off): Env =
     result = e
     assert not e.isDirty
 
-proc set(e: var Env; key: Name; val: IdentDefVarLet): Env =
+proc set(e: var Env; key: Name; val: VarLetIdentDef): Env =
   ## set [ident|sym] = let/var section
   if key in e.locals:
     result = storeType e
@@ -271,7 +271,7 @@ proc identity*(e: var Env): Name =
   assert not e.id.NimNode.isEmpty
   result = e.id
 
-proc initialization(e: Env; field: Name, section: IdentDefVarLet): NimNode =
+proc initialization(e: Env; field: Name, section: VarLetIdentDef): NimNode =
   ## produce the `x = 34`
   result = newStmtList()
   # let/var sections basically become env2323(cont).foo34 = "some default"
@@ -301,7 +301,7 @@ proc addAssignment(e: var Env; d: IdentDef): NimNode =
   # don't attempt to redefine proc params!
   result = newStmtList()
 
-proc addAssignment(e: var Env; section: IdentDefVarLet): NimNode =
+proc addAssignment(e: var Env; section: VarLetIdentDef): NimNode =
   ## compose an assignment during addition of var|let identDefs to env
   when cpsDebug == "Env":
     echo $section.kind, "\t", repr(section)

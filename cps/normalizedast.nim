@@ -63,13 +63,17 @@ export NormalizedNode
 
 type
   Name* = distinct NormalizedNode
-    ## an "opaque" sum type for any name, which are typically Ident or Sym
+    ## opaque sum: `Ident` | `Sym`
+    ## This lets you query and use name like things, which is often required as
+    ## transformations need to resym, desym, bind, all over the place
+
   Ident* = distinct Name
     ## nnkIdent
   Sym* = distinct Name
     ## nnkSym
 
   TypeExpr* = distinct NormalizedNode
+    ## opaque sum: see `TypeExprKinds`
     ## the type part of a let or var definition or routine param
 
   IdentDef* = distinct NormalizedNode
@@ -83,30 +87,51 @@ type
   RoutineParam* = distinct IdentDef
     ## each calling params of proc/func/etc definition is an nnkIdentDefs
 
+  # Naming Convention Notes for Var and Let:
+  # - first part of name is the Node, while the later parts add/narrow context
+  # - `_` denotes if we're talking about it in a prefix or suffix context
+  #
+  # Precise rules in "precendence" order:
+  # - Let_: LetSection, suffix part narrow the type of content
+  # - Var_: VarSection, suffix part narrow the type of content
+  # - _Section: used because Var and Let alone collide too easily
+  # - VarLet_: is either a Var or Let
+  # - IdentDef_: an IdentDef, from some context `_`
+  # - TupleDef_: an VarTuple, from some context `_`
+  # - Def_: Inner part of a Var or Let
   VarLet* = distinct NormalizedNode
-    ## a var or let section, with a single define
-  VarLetDef = distinct NormalizedNode
-    ## opaque sum: nnkIdentDefs|nnkVarTuple from a var or let section
+    ## opqaue sum: a var or let section, with a single define ident or tuple
+  DefVarLet = distinct NormalizedNode
+    ## opaque sum: nnkIdentDefs|nnkVarTuple, from a var or let section
 
-  TupleVarLet* = distinct VarLet
-    ## a var or let section, but with a tuple defintion within
-  IdentDefVarLet* = distinct VarLet
+  VarLetTuple* = distinct VarLet
+    ## opaque sum: a var or let section, but with a tuple defintion within
+  VarLetIdentDef* = distinct VarLet
     ## a var or let section, but with a single identdefs, eg: `var a: int = 10`
 
   LetSection* = distinct VarLet
     ## a let section, with a single identdefs or vartuple
-
   VarSection* = distinct VarLet
     ## a let or var section, with a single identdefs or vartuple
-  IdentDefLet* = distinct IdentDefVarLet
+  
+  IdentDefLet* = distinct VarLetIdentDef
     ## identdef defintion from a let section
-  IdentDefVar* = distinct IdentDefVarLet
+  IdentDefVar* = distinct VarLetIdentDef
     ## identdef defintion from a var section
 
   # unlike the other `XyzLike` types, this is sprinkled all over the place
   TypeExprLike* = Name | TypeExpr
     ## Any expression that could go into the type part of a routine parameter,
     ## the identdef of a var or let section, etc.
+
+const TypeExprKinds = {
+    nnkIdent, nnkSym,   # the simple atoms
+    nnkVarTy, nnkRefTy, # the weirder ones
+    nnkTupleConstr      # still have tuples in a few areas
+    # nnkEmpty          # excluded as it's only allowed in some cases
+  }
+  ## list of type NimNodeKind
+  ## XXX: this is an incomplete list
 
 func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
   ## useful for error messages
@@ -370,13 +395,13 @@ proc newCall*(n: string, args: NormalizedVarargs): NormalizedNode =
 
 # fn-TypeExpr
 proc asTypeExpr*(n: NimNode): TypeExpr =
-  if n.kind notin {nnkIdent, nnkSym, nnkVarTy, nnkRefTy}:
+  if n.kind notin TypeExprKinds:
     # XXX: incomplete list of type kinds
     errorGot "not a type expression", n
   n.TypeExpr
 proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
   ## coerce to `TypeExpr`, allow `nnkEmpty`, error out otherwise
-  if n.kind notin {nnkIdent, nnkSym, nnkVarTy, nnkTupleConstr, nnkEmpty}:
+  if n.kind notin {nnkEmpty} + TypeExprKinds:
     errorGot "not a type expression or empty", n
   n.TypeExpr
 proc newRefType*(n: Name): TypeExpr =
@@ -403,7 +428,7 @@ func name*(n: IdentDefLike): Name = n.NimNode[0].Name
 # fn-DefLike
 
 type
-  DefLike* = IdentDefLike | VarLetDef
+  DefLike* = IdentDefLike | DefVarLet
     ## abstract over any IdentDef or VarTuple from a VarLet or a RoutineParam
 
 func typ*(n: DefLike): NimNode = n.NimNode[^2]
@@ -459,11 +484,11 @@ type
 # fn-VarLetLike
 
 type
-  VarLetLike* = VarLet | TupleVarLet | IdentDefVarLet | LetSectionLike |
+  VarLetLike* = VarLet | VarLetTuple | VarLetIdentDef | LetSectionLike |
                VarSectionLike
     ## abstract over various let or var sections types
 
-func def*(n: VarLetLike): VarLetDef = VarLetDef n.NimNode[0]
+func def*(n: VarLetLike): DefVarLet = DefVarLet n.NimNode[0]
   ## an IdentDef or VarTuple
 func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
@@ -479,7 +504,7 @@ func isTuple*(n: VarLetLike): bool = n.def.NimNode.kind == nnkVarTuple
 # fn-VarLetIdentDefLike
 
 type
-  VarLetIdentDefLike* = IdentDefVarLet | IdentDefVar
+  VarLetIdentDefLike* = VarLetIdentDef | IdentDefVar
     ## abstract over identdefs from let or var sections types
 
 func identdef*(n: VarLetIdentDefLike): IdentDef = n.NimNode[0].IdentDef
@@ -509,7 +534,7 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
     elif T is VarLetLike:         false
     else:                         {.error.}
   const checkTuple =
-    when T is TupleVarLet: true
+    when T is VarLetTuple: true
     elif T is VarLetLike:  false
     else:                  {.error.}
   
@@ -532,12 +557,12 @@ proc asVarLet*(n: NimNode): VarLet =
 func errorGot(msg: string, n: VarLetLike, got: string = repr(n)) =
   errorGot(msg, n.NimNode, got)
 
-proc asVarLetTuple*(n: VarLet): TupleVarLet =
-  ## return a TupleVarLet if the def is a VarTuple, otherwise error out
-  validateAndCoerce(n.NimNode, TupleVarLet)
-proc asVarLetIdentDef*(n: VarLet): IdentDefVarLet =
-  ## return a IdentDefVarLet if the def is an IdentDef, otherwise error out
-  validateAndCoerce(n.NimNode, IdentDefVarLet)
+proc asVarLetTuple*(n: VarLet): VarLetTuple =
+  ## return a VarLetTuple if the def is a VarTuple, otherwise error out
+  validateAndCoerce(n.NimNode, VarLetTuple)
+proc asVarLetIdentDef*(n: VarLet): VarLetIdentDef =
+  ## return a VarLetIdentDef if the def is an IdentDef, otherwise error out
+  validateAndCoerce(n.NimNode, VarLetIdentDef)
 
 func clone*(n: VarLet, value: NimNode = nil): VarLet =
   ## clone a `VarLet` but with `value` changed
@@ -560,29 +585,29 @@ func clone*(n: VarLet, value: NimNode = nil): VarLet =
 
 allowAutoDowngradeNormalizedNode(VarLet)
 
-# fn-TupleVarLet
+# fn-VarLetTuple
 
-proc typ*(n: TupleVarLet): NimNode =
+proc typ*(n: VarLetTuple): NimNode =
   ## return the type based on `getTypeInst`
   getTypeInst n.val
-iterator indexNamePairs*(n: TupleVarLet): (int, NimNode) =
+iterator indexNamePairs*(n: VarLetTuple): (int, NimNode) =
   ## return the names of fields on the lhs of a var/let tuple assignment
   for index, name in n.def.NimNode[0 .. ^3].pairs:
     yield (index, name)
 
-# fn-IdentDefVarLet
+# fn-VarLetIdentDef
 
-proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDef): IdentDefVarLet =
-  ## create a new IdentDefVarLet
+proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDef): VarLetIdentDef =
+  ## create a new VarLetIdentDef
   doAssert kind in {nnkLetSection, nnkVarSection},
     "kind must be nnkLetSection nnkVarSection, got: " & repr(kind)
-  newTree(kind, i).IdentDefVarLet
+  newTree(kind, i).VarLetIdentDef
 proc newVarLetIdentDef*(kind: NimNodeKind,
-                        name: Name, typ, val: NimNode): IdentDefVarLet =
-  ## create a new IdentDefVarLet
+                        name: Name, typ, val: NimNode): VarLetIdentDef =
+  ## create a new VarLetIdentDef
   newVarLetIdentDef(kind, newIdentDefs(name.NimNode, typ, val).IdentDef)
 
-allowAutoDowngradeNormalizedNode(IdentDefVarLet)
+allowAutoDowngradeNormalizedNode(VarLetIdentDef)
 
 # fn-VarSection
 
@@ -607,7 +632,7 @@ proc newIdentDefLet*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefLe
   ## create a let section with an identdef, eg: `n`: `t` = `val`
   newIdentDefLet(newIdentDefs(n, t, val))
 
-allowAutoDowngrade(IdentDefLet, IdentDefVarLet)
+allowAutoDowngrade(IdentDefLet, VarLetIdentDef)
 allowAutoDowngradeNormalizedNode(IdentDefLet)
 
 # fn-IdentDefVar
@@ -619,7 +644,7 @@ proc newIdentDefVar*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefVa
   ## create a var section with an identdef, eg: `n`: `t` = `val`
   newIdentDefVar(newIdentDefs(n, t, val))
 
-allowAutoDowngrade(IdentDefVar, IdentDefVarLet)
+allowAutoDowngrade(IdentDefVar, VarLetIdentDef)
 
 # fn-ProcDefParams
 
