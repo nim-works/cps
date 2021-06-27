@@ -18,7 +18,6 @@ type
   LocalCache = OrderedTable[NimNode, IdentDefVarLet]
 
   Env* = ref object
-    exported: bool                  # whether `...` should be exported
     id: NimNode                     # the identifier of our continuation type
     via: NimNode                    # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
@@ -244,7 +243,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode; exported = false): Env =
+proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
@@ -255,7 +254,7 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode; exported = false)
   let rs = if rs.isNil: newEmptyNode() else: rs
   let c = if c.isNil or c.isEmpty: ident"continuation" else: c
 
-  result = Env(exported: exported, c: c, store: store, via: via, id: via)
+  result = Env(c: c, store: store, via: via, id: via)
   result.rs = newIdentDefs("result", rs)
   when cpsReparent:
     result.seen = initHashSet[string]()
@@ -421,8 +420,10 @@ proc genException*(e: var Env): NimNode =
     newIdentDefVar(ex, nnkRefTy.newTree(bindSym"Exception"), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
 
-proc createResult*(env: Env): ProcDef =
+proc createResult*(env: Env, exported = false): ProcDef =
   ## define a procedure for retrieving the result of a continuation
+  ##
+  ## `exported` determines whether this procedure will be exported
   let
     field =
       if env.rs.hasType:
@@ -431,7 +432,7 @@ proc createResult*(env: Env): ProcDef =
         nnkDiscardStmt.newTree:
           newEmptyNode()         # the return value is void
     name =
-      if env.exported:
+      if exported:
         nnkPostfix.newTree(
           ident"*",
           nnkAccQuoted.newTree(ident"...")
