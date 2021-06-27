@@ -337,6 +337,11 @@ proc asTypeExpr*(n: NimNode): TypeExpr =
     # XXX: incomplete list of type kinds
     errorGot "not a type expression", n
   n.TypeExpr
+proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
+  ## coerce to `TypeExpr`, allow `nnkEmpty`, error out otherwise
+  if n.kind notin {nnkIdent, nnkSym, nnkVarTy, nnkTupleConstr, nnkEmpty}:
+    errorGot "not a type expression or empty", n
+  n.TypeExpr
 proc newRefType*(n: Name): TypeExpr =
   nnkRefTy.newTree(n.NimNode).TypeExpr
 
@@ -391,7 +396,7 @@ proc validateIdentDefs(n: NimNode) =
     errorGot "bad rewrite presented", n
   elif n.len != 3:
     errorGot "bad rewrite, failed to set init", n
-proc expectIdentDefs*(n: NimNode): IdentDef =
+proc asIdentDefs*(n: NimNode): IdentDef =
   ## return an IdentDef or error out
   validateIdentDefs(n)
   return n.IdentDef
@@ -483,7 +488,7 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
     errorGot sectionName & " section must be a tuple assignment", n
   return n.T
 
-proc expectVarLet*(n: NimNode): VarLet =
+proc asVarLet*(n: NimNode): VarLet =
   ## return a VarLet if this is a var or let section, otherwise error out
   validateAndCoerce(n)
 
@@ -513,7 +518,7 @@ func clone*(n: VarLet, value: NimNode = nil): VarLet =
     def.add copy(value)
 
   # copy the varlet and add the new def
-  result = expectVarLet:
+  result = asVarLet:
     copyNimNode(n.NimNode).add def
 
 converter varLetToNormalizedNimNode*(n: VarLet): NormalizedNimNode =

@@ -108,9 +108,10 @@ template whelpIt*(input: typed; body: untyped): untyped =
 macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
   ## running it; instead, return the continuation as a value.
-  let sym = bootstrapSymbol call
-  let base = enbasen:  # find the parent type of the environment
-    (getImpl sym).pragmaArgument"cpsEnvironment"
+  let
+    sym = bootstrapSymbol call
+    base = enbasen:  # find the parent type of the environment
+      (getImpl sym).pragmaArgument"cpsEnvironment"
   result = whelpIt call:
     it =
       sym.ensimilate:
@@ -126,7 +127,7 @@ macro whelp*(parent: Continuation; call: typed): untyped =
   result = whelpIt call:
     it =
       sym.ensimilate:
-        Tail.hook(newCall("Continuation", parent.NormalizedNimNode),
+        Tail.hook(newCall(ident"Continuation", parent).NormalizedNimNode,
                   newCall(base, it).NormalizedNimNode)
 
 template head*[T: Continuation](first: T): T {.used.} =

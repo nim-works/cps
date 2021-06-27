@@ -27,7 +27,7 @@ func hasCpsExpr(n: NormalizedNimNode): bool =
     # Check if its children have any
     case n.kind
     of nnkVarSection, nnkLetSection:
-      let n = expectVarLet n
+      let n = asVarLet n
       result = n.val.hasCpsExpr
     of nnkElifBranch, nnkElifExpr, nnkWhileStmt:
       result = n[0].NormalizedNimNode.hasCpsExpr
@@ -417,7 +417,7 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
     if child.hasCpsExpr:
       case child.kind
       of nnkVarSection, nnkLetSection:
-        let child = expectVarLet(child)
+        let child = asVarLet(child)
 
         result.add:
           # Puts the section under expression lifter in case its value contains

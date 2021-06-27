@@ -733,7 +733,7 @@ proc annotate(parent: var Env; n: NormalizedNimNode): NormalizedNimNode =
       return
 
     of nnkVarSection, nnkLetSection:
-      let section = expectVarLet nc
+      let section = asVarLet nc
       if section.val.isCpsCall or section.val.isCpsBlock:
         let assign = section
         result.add: # shimming `let x = foo()` or `let (a, b) = bar()`
@@ -1120,7 +1120,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNimNode =
       newCall(bindSym"cpsResolver", NimNode env.identity):
         newCall(bindSym"cpsManageException"):
           newCall(bindSym"cpsHandleUnhandledException"):
-            n
+            NormalizedNimNode n
 
   # storing the source environment on helpers
   for p in [whelp, booty]:

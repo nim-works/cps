@@ -257,7 +257,7 @@ proc newEnv*(c: Name; store: var NormalizedNimNode; via: Name, rs: NormalizedNim
   let via = if via.isNil: errorAst"need a type".Name else: via
 
   result = Env(c: c, store: store, via: via, id: via)
-  result.rs = newIdentDefs("result", asNameAllowEmpty(rs))
+  result.rs = newIdentDefs("result", asTypeExprAllowEmpty(rs))
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
@@ -339,7 +339,7 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
       let entry = newIdentDefs(name, rhs[index], newEmptyNode())
       # we need to insert the variable and then write a new
       # accessor that plucks the field from the env
-      let (field, _) = e.addIdentDef(n.kind, expectIdentDefs(entry))
+      let (field, _) = e.addIdentDef(n.kind, asIdentDefs(entry))
       tups.add newDotExpr(child, field.NimNode)
     maybeAdd newAssignment(tups, defs.val)
   else:
