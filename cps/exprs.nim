@@ -121,9 +121,8 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
 
     for branch in n.items:
       result.add:
-        NimNode:
-          rewriteElifOf:
-            NormalizedNimNode branch
+        rewriteElifOf:
+          NormalizedNimNode branch
   of nnkCaseStmt:
     # It appears that the type of the `case` expression remains if we
     # don't destroy it by creating a new node instead of copying and
@@ -137,9 +136,8 @@ func filterExpr[T: NormalizedNimNode](n: T, transformer: proc(n: T): T): T =
     # Rewrite and add branches
     for idx in 1 ..< n.len:
       result.add:
-        NimNode:
-          rewriteElifOf:
-            NormalizedNimNode n[idx]
+        rewriteElifOf:
+          NormalizedNimNode n[idx]
   of nnkTryStmt:
     # Similar to other node types, we must erase the type attached to this
     # statement.
@@ -335,7 +333,7 @@ macro cpsAsgn(dst, src: typed): untyped =
           it[0].NormalizedNimNode
 
 macro cpsExprConv(T, n: typed): untyped =
-  ## Apply the conversion to `T` directly into `n`'s trailling expressions.
+  ## Apply the conversion to `T` directly into `n`'s trailing expressions.
   # If we don't shadow this parameter, it will be nnkNilLit.
   {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18352".}
   let T = normalizingRewrites T
@@ -544,18 +542,17 @@ func annotate(n: NormalizedNimNode): NormalizedNimNode =
 
         # Add the new loop body
         newWhile.add:
-          NimNode:
-            # Run annotate on the if statement to rewrite its condition and body
-            annotate:
-              newStmtList:
-                NormalizedNimNode:
-                  # A new if statement
-                  nnkIfStmt.newTree(
-                    # The first branch being the condition and the body
-                    nnkElifBranch.newTree(child[0], child.last),
-                    # The else branch breaks the loop
-                    nnkElse.newTree(nnkBreakStmt.newTree(newEmptyNode()))
-                  )
+          # Run annotate on the if statement to rewrite its condition and body
+          annotate:
+            newStmtList:
+              NormalizedNimNode:
+                # A new if statement
+                nnkIfStmt.newTree(
+                  # The first branch being the condition and the body
+                  nnkElifBranch.newTree(child[0], child.last),
+                  # The else branch breaks the loop
+                  nnkElse.newTree(nnkBreakStmt.newTree(newEmptyNode()))
+                )
 
         result.add newWhile
 

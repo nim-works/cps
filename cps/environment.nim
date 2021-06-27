@@ -5,8 +5,8 @@ they are comprised.
 
 ]##
 
-import std/[sets, sequtils, hashes, tables, algorithm, genasts]
 import std/macros except newStmtList
+import std/[sets, sequtils, hashes, tables, algorithm, genasts]
 import cps/[spec, hooks, help, rewrites, normalizedast]
 
 #{.experimental: "strictNotNil".}
@@ -30,7 +30,7 @@ type
     # special symbols for cps machinery
     c: Name                         # the sym we use for the continuation
     fn: Name                        # the sym we use for the goto target
-    rs: IdentDefs                   # the identdefs for the result
+    rs: IdentDef                    # the identdefs for the result
     mom: Name                       # the sym we use for parent continuation
 
   CachePair* = tuple
@@ -164,7 +164,7 @@ proc makeType*(e: Env): NimNode =
 
 proc first*(e: Env): Name = e.c
 
-proc firstDef*(e: Env): IdentDefs =
+proc firstDef*(e: Env): IdentDef =
   newIdentDefs(e.first, e.via, newEmptyNode())
 
 proc get*(e: Env): NormalizedNimNode =
@@ -234,7 +234,7 @@ proc set(e: var Env; key: Name; val: IdentDefVarLet): Env =
   when cpsReparent:
     result.seen.incl key.strVal
 
-proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDefs): CachePair =
+proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
   ## add an IdentDef from a Var|Let Section to the env
   template stripVar(n: NimNode): NimNode =
     ## pull the type out of a VarTy
@@ -280,7 +280,7 @@ proc initialization(e: Env; field: Name, section: IdentDefVarLet): NimNode =
     let child = e.castToChild(e.first)
     result.add newAssignment(newDotExpr(child, field), section.val)
 
-proc letOrVar(n: IdentDefs): NimNodeKind =
+proc letOrVar(n: IdentDef): NimNodeKind =
   ## choose between let or var for proc parameters
   case n.typ.kind:
   of nnkEmpty:
@@ -290,7 +290,7 @@ proc letOrVar(n: IdentDefs): NimNodeKind =
   else:
     result = nnkLetSection
 
-proc addAssignment(e: var Env; d: IdentDefs): NimNode =
+proc addAssignment(e: var Env; d: IdentDef): NimNode =
   ## compose an assignment during addition of identdefs to env. For the
   ## purposes of CPS, even though let and var sections contain identdefs this
   ## proc should never handle those directly, see overloads.
@@ -346,7 +346,7 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
     # an iterator handles `var a, b, c = 3` appropriately
     maybeAdd e.addAssignment(n.asVarLetIdentDef())
 
-proc localSection*(e: var Env; n: IdentDefs; into: NimNode = nil) =
+proc localSection*(e: var Env; n: IdentDef; into: NimNode = nil) =
   ## consume nnkIdentDefs and populate `into` with assignments, even if `into`
   ## is nil, the `n` will be cached locally
   let assignment = e.addAssignment(n)

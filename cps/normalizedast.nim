@@ -59,7 +59,7 @@ export NormalizedNimNode
 # * this should break-up into a a few files
 #
 # # References:
-# [1] Semantic Grammar Insight from Redex: https://docs.racket-lang.org/redex/
+# [1]: Semantic Grammar Insight from Redex: https://docs.racket-lang.org/redex/
 
 type
   Name* = distinct NormalizedNimNode
@@ -68,23 +68,25 @@ type
     ## nnkIdent
   Sym* = distinct Name
     ## nnkSym
-  TypeExpr* = distinct NormalizedNimNode
-    ## the type part of a let or var definition or a proc param
 
-  IdentDefs* = distinct NormalizedNimNode
-    ## currently this is IdentDefs mostly in a var let section, in reality
-    ## these are also for routine and generic param definitions
+  TypeExpr* = distinct NormalizedNimNode
+    ## the type part of a let or var definition or routine param
+
+  IdentDef* = distinct NormalizedNimNode
+    ## currently this is nnkIdentDefs mostly in a var let section, in reality
+    ## these are also for routine and generic param definitions. A normalized
+    ## IdentDef should only have one identifier.
 
   ProcDef* = distinct NormalizedNimNode
     ## an nnkProcDef node which has been normalized
 
-  RoutineParam* = distinct IdentDefs
-    ## each calling params of proc definition is an IdentDefs
+  RoutineParam* = distinct IdentDef
+    ## each calling params of proc/func/etc definition is an nnkIdentDefs
 
   VarLet* = distinct NormalizedNimNode
     ## a var or let section, with a single define
   VarLetDef = distinct NormalizedNimNode
-    ## identdef or tuple defintion from a var or let section
+    ## opaque sum: nnkIdentDefs|nnkVarTuple from a var or let section
 
   TupleVarLet* = distinct VarLet
     ## a var or let section, but with a tuple defintion within
@@ -101,11 +103,11 @@ type
   IdentDefVar* = distinct IdentDefVarLet
     ## identdef defintion from a var section
 
-  IdentDefLike* = IdentDefs | RoutineParam
-    ## single var, let, or a proc definition's calling param
+  IdentDefLike* = IdentDef | RoutineParam
+    ## abstract over a single var or let sections IdentDef, or a routine param
+    ## definition
   DefLike* = IdentDefLike | VarLetDef
-    ## IdentDefs could be a single variable define or a proc def param, while
-    ## a VarLetDef is an identdefs or vartuple from a var or let section
+    ## abstract over any IdentDef or VarTuple from a VarLet or a RoutineParam
 
   LetSectionLike* = LetSection
     ## abstract over various forms of let sections, used to define operations
@@ -377,29 +379,29 @@ func inferTypFromImpl*(n: DefLike): Name =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
   if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
 
-# fn-IdentDefs
+# fn-IdentDef
 
-defineToNimNodeConverter(IdentDefs)
+defineToNimNodeConverter(IdentDef)
 
 proc validateIdentDefs(n: NimNode) =
   ## validators only, afterwards it's safe to cast, allows re-use
   if n.kind != nnkIdentDefs:
-    errorGot "not an IdentDefs", n, $n.kind
+    errorGot "not an IdentDef", n, $n.kind
   elif n[0].kind notin {nnkIdent, nnkSym}:
     errorGot "bad rewrite presented", n
   elif n.len != 3:
     errorGot "bad rewrite, failed to set init", n
-proc expectIdentDefs*(n: NimNode): IdentDefs =
+proc expectIdentDefs*(n: NimNode): IdentDef =
   ## return an IdentDef or error out
   validateIdentDefs(n)
-  return n.IdentDefs
+  return n.IdentDef
 
-proc newIdentDefs*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDefs =
-  newIdentDefs(ident(n), t.NimNode, val).IdentDefs
-proc newIdentDefs*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefs =
-  newIdentDefs(n.NimNode, t.NimNode, val).IdentDefs
-proc newIdentDefs*(n: Name, val: NormalizedNimNode): IdentDefs =
-  newIdentDefs(n.NimNode, newEmptyNode(), val).IdentDefs
+proc newIdentDefs*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDef =
+  newIdentDefs(ident(n), t.NimNode, val).IdentDef
+proc newIdentDefs*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDef =
+  newIdentDefs(n.NimNode, t.NimNode, val).IdentDef
+proc newIdentDefs*(n: Name, val: NormalizedNimNode): IdentDef =
+  newIdentDefs(n.NimNode, newEmptyNode(), val).IdentDef
 
 # fn-IdentDefLike
 
@@ -408,7 +410,7 @@ func name*(n: IdentDefLike): Name = n.NimNode[0].Name
 # fn-VarLetLike
 
 func def*(n: VarLetLike): VarLetDef = VarLetDef n.NimNode[0]
-  ## an IdentDefs or VarTuple
+  ## an IdentDef or VarTuple
 func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
 func val*(n: VarLetLike): NormalizedNimNode = n.def.val.NormalizedNimNode
@@ -446,7 +448,7 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
     errorGot sectionName & " has " & $n.len & " defs, requires exactly 1", n
   elif checkIdentDef:
     if n[0].kind != nnkIdentDefs:
-      errorGot sectionName & " section must contain an IdentDefs", n
+      errorGot sectionName & " section must contain an IdentDef", n
     validateIdentDefs(n[0])
   elif checkTuple and n[0].kind != nnkVarTuple:
     errorGot sectionName & " section must be a tuple assignment", n
@@ -454,7 +456,7 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
 
 # fn-VarLetIdentDefLike
 
-func identdef*(n: VarLetIdentDefLike): IdentDefs = n.NimNode[0].IdentDefs
+func identdef*(n: VarLetIdentDefLike): IdentDef = n.NimNode[0].IdentDef
   ## retrieve the innner IdentDef
 func name*(n: VarLetIdentDefLike): Name = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
@@ -514,7 +516,7 @@ iterator indexNamePairs*(n: TupleVarLet): (int, NimNode) =
 
 # fn-IdentDefVarLet
 
-proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDefs): IdentDefVarLet =
+proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDef): IdentDefVarLet =
   ## create a new IdentDefVarLet
   doAssert kind in {nnkLetSection, nnkVarSection},
     "kind must be nnkLetSection nnkVarSection, got: " & repr(kind)
@@ -522,7 +524,7 @@ proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDefs): IdentDefVarLet =
 proc newVarLetIdentDef*(kind: NimNodeKind,
                         name: Name, typ, val: NimNode): IdentDefVarLet =
   ## create a new IdentDefVarLet
-  newVarLetIdentDef(kind, newIdentDefs(name.NimNode, typ, val).IdentDefs)
+  newVarLetIdentDef(kind, newIdentDefs(name.NimNode, typ, val).IdentDef)
 
 converter identDefVarLetToNormalizedNimNode*(n: IdentDefVarLet): NormalizedNimNode =
   # allow downgrading
@@ -532,7 +534,7 @@ converter identDefVarLetToNormalizedNimNode*(n: IdentDefVarLet): NormalizedNimNo
 
 defineToNimNodeConverter(VarSection)
 
-proc newVarSection*(i: IdentDefs): VarSection =
+proc newVarSection*(i: IdentDef): VarSection =
   (nnkVarSection.newTree i).VarSection
 proc newVarSection*(n: Name, t: TypeExprLike, val = newEmptyNode()): VarSection =
   ## create a var section with an identdef, eg: `n`: `t` = `val`
@@ -544,7 +546,7 @@ converter varSectionToNormalizedNimNode*(n: VarSection): NormalizedNimNode =
 
 # fn-IdentDefLet
 
-proc newIdentDefLet*(i: IdentDefs): IdentDefLet =
+proc newIdentDefLet*(i: IdentDef): IdentDefLet =
   ## create a var section with an identdef
   (nnkLetSection.newTree i).IdentDefLet
 proc newIdentDefLet*(n: Name, val: NormalizedNimNode): IdentDefLet =
@@ -563,7 +565,7 @@ converter identDefLetToNormalizedNimNode*(n: IdentDefLet): NormalizedNimNode =
 
 # fn-IdentDefVar
 
-proc newIdentDefVar*(i: IdentDefs): IdentDefVar =
+proc newIdentDefVar*(i: IdentDef): IdentDefVar =
   ## create a var section with an identdef
   (nnkVarSection.newTree i).IdentDefVar
 proc newIdentDefVar*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefVar =
@@ -576,9 +578,9 @@ converter identDefVarToIdentDefVarLet*(n: IdentDefVar): IdentDefVarLet =
 
 # fn-ProcDefParams
 
-converter procDefParamToIdentDefs*(n: RoutineParam): IdentDefs =
+converter procDefParamToIdentDefs*(n: RoutineParam): IdentDef =
   # allow downgrading
-  n.IdentDefs
+  n.IdentDef
 
 # fn-ProcDef
 

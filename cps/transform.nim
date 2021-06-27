@@ -1,4 +1,4 @@
-import std/[sequtils, tables, hashes, genasts]
+import std/[tables, hashes, genasts]
 import macros except newStmtList
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
             normalizedast]
@@ -779,7 +779,7 @@ proc annotate(parent: var Env; n: NormalizedNimNode): NormalizedNimNode =
 
     of nnkBreakStmt:
       result.add:
-        NormalizedNimNode newCpsBreak(nc, nc.breakLabel)
+        newCpsBreak(nc, nc.breakLabel)
 
     of nnkBlockStmt:
       if nc.isCpsBlock:
