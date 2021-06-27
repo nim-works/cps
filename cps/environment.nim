@@ -249,7 +249,6 @@ proc newEnv*(c: NimNode; store: var NimNode; via, rs: NimNode): Env =
   ## `store` is where we add types and procedures,
   ## `via` is the type from which we inherit,
   ## `rs` is the return type (if not nnkEmpty) of the continuation.
-  ## `exported` is whether the `...` operator should be exported.
   let via = if via.isNil: errorAst"need a type" else: via
   let rs = if rs.isNil: newEmptyNode() else: rs
   let c = if c.isNil or c.isEmpty: ident"continuation" else: c
@@ -431,17 +430,15 @@ proc createResult*(env: Env, exported = false): ProcDef =
       else:
         nnkDiscardStmt.newTree:
           newEmptyNode()         # the return value is void
-    name =
-      if exported:
-        nnkPostfix.newTree(
-          ident"*",
-          nnkAccQuoted.newTree(ident"...")
-        )
-      else:
-        nnkAccQuoted.newTree(ident"...")
+
+  # compose the (exported?) symbol
+  var name = nnkAccQuoted.newTree ident"()"
+  if exported:
+    name = postfix(name, "*")
 
   result = ProcDef:
     genAst(name, field, c = env.first, cont = env.identity, tipe = env.rs.typ):
+      {.push experimental: "callOperator".}
       proc name(c: cont): tipe {.used.} =
         case c.state
         of Dismissed:
@@ -450,7 +447,8 @@ proc createResult*(env: Env, exported = false): ProcDef =
         of Finished:
           field
         of Running:
-          `...`(trampoline c)
+          `()`(trampoline c)
+      {.pop.}
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   ## the whelp needs to create a continuation

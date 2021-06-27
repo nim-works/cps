@@ -582,7 +582,7 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
 
   # swap the call in the assignment statement(s)
   let (child, etype) = setupChildContinuation(env, call)
-  assign = assign.resymCall(call, newCall(ident"...", child))
+  assign = assign.resymCall(call, newCall child)
 
   # compose the rewrite as an assignment, a lame effort to dealloc
   # the child, and then any remaining statements we were passed
@@ -1030,7 +1030,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   for p in [whelp, booty]:
     p.addPragma(bindSym"cpsEnvironment", env.identity)
 
-  # the `...` operator recovers the result of a continuation
+  # the `()` operator recovers the result of a continuation
   #
   # copy the exported-ness from the original proc so that it can be used
   # from other modules

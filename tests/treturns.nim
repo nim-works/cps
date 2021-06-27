@@ -45,8 +45,8 @@ suite "returns and results":
 
     var c = whelp foo(5)
     trampoline c
-    check "dots work correctly":
-      ... c == 25
+    check "call operator works correctly":
+      c() == 25
 
   block:
     ## assignments to the special result symbol work
@@ -134,5 +134,5 @@ suite "returns and results":
 
     var c = whelp foo()
     trampoline c
-    check "dots work correctly":
-      ... c == 6
+    check "call operator works correctly":
+      c() == 6
