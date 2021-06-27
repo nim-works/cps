@@ -953,7 +953,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(ident"continuation", types, T, n.returnParam, originalProcSym.isExported)
+  var env = newEnv(ident"continuation", types, T, n.returnParam)
 
   # add parameters into the environment
   for defs in n.callingParams:
@@ -1038,7 +1038,10 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
     p.addPragma(bindSym"cpsEnvironment", env.identity)
 
   # the `...` operator recovers the result of a continuation
-  let dots = env.createResult()
+  #
+  # copy the exported-ness from the original proc so that it can be used
+  # from other modules
+  let dots = env.createResult(originalProcSym.isExported)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
