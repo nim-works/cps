@@ -148,8 +148,9 @@ These pragma'd procedures act as continuation legs and we can use them in our
 continuations without supplying the initial `Count` argument.
 
 ```nim
-proc count(upto: int) {.cps: Count.} =
-  ## deploy the Count to make counting fun again
+proc count(upto: int): int {.cps: Count.} =
+  ## deploy the Count to make counting fun again;
+  ## this continuation returns the number of trips through the goto
   var number = 0
   label: "again!"
   inc number
@@ -158,8 +159,10 @@ proc count(upto: int) {.cps: Count.} =
   if number < upto:
     goto "again!"
   echo "whew!"
+  return number
 
-count(1_000_000_000)  # (this might take awhile to finish)
+const many = 1_000_000_000
+assert many + 1 == count(many)  # (this might take awhile to finish)
 ```
 
 Sometimes you don't want to do a lot of counting right away, but, y'know, maybe
@@ -191,6 +194,26 @@ sleep 30*60*1000
 echo "it's later!  time to count!"
 later = trampoline later
 assert later.finished, "laws of physics lost their sway"
+```
+
+Continuations can themselves be called in order to retrieve their return value.
+
+```nim
+var later = whelp count(1_000_000)
+sleep 30*60*1000
+echo "it's later!  time to count!"
+later = trampoline later
+assert later.finished, "laws of physics lost their sway"
+echo "i counted ", later(), " trips through the goto"
+```
+
+In fact, such a call will run the continuation on your behalf, as well.
+
+```nim
+var later = whelp count(1_000_000)
+sleep 30*60*1000
+echo "it's later!  time to count!"
+echo "i counted ", later(), " trips through the goto"
 ```
 
 ### TBD
