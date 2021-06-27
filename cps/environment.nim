@@ -95,7 +95,7 @@ proc init(e: var Env) =
     e.mom = asName"mom"
   e.id = genSymType("cps environment")
   if e.rs.hasType:
-    e = e.set(e.rs.name, newIdentDefVar(e.rs))
+    e = e.set(e.rs.name, newVarIdentDef(e.rs))
 
 proc allPairs(e: Env): seq[CachePair] =
   if not e.isNil:
@@ -120,7 +120,7 @@ proc populateType(e: Env; n: var NimNode) =
   # XXX: remove NimNode
   for name, section in e.locals.pairs:
     n.add:
-      newIdentDefs(name, section.inferTypFromImpl, newEmptyNode()).NimNode
+      newIdentDef(name, section.inferTypFromImpl, newEmptyNode()).NimNode
 
 proc objectType(e: Env): NimNode =
   ## turn an env into an object type
@@ -165,7 +165,7 @@ proc makeType*(e: Env): NimNode =
 proc first*(e: Env): Name = e.c
 
 proc firstDef*(e: Env): IdentDef =
-  newIdentDefs(e.first, e.via, newEmptyNode())
+  newIdentDef(e.first, e.via, newEmptyNode())
 
 proc get*(e: Env): NormalizedNode =
   ## retrieve a continuation's result value from the env
@@ -236,9 +236,11 @@ proc set(e: var Env; key: Name; val: VarLetIdentDef): Env =
 
 proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
   ## add an IdentDef from a Var|Let Section to the env
-  template stripVar(n: NimNode): NimNode =
+  template stripVar(n: NimNode): TypeExpr =
     ## pull the type out of a VarTy
-    if n.kind == nnkVarTy: n[0] else: n
+    ## XXX: little hacky about how we assume it's a valid type expression
+    TypeExpr:
+      if n.kind == nnkVarTy: n[0] else: n
 
   let
     field = asName(genField def.name.strVal)
@@ -257,7 +259,7 @@ proc newEnv*(c: Name; store: var NormalizedNode; via: Name, rs: NormalizedNode):
   let via = if via.isNil: errorAst"need a type".Name else: via
 
   result = Env(c: c, store: store, via: via, id: via)
-  result.rs = newIdentDefs("result", asTypeExprAllowEmpty(rs))
+  result.rs = newIdentDef("result", asTypeExprAllowEmpty(rs))
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
@@ -421,7 +423,7 @@ proc genException*(e: var Env): NimNode =
   ## returns the access to the exception symbol from the env.
   let ex = asName(genField("ex"))
   e = e.set ex:
-    newIdentDefLet(ex, newRefType(bindName("Exception")), newNilLit())
+    newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
 
 proc createResult*(env: Env, exported = false): ProcDef =

@@ -588,7 +588,7 @@ proc setupChildContinuation(env: var Env; call: NimNode): (Name, NimNode) =
   ## environment.  return the child's symbol and its environment type.
   let child = genSymVar"child"
   let etype = pragmaArgument(call, "cpsEnvironment")
-  env.localSection newIdentDefs(child, etype.TypeExpr)
+  env.localSection newIdentDef(child, etype.TypeExpr)
   result = (child, etype)
 
 proc shimAssign(env: var Env; store, call, tail: NormalizedNode): NormalizedNode =

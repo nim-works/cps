@@ -99,25 +99,33 @@ type
   # - IdentDef_: an IdentDef, from some context `_`
   # - TupleDef_: an VarTuple, from some context `_`
   # - Def_: Inner part of a Var or Let
+
   VarLet* = distinct NormalizedNode
     ## opqaue sum: a var or let section, with a single define ident or tuple
-  DefVarLet = distinct NormalizedNode
-    ## opaque sum: nnkIdentDefs|nnkVarTuple, from a var or let section
 
   VarLetTuple* = distinct VarLet
     ## opaque sum: a var or let section, but with a tuple defintion within
   VarLetIdentDef* = distinct VarLet
-    ## a var or let section, but with a single identdefs, eg: `var a: int = 10`
+    ## opaque sum: a var or let section, but with a single identdefs, eg: `var a: int = 10`
 
   LetSection* = distinct VarLet
-    ## a let section, with a single identdefs or vartuple
+    ## a let section, with a single nnkIdentDefs or vartuple
   VarSection* = distinct VarLet
-    ## a let or var section, with a single identdefs or vartuple
+    ## a var section, with a single nnkIdentDefs or vartuple
   
-  IdentDefLet* = distinct VarLetIdentDef
-    ## identdef defintion from a let section
-  IdentDefVar* = distinct VarLetIdentDef
-    ## identdef defintion from a var section
+  VarIdentDef* = distinct VarLetIdentDef
+    ## a var section with a single nnkIdentDefs, never a vartuple
+  LetIdentDef* = distinct VarLetIdentDef
+    ## a let section with a single nnkIdentDefs, never a vartuple
+
+  DefVarLet = distinct NormalizedNode
+    ## opaque sum: nnkIdentDefs|nnkVarTuple, from a var or let section
+  IdentDefVarLet* = distinct DefVarLet
+    ## opaque sum: identdef defintion from a var or let section
+  IdentDefLet* = distinct IdentDefVarLet
+    ## opaque sum: identdef defintion from a let section
+  IdentDefVar* = distinct IdentDefVarLet
+    ## opaque sum: identdef defintion from a var section
 
   # unlike the other `XyzLike` types, this is sprinkled all over the place
   TypeExprLike* = Name | TypeExpr
@@ -227,9 +235,11 @@ allowAutoDowngradeNormalizedNode(VarLetIdentDef)
 allowAutoDowngradeNormalizedNode(IdentDef)
 
 # types that go from a specific type to a less specific type, "downgrade"
-allowAutoDowngrade(IdentDefLet, VarLetIdentDef)
-allowAutoDowngrade(IdentDefVar, VarLetIdentDef)
+allowAutoDowngrade(IdentDefLet, IdentDef)
+allowAutoDowngrade(IdentDefVar, IdentDef)
 allowAutoDowngrade(RoutineParam, IdentDef)
+allowAutoDowngrade(LetIdentDef, VarLetIdentDef)
+allowAutoDowngrade(VarIdentDef, VarLetIdentDef)
 
 # fn-NormalizedNode
 
@@ -425,7 +435,7 @@ proc newRefType*(n: Name): TypeExpr =
 
 # fn-IdentDefLike
 type
-  IdentDefLike* = IdentDef | RoutineParam
+  IdentDefLike* = IdentDef | RoutineParam | IdentDefVarLet | IdentDefLet | IdentDefVar
     ## abstract over a single var or let sections IdentDef, or a routine param
     ## definition
 
@@ -467,11 +477,17 @@ proc asIdentDefs*(n: NimNode): IdentDef =
   validateIdentDefs(n)
   return n.IdentDef
 
-proc newIdentDefs*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDef =
+proc newIdentDef*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDef =
+  ## create a single assignment nnkIdentDefs, we drop the plural to indicate
+  ## the singleton nature
   newIdentDefs(ident(n), t.NimNode, val).IdentDef
-proc newIdentDefs*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDef =
+proc newIdentDef*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDef =
+  ## create a single assignment nnkIdentDefs, we drop the plural to indicate
+  ## the singleton nature
   newIdentDefs(n.NimNode, t.NimNode, val).IdentDef
-proc newIdentDefs*(n: Name, val: NormalizedNode): IdentDef =
+proc newIdentDef*(n: Name, val: NormalizedNode): IdentDef =
+  ## create a single assignment nnkIdentDefs, we drop the plural to indicate
+  ## the singleton nature
   newIdentDefs(n.NimNode, newEmptyNode(), val).IdentDef
 
 #########################################
@@ -508,10 +524,10 @@ func isTuple*(n: VarLetLike): bool = n.def.NimNode.kind == nnkVarTuple
 # fn-VarLetIdentDefLike
 
 type
-  VarLetIdentDefLike* = VarLetIdentDef | IdentDefVar
-    ## abstract over identdefs from let or var sections types
+  VarLetIdentDefLike* = VarLetIdentDef
+    ## abstract over let or var sections with identdefs within
 
-func identdef*(n: VarLetIdentDefLike): IdentDef = n.NimNode[0].IdentDef
+func identdef*(n: VarLetIdentDefLike): IdentDef = n.def.IdentDef
   ## retrieve the innner IdentDef
 func name*(n: VarLetIdentDefLike): Name = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
@@ -604,32 +620,39 @@ proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDef): VarLetIdentDef =
   doAssert kind in {nnkLetSection, nnkVarSection},
     "kind must be nnkLetSection nnkVarSection, got: " & repr(kind)
   newTree(kind, i).VarLetIdentDef
-proc newVarLetIdentDef*(kind: NimNodeKind,
-                        name: Name, typ, val: NimNode): VarLetIdentDef =
+proc newVarLetIdentDef*(kind: NimNodeKind, name: Name,
+                        typ: TypeExprLike, val: NimNode): VarLetIdentDef =
   ## create a new VarLetIdentDef
-  newVarLetIdentDef(kind, newIdentDefs(name.NimNode, typ, val).IdentDef)
+  newVarLetIdentDef(kind, newIdentDef(name, typ, val))
+
+# fn-VarIdentDef
+
+proc newVarIdentDef*(i: IdentDef): VarIdentDef =
+  ## create a var section with an identdef
+  ## ie: `newVarSection(i)`, where `i` is 'foo: int = 2` -> `var foo: int = 2`
+  (nnkVarSection.newTree i).VarIdentDef
 
 # fn-VarSection
 
 proc newVarSection*(i: IdentDef): VarSection =
   ## create a var section with an identdef
   ## ie: `newVarSection(i)`, where `i` is 'foo: int = 2` -> `var foo: int = 2`
-  (nnkVarSection.newTree i).VarSection
+  VarSection (newVarIdentDef i)
 proc newVarSection*(n: Name, t: TypeExprLike, val = newEmptyNode()): VarSection =
   ## create a var section with an identdef, eg: `n`: `t` = `val`
-  newVarSection(newIdentDefs(n, t, val))
+  newVarSection(newIdentDef(n, t, val))
 
-# fn-IdentDefLet
+# fn-LetIdentDef
 
-proc newIdentDefLet*(i: IdentDef): IdentDefLet =
+proc newLetIdentDef*(i: IdentDef): LetIdentDef =
   ## create a let section with an identdef
   ## ie: `newLetSection(i)`, where `i` is 'foo: int = 2` -> `let foo: int = 2`
-  (nnkLetSection.newTree i).IdentDefLet
-proc newIdentDefLet*(n: Name, val: NormalizedNode): IdentDefLet =
-  newIdentDefLet(newIdentDefs(n, val))
-proc newIdentDefLet*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefLet =
+  (nnkLetSection.newTree i).LetIdentDef
+proc newLetIdentDef*(n: Name, val: NormalizedNode): LetIdentDef =
+  newLetIdentDef(newIdentDef(n, val))
+proc newLetIdentDef*(n: Name, t: TypeExprLike, val = newEmptyNode()): LetIdentDef =
   ## create a let section with an identdef, eg: `n`: `t` = `val`
-  newIdentDefLet(newIdentDefs(n, t, val))
+  newLetIdentDef(newIdentDef(n, t, val))
 
 # fn-IdentDefVar
 
@@ -639,7 +662,7 @@ proc newIdentDefVar*(i: IdentDef): IdentDefVar =
   (nnkVarSection.newTree i).IdentDefVar
 proc newIdentDefVar*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefVar =
   ## create a var section with an identdef, eg: `n`: `t` = `val`
-  newIdentDefVar(newIdentDefs(n, t, val))
+  newIdentDefVar(newIdentDef(n, t, val))
 
 # fn-ProcDef
 
