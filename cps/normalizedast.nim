@@ -8,17 +8,62 @@ from cps/rewrites import NormalizedNimNode, normalizingRewrites, replace,
 
 export NormalizedNimNode
 
-# Parts of this module:
+# # Structure of the Module
 # * distinct types representing normalized/transformed variants of distinct AST
 # * procs use to query, transform, etc on the normalized AST as conveniences
 #
-# Why each part:
+# ## Why each part:
 # * Normalized types - codify the pre/post conditions of CPS code
 # * Normalized procs - ensure invariants by centralizing the AST operations
+#
+# # Nim (macros) AST vs Normalized AST
+# 
+# Major Difference:
+# 1. Nim's AST focuses on syntax and syntax grammar
+# 2. Normalized AST maintains the invariants per the rewrites module
+# 3. Normalized AST focuses on semantics and semantics grammar
+# 4. Opaque Types & Type Classes are used to work around the lack of Sum Types
+#
+# ## Syntax vs Semantic Grammar
+# More about the types, the AST in Nim as exposed by macros is a reflection of
+# a syntax tree and grammar, for untyped ASTs especially, this is entirely
+# appropriate. Normalized AST is a more of a semantic grammar and as such
+# attempts to provide higher level types over top the typical AST nodes one
+# might expect. The little insight to take away is that semantics of a language
+# can have a grammar onto itself, which will be richer version of the syntactic
+# grammar[1].
+#
+# ## Maintaining Normalization Invariants
+# Various procs used to transform the AST work to maintain the invariants put
+# in place by by the `rewrites` module. This is done with a few strategies:
+# 1. `asXXX` procs which convert nodes or error out
+# 2. dedicated constructors that return specialized types
+# 3. transformation procs that limit options by type
+#
+# ## Semantics Grammar
+# An example of syntax based grammar, `nnkIdentDefs` is used inside let and var
+# sections, routine (proc, template, ...) parameter definitions, generic param
+# definitions. Treating all thsoe the same very quick runs into issues as the
+# way in those circumstances need to be handled differ darmatically. Here
+# distinct types on the parent of an individual instance as a way of pattern
+# matching and then controling dispatch is used to ensure the handling is very
+# linear. For parts of the code that share significant commonalities, lowering
+# the type to a common type can be used -- an opaque type representing the sum.
+#
+# # Naming Conventions:
+# 
+# To be Completed
+#
+# # Longer Term ToDos:
+# * converters are likely a bad thing
+# * this should break-up into a a few files
+#
+# # References:
+# [1] Semantic Grammar Insight from Redex: https://docs.racket-lang.org/redex/
 
 type
   Name* = distinct NormalizedNimNode
-    ## either an Ident or Sym
+    ## an "opaque" sum type for any name, which are typically Ident or Sym
   Ident* = distinct Name
     ## nnkIdent
   Sym* = distinct Name
