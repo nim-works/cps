@@ -115,9 +115,9 @@ suite "returns and results":
       check x == 8
 
     foo()
-  
+
   block:
-    ## local assignement tuple unpacking a continution return value
+    ## local assignment tuple unpacking a continution return value
     var k = newKiller 3
     proc bar(): (int, int) {.cps: Cont.} =
       noop()
