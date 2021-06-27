@@ -251,6 +251,14 @@ also, perhaps, due to `exceptions:goto` assumptions that we rely upon.
 
 - `var` parameters to procedures with the `cps` pragma are not supported.
 
+- Generic continuations such as the following won't work without changes to
+the compiler.
+
+```nim
+type
+  MyContinuation[T] = ref object of Continuation
+```
+
 ### Performance
 
 If you are not running with `define:danger` and `gc:arc` and `panics:on` then
