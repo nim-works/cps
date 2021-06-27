@@ -1026,9 +1026,12 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
     n.body.add newCpsPending()
 
   # run other stages
-  n.addPragma(bindSym"cpsFloater")
-  n.addPragma(bindSym"cpsResolver", env.identity)
-  n.addPragma(bindSym"cpsManageException")
+  {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
+  let processMainContinuation =
+    newCall(bindSym"cpsFloater"):
+      newCall(bindSym"cpsResolver", env.identity):
+        newCall(bindSym"cpsManageException"):
+          n
 
   # storing the source environment on helpers
   for p in [whelp, booty]:
@@ -1041,7 +1044,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   env = env.storeType(force = off)
 
   # generated proc bodies, remaining proc, whelp, bootstrap
-  result = newStmtList(types, n, dots, whelp, booty)
+  result = newStmtList(types, processMainContinuation, dots, whelp, booty)
   result = workaroundRewrites result
 
 macro cpsTransform*(T, n: typed): untyped =
