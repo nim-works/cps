@@ -306,21 +306,23 @@ proc asNameAllowEmpty*(n: NimNode): Name =
 proc asName*(n: string): Name =
   ## `nnkIdent` as `Name`
   (ident n).Name
-proc newTypeName*(n: string): Name =
+
+proc genSymType*(n: string): Name =
   ## `genSym` an `nskType`
   genSym(nskType, n).Name
-proc newVarName*(n: string = ""): Name =
+proc genSymVar*(n: string = ""): Name =
   ## `genSym` an `nskVar`
   genSym(nskVar, n).Name
-proc newLetName*(n: string): Name =
+proc genSymLet*(n: string): Name =
   ## `genSym` an `nskLet`
   genSym(nskLet, n).Name
-proc newProcName*(n: string): Name =
+proc genSymProc*(n: string): Name =
   ## `genSym` an `nskProc`
   genSym(nskProc, n).Name
-proc newUnknownName*(n: string): Name =
+proc genSymUnknown*(n: string): Name =
   ## `genSym` an `nskUnknown`
   genSym(nskUnknown, n).Name
+
 proc bindName*(n: static string): Name =
   ## `bindSym` the string as a `Name`
   let r = bindSym(n)

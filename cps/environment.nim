@@ -93,7 +93,7 @@ proc init(e: var Env) =
     e.fn = asName"fn"
   if e.mom.isNil:
     e.mom = asName"mom"
-  e.id = newTypeName("cps environment")
+  e.id = genSymType("cps environment")
   if e.rs.hasType:
     e = e.set(e.rs.name, newIdentDefVar(e.rs))
 
@@ -467,7 +467,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
   result.returnParam = env.identity
-  result.name = newProcName"whelp"
+  result.name = genSymProc"whelp"
   result.introduce {Alloc, Boot}
 
   # create the continuation as the result and point it at the proc
@@ -490,7 +490,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   result.addPragma "used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot}
 
-  let c = newVarName("C")
+  let c = genSymVar("C")
   result.body.add:
     # declare `var c: Cont`
     # XXX: conversion must be forced otherwise we end up with an ambiguous call

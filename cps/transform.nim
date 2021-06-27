@@ -60,7 +60,7 @@ macro cpsJump(cont, call, n: typed): untyped =
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let
     call = normalizingRewrites call
-    name = newProcName("Post Call")
+    name = genSymProc("Post Call")
     cont = asName(cont)
   debugAnnotation cpsJump, n:
     it = newStmtList:
@@ -77,7 +77,7 @@ macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   let
     c = c.NormalizedNode
     call = call.NormalizedNode
-    name = newProcName("Post Child")
+    name = genSymProc("Post Child")
     cont = asName(cont)
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
@@ -104,7 +104,7 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` in `n`
   ## with tail calls to `after`.
   let
-    name = newProcName("Finish")
+    name = genSymProc("Finish")
     cont = asName(cont)
     tail = tailCall(desym cont, name)
   debugAnnotation cpsMayJump, n:
@@ -161,7 +161,7 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   ## jump to the loop condition and `{.cpsBreak.}` with `{.cpsPending.}`
   ## to the next control-flow.
   let
-    name = newProcName("While Loop")
+    name = genSymProc("While Loop")
     cont = asName(cont)
     tail = tailCall(desym cont, name)
   tail.copyLineInfo n
@@ -401,8 +401,8 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   let
     cont = asName(cont)
     ex = normalizingRewrites ex
-    temp = newUnknownName"placeholder"
-    handler = newProcName"Except"
+    temp = genSymUnknown"placeholder"
+    handler = genSymProc"Except"
 
   debugAnnotation cpsTryExcept, n:
     # unwrap stmtlist and merge all except branches into one
@@ -458,7 +458,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     let cont = asName(cont)
 
     # Turn the finally into a continuation leg.
-    let final = makeContProc(newProcName("Finally"), cont, finallyBody)
+    let final = makeContProc(genSymProc("Finally"), cont, finallyBody)
 
     # A property of `finally` is that it inserts itself in the middle
     # of any scope exit attempt before performing the scope exit.
@@ -500,7 +500,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
       result = asProcDef(filter(templ, generator))
 
     # Create a symbol to use as the placeholder for the finally leg next jump.
-    let nextJump = newUnknownName"nextJump"
+    let nextJump = genSymUnknown"nextJump"
 
     # Replace all cpsPending within the final leg with this placeholder
     final.body = final.body.replace(isCpsPending, nextJump)
@@ -586,7 +586,7 @@ func newAnnotation(env: Env; n: NormalizedNode; a: static[string]): NormalizedNo
 proc setupChildContinuation(env: var Env; call: NimNode): (Name, NimNode) =
   ## create a new child continuation variable and add it to the
   ## environment.  return the child's symbol and its environment type.
-  let child = newVarName"child"
+  let child = genSymVar"child"
   let etype = pragmaArgument(call, "cpsEnvironment")
   env.localSection newIdentDefs(child, etype.TypeExpr)
   result = (child, etype)
@@ -906,7 +906,7 @@ macro cpsManageException(n: typed): untyped =
       if not hasException.isNil:
         # Create a copy of this continuation and rename it
         let inner = clone(n.ProcDef, n.body)
-        inner.name = newProcName("Managed_" & inner.name.strVal)
+        inner.name = genSymProc("Managed_" & inner.name.strVal)
         # Copy the continuation pragmas, but remove the "has exception" tag
         inner.pragma = n.pragma.stripPragma("cpsHasException")
         # Rewrite the continuations contained in `inner` as well
