@@ -1041,6 +1041,19 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
 
   # generated proc bodies, remaining proc, whelp, bootstrap
   result = newStmtList(types, processMainContinuation, dots, whelp, booty)
+
+  # this is something that happens a lot in cps-generated code, so hide it
+  # here to not spam the user with hints.
+  #
+  # any hints coming from the user code would be emitted by the compiler
+  # before they enter cps, so we don't need to care about those.
+  #
+  # TODO: we should track down why these hints occur.
+  result = quote:
+    {.push hint[ConvFromXtoItselfNotNeeded]: off.}
+    `result`
+    {.pop.}
+
   result = workaroundRewrites result
 
 macro cpsTransform*(T, n: typed): untyped =
