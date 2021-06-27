@@ -290,7 +290,7 @@ performance considerations really aren't your primary consideration, right?
 
 ### Using `cpsDebug`
 
-Add `--define:cpsDebug=SomePass` where `SomePass` matches on of the CPS
+Add `--define:cpsDebug=SomePass` where `SomePass` matches one of the CPS
 transformation passes; this will output Nim codegen corresponding to the
 rewrite phase. Interesting places to start include the following:
 
