@@ -567,9 +567,6 @@ proc shimAssign(env: var Env; store, call, tail: NimNode): NimNode =
     # perform a normal assignment
     assign.add:
       newAssignment(store, call)
-  of nnkIdentDefs:
-    # consume a new local section and turn it into an assignment
-    env.localSection(expectIdentDefs(store).newVarSection, assign)
   else:
     raise Defect.newException "unsupported store kind: " & $store.kind
 
@@ -632,7 +629,7 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
         var jumpCall: NimNode
         if nc.len > 0 and (getImpl nc[0]).hasPragma"cpsBootstrap":
           jumpCall = env.newAnnotation(nc, "cpsContinuationJump")
-          let (child, etype) = setupChildContinuation(env, nc)
+          let (child, _) = setupChildContinuation(env, nc)
           jumpCall.add env.annotate(nc)
           jumpCall.add env.annotate(child)
         else:
@@ -698,16 +695,11 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
     of nnkVarSection, nnkLetSection:
       let section = expectVarLet nc
       if section.val.isCpsCall or section.val.isCpsBlock: # XXX: temporary
-        let assign = section.asVarLetIdentDef
-        if section.isTuple:
-          result.add:
-            nc.errorAst "cps doesn't support var tuples here yet"
-          discard "add() is dumb"
-        else:
-          result.add:     # shimming `let x = foo()`
-            env.shimAssign(assign.NimNode, assign.val):
-              anyTail()
-          return
+        let assign = section
+        result.add: # shimming `let x = foo()` or `let (a, b) = bar()`
+          env.shimAssign(assign.NimNode, assign.val):
+            anyTail()
+        return
       elif section.val.isCpsBlock:
         # this is supported by what we refer to as `expr flattening`
         result.add:
