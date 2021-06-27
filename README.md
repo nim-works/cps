@@ -236,5 +236,43 @@ yet demonstrates different exploits of `cps`.
 |[LuaCoroutines](https://github.com/disruptek/cps/blob/master/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
 |[ThreadPool](https://github.com/disruptek/cps/blob/master/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
 
+## Debugging
+
+### Expectations
+
+- Exceptions are evaluated differently under `panics:on` and `panics:off`, so
+you may need to use `panics:on` in order to produce correct code.
+
+- Expressions are evaluated differently under `gc:[ao]rc`, so you may need to
+use those memory managers in order to produce correct code.
+
+- The `cpp` backend often doesn't work, particularly due to faulty codegen but
+also, perhaps, due to `exceptions:goto` assumptions that we rely upon.
+
+- `var` parameters to procedures with the `cps` pragma are not supported.
+
+### Performance
+
+If you are not running with `define:danger` and `gc:arc` and `panics:on` then
+performance considerations really aren't your primary consideration, right?
+
+### Using `cpsDebug`
+
+Add `--define:cpsDebug=SomePass` where `SomePass` matches on of the CPS
+transformation passes; this will output Nim codegen corresponding to the
+rewrite phase. Interested places to start include the following:
+
+- `cpsTransform`
+- `cpsResolver`
+- `cpsJump`
+- `cpsContinuationJump`
+- `cpsManageException`
+- `cpsTryFinally`
+- etc.
+
+### Using `trace`
+
+Implement `trace` and it will be called at each continuation leg; [see the documentation for details](https://disruptek.github.io/cps/cps.html#trace.t%2CContinuation%2Cstring%2CLineInfo).
+
 ## License
 MIT
