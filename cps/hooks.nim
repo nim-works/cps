@@ -57,7 +57,7 @@ proc sym*(hook: Hook): Name =
     # rely on a `mixin $hook` in (high) scope
     asName($hook)
 
-proc hook*(hook: Hook; n: NormalizedNimNode): NormalizedNimNode =
+proc hook*(hook: Hook; n: NormalizedNode): NormalizedNode =
   ## execute the given hook on the given node
   case hook
   of Alloc: # (unused; see alloc/2)
@@ -69,17 +69,17 @@ proc hook*(hook: Hook; n: NormalizedNimNode): NormalizedNimNode =
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
     newCall(hook.sym,
-            newLit(repr n.name).NormalizedNimNode,
-            makeLineInfo(n.lineInfoObj).NormalizedNimNode)
+            newLit(repr n.name).NormalizedNode,
+            makeLineInfo(n.lineInfoObj).NormalizedNode)
   else:
     n.errorAst("the " & $hook & " hook doesn't take one argument")
 
-proc hook*(hook: Hook; n: Name): NormalizedNimNode =
+proc hook*(hook: Hook; n: Name): NormalizedNode =
   ## execute the given hook on the given node
   ## XXX: work out the correct type class for `n`
-  hook(hook, n.NormalizedNimNode)
+  hook(hook, n.NormalizedNode)
 
-proc hook*(hook: Hook; a, b: NormalizedNimNode): NormalizedNimNode =
+proc hook*(hook: Hook; a, b: NormalizedNode): NormalizedNode =
   ## execute the given hook with two arguments
   case hook
   of Alloc:
@@ -88,7 +88,7 @@ proc hook*(hook: Hook; a, b: NormalizedNimNode): NormalizedNimNode =
   of Unwind:
     # hook(continuation, Cont)
     let unwind = hook.sym.NimNode
-    NormalizedNimNode:
+    NormalizedNode:
       quote:
         if not `a`.ex.isNil:
           return `unwind`(`a`, `a`.ex).`b`
@@ -98,14 +98,14 @@ proc hook*(hook: Hook; a, b: NormalizedNimNode): NormalizedNimNode =
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
     newCall(hook.sym, a,
-            newLit(repr b.name).NormalizedNimNode,
-            makeLineInfo(b.lineInfoObj).NormalizedNimNode)
+            newLit(repr b.name).NormalizedNode,
+            makeLineInfo(b.lineInfoObj).NormalizedNode)
   of Dealloc:
-    newStmtList(newCall(hook.sym, a, b), newNilLit().NormalizedNimNode)
+    newStmtList(newCall(hook.sym, a, b), newNilLit().NormalizedNode)
   else:
     b.errorAst("the " & $hook & " hook doesn't take two arguments")
 
-proc hook*(hook: Hook; a: Name; b: NormalizedNimNode): NormalizedNimNode =
+proc hook*(hook: Hook; a: Name; b: NormalizedNode): NormalizedNode =
   ## execute the given hook with two arguments
   ## XXX: work out the correct type class for `a` and `b`
-  hook(hook, a.NormalizedNimNode, b)
+  hook(hook, a.NormalizedNode, b)

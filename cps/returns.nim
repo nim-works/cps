@@ -2,7 +2,7 @@ import std/macros except newStmtList
 
 import cps/[spec, hooks, normalizedast]
 
-proc firstReturn*(p: NormalizedNimNode): NormalizedNimNode =
+proc firstReturn*(p: NormalizedNode): NormalizedNode =
   ## Find the first control-flow return statement or cps
   ## control-flow within statement lists; else, nil.
   case p.kind
@@ -10,7 +10,7 @@ proc firstReturn*(p: NormalizedNimNode): NormalizedNimNode =
     result = p
   of nnkTryStmt, nnkStmtList, nnkStmtListExpr:
     for child in p.items:
-      result = child.NormalizedNimNode.firstReturn
+      result = child.NormalizedNode.firstReturn
       if not result.isNil:
         break
   of nnkBlockStmt, nnkBlockExpr, nnkFinally, nnkPragmaBlock:
@@ -20,7 +20,7 @@ proc firstReturn*(p: NormalizedNimNode): NormalizedNimNode =
   else:
     result = nil
 
-proc makeReturn*(n: NormalizedNimNode): NormalizedNimNode =
+proc makeReturn*(n: NormalizedNode): NormalizedNode =
   ## generate a `return` of the node if it doesn't already contain a return
   if n.firstReturn.isNil:
     let toAdd = 
@@ -28,11 +28,11 @@ proc makeReturn*(n: NormalizedNimNode): NormalizedNimNode =
         n             # what we're saying here is, don't hook Coop on magics
       else:
         hook(Coop, n) # but we will hook Coop on child continuations
-    nnkReturnStmt.newNimNode(n).add(toAdd).NormalizedNimNode
+    nnkReturnStmt.newNimNode(n).add(toAdd).NormalizedNode
   else:
     n
 
-proc makeReturn*(pre, n: NormalizedNimNode): NormalizedNimNode =
+proc makeReturn*(pre, n: NormalizedNode): NormalizedNode =
   ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
   if not pre.firstReturn.isNil:
     result.add:
@@ -42,7 +42,7 @@ proc makeReturn*(pre, n: NormalizedNimNode): NormalizedNimNode =
     if pre.firstReturn.isNil:
       makeReturn n
     else:
-      newEmptyNode().NormalizedNimNode
+      newEmptyNode().NormalizedNode
     #else:
     #  doc "omitted a return of " & repr(n)
 
@@ -52,12 +52,12 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
-proc terminator*(c: Name; T: NormalizedNimNode): NormalizedNimNode =
+proc terminator*(c: Name; T: NormalizedNode): NormalizedNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.
   let (dealloc, pass, coop) = (Dealloc.sym, Pass.sym, Coop.sym)
-  NormalizedNimNode:
+  NormalizedNode:
     quote:
       if `c`.isNil:
         result = `c`
@@ -78,7 +78,7 @@ proc terminator*(c: Name; T: NormalizedNimNode): NormalizedNimNode =
       # critically, terminate control-flow here!
       return
 
-proc tailCall*(cont, to: Name; jump: NormalizedNimNode = nil): NormalizedNimNode =
+proc tailCall*(cont, to: Name; jump: NormalizedNode = nil): NormalizedNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   result = newStmtList:
@@ -87,11 +87,11 @@ proc tailCall*(cont, to: Name; jump: NormalizedNimNode = nil): NormalizedNimNode
   # figure out what the return value will be...
   result = makeReturn result:
     if jump.isNil:
-      cont.NormalizedNimNode  # just return our continuation
+      cont.NormalizedNode  # just return our continuation
     else:
       jump                    # return the jump target as requested
 
-proc jumperCall*(cont, to: Name; via: NormalizedNimNode): NormalizedNimNode =
+proc jumperCall*(cont, to: Name; via: NormalizedNode): NormalizedNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   let jump = copyNimTree via

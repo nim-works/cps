@@ -72,14 +72,14 @@ proc root*(e: Env): Name =
     r = r.parent
   result = r.inherits
 
-proc castToRoot(e: Env; n: NormalizedNimNode): NormalizedNimNode =
+proc castToRoot(e: Env; n: NormalizedNode): NormalizedNode =
   newCall(e.root, n)
 
-proc castToChild(e: Env; n: Name): NormalizedNimNode =
+proc castToChild(e: Env; n: Name): NormalizedNode =
   # XXX: remove NimNode
   newCall(e.identity, n)
 
-proc maybeConvertToRoot*(e: Env; locals: NormalizedNimNode): NormalizedNimNode =
+proc maybeConvertToRoot*(e: Env; locals: NormalizedNode): NormalizedNode =
   ## add an Obj(foo: bar).Other conversion if necessary
   if not eqIdent(locals[0], e.root):
     e.castToRoot(locals)
@@ -167,14 +167,14 @@ proc first*(e: Env): Name = e.c
 proc firstDef*(e: Env): IdentDef =
   newIdentDefs(e.first, e.via, newEmptyNode())
 
-proc get*(e: Env): NormalizedNimNode =
+proc get*(e: Env): NormalizedNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
-proc rewriteResult(e: Env; n: NimNode): NormalizedNimNode =
+proc rewriteResult(e: Env; n: NimNode): NormalizedNode =
   ## replaces result symbols with the env's result; this should be
   ## safe to run on sem'd ast (for obvious reasons)
-  proc rewriter(n: NimNode): NormalizedNimNode =
+  proc rewriter(n: NimNode): NormalizedNode =
     ## Rewrite any result symbols to use the result field from the Env.
     case n.kind
     of nnkSym:
@@ -247,7 +247,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: Name; store: var NormalizedNimNode; via: Name, rs: NormalizedNimNode): Env =
+proc newEnv*(c: Name; store: var NormalizedNode; via: Name, rs: NormalizedNode): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
@@ -262,7 +262,7 @@ proc newEnv*(c: Name; store: var NormalizedNimNode; via: Name, rs: NormalizedNim
     result.seen = initHashSet[string]()
   init result
 
-proc newEnv*(store: var NormalizedNimNode; via: Name, rs: NormalizedNimNode): Env=
+proc newEnv*(store: var NormalizedNode; via: Name, rs: NormalizedNode): Env=
   newEnv(asName("continuation"), store, via, rs)
 
 proc identity*(e: var Env): Name =
@@ -381,7 +381,7 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
       # and add the termination annotation
       result.add newCpsTerminate()
 
-proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormalizedNimNode): NormalizedNimNode =
+proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormalizedNode): NormalizedNode =
   ## swap symbols for those in the continuation
   result = n
   let child = e.castToChild e.first
@@ -399,7 +399,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormalizedNimNode): Normalize
 proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
   # XXX: remove NimNode
-  proc resultdot(n: Name): NormalizedNimNode =
+  proc resultdot(n: Name): NormalizedNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
     newAssignment name:
@@ -433,7 +433,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
       if env.rs.hasType:
         env.get                  # the return value is env.result
       else:
-        NormalizedNimNode:
+        NormalizedNode:
           nnkDiscardStmt.newTree:
             newEmptyNode()       # the return value is void
 
