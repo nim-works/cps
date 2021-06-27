@@ -197,6 +197,9 @@ proc onlyNormalizedNimNode*[T: distinct](n: T): NormalizedNimNode =
   else:
     errorGot "invalid type, expected some NormalizedNimNode", n
 
+type
+  NormalizedVarargs = varargs[NormalizedNimNode, onlyNormalizedNimNode]
+
 template hash*(n: NormalizedNimNode): Hash =
   ## hash `NormalizedNode`, necessary for what we do in `environment`
   hash(n.NimNode)
@@ -217,7 +220,7 @@ func kind*(n: NormalizedNimNode): NimNodeKind {.borrow.}
 proc add*(f, c: NormalizedNimNode): NormalizedNimNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
   f.NimNode.add(c.NimNode).NormalizedNimNode
-proc add*(f: NormalizedNimNode, cs: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode {.discardable.} =
+proc add*(f: NormalizedNimNode, cs: NormalizedVarargs): NormalizedNimNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
   for c in cs:
     f.add(c)
@@ -225,7 +228,7 @@ proc add*(f: NormalizedNimNode, cs: varargs[NormalizedNimNode, onlyNormalizedNim
 proc add*(f: NimNode, c: NormalizedNimNode): NimNode {.borrow, discardable.}
   ## hopefully this fixes ambiguous call issues
 
-proc newStmtList*(stmts: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
+proc newStmtList*(stmts: NormalizedVarargs): NormalizedNimNode =
   ## create a new normalized statement
   result = macros.newStmtList().NormalizedNimNode
   for s in stmts:
@@ -327,58 +330,43 @@ type
   ExprLike* = Name | NormalizedNimNode
     ## abstract over any nim value expression
 
-proc newDotExpr*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
+template binaryExprOrStmt(name: untyped, comments: untyped) =
+  ## create a binary expression or statement proc, eg: dot, colon, assignment
+  proc `name`*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
+    comments
+    `name`(
+      when l isnot NimNode: l.NimNode else: l,
+      when r isnot NimNode: r.NimNode else: r
+    ).NormalizedNimNode  
+
+binaryExprOrStmt newDotExpr:
   ## create a new dot expression, meant for executable code. In the future
-  ## this is unlikely to work for type expressions for example
-  newDotExpr(
-    when l isnot NimNode: l.NimNode else: l,
-    when r isnot NimNode: r.NimNode else: r
-  ).NormalizedNimNode
-proc newColonExpr*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
+  ## this is unlikely to work for type expressions for example  
+  
+binaryExprOrStmt newColonExpr:
   ## create a new colon expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
-  newColonExpr(
-    when l isnot NimNode: l.NimNode else: l,
-    when r isnot NimNode: r.NimNode else: r
-  ).NormalizedNimNode
-proc newAssignment*(l: ExprLike, r: distinct ExprLike): NormalizedNimNode =
+  
+binaryExprOrStmt newAssignment:
   ## create a new assignment, meant for executable code
-  newAssignment(
-    when l isnot NimNode: l.NimNode else: l,
-    when r isnot NimNode: r.NimNode else: r
-  ).NormalizedNimNode
+
 proc newCall*(n: Name, arg: ExprLike): NormalizedNimNode =
   ## create a new call with a single arg
   newCall(
     when n isnot NimNode: n.NimNode else: n,
     when arg isnot NimNode: arg.NimNode else: arg
   ).NormalizedNimNode
-proc newCall*(n: Name, args: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
+proc newCall*(n: NormalizedNimNode, args: NormalizedVarargs): NormalizedNimNode =
   ## create a new call, with `n` as name some args
   result = newCall(n.NimNode).NormalizedNimNode
   for a in args:
     result.add a
-proc newCall*(n: string, args: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
+proc newCall*(n: Name, args: NormalizedVarargs): NormalizedNimNode =
+  ## create a new call, with `n` as name some args
+  result = newCall(NormalizedNimNode n, args)
+proc newCall*(n: string, args: NormalizedVarargs): NormalizedNimNode =
   ## create a new call, with `n` as and ident name, and a single arg
   result = newCall(asName(n), args)
-proc newCall*(n: string, arg: ExprLike): NormalizedNimNode =
-  ## create a new call, with `n` as and ident name, and a single arg
-  newCall(
-    asName(n).NimNode,
-    when arg isnot NimNode: arg.NimNode else: arg
-  ).NormalizedNimNode
-proc newCall*[A: ExprLike, B: ExprLike](n: string, a: A, b: B): NormalizedNimNode =
-  ## create a new call, with `n` as and ident name, and two args
-  newCall(
-    asName(n).NimNode,
-    when a isnot NimNode: a.NimNode else: a,
-    when b isnot NimNode: b.NimNode else: b
-  ).NormalizedNimNode
-proc newCall*(n: NormalizedNimNode, args: varargs[NormalizedNimNode, onlyNormalizedNimNode]): NormalizedNimNode =
-  ## create a new call, with `n` as name some args
-  result = newCall(n.NimNode).NormalizedNimNode
-  for a in args:
-    result.add a
 
 # fn-TypeExpr
 proc asTypeExpr*(n: NimNode): TypeExpr =
