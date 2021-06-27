@@ -2,6 +2,7 @@ import balls
 import cps
 
 include preamble
+import killer
 
 suite "try statements":
 
@@ -384,3 +385,33 @@ suite "try statements":
 
     trampoline whelp(foo())
     check r == 2
+
+  block:
+    ## handling exception across multiple continuations
+    skip "not supported yet"
+    var k = newKiller(6)
+    proc foo() {.cps: Cont.} =
+      noop()
+      step 4
+      raise newException(ValueError, "foo")
+
+    proc bar() {.cps: Cont.} =
+      noop()
+      step 3
+      foo()
+
+    proc barbar() {.cps: Cont.} =
+      try:
+        noop()
+        step 2
+        bar()
+      except ValueError as e:
+        step 5
+        doAssert e.msg == "foo"
+
+    proc foobar() {.cps: Cont.} =
+      step 1
+      barbar()
+      step 6
+
+    trampoline whelp(foobar())
