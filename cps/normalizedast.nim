@@ -197,19 +197,41 @@ template defineToNimNodeConverter(t: typedesc) =
   ## because plastering `.NimNode` makes everyone sad
   converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
 
-template allowAutoDowngradeNormalizedNode(t: typedesc) =
-  ## because plastering `.NormalizedNode` makes everyone sad
-  converter `c t ToNormalizedNode`*(n: `t`): NormalizedNode = n.NormalizedNode
-
 template allowAutoDowngrade(t: typedesc, r: distinct typedesc) =
   ## defined a converter allowing easy downgrading of types, eg:
   ## * RoutineParam -> IdentDef
   ## XXX: check if downgrades are valid
   converter `c t To r`*(n: `t`): `r` = n.`r`
 
-# fn-NormalizedNode
+template allowAutoDowngradeNormalizedNode(t: typedesc) =
+  ## because plastering `.NormalizedNode` makes everyone sad
+  allowAutoDowngrade(t, NormalizedNode)
 
+# Define the various conversion relations in one place to show an overview
+# XXX: use the power of macros/templates to make this map prettier
+
+# all the types that can convert down to `NimNode`
 defineToNimNodeConverter(NormalizedNode)
+defineToNimNodeConverter(IdentDef)
+defineToNimNodeConverter(Ident)
+defineToNimNodeConverter(VarSection)
+defineToNimNodeConverter(ProcDef)
+
+# all the types that can convert down to `NormalizedNode`
+allowAutoDowngradeNormalizedNode(ProcDef)
+allowAutoDowngradeNormalizedNode(IdentDefLet)
+allowAutoDowngradeNormalizedNode(VarSection)
+allowAutoDowngradeNormalizedNode(Name)
+allowAutoDowngradeNormalizedNode(VarLet)
+allowAutoDowngradeNormalizedNode(VarLetIdentDef)
+allowAutoDowngradeNormalizedNode(IdentDef)
+
+# types that go from a specific type to a less specific type, "downgrade"
+allowAutoDowngrade(IdentDefLet, VarLetIdentDef)
+allowAutoDowngrade(IdentDefVar, VarLetIdentDef)
+allowAutoDowngrade(RoutineParam, IdentDef)
+
+# fn-NormalizedNode
 
 proc newEmptyNormalizedNode*(): NormalizedNode =
   ## create a new empty node (`nnkEmpty`)
@@ -350,15 +372,13 @@ func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
     when b isnot NimNode: b.NimNode else: b
   )
 
-allowAutoDowngradeNormalizedNode(Name)
-
 # fn-ExprLike
 type
   ExprLike* = Name | NormalizedNode
     ## abstract over any nim value expression
 
 template binaryExprOrStmt(name: untyped, comments: untyped) =
-  ## create a binary expression or statement proc, eg: dot, colon, assignment
+  ## declare a proc for a binary expression or statement, eg: dot, colon, asgn
   proc `name`*(l: ExprLike, r: distinct ExprLike): NormalizedNode =
     comments
     `name`(
@@ -377,12 +397,6 @@ binaryExprOrStmt newColonExpr:
 binaryExprOrStmt newAssignment:
   ## create a new assignment, meant for executable code
 
-proc newCall*(n: Name, arg: ExprLike): NormalizedNode =
-  ## create a new call with a single arg
-  newCall(
-    when n isnot NimNode: n.NimNode else: n,
-    when arg isnot NimNode: arg.NimNode else: arg
-  ).NormalizedNode
 proc newCall*(n: NormalizedNode, args: NormalizedVarargs): NormalizedNode =
   ## create a new call, with `n` as name some args
   result = newCall(n.NimNode).NormalizedNode
@@ -408,16 +422,6 @@ proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
   n.TypeExpr
 proc newRefType*(n: Name): TypeExpr =
   nnkRefTy.newTree(n.NimNode).TypeExpr
-
-# fn-Ident
-
-defineToNimNodeConverter(Ident)
-proc asIdent*(n: NimNode): Ident =
-  if n.kind != nnkIdent:
-    errorGot "not an ident", n
-  n.Ident
-proc asIdent*(n: string): Ident =
-  (ident n).Ident
 
 # fn-IdentDefLike
 type
@@ -449,8 +453,6 @@ func inferTypFromImpl*(n: DefLike): Name =
   if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
 
 # fn-IdentDef
-
-defineToNimNodeConverter(IdentDef)
 
 proc validateIdentDefs(n: NimNode) =
   ## validators only, afterwards it's safe to cast, allows re-use
@@ -585,8 +587,6 @@ func clone*(n: VarLet, value: NimNode = nil): VarLet =
   result = asVarLet:
     copyNimNode(n.NimNode).add def
 
-allowAutoDowngradeNormalizedNode(VarLet)
-
 # fn-VarLetTuple
 
 proc typ*(n: VarLetTuple): NimNode =
@@ -609,24 +609,21 @@ proc newVarLetIdentDef*(kind: NimNodeKind,
   ## create a new VarLetIdentDef
   newVarLetIdentDef(kind, newIdentDefs(name.NimNode, typ, val).IdentDef)
 
-allowAutoDowngradeNormalizedNode(VarLetIdentDef)
-
 # fn-VarSection
 
-defineToNimNodeConverter(VarSection)
-
 proc newVarSection*(i: IdentDef): VarSection =
+  ## create a var section with an identdef
+  ## ie: `newVarSection(i)`, where `i` is 'foo: int = 2` -> `var foo: int = 2`
   (nnkVarSection.newTree i).VarSection
 proc newVarSection*(n: Name, t: TypeExprLike, val = newEmptyNode()): VarSection =
   ## create a var section with an identdef, eg: `n`: `t` = `val`
   newVarSection(newIdentDefs(n, t, val))
 
-allowAutoDowngradeNormalizedNode(VarSection)
-
 # fn-IdentDefLet
 
 proc newIdentDefLet*(i: IdentDef): IdentDefLet =
-  ## create a var section with an identdef
+  ## create a let section with an identdef
+  ## ie: `newLetSection(i)`, where `i` is 'foo: int = 2` -> `let foo: int = 2`
   (nnkLetSection.newTree i).IdentDefLet
 proc newIdentDefLet*(n: Name, val: NormalizedNode): IdentDefLet =
   newIdentDefLet(newIdentDefs(n, val))
@@ -634,27 +631,17 @@ proc newIdentDefLet*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefLe
   ## create a let section with an identdef, eg: `n`: `t` = `val`
   newIdentDefLet(newIdentDefs(n, t, val))
 
-allowAutoDowngrade(IdentDefLet, VarLetIdentDef)
-allowAutoDowngradeNormalizedNode(IdentDefLet)
-
 # fn-IdentDefVar
 
 proc newIdentDefVar*(i: IdentDef): IdentDefVar =
   ## create a var section with an identdef
+  ## ie: `newVarSection(i)`, where `i` is 'foo: int = 2` -> `var foo: int = 2`
   (nnkVarSection.newTree i).IdentDefVar
 proc newIdentDefVar*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefVar =
   ## create a var section with an identdef, eg: `n`: `t` = `val`
   newIdentDefVar(newIdentDefs(n, t, val))
 
-allowAutoDowngrade(IdentDefVar, VarLetIdentDef)
-
-# fn-ProcDefParams
-
-allowAutoDowngrade(RoutineParam, IdentDef)
-
 # fn-ProcDef
-
-defineToNimNodeConverter(ProcDef)
 
 proc newProcDef*(name: Name, formalParams: openArray[NimNode]): ProcDef =
   ## create a new proc def with name and formal params (includes return type)
@@ -743,5 +730,3 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
     if body == nil: macros.copy(n.body) else: body
   ).ProcDef
   result.copyLineInfo n
-
-allowAutoDowngradeNormalizedNode(ProcDef)
