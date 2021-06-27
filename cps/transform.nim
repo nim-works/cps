@@ -293,7 +293,7 @@ func wrapContinuationWith(n, cont, replace, templ: NimNode): NimNode =
       # wrap all continuations of `n` with the template
       filter(n, wrapCont)
 
-func withException(n, cont, ex: NimNode): NimNode =
+macro cpsWithException(cont, ex, n: typed): untyped =
   ## Given the exception handler continuation `n`, set the global exception of
   ## continuation `cont` in the scope of `n` to `ex` before any code is run.
   ##
@@ -302,56 +302,64 @@ func withException(n, cont, ex: NimNode): NimNode =
   ##
   ## At the end of the exception handler scope, `ex` will be set to `nil`.
 
-  proc transformer(n: NimNode): NimNode =
-    # For scope exits, we just prefix result with our nil assignment
-    if n.isScopeExit:
-      result = newStmtList()
-      result.add newAssignment(ex, newNilLit())
-      result.add n
+  let
+    cont = normalizingRewrites cont
+    ex = normalizingRewrites ex
 
-    # If n is a continuation
-    elif n.isCpsCont:
-      result = copyNimTree n
+  proc withException(n, cont, ex: NimNode): NimNode =
+    proc transformer(n: NimNode): NimNode =
+      # For scope exits, we just prefix result with our nil assignment
+      if n.isScopeExit:
+        result = newStmtList()
+        result.add newAssignment(ex, newNilLit())
+        result.add n
 
-      let
-        nextCont = result.getContSym()
-        ex =
-          # In case the continuation is a sym, resym it to this continuation
-          if cont.kind == nnkSym:
-            ex.resym(cont, nextCont)
-          else:
-            ex
+      # If n is a continuation
+      elif n.isCpsCont:
+        result = copyNimTree n
 
-      # If the continuation doesn't have an exception tag
-      if not result.hasPragma("cpsHasException"):
-        # Tag the continuation with details on where to get
-        # the exception symbol.
-        #
-        # We need to store both the originating continuation and the
-        # access AST since pragmas are considered to be *outside*
-        # of the procedure and thus will bind to symbols outside if they
-        # are not already bound.
-        result.pragma.add:
-          newCall(bindSym"cpsHasException", cont, ex)
+        let
+          nextCont = result.getContSym()
+          ex =
+            # In case the continuation is a sym, resym it to this continuation
+            if cont.kind == nnkSym:
+              ex.resym(cont, nextCont)
+            else:
+              ex
 
-      result.body =
-        # Put the body in a try-except statement to clear `ex` in the case
-        # of an unhandled exception.
-        nnkTryStmt.newTree(
-          # Rewrites the inner continuations, then use it as the try body.
-          result.body.withException(cont, ex),
-          # On an exception not handled by the body.
-          nnkExceptBranch.newTree(
-            newStmtList(
-              # Set `ex` to nil.
-              newAssignment(ex, newNilLit()),
-              # Then re-raise the exception.
-              nnkRaiseStmt.newTree(newEmptyNode())
+        # If the continuation doesn't have an exception tag
+        if not result.hasPragma("cpsHasException"):
+          # Tag the continuation with details on where to get
+          # the exception symbol.
+          #
+          # We need to store both the originating continuation and the
+          # access AST since pragmas are considered to be *outside*
+          # of the procedure and thus will bind to symbols outside if they
+          # are not already bound.
+          result.pragma.add:
+            newCall(bindSym"cpsHasException", nextCont, ex)
+
+        result.body =
+          # Put the body in a try-except statement to clear `ex` in the case
+          # of an unhandled exception.
+          nnkTryStmt.newTree(
+            # Rewrites the inner continuations, then use it as the try body.
+            result.body.withException(nextCont, ex),
+            # On an exception not handled by the body.
+            nnkExceptBranch.newTree(
+              newStmtList(
+                # Set `ex` to nil.
+                newAssignment(ex, newNilLit()),
+                # Then re-raise the exception.
+                nnkRaiseStmt.newTree(newEmptyNode())
+              )
             )
           )
-        )
 
-  result = filter(n, transformer)
+    result = filter(n, transformer)
+
+  debugAnnotation cpsWithException, n:
+    it = it[0].withException(cont, ex)
 
 macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
@@ -364,20 +372,21 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
     n = normalizingRewrites n
     ex = normalizingRewrites ex
 
+  debug("cpsTryExcept", n, Original)
+
   # merge all except branches into one
   n = n.mergeExceptBranches(ex)
 
   # grab the merged except branch and collect its body
   let handlerBody = n.findChild(it.kind == nnkExceptBranch)[0]
 
-  var handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
-
-  # rewrite the handler to use the stashed exception as the current exception,
-  # then clear it on exit
-  handler = handler.withException(cont, ex)
+  let handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
 
   # add our handler before the body
-  result.add handler
+  result.add:
+    # make the handler uses the exception `ex` as its current exception
+    newCall(bindSym"cpsWithException", cont, ex):
+      handler
 
   # write a try-except clause to wrap on all children continuations so that
   # they jump to the handler upon an exception
@@ -407,6 +416,8 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   result.add n[0].wrapContinuationWith(cont, placeholder, tryTemplate)
 
   result = workaroundRewrites result
+
+  debug("cpsTryExcept", result, Transformed, n)
 
 macro cpsTryFinally(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
@@ -507,19 +518,18 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     #
     # Generate a finally leg that serve as an exception handler and will
     # raise the captured exception on exit
-    var reraise = final.generateContinuation(nextJump):
+    let reraise = final.generateContinuation(nextJump):
       newStmtList:
         nnkRaiseStmt.newTree:
           # de-sym our `ex` so that it uses the continuation of where it is
           # replaced into
           ex.resym(cont, desym cont)
 
-    # Make sure the captured exception acts as the current exception in
-    # the finally body, then clear it on exit.
-    reraise = reraise.withException(cont, ex)
-
     # Add this leg to the AST
-    it.add reraise
+    it.add:
+      # Make it uses `ex` as its current exception and clear it on exit
+      newCall(bindSym"cpsWithException", cont, ex):
+        reraise
 
     # Now we create a try-except template to catch any unhandled exception that
     # might occur in the body, then jump to reraise.
@@ -904,15 +914,6 @@ macro cpsManageException(n: typed): untyped =
           # Take the exception access from the annotation and resym it to
           # use our symbol
           ex = hasException[2].resym(exCont, cont)
-
-        {.warning: "Compiler bug workaround".}
-        # XXX: Depends too much on `ex` implementation
-        # The resym earlier should've swapped the symbol for us, but somehow
-        # exCont wasn't equal to the continuation symbol in ex, even though
-        # they were equal when it was set by withException.
-        #
-        # We manually swap the symbol here for because of that.
-        ex[0][0][1] = cont
 
         # Add the manager itself
         result.body.add:
