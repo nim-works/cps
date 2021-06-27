@@ -264,8 +264,7 @@ yet demonstrates different exploits of `cps`.
 ### Expectations
 
 See [this list of open Nim issues surfaced by CPS
-development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+labe
-l%3ACPS); some repercussions include the following:
+development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label%3ACPS); some repercussions include the following:
 
 - Exceptions are evaluated differently under `panics:on` and `panics:off`, so
 you may need to use `panics:on` in order to produce correct code.
