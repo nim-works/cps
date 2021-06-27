@@ -115,3 +115,24 @@ suite "returns and results":
       check x == 8
 
     foo()
+
+  block:
+    ## local assignment tuple unpacking a continution return value
+    var k = newKiller 3
+    proc bar(): (int, int) {.cps: Cont.} =
+      noop()
+      step 2
+      return (1, 2)
+
+    proc foo(): int {.cps: Cont.} =
+      step 1
+      let (a, b) = bar()
+      step 3
+      check a == 1
+      check b == 2
+      (a + b) * 2
+
+    var c = whelp foo()
+    trampoline c
+    check "dots work correctly":
+      ... c == 6
