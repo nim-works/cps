@@ -275,7 +275,8 @@ use those memory managers in order to produce correct code.
 - The `cpp` backend often doesn't work, particularly due to faulty codegen but
 also, perhaps, due to `exceptions:goto` assumptions that we rely upon.
 
-- `var` parameters to procedures with the `cps` pragma are not supported.
+- `var`/`openArray`/`varargs` parameters to procedures with the `cps` pragma
+  are not supported.
 
 - Generic continuations such as the following won't work without changes to
 the compiler.
