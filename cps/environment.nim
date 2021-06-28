@@ -76,7 +76,6 @@ proc castToRoot(e: Env; n: NormalizedNode): NormalizedNode =
   newCall(e.root, n)
 
 proc castToChild(e: Env; n: Name): NormalizedNode =
-  # XXX: remove NimNode
   newCall(e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NormalizedNode): NormalizedNode =
@@ -338,15 +337,15 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
       rhs = defs.typ
       tups = nnkTupleConstr.newTree
     for index, name in defs.indexNamePairs:
-      let entry = newIdentDefs(name, rhs[index], newEmptyNode())
       # we need to insert the variable and then write a new
       # accessor that plucks the field from the env
-      let (field, _) = e.addIdentDef(n.kind, asIdentDefs(entry))
-      tups.add newDotExpr(child, field.NimNode)
+      let (field, _) = e.addIdentDef n.kind:
+        newIdentDef(name, rhs[index], newEmptyNode())
+      tups.add newDotExpr(child, field)
     maybeAdd newAssignment(tups, defs.val)
   else:
     # an iterator handles `var a, b, c = 3` appropriately
-    maybeAdd e.addAssignment(n.asVarLetIdentDef())
+    maybeAdd e.addAssignment(asVarLetIdentDef(n))
 
 proc localSection*(e: var Env; n: IdentDef; into: NimNode = nil) =
   ## consume nnkIdentDefs and populate `into` with assignments, even if `into`

@@ -14,6 +14,11 @@ type
     ## a normalized node, but this should not be useed directly, use a
     ## specialized type instead, see the `normalizedast` module.
 
+converter normalizedNodeToNimNode(n: NormalizedNode): NimNode =
+  ## scope a converter to this module so it doesn't leak but we keep our sanity
+  ## in `filter`, `normalizingRewrites`, etc  below.
+  n.NimNode
+
 proc filter*(n: NimNode; f: NodeFilter): NimNode =
   ## rewrites a node and its children by passing each node to the filter;
   ## if the filter yields nil, the node is simply copied.  otherwise, the
@@ -28,16 +33,13 @@ proc filter*(n: NimNode; f: NormalizingFilter): NormalizedNode =
   ## rewrites a node and its children by passing each node to the filter;
   ## if the filter yields nil, the node is simply copied.  otherwise, the
   ## node is replaced.
-  filter(n, proc (n: NimNode): NimNode = f(n).NimNode).NormalizedNode
+  filter(n, proc (n: NimNode): NimNode = f(n)).NormalizedNode
 
 proc filter*(n: NormalizedNode, f: NormalizedFilter): NormalizedNode =
   ## rewrites a node and its children by passing each node to the filter;
   ## if the filter yields nil, the node is simply copied.  otherwise, the
   ## node is replaced.
-  filter(
-    n.NimNode,
-    proc (n: NimNode): NimNode = f(n.NormalizedNode).NimNode
-  ).NormalizedNode
+  filter(n, proc (n: NimNode): NimNode = f(n.NormalizedNode)).NormalizedNode
 
 func isEmpty*(n: NimNode): bool =
   ## `true` if the node `n` is Empty
@@ -115,11 +117,6 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
       discard
   result = filter(n, desymifier)
 
-converter normalizedNimNodeToNimNode(n: NormalizedNode): NimNode =
-  ## scope a converter to this module so it doesn't leak but we keep our sanity
-  ## in `normalizingRewrites` below.
-  n.NimNode
-
 proc normalizingRewrites*(n: NimNode): NormalizedNode =
   ## Rewrite AST into a safe form for manipulation without removing semantic
   ## data.
@@ -184,7 +181,7 @@ proc normalizingRewrites*(n: NimNode): NormalizedNode =
           else:
             result = copyNimNode(n)
             result.add:
-              normalizedNimNodeToNimNode(normalizingRewrites n[0][1])
+              normalizedNodeToNimNode(normalizingRewrites n[0][1])
         else:
           result = n
       else: discard
@@ -195,7 +192,7 @@ proc normalizingRewrites*(n: NimNode): NormalizedNode =
       of nnkFormalParams:
         result = nnkFormalParams.newNimNode(n)
         result.add:
-          normalizedNimNodeToNimNode(normalizingRewrites n[0]) # return value
+          normalizedNodeToNimNode(normalizingRewrites n[0]) # return value
         for arg in n[1 .. ^1].items:
           case arg.kind
           of nnkIdentDefs:
@@ -207,7 +204,7 @@ proc normalizingRewrites*(n: NimNode): NormalizedNode =
           else:
             result.add:
               # sometimes we have symbols, they get desymed elsewhere
-              normalizedNimNodeToNimNode(normalizingRewrites arg)
+              normalizedNodeToNimNode(normalizingRewrites arg)
       else:
         discard
 
@@ -242,7 +239,7 @@ proc normalizingRewrites*(n: NimNode): NormalizedNode =
 
             # add the rewritten body
             result.last.add:
-              normalizedNimNodeToNimNode(normalizingRewrites body)
+              normalizedNodeToNimNode(normalizingRewrites body)
       else: discard
 
     proc rewriteVarargsTypedCalls(n: NimNode): NimNode =
@@ -301,7 +298,7 @@ proc normalizingRewrites*(n: NimNode): NormalizedNode =
             result = copyNimNode n
             # Add the symbol being called
             result.add:
-              normalizedNimNodeToNimNode(normalizingRewrites n[0])
+              normalizedNodeToNimNode(normalizingRewrites n[0])
             # Retrieve the array from the magical conversion
             let unwrapped = n[1].last
             # Add everything in this array as parameters of the call
@@ -442,15 +439,15 @@ func replace*(n: NimNode, match: NormalizedMatcher, replacement: NormalizedNode)
   replace(
     n,
     proc (n: NimNode): bool = match(n.NormalizedNode),
-    replacement.NimNode
+    replacement
   ).NormalizedNode
 func replace*(n: NormalizedNode, match: NormalizedMatcher, replacement: NormalizedNode): NormalizedNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
   ## `replacement`
   replace(
-    n.NimNode,
+    n,
     proc (n: NimNode): bool = match(n.NormalizedNode),
-    replacement.NimNode
+    replacement
   ).NormalizedNode
 
 template replace*(n, noob: NimNode; body: untyped): NimNode {.dirty.} =

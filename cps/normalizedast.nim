@@ -122,6 +122,8 @@ type
     ## opaque sum: nnkIdentDefs|nnkVarTuple, from a var or let section
   IdentDefVarLet* = distinct DefVarLet
     ## opaque sum: identdef defintion from a var or let section
+  TupleDefVarLet* = distinct DefVarLet
+    ## opaque sum: tuple defintion from a var or let section
   IdentDefLet* = distinct IdentDefVarLet
     ## opaque sum: identdef defintion from a let section
   IdentDefVar* = distinct IdentDefVarLet
@@ -226,13 +228,21 @@ defineToNimNodeConverter(VarSection)
 defineToNimNodeConverter(ProcDef)
 
 # all the types that can convert down to `NormalizedNode`
-allowAutoDowngradeNormalizedNode(ProcDef)
-allowAutoDowngradeNormalizedNode(IdentDefLet)
-allowAutoDowngradeNormalizedNode(VarSection)
 allowAutoDowngradeNormalizedNode(Name)
+allowAutoDowngradeNormalizedNode(TypeExpr)
+
+allowAutoDowngradeNormalizedNode(IdentDef)
+
+allowAutoDowngradeNormalizedNode(ProcDef)
+
+allowAutoDowngradeNormalizedNode(VarSection)
+allowAutoDowngradeNormalizedNode(LetSection)
 allowAutoDowngradeNormalizedNode(VarLet)
 allowAutoDowngradeNormalizedNode(VarLetIdentDef)
-allowAutoDowngradeNormalizedNode(IdentDef)
+allowAutoDowngradeNormalizedNode(VarLetTuple)
+
+allowAutoDowngradeNormalizedNode(DefVarLet)
+allowAutoDowngradeNormalizedNode(IdentDefLet)
 
 # types that go from a specific type to a less specific type, "downgrade"
 allowAutoDowngrade(IdentDefLet, IdentDef)
@@ -369,9 +379,8 @@ proc desym*(n: Name): Name {.borrow.}
 proc resym*(fragment: NormalizedNode, sym, replacement: Name): NormalizedNode {.borrow.}
   ## replace `sym` in the AST `fragment` with the `replacement`
 
-func typeInst*(n: Name): NimNode =
+func typeInst*(n: Name): NimNode {.deprecated: "A Name can be a bare ident and entirely".} =
   ## gets the type via `getTypeInst`
-  ## XXX: this shouldn't be done on name, as these could be bare idents
   getTypeInst n.NimNode
 
 func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
@@ -391,10 +400,8 @@ template binaryExprOrStmt(name: untyped, comments: untyped) =
   ## declare a proc for a binary expression or statement, eg: dot, colon, asgn
   proc `name`*(l: ExprLike, r: distinct ExprLike): NormalizedNode =
     comments
-    `name`(
-      when l isnot NimNode: l.NimNode else: l,
-      when r isnot NimNode: r.NimNode else: r
-    ).NormalizedNode  
+    NormalizedNode:
+      `name`(l.NimNode, r.NimNode)
 
 binaryExprOrStmt newDotExpr:
   ## create a new dot expression, meant for executable code. In the future
@@ -421,8 +428,8 @@ proc newCall*(n: string, args: NormalizedVarargs): NormalizedNode =
 
 # fn-TypeExpr
 proc asTypeExpr*(n: NimNode): TypeExpr =
+  ## coerce to `TypeExpr`, disallow `nnkEmpty`, error out otherwise
   if n.kind notin TypeExprKinds:
-    # XXX: incomplete list of type kinds
     errorGot "not a type expression", n
   n.TypeExpr
 proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
@@ -430,8 +437,12 @@ proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
   if n.kind notin {nnkEmpty} + TypeExprKinds:
     errorGot "not a type expression or empty", n
   n.TypeExpr
+
 proc newRefType*(n: Name): TypeExpr =
   nnkRefTy.newTree(n.NimNode).TypeExpr
+
+proc `[]`*(n: TypeExpr, i: int): TypeExpr = TypeExpr n.NimNode[i]
+  ## allow iteration through a TypeExpr, in case it's a tuple type with kids
 
 # fn-IdentDefLike
 type
@@ -440,6 +451,7 @@ type
     ## definition
 
 func name*(n: IdentDefLike): Name = n.NimNode[0].Name
+  ## retrieve the name of this `IdentDefLike`
 
 # fn-DefLike
 
@@ -458,9 +470,10 @@ func hasType*(n: DefLike): bool =
   ## has a non-Empty type (`typ`) defined
   n.typ.kind != nnkEmpty
 
-func inferTypFromImpl*(n: DefLike): Name =
+func inferTypFromImpl*(n: DefLike): TypeExpr =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
+  TypeExpr:
+    if n.hasType: n.typ else: getTypeImpl(n.val)
 
 # fn-IdentDef
 
@@ -508,7 +521,7 @@ type
                VarSectionLike
     ## abstract over various let or var sections types
 
-func def*(n: VarLetLike): DefVarLet = DefVarLet n.NimNode[0]
+func def*(n: VarLetLike): DefVarLet = DefVarLet n[0]
   ## an IdentDef or VarTuple
 func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
@@ -532,9 +545,10 @@ func identdef*(n: VarLetIdentDefLike): IdentDef = n.def.IdentDef
 func name*(n: VarLetIdentDefLike): Name = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
   ## will have the name
-func inferTypFromImpl*(n: VarLetIdentDefLike): Name =
+func inferTypFromImpl*(n: VarLetIdentDefLike): TypeExpr =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  if n.hasType: n.typ.Name else: getTypeImpl(n.val).Name
+  TypeExpr:
+    if n.hasType: n.typ else: getTypeImpl(n.val)
 
 # fn-VarLet
 
@@ -605,12 +619,19 @@ func clone*(n: VarLet, value: NimNode = nil): VarLet =
 
 # fn-VarLetTuple
 
-proc typ*(n: VarLetTuple): NimNode =
+proc def*(n: VarLetTuple): TupleDefVarLet = TupleDefVarLet n[0]
+  ## the tuple definition (`nnkVarTuple`) from a var or let section
+proc typ*(n: VarLetTuple): TypeExpr =
   ## return the type based on `getTypeInst`
-  getTypeInst n.val
-iterator indexNamePairs*(n: VarLetTuple): (int, NimNode) =
+  TypeExpr:
+    getTypeInst n.val
+iterator indexNamePairs*(n: VarLetTuple): (int, Name) =
   ## return the names of fields on the lhs of a var/let tuple assignment
-  for index, name in n.def.NimNode[0 .. ^3].pairs:
+  
+  let fields = seq[Name] n.def.NormalizedNode[0 ..^ 3]
+    ## get the names of the tuple fields from a TupleDefVarLet
+
+  for index, name in fields.pairs:
     yield (index, name)
 
 # fn-VarLetIdentDef
@@ -671,7 +692,7 @@ proc newProcDef*(name: Name, formalParams: openArray[NimNode]): ProcDef =
   ## and an empty body (`nnkStmtList`)
   newProc(name.Nimnode, formalParams, newStmtList()).ProcDef
 
-func asProcDef*(n: NimNode): ProcDef =
+func asProcDef*(n: NimNode): ProcDef {.deprecated: "change the parameter to be NormalizedNode".} =
   ## coerce into a `ProcDef` or error out
   if n.kind != nnkProcDef:
     errorGot "not a proc definition", n
@@ -726,9 +747,8 @@ func hasPragma*(n: ProcDef, s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
   hasPragma(n.NimNode, s)
 
-func returnParam*(n: ProcDef): NormalizedNode =
+func returnParam*(n: ProcDef): NormalizedNode {.deprecated: "refactor to return TypeExpr or Name, depending upon rewrite invariants".} =
   ## the return param or empty if void
-  ## XXX: should return TypeExpr or Name, need to check rewrite restrictions 
   n.NimNode.params[0].NormalizedNode
 
 proc `returnParam=`*(n: ProcDef, ret: Name) =
