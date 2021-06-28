@@ -933,6 +933,37 @@ macro cpsManageException(n: typed): untyped =
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
 
+macro cpsEnvironmentConv(T, n: typed): untyped =
+  ## An optimization pass for cps to make sure we convert from base type
+  ## to the environment exactly once per continuation leg, which should
+  ## provide a rather substantial performance improvement (in theory).
+  ##
+  ## The way this works is by prefixing all continuations body with
+  ##
+  ## .. code-block:: nim
+  ##    let cont = env(cont)
+  ##
+  ## Then resym all access to the parameter `cont` with this new variable.
+
+  func convert(T, n: NimNode): NimNode =
+    func optimize(n: NimNode): NimNode =
+      if n.isCpsCont:
+        result = copy n
+        let cont = result.getContSym()
+        result.body = newStmtList:
+          newLetStmt(desym cont):
+            nnkCall.newTree(copy(T), copy(cont))
+
+        result.body.add:
+          convert(T):
+            n.body.resym(cont, desym cont)
+
+    result = filter(n, optimize)
+
+  debugAnnotation cpsEnvironmentConv, n:
+    it = convert(T):
+      it
+
 proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
@@ -1022,9 +1053,10 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
   let processMainContinuation =
     newCall(bindSym"cpsFloater"):
-      newCall(bindSym"cpsResolver", env.identity):
-        newCall(bindSym"cpsManageException"):
-          n
+      newCall(bindSym"cpsEnvironmentConv", env.identity):
+        newCall(bindSym"cpsResolver", env.identity):
+          newCall(bindSym"cpsManageException"):
+            n
 
   # storing the source environment on helpers
   for p in [whelp, booty]:
