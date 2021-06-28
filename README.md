@@ -267,16 +267,19 @@ See [this list of open Nim issues surfaced by CPS
 development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label%3ACPS); some repercussions include the following:
 
 - Exceptions are evaluated differently under `panics:on` and `panics:off`, so
-you may need to use `panics:on` in order to produce correct code.
+  you may need to use `panics:on` in order to produce correct code.
 
 - Expressions are evaluated differently under `gc:[ao]rc`, so you may need to
-use those memory managers in order to produce correct code.
+  use those memory managers in order to produce correct code.
 
 - The `cpp` backend often doesn't work, particularly due to faulty codegen but
-also, perhaps, due to `exceptions:goto` assumptions that we rely upon.
+  also, perhaps, due to `exceptions:goto` assumptions that we rely upon.
 
 - `var`/`openArray`/`varargs` parameters to procedures with the `cps` pragma
   are not supported.
+
+- Nim's `for` loops work, but you cannot perform any CPS control-flow inside of
+  them; if in doubt, use a `while` loop instead.
 
 - Generic continuations such as the following won't work without changes to
 the compiler.
