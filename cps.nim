@@ -105,6 +105,10 @@ macro cpsMagic*(n: untyped): untyped =
   ##
   ## This new magical will compile correctly inside CPS procedures though
   ## it never takes a `Continuation` argument and produces no return value.
+  ##
+  ## The target procedure of a cpsMagic pragma returns the `Continuation`
+  ## to which control-flow should return; this is _usually_ the same value
+  ## passed into the procedure, but this is not required nor is it checked!
   expectKind(n, nnkProcDef)
   result = newStmtList n            # preserve the original proc
   var shim = makeErrorShim n        # create the shim
