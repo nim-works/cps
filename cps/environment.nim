@@ -436,15 +436,9 @@ proc createResult*(env: Env, exported = false): ProcDef =
   if exported:
     name = postfix(name, "*")
 
-  # we bind these here so that they won't clash elsewhere
-  let
-    dismissed = bindSym"Dismissed"
-    finished = bindSym"Finished"
-    running = bindSym"Running"
-
   result = ProcDef:
-    genAst(name, field, dismissed, finished, running,
-           c = env.first, cont = env.identity, tipe = env.rs.typ):
+    genAst(name, field, c = env.first, cont = env.identity, tipe = env.rs.typ,
+           dismissed=Dismissed, finished=Finished, running=Running):
       {.push experimental: "callOperator".}
       proc name(c: cont): tipe {.used.} =
         case c.state
