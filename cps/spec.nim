@@ -323,3 +323,10 @@ proc enbasen*(n: NimNode): NimNode =
     enbasen: getImpl n
   else:
     n
+
+type
+  State* {.pure.} = enum
+    ## Representation of the state of a continuation.
+    Running    ## The continuation is active and running and can be resumed
+    Dismissed  ## The continuation is currently somewhere else
+    Finished   ## The continuation is finished and can no longer be resumed

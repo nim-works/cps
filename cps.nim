@@ -1,6 +1,6 @@
 import std/[macros]
 import cps/[spec, transform, rewrites, hooks, exprs]
-export Continuation, ContinuationProc
+export Continuation, ContinuationProc, State
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 
 # exporting some symbols that we had to bury for bindSym reasons
@@ -17,35 +17,28 @@ when not defined(nimPanics):
   {.warning: "cps supports --panics:on only; " &
              " see https://github.com/disruptek/cps/issues/110".}
 
-type
-  State* {.pure.} = enum
-    ## Representation of the state of a continuation.
-    Running    ## The continuation is active and running and can be resumed
-    Dismissed  ## The continuation is currently somewhere else
-    Finished   ## The continuation is finished and can no longer be resumed
-
 proc state*(c: Continuation): State =
   ## Get the current state of a continuation
   if c == nil:
-    Dismissed
+    State.Dismissed
   elif c.fn == nil:
-    Finished
+    State.Finished
   else:
-    Running
+    State.Running
 
 {.push hint[ConvFromXtoItselfNotNeeded]: off.}
 
 template running*(c: Continuation): bool =
   ## `true` if the continuation is running.
-  (Continuation c).state == Running
+  (Continuation c).state == State.Running
 
 template finished*(c: Continuation): bool =
   ## `true` if the continuation is finished.
-  (Continuation c).state == Finished
+  (Continuation c).state == State.Finished
 
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
-  (Continuation c).state == Dismissed
+  (Continuation c).state == State.Dismissed
 
 {.pop.}
 

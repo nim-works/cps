@@ -437,16 +437,17 @@ proc createResult*(env: Env, exported = false): ProcDef =
     name = postfix(name, "*")
 
   result = ProcDef:
-    genAst(name, field, c = env.first, cont = env.identity, tipe = env.rs.typ):
+    genAst(name, field, c = env.first, cont = env.identity, tipe = env.rs.typ,
+           dismissed=Dismissed, finished=Finished, running=Running):
       {.push experimental: "callOperator".}
       proc name(c: cont): tipe {.used.} =
         case c.state
-        of Dismissed:
+        of dismissed:
           raise Defect.newException:
             "dismissed continuations have no result"
-        of Finished:
+        of finished:
           field
-        of Running:
+        of running:
           `()`(trampoline c)
       {.pop.}
 
