@@ -47,12 +47,12 @@ suite "cps api":
     check "whelp initial state surprised us":
       not c.dismissed
       not c.finished
-      c.state == Running
+      c.state == State.Running
       c.running
     trampoline c
     check "whelp state after trampoline surprised us":
       not c.dismissed
-      c.state == Finished
+      c.state == State.Finished
       c.finished
       not c.running
 
