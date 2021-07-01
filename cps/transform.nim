@@ -952,8 +952,11 @@ proc handler*(c: Continuation;
 proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
                                                                 cpsMagic.} =
   ## This symbol may be reimplemented to customize stack unwind.
-  if c.mom.isNil and not e.isNil:
-    raise e
+  if c.mom.isNil:
+    if e.isNil:
+      result = c
+    else:
+      raise e
   else:
     result = c.mom
     result.ex = e
