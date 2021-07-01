@@ -965,6 +965,9 @@ macro cpsHandleUnhandledException(n: typed): untyped =
     if n.isCpsCont:
       let cont = n.getContSym
       result = copy n
+      # Rewrite continuations within this continuation body as well
+      result.body = result.body.filter(handle)
+      # Put the body in a try-except to capture the unhandled exception
       result.body = genAstOpt({}, cont, body = result.body):
         bind getCurrentException
         try:
