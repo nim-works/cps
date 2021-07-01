@@ -219,11 +219,24 @@ template `()`(c: Continuation): untyped {.used.} =
   discard
 {.pop.}
 
+
+proc unwind*(c: Continuation; e: ref Exception): Continuation
+
+proc handler*(c: Continuation;
+              fn: Continuation.fn): Continuation {.used, cpsMagic.} =
+  ## This symbol may be reimplemented to customize exception handling.
+  result =
+    if c.ex.isNil and not c.fn.isNil:
+      fn(c)
+    else:
+      unwind(c, c.ex)
+
 proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
                                                                 cpsMagic.} =
-  ## This symbol may be reimplemented to customize exception handling.
-  if c.mom.isNil:
+  ## This symbol may be reimplemented to customize stack unwind.
+  if c.mom.isNil and not e.isNil:
     raise e
   else:
     result = c.mom
     result.ex = e
+    result = handler(result, result.fn)
