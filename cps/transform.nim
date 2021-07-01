@@ -940,27 +940,30 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation
 proc handler*(c: Continuation;
               fn: Continuation.fn): Continuation {.used, cpsMagic.} =
   ## Reimplement this symbol to customize exception handling.
-  result =
+  if not c.isNil:
     if fn.isNil:
-      unwind(c, c.ex)
-    elif c.ex.isNil:
-      fn(c)
+      result = unwind(c, c.ex)
     else:
-      # we're exploiting expr evaluation order here!
-      unwind(fn(c), c.ex)
+      try:
+        result = fn(c)
+        if not c.ex.isNil:
+          result = unwind(result, c.ex)
+      except CatchableError as e:
+        result = unwind(result, e)
 
 proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
                                                                 cpsMagic.} =
   ## Reimplement this symbol to customize stack unwind.
-  if c.mom.isNil:
-    if e.isNil:
-      result = c
+  if not c.isNil:
+    if c.mom.isNil:
+      if e.isNil:
+        result = c
+      else:
+        raise e
     else:
-      raise e
-  else:
-    result = c.mom
-    result.ex = e
-    result = handler(result, result.fn)
+      result = c.mom
+      result.ex = e
+      result = handler(result, result.fn)
 
 macro cpsHandleUnhandledException(n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
