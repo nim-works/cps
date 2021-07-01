@@ -935,6 +935,26 @@ macro cpsManageException(n: typed): untyped =
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
 
+macro cpsHandleUnhandledException(n: typed): untyped =
+  ## rewrites all continuations in `n` so that any unhandled exception will
+  ## be first copied into the `ex` variable, then raise
+  ##
+  ## XXX: raising is the temporary behavior until unwind is implemented
+  func handle(n: NimNode): NimNode =
+    if n.isCpsCont:
+      let cont = n.getContSym
+      result = copy n
+      result.body = genAstOpt({}, cont, body = result.body):
+        bind getCurrentException
+        try:
+          body
+        except:
+          cont.ex = getCurrentException()
+          raise cont.ex
+
+  debugAnnotation cpsHandleUnhandledException, n:
+    it = it.filter(handle)
+
 proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
@@ -1020,13 +1040,17 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
     # by ensuring that we always rewrite termination
     n.body.add newCpsPending()
 
+  # tag the proc as a cps continuation
+  n.pragma.add bindSym"cpsCont"
+
   # run other stages
   {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
   let processMainContinuation =
     newCall(bindSym"cpsFloater"):
       newCall(bindSym"cpsResolver", env.identity):
         newCall(bindSym"cpsManageException"):
-          n
+          newCall(bindSym"cpsHandleUnhandledException"):
+            n
 
   # storing the source environment on helpers
   for p in [whelp, booty]:
