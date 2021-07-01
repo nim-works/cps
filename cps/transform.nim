@@ -939,7 +939,7 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation
 
 proc handler*(c: Continuation;
               fn: Continuation.fn): Continuation {.used, cpsMagic.} =
-  ## This symbol may be reimplemented to customize exception handling.
+  ## Reimplement this symbol to customize exception handling.
   result =
     if fn.isNil:
       unwind(c, c.ex)
@@ -951,7 +951,7 @@ proc handler*(c: Continuation;
 
 proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
                                                                 cpsMagic.} =
-  ## This symbol may be reimplemented to customize stack unwind.
+  ## Reimplement this symbol to customize stack unwind.
   if c.mom.isNil:
     if e.isNil:
       result = c
