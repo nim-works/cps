@@ -978,8 +978,6 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
 macro cpsHandleUnhandledException(n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
   ## be first copied into the `ex` variable, then raise
-  ##
-  ## XXX: raising is the temporary behavior until unwind is implemented
   func handle(n: NimNode): NimNode =
     if n.isCpsCont:
       let cont = n.getContSym
