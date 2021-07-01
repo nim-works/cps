@@ -130,13 +130,13 @@ macro whelp*(parent: Continuation; call: typed): untyped =
                   newCall(base, it))
 
 template head*[T: Continuation](first: T): T {.used.} =
-  ## This symbol may be reimplemented to configure a continuation
+  ## Reimplement this symbol to configure a continuation
   ## for use when there is no parent continuation available.
   ## The return value specifies the continuation.
   first
 
 proc tail*[T: Continuation](parent: Continuation; child: T): T {.used, inline.} =
-  ## This symbol may be reimplemented to configure a continuation for
+  ## Reimplement this symbol to configure a continuation for
   ## use when it has been instantiated from inside another continuation;
   ## currently, this means assigning the parent to the child's `mom`
   ## field. The return value specifies the child continuation.
@@ -148,30 +148,30 @@ proc tail*[T: Continuation](parent: Continuation; child: T): T {.used, inline.} 
   result.mom = parent
 
 template coop*[T: Continuation](c: T): T {.used.} =
-  ## This symbol may be reimplemented as a `.cpsMagic.` to introduce
+  ## Reimplement this symbol as a `.cpsMagic.` to introduce
   ## a cooperative yield at appropriate continuation exit points.
   ## The return value specifies the continuation.
   c
 
 template boot*[T: Continuation](c: T): T {.used.} =
-  ## This symbol may be reimplemented to refine a continuation after
+  ## Reimplement this symbol to refine a continuation after
   ## it has been allocated but before it is first run.
   ## The return value specifies the continuation.
   c
 
 template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
-  ## This symbol may be reimplemented to introduce control-flow
+  ## Reimplement this symbol to introduce control-flow
   ## tracing of the entry to each continuation leg.
   discard
 
 proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used, inline.} =
-  ## This symbol may be reimplemented to customize continuation
+  ## Reimplement this symbol to customize continuation
   ## allocation.
   new c
 
 template dealloc*[T: Continuation](t: typedesc[T];
                                    c: sink Continuation) {.used.} =
-  ## This symbol may be reimplemented to customize continuation
+  ## Reimplement this symbol to customize continuation
   ## deallocation.
   discard
 
