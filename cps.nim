@@ -5,7 +5,7 @@ export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic
 
 # exporting some symbols that we had to bury for bindSym reasons
 from cps/returns import pass
-export pass, trampoline, unwind, handler
+export pass, trampoline, unwind
 
 # we only support arc/orc due to its eager expr evaluation qualities
 when not(defined(gcArc) or defined(gcOrc)):
