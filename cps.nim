@@ -1,11 +1,11 @@
 import std/[macros]
 import cps/[spec, transform, rewrites, hooks, exprs]
 export Continuation, ContinuationProc, State
-export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
+export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic
 
 # exporting some symbols that we had to bury for bindSym reasons
 from cps/returns import pass
-export pass, trampoline
+export pass, trampoline, unwind, handler
 
 # we only support arc/orc due to its eager expr evaluation qualities
 when not(defined(gcArc) or defined(gcOrc)):
@@ -75,44 +75,6 @@ macro cps*(T: typed, n: typed): untyped =
             n
     else:
       result = getAst(cpsTransform(T, n))
-
-proc makeErrorShim(n: NimNode): NimNode =
-  ## Upgrades a procedure to serve as a CPS primitive, generating
-  ## errors out of `.cps.` context and taking continuations as input.
-  expectKind(n, nnkProcDef)
-
-  # Create a version of the proc that lacks a first argument or return
-  # value.  While this version will throw an exception at runtime, it
-  # may be used inside CPS as magic(); for better programmer ergonomics.
-  var shim = copyNimTree n
-  del(shim.params, 1)               # delete the 1st Continuation argument
-  let msg = newLit($n.name & "() is only valid in {.cps.} context")
-  shim.body =                       # raise a defect when invoked directly
-    quote:
-      raise Defect.newException: `msg`
-  result = shim
-
-macro cpsMagic*(n: untyped): untyped =
-  ## Applied to a procedure to generate a version which lacks the first
-  ## argument and return value, which are those of a `Continuation`.
-  ##
-  ## This new magical will compile correctly inside CPS procedures though
-  ## it never takes a `Continuation` argument and produces no return value.
-  ##
-  ## The target procedure of a cpsMagic pragma returns the `Continuation`
-  ## to which control-flow should return; this is _usually_ the same value
-  ## passed into the procedure, but this is not required nor is it checked!
-  expectKind(n, nnkProcDef)
-  result = newStmtList n            # preserve the original proc
-  var shim = makeErrorShim n        # create the shim
-  shim.params[0] = newEmptyNode()   # wipe out the return value
-
-  # we use these pragmas to identify the primitive and rewrite it inside
-  # CPS so that it again binds to the version that takes and returns a
-  # continuation.
-  shim.addPragma ident"cpsMustJump"
-  shim.addPragma ident"cpsMagicCall"
-  result.add shim
 
 macro cpsVoodoo*(n: untyped): untyped =
   ## Similar to a `cpsMagic` where the first argument is concerned, but
@@ -218,25 +180,3 @@ template `()`(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
 {.pop.}
-
-
-proc unwind*(c: Continuation; e: ref Exception): Continuation
-
-proc handler*(c: Continuation;
-              fn: Continuation.fn): Continuation {.used, cpsMagic.} =
-  ## This symbol may be reimplemented to customize exception handling.
-  result =
-    if c.ex.isNil and not c.fn.isNil:
-      fn(c)
-    else:
-      unwind(c, c.ex)
-
-proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
-                                                                cpsMagic.} =
-  ## This symbol may be reimplemented to customize stack unwind.
-  if c.mom.isNil and not e.isNil:
-    raise e
-  else:
-    result = c.mom
-    result.ex = e
-    result = handler(result, result.fn)

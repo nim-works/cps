@@ -935,6 +935,27 @@ macro cpsManageException(n: typed): untyped =
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
 
+proc unwind*(c: Continuation; e: ref Exception): Continuation
+
+proc handler*(c: Continuation;
+              fn: Continuation.fn): Continuation {.used, cpsMagic.} =
+  ## This symbol may be reimplemented to customize exception handling.
+  result =
+    if c.ex.isNil and not c.fn.isNil:
+      fn(c)
+    else:
+      unwind(c, c.ex)
+
+proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
+                                                                cpsMagic.} =
+  ## This symbol may be reimplemented to customize stack unwind.
+  if c.mom.isNil and not e.isNil:
+    raise e
+  else:
+    result = c.mom
+    result.ex = e
+    result = handler(result, result.fn)
+
 macro cpsHandleUnhandledException(n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
   ## be first copied into the `ex` variable, then raise
@@ -950,7 +971,7 @@ macro cpsHandleUnhandledException(n: typed): untyped =
           body
         except:
           cont.ex = getCurrentException()
-          raise cont.ex
+          return (typeof cont) unwind(cont, cont.ex)
 
   debugAnnotation cpsHandleUnhandledException, n:
     it = it.filter(handle)
