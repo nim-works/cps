@@ -941,10 +941,13 @@ proc handler*(c: Continuation;
               fn: Continuation.fn): Continuation {.used, cpsMagic.} =
   ## This symbol may be reimplemented to customize exception handling.
   result =
-    if c.ex.isNil and not c.fn.isNil:
+    if fn.isNil:
+      unwind(c, c.ex)
+    elif c.ex.isNil:
       fn(c)
     else:
-      unwind(c, c.ex)
+      # we're exploiting expr evaluation order here!
+      unwind(fn(c), c.ex)
 
 proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
                                                                 cpsMagic.} =
