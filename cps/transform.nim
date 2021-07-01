@@ -991,7 +991,12 @@ macro cpsHandleUnhandledException(n: typed): untyped =
           body
         except:
           cont.ex = getCurrentException()
-          return (typeof cont) unwind(cont, cont.ex)
+        # A continuation body created with makeContProc (which is all of them)
+        # will have a terminator in the body, thus this part can only be reached
+        # iff the except branch happened to deter the jump
+        #
+        # This is a workaround for https://github.com/nim-lang/Nim/issues/18411
+        return (typeof cont) unwind(cont, cont.ex)
 
   debugAnnotation cpsHandleUnhandledException, n:
     it = it.filter(handle)
