@@ -21,8 +21,18 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
   result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc, Unwind}
-  result.body.add:                  # perform any possible stack unwind
-    Unwind.hook cont, contType      # before any other activity, then
+  # install check for any exception that might have been injected by
+  # a child continuation
+  result.body.add:
+    genAstOpt({}, contParam):
+      # If there is an injected exception
+      if not contParam.ex.isNil:
+        try:
+          # Raise it
+          raise contParam.ex
+        finally:
+          # Set the injected exception field to nil
+          contParam.ex = nil
   result.body.add:                  # insert a hook ahead of the source,
     Trace.hook contParam, result    # hooking against the proc (minus body)
   result.body.add:                  # perform convenience rewrites on source
