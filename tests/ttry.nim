@@ -388,7 +388,6 @@ suite "try statements":
 
   block:
     ## handling exception across multiple continuations
-    skip "not supported yet"
     var k = newKiller(6)
     proc foo() {.cps: Cont.} =
       noop()

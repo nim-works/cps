@@ -20,7 +20,19 @@ proc makeContProc(name, cont, source: NimNode): NimNode =
   result = newProc(name, [contType, newIdentDefs(contParam, contType)])
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
-  result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc}
+  result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc, Unwind}
+  # install check for any exception that might have been injected by
+  # a child continuation
+  result.body.add:
+    genAstOpt({}, contParam):
+      # If there is an injected exception
+      if not contParam.ex.isNil:
+        try:
+          # Raise it
+          raise contParam.ex
+        finally:
+          # Set the injected exception field to nil
+          contParam.ex = nil
   result.body.add:                  # insert a hook ahead of the source,
     Trace.hook contParam, result    # hooking against the proc (minus body)
   result.body.add:                  # perform convenience rewrites on source
@@ -933,6 +945,62 @@ macro cpsManageException(n: typed): untyped =
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
 
+proc unwind*(c: Continuation; e: ref Exception): Continuation
+
+proc handler*(c: Continuation;
+              fn: Continuation.fn): Continuation {.used, cpsMagic.} =
+  ## Reimplement this symbol to customize exception handling.
+  if not c.isNil:
+    if fn.isNil:
+      result = unwind(c, c.ex)
+    else:
+      try:
+        result = fn(c)
+        if not c.ex.isNil:
+          result = unwind(result, c.ex)
+      except CatchableError as e:
+        result = unwind(result, e)
+
+proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
+                                                                cpsMagic.} =
+  ## Reimplement this symbol to customize stack unwind.
+  if not c.isNil:
+    if c.mom.isNil:
+      if e.isNil:
+        result = c
+      else:
+        raise e
+    else:
+      result = c.mom
+      result.ex = e
+      #result = handler(result, result.fn)
+
+macro cpsHandleUnhandledException(n: typed): untyped =
+  ## rewrites all continuations in `n` so that any unhandled exception will
+  ## be first copied into the `ex` variable, then raise
+  func handle(n: NimNode): NimNode =
+    if n.isCpsCont:
+      let cont = n.getContSym
+      result = copy n
+      # Rewrite continuations within this continuation body as well
+      result.body = result.body.filter(handle)
+      # Put the body in a try-except to capture the unhandled exception
+      result.body = genAstOpt({}, cont, body = result.body):
+        bind getCurrentException
+        try:
+          body
+        except:
+          cont.ex = getCurrentException()
+        # A continuation body created with makeContProc (which is all of them)
+        # will have a terminator in the body, thus this part can only be reached
+        # iff the except branch happened to deter the jump
+        #
+        # This is a workaround for https://github.com/nim-lang/Nim/issues/18411
+        return (typeof cont) unwind(cont, cont.ex)
+
+  debugAnnotation cpsHandleUnhandledException, n:
+    it = it.filter(handle)
+
 proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
@@ -1018,13 +1086,17 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NimNode =
     # by ensuring that we always rewrite termination
     n.body.add newCpsPending()
 
+  # tag the proc as a cps continuation
+  n.pragma.add bindSym"cpsCont"
+
   # run other stages
   {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
   let processMainContinuation =
     newCall(bindSym"cpsFloater"):
       newCall(bindSym"cpsResolver", env.identity):
         newCall(bindSym"cpsManageException"):
-          n
+          newCall(bindSym"cpsHandleUnhandledException"):
+            n
 
   # storing the source environment on helpers
   for p in [whelp, booty]:
