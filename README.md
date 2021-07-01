@@ -258,6 +258,7 @@ yet demonstrates different exploits of `cps`.
 |[Work](https://github.com/disruptek/cps/blob/master/examples/work.nim)|Implementation of a simple continuation scheduler|
 |[LuaCoroutines](https://github.com/disruptek/cps/blob/master/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
 |[ThreadPool](https://github.com/disruptek/cps/blob/master/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
+|[WebServer](https://github.com/zevv/cpstest)|Zevv's "Real World Test" WebServer And More|
 
 ## Debugging
 
