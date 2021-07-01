@@ -973,7 +973,7 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
     else:
       result = c.mom
       result.ex = e
-      result = handler(result, result.fn)
+      #result = handler(result, result.fn)
 
 macro cpsHandleUnhandledException(n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
