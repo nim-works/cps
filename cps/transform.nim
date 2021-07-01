@@ -988,8 +988,7 @@ macro cpsHandleUnhandledException(n: typed): untyped =
       result.body = genAstOpt({}, cont, body = result.body):
         bind getCurrentException
         try:
-          if cont.ex.isNil:
-            body
+          body
         except:
           cont.ex = getCurrentException()
         # A continuation body created with makeContProc (which is all of them)
