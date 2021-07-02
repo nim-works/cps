@@ -378,58 +378,44 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
   ## may require a jump to enter any handler.
   ##
   ## Only rewrite try with except branches.
-  result = newStmtList()
-
-  var
-    n = normalizingRewrites n
-    ex = normalizingRewrites ex
-
-  debug("cpsTryExcept", n, Original)
-
-  # merge all except branches into one
-  n = n.mergeExceptBranches(ex)
-
-  # grab the merged except branch and collect its body
-  let handlerBody = n.findChild(it.kind == nnkExceptBranch)[0]
-
-  let handler = makeContProc(genSym(nskProc, "Except"), cont, handlerBody)
-
-  # add our handler before the body
-  result.add:
-    # make the handler uses the exception `ex` as its current exception
-    newCall(bindSym"cpsWithException", cont, ex):
-      handler
-
-  # write a try-except clause to wrap on all children continuations so that
-  # they jump to the handler upon an exception
+  ##
   let
-    placeholder = genSym(nskUnknown, "placeholder")
-    tryTemplate = copyNimNode n
+    ex = normalizingRewrites ex
+    temp = nskUnknown.genSym"placeholder"
+    handler = nskProc.genSym"Except"
 
-  # add the placeholder as the body
-  tryTemplate.add placeholder
+  debugAnnotation cpsTryExcept, n:
+    # unwrap stmtlist and merge all except branches into one
+    it = it[0].mergeExceptBranches ex
 
-  # add an except node that captures the exception into `ex`, then
-  # jump to handler
-  let jumpBody = newStmtList()
-  jumpBody.add:
-    # captures the exception to ex
-    newAssignment(ex, newCall(bindSym"getCurrentException"))
-  jumpBody.add:
-    # jump to the handler
-    cont.tailCall(handler.name)
+    # write a try-except clause to wrap all child continuations so that
+    # they jump to the handler upon an exception
+    let newTry = copyNimNode it
 
-  # add this to our template as an except branch
-  tryTemplate.add:
-    nnkExceptBranch.newTree:
-      jumpBody
+    # add the temporary placeholder as the body
+    newTry.add temp
 
-  # wrap the try body and everything in it with the template
-  result.add n[0].wrapContinuationWith(cont, placeholder, tryTemplate)
+    # add an except branch to invoke the handler
+    newTry.add:
+      nnkExceptBranch.newTree:
+        newStmtList [
+          # capture the exception to ex
+          newAssignment(ex, newCall(bindSym"getCurrentException")),
+          # jump to the handler
+          cont.tailCall(handler)
+        ]
 
-  result = workaroundRewrites result
+    # the completed rewrite starts with adding our handler
+    let rewrote = newStmtList:
+      # the handler uses the exception `ex` as its current exception
+      newCall(bindSym"cpsWithException", cont, ex):
+        # the body of the handler is the merged except branch
+        makeContProc(handler, cont):
+          it.findChild(it.kind == nnkExceptBranch)[0]
 
-  debug("cpsTryExcept", result, Transformed, n)
+    it = rewrote.add:
+      # then swap the temporary placeholder with the original try body
+      wrapContinuationWith(it[0], cont, temp, newTry)
 
 macro cpsTryFinally(cont, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
