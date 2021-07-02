@@ -716,16 +716,12 @@ proc annotate(parent: var Env; n: NimNode): NimNode =
 
     of nnkVarSection, nnkLetSection:
       let section = expectVarLet nc
-      if section.val.isCpsCall or section.val.isCpsBlock: # XXX: temporary
+      if section.val.isCpsCall or section.val.isCpsBlock:
         let assign = section
         result.add: # shimming `let x = foo()` or `let (a, b) = bar()`
           env.shimAssign(assign.NimNode, assign.val):
             anyTail()
         return
-      elif section.val.isCpsBlock:
-        # this is supported by what we refer to as `expr flattening`
-        result.add:
-          nc.errorAst "cps only supports calls here"
       else:
         # add definitions into the environment
         env.localSection(section, result)
