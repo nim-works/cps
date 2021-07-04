@@ -16,7 +16,7 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   ## `cont` with the given body.
   let
     contParam = desym cont
-    contType = cont.typeInst
+    contType = cont.typeInst # XXX: funny thing that, we just desym'd cont
     contFormalParams = [contType, newIdentDefs(contParam.NimNode, contType)]
 
   result = newProcDef(name, contFormalParams)
@@ -46,8 +46,6 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   if result.body.firstReturn.isNil:
     # annotate it so that outer macros can fill in as needed.
     result.body.add newCpsPending()
-    {.cast(noSideEffect).}:
-      echo "makeContProc - newCpsPending: ", treeRepr result.body
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindName"cpsLift"
   result.addPragma "nimcall"
@@ -1117,8 +1115,6 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   if n.body.firstReturn.isNil:
     # fixes https://github.com/disruptek/cps/issues/145
     # by ensuring that we always rewrite termination
-    {.cast(noSideEffect).}:
-      echo "cpsTransformProc - newCpsPending: ", treeRepr n.body
     n.body.add newCpsPending()
 
   # tag the proc as a cps continuation

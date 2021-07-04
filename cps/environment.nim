@@ -517,7 +517,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
     newAssignment(c, newCall(bindName"trampoline", c))
 
   # do an easy static check, and then
-  if env.rs.typ != result.returnParam:
+  if env.rs.typ != asName(result.returnParam):
     result.body.add:
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"

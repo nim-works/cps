@@ -77,7 +77,12 @@ type
 
   TypeExpr* = distinct NormalizedNode
     ## opaque sum: see `TypeExprKinds`
-    ## the type part of a let or var definition or routine param
+    ## the type part of a let or var definition, routine param, or type def or
+    ## section.
+  TypeExprObj* = distinct TypeExpr
+    ## `nnkObjTy`
+  TypeExprRef* = distinct TypeExpr
+    ## `nnkRefTy`
 
   IdentDef* = distinct NormalizedNode
     ## currently this is nnkIdentDefs mostly in a var let section, in reality
@@ -111,6 +116,8 @@ type
 
   TypeSection* = distinct NormalizedNode
     ## `nnkTypeSection`
+  TypeDef* = distinct NormalizedNode
+    ## `nnkTypeDef`
 
   # Naming Convention Notes for Var and Let:
   # - first part of name is the Node, while the later parts add/narrow context
@@ -259,6 +266,7 @@ allowAutoDowngrade(RoutineParam, IdentDef)
 allowAutoDowngrade(LetIdentDef, VarLetIdentDef)
 allowAutoDowngrade(VarIdentDef, VarLetIdentDef)
 allowAutoDowngrade(ProcDef, RoutineDef)
+allowAutoDowngrade(TypeExprRef, TypeExpr)
 
 # fn-NormalizedNode
 
@@ -377,6 +385,7 @@ proc asNameAllowEmpty*(n: NimNode): Name =
   n.Name
 
 # fn-Name - construct various Name in various ways (ident/sym)
+
 proc asName*(n: string): Name =
   ## `nnkIdent` as `Name`
   (ident n).Name
@@ -417,7 +426,8 @@ proc desym*(n: Name): Name {.borrow.}
 proc resym*(fragment: NormalizedNode, sym, replacement: Name): NormalizedNode {.borrow.}
   ## replace `sym` in the AST `fragment` with the `replacement`
 
-func typeInst*(n: Name): NimNode {.deprecated: "A Name can be a bare ident and entirely".} =
+func typeInst*(n: Name): NimNode
+  {.deprecated: "A Name can be a bare ident and entirely".} =
   ## gets the type via `getTypeInst`
   getTypeInst n.NimNode
 
@@ -432,6 +442,12 @@ func eqIdent*(a: Name|NimNode, b: distinct Name|NimNode): bool =
   ## bridge eqIdent from macros
   macros.eqIdent(a.NimNode, b.NimNode)
 func eqIdent*(a: NormalizedNode, b: Name): bool {.borrow.}
+
+proc asName*(n: TypeExpr): Name =
+  ## coerce to a `Name`, or error
+  # if n.kind notin {nnkIdent, nnkSym}:
+  #   errorGot "not an ident or sym", n
+  n.Name
 
 # fn-ExprLike
 type
@@ -467,7 +483,24 @@ proc newCall*(n: string, args: NormalizedVarargs): NormalizedNode =
   ## create a new call, with `n` as and ident name, and a single arg
   result = newCall(asName(n), args)
 
+# fn-TypeSection
+
+proc asTypeSection*(n: NormalizedNode): TypeSection =
+  ## coerce to `TypeSection`, error out otherwise
+  if n.kind notin {nnkTypeSection}:
+    errorGot "not a type section", n
+  n.TypeSection
+
+# fn-TypeDef
+
+proc asTypeDef*(n: NormalizedNode): TypeDef =
+  ## coerce to `TypeDef`, error out otherwise
+  if n.kind notin {nnkTypeDef}:
+    errorGot "not a type def", n
+  n.TypeDef
+
 # fn-TypeExpr
+
 proc asTypeExpr*(n: NimNode): TypeExpr =
   ## coerce to `TypeExpr`, disallow `nnkEmpty`, error out otherwise
   if n.kind notin TypeExprKinds:
@@ -479,11 +512,28 @@ proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
     errorGot "not a type expression or empty", n
   n.TypeExpr
 
-proc newRefType*(n: Name): TypeExpr =
-  nnkRefTy.newTree(n.NimNode).TypeExpr
-
 proc `[]`*(n: TypeExpr, i: int): TypeExpr = TypeExpr n.NimNode[i]
   ## allow iteration through a TypeExpr, in case it's a tuple type with kids
+
+# fn-TypeExprObj
+
+proc asTypeExprObj*(n: NormalizedNode): TypeExprObj =
+  ## coerce to `TypeExprObj`, error out otherwise
+  if n.kind notin {nnkObjectTy}:
+    errorGot "not an object type expression", n
+  n.TypeExprObj
+
+# fn-TypeExprRef
+
+proc asTypeExprRef*(n: NormalizedNode): TypeExprRef =
+  ## coerce to `TypeExprRef`, error out otherwise
+  if n.kind notin {nnkRefTy}:
+    errorGot "not a ref type expression", n
+  n.TypeExprRef
+
+proc newRefType*(n: Name): TypeExprRef =
+  ## create a new ref type from `n`
+  nnkRefTy.newTree(n.NimNode).TypeExprRef
 
 # fn-PragmaAtom
 
@@ -815,7 +865,8 @@ proc asPragmaBlock*(n: NormalizedNode): PragmaBlock =
 # fn-PragmaHaver
 
 type
-  PragmaHaver* = RoutineDef | ProcDef | Call
+  PragmaHaver* = RoutineDef | ProcDef | Call | TypeExprObj | TypeExprRef |
+                 TypeDef
     ## abstract over things that have pragmas to provide a uniform interface
 
 func pragma*(n: PragmaHaver): PragmaLike =
@@ -827,6 +878,12 @@ func pragma*(n: PragmaHaver): PragmaLike =
       n.impl.pragma
     else:
       PragmaStmt newEmptyNormalizedNode()
+  elif n is TypeExprObj:
+    PragmaStmt n.NimNode[0]
+  elif n is TypeExprRef | TypeDef:
+    PragmaStmt n.NimNode.last
+  else:
+    {.error: "not all types have been defined".}
 
 func hasPragma*(n: PragmaHaver, s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
@@ -978,9 +1035,9 @@ proc desym*[T: ProcDef](n: T, sym: Name): T =
   ## desym the routine
   desym(n.NormalizedNode, sym.NimNode).T
 
-func returnParam*(n: ProcDef): NormalizedNode {.deprecated: "refactor to return TypeExpr or Name, depending upon rewrite invariants".} =
+func returnParam*(n: ProcDef): TypeExpr =
   ## the return param or empty if void
-  n.NimNode.params[0].NormalizedNode
+  n.NimNode.params[0].TypeExpr
 
 proc `returnParam=`*(n: ProcDef, ret: Name) =
   ## set the return param
@@ -1005,8 +1062,7 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
   ).ProcDef
   result.copyLineInfo n
 
-proc hasPragma*(n: NormalizedNode; s: static[string]): bool
-  {.deprecated: "convert to NormalizedNode or a sum type of pragma-havers".} =
+proc hasPragma*(n: NormalizedNode; s: static[string]): bool =
   ## `true` if the `n` holds the pragma `s`
   case n.kind
   of nnkPragma:
@@ -1014,11 +1070,11 @@ proc hasPragma*(n: NormalizedNode; s: static[string]): bool
   of RoutineNodes:
     result = asRoutineDef(n).hasPragma(s)
   of nnkObjectTy:
-    result = hasPragma(n[0], s)
+    result = asTypeExprObj(n).hasPragma(s)
   of nnkRefTy:
-    result = hasPragma(n.last, s)
+    result = asTypeExprRef(n).hasPragma(s)
   of nnkTypeDef:
-    result = hasPragma(n.last, s)
+    result = asTypeDef(n).hasPragma(s)
   of nnkTypeSection:
     result = anyIt(toSeq items(n), hasPragma(it, s))
   else:
