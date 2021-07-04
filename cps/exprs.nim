@@ -1,4 +1,4 @@
-import std/macros except newStmtList
+import std/macros except newStmtList, items, pairs
 import cps/[spec, normalizedast, help, rewrites]
 
 template cpsMustLift() {.pragma.} ## signify a code block that has to be lifted
@@ -11,9 +11,10 @@ proc newCpsMustLift(n: NormalizedNode): NormalizedNode =
       n
     )
 
-proc isCpsMustLift(n: NimNode): bool =
+proc isCpsMustLift(n: NormalizedNode): bool =
   ## Check whether `n` is a cpsMustLift block
-  n.kind == nnkPragmaBlock and n[0].len == 1 and n[0].hasPragma("cpsMustLift")
+  n.kind == nnkPragmaBlock and n[0].len == 1 and
+    asPragmaBlock(n).hasPragma("cpsMustLift")
 
 func hasCpsExpr(n: NormalizedNode): bool =
   ## Returns whether `n` has a cps block acting as an expression within it
@@ -34,7 +35,7 @@ func hasCpsExpr(n: NormalizedNode): bool =
     of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
        nnkAsgn, CallNodes, nnkDiscardStmt, nnkReturnStmt, nnkRaiseStmt:
       for child in n.items:
-        if child.NormalizedNode.hasCpsExpr:
+        if child.hasCpsExpr:
           return true
     of nnkExprColonExpr:
       result = n[1].hasCpsExpr
@@ -101,16 +102,14 @@ func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
       # can't handle our awesome nodes (our node binds to both
       # varargs and normal form of add).
       {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
-      NimNode:
-        filterExpr(n.last, transformer)
+      filterExpr(n.last, transformer)
   of nnkBlockStmt, nnkBlockExpr, nnkPragmaBlock:
     result = copyNimNode(n)
     # Copy the label/pragma list
     result.add copy(n[0])
     # Rewrite and add the body
     result.add:
-      NimNode:
-        filterExpr(n[1], transformer)
+      filterExpr(n[1], transformer)
   of nnkIfStmt, nnkIfExpr:
     # It appears that the type of the `if` expression remains if we
     # don't destroy it by creating a new node instead of copying and
@@ -121,7 +120,7 @@ func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
     for branch in n.items:
       result.add:
         rewriteElifOf:
-          NormalizedNode branch
+          branch
   of nnkCaseStmt:
     # It appears that the type of the `case` expression remains if we
     # don't destroy it by creating a new node instead of copying and
@@ -144,8 +143,7 @@ func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
 
     # Rewrite the body
     result.add:
-      NimNode:
-        filterExpr(n[0], transformer)
+      filterExpr(n[0], transformer)
 
     # Rewrite except/finally branches
     for idx in 1 ..< n.len:
@@ -160,8 +158,7 @@ func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
 
         # Rewrite and add the body
         newBranch.add:
-          NimNode:
-            filterExpr(branch.last, transformer)
+          filterExpr(branch.last, transformer)
 
         # Add the branch to the new try statement
         result.add newBranch
@@ -221,7 +218,7 @@ func isMutable(n: NormalizedNode): bool =
     result = n[1].isMutable
   else:
     for child in n.items:
-      if child.NormalizedNode.isMutable:
+      if child.isMutable:
         return true
 
 func isMutableLocation(location: NormalizedNode): bool =
@@ -238,7 +235,7 @@ func isMutableLocation(location: NormalizedNode): bool =
     result = location[0].isMutableLocation
   else:
     for child in location:
-      if child.NormalizedNode.isMutableLocation:
+      if child.isMutableLocation:
         return true
 
 func isSingleStatement(n: NormalizedNode): bool =
@@ -250,7 +247,7 @@ func isSingleStatement(n: NormalizedNode): bool =
   of ConvNodes, AccessNodes - AtomicNodes, ConstructNodes, nnkExprColonExpr:
     ## These are singular iff their operands are singular
     for child in n.items:
-      if not child.NormalizedNode.isSingleStatement:
+      if not child.isSingleStatement:
         return false
 
     result = true
@@ -261,13 +258,14 @@ func isSingleStatement(n: NormalizedNode): bool =
 func getMagic(n: NormalizedNode): string =
   ## Obtain the magic name of the call `n`
   if n.kind in CallNodes:
-    if n[0].kind == nnkSym:
-      let impl = getImpl(n[0])
+    var n = asCall(n)
+    if n.canGetImpl:
+      let impl = n.impl
       if impl.hasPragma("magic"):
         for pragma in impl.pragma.items:
           case pragma.kind
           of nnkExprColonExpr:
-            if pragma[0].eqIdent("magic"):
+            if pragma.getPragmaName.eqIdent("magic"):
               return pragma.last.strVal
           else:
             discard
@@ -401,7 +399,7 @@ func lastCpsExprAt(n: NormalizedNode): int =
   ## -1 is returned if there are no cps expression within `n`
   result = -1
   for idx, child in n.pairs:
-    if child.NormalizedNode.hasCpsExpr:
+    if child.hasCpsExpr:
       result = idx
 
 func annotate(n: NormalizedNode): NormalizedNode =
@@ -411,7 +409,6 @@ func annotate(n: NormalizedNode): NormalizedNode =
   result = copyNimNode(n)
 
   for idx, child in n.pairs:
-    let child = NormalizedNode child
     if child.hasCpsExpr:
       case child.kind
       of nnkVarSection, nnkLetSection:
@@ -665,7 +662,7 @@ func annotate(n: NormalizedNode): NormalizedNode =
               body
 
           for idx, gc in child.pairs:
-            let grandchild = NormalizedNode gc
+            let grandchild = gc
             if child.kind == nnkObjConstr and idx == 0:
               # The first node of an object constructor needs to be copied
               # verbatim since it has to be a type symbol and wrapping it in any

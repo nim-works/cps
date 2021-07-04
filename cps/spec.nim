@@ -46,27 +46,25 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
-proc filterPragma*(ns: seq[NimNode], liftee: NimNode): NimNode =
+proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormalizedNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
-  var pragmas = nnkPragma.newNimNode
-  for p in filterIt(ns, it.getPragmaName != liftee):
-    pragmas.add p
-    copyLineInfo(pragmas, p)
-  if len(pragmas) > 0:
-    pragmas
-  else:
-    newEmptyNode()
+  newPragmaStmt(filterIt(ns, it.getPragmaName != liftee))
 
-proc stripPragma*(n: NimNode; s: static[string]): NimNode =
+proc stripPragma*(n: PragmaStmt, s: static[string]): PragmaStmt =
+  ## filter a pragma with the matching name
+  PragmaStmt filterPragma(toSeq items(asPragmaStmt(n)), bindName(s))
+
+proc stripPragma*(n: NormalizedNode; s: static[string]): NormalizedNode =
   ## filter a pragma with the matching name from various nodes
   case n.kind
   of nnkPragma:
-    result = filterPragma(toSeq n, bindSym(s))
+    result = filterPragma(toSeq items(asPragmaStmt(n)), bindName(s))
   of RoutineNodes:
+    let n = asRoutineDef(n)
     n.pragma = stripPragma(n.pragma, s)
     result = n
   of nnkObjectTy:
-    n[0] = filterPragma(toSeq n[0], bindSym(s))
+    n[0] = filterPragma(toSeq items(asPragmaStmt(n[0])), bindName(s))
     result = n
   of nnkRefTy:
     n[^1] = stripPragma(n.last, s)
@@ -75,7 +73,7 @@ proc stripPragma*(n: NimNode; s: static[string]): NimNode =
     n[^1] = stripPragma(n.last, s)
     result = n
   of nnkTypeSection:
-    result = newNimNode(n.kind, n)
+    result = NormalizedNode newNimNode(n.kind, n)
     for item in items(n):
       result.add stripPragma(item, s)
   else:
@@ -87,15 +85,15 @@ proc hash*(n: NimNode): Hash =
   h = h !& hash(repr n)
   result = !$h
 
-func newCpsPending*(): NormalizedNode =
+func newCpsPending*(): PragmaStmt =
   ## Produce a {.cpsPending.} annotation
-  nnkPragma.newTree(bindSym"cpsPending").NormalizedNode
+  newPragmaStmt(bindName"cpsPending")
 
 func isCpsPending*(n: NormalizedNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
-  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsPending")
+  n.kind == nnkPragma and n.len == 1 and n.asPragmaStmt.hasPragma("cpsPending")
 
-func newCpsBreak*(n: NimNode; label: NormalizedNode = newNilLit().NormalizedNode): NormalizedNode =
+func newCpsBreak*(n: NormalizedNode, label: NormalizedNode = newNilLit().NormalizedNode): NormalizedNode =
   ## Produce a {.cpsBreak.} annotation with the given label
   let label =
     if label.kind == nnkEmpty:
@@ -103,56 +101,51 @@ func newCpsBreak*(n: NimNode; label: NormalizedNode = newNilLit().NormalizedNode
     else:
       label
 
-  nnkPragma.newNimNode(n).NormalizedNode.add:
-    newColonExpr(bindName"cpsBreak", label)
+  newPragmaStmtWithInfo(n, newPragmaColonExpr("cpsBreak", label))
 
 proc isCpsBreak*(n: NormalizedNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
-  # isCpsBreak(n.NimNode)
-  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsBreak")
+  n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsBreak")
 
 func newCpsContinue*(n: NormalizedNode): NormalizedNode =
   ## Produce a {.cpsContinue.} annotation
-  nnkPragma.newNimNode(n).NormalizedNode.add:
-    NormalizedNode bindName"cpsContinue"
+  newPragmaStmtWithInfo(n, asPragmaAtom(bindName"cpsContinue"))
 
-proc isCpsContinue*(n: NormalizedNode): bool =
+func isCpsContinue*(n: NormalizedNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
-  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsContinue")
+  n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsContinue")
 
 proc breakLabel*(n: NormalizedNode): NormalizedNode =
   ## Return the break label of a `break` statement or a `cpsBreak` annotation
-  let r =
-    if n.isCpsBreak():
-      if n[0].len > 1 and n[0][1].kind != nnkNilLit:
-        n[0][1]
-      else:
-        newEmptyNormalizedNode()
-    elif n.kind == nnkBreakStmt:
-      n[0]
+  if n.isCpsBreak():
+    if n[0].len > 1 and n[0][1].kind != nnkNilLit:
+      n[0][1]
     else:
-      raise newException(Defect, "this node is not a break: " & $n.kind)
-  r
+      newEmptyNormalizedNode()
+  elif n.kind == nnkBreakStmt:
+    n[0]
+  else:
+    raise newException(Defect, "this node is not a break: " & $n.kind)
 
 proc isCpsCont*(n: NormalizedNode): bool =
   ## Return whether the given procedure is a cps continuation
-  n.kind in RoutineNodes and n.hasPragma("cpsCont")
+  n.kind in RoutineNodes and n.asRoutineDef.hasPragma("cpsCont")
 
 proc getContSym*(n: NormalizedNode): Name =
   ## Retrieve the continuation symbol from `n`, provided that
   ## `n` is a cpsCont.
   if n.isCpsCont:
-    asProcDef(n).firstCallParam.name
+    asRoutineDef(n).firstCallParam.name
   else:
     nil.Name
 
 proc newCpsTerminate*(): NormalizedNode =
   ## Create a new node signifying early termination of the procedure
-  nnkPragma.newTree(bindSym"cpsTerminate").NormalizedNode
+  newPragmaStmt(bindName"cpsTerminate")
 
 proc isCpsTerminate*(n: NormalizedNode): bool =
   ## Return whether `n` is a cpsTerminate annotation
-  n.kind == nnkPragma and n.len == 1 and n.hasPragma("cpsTerminate")
+  n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsTerminate")
 
 proc isScopeExit*(n: NormalizedNode): bool =
   ## Return whether the given node signify a CPS scope exit
@@ -174,7 +167,7 @@ func matchCpsBreak*(label: NormalizedNode): NormalizedMatcher =
   ## create a matcher matching cpsBreak with the given label
   ## and cpsBreak without any label
   result =
-    proc (n: NormalizedNode): bool =
+    func (n: NormalizedNode): bool =
       if n.isCpsBreak:
         let breakLabel = n.breakLabel
         breakLabel.kind == nnkEmpty or breakLabel == label
@@ -192,16 +185,15 @@ func wrappedFinally*(n, final: NormalizedNode): NormalizedNode =
 
   # wrap the try-finally outside of `nc`
   result = copyNimNode n
-  result.add newStmtList(newTry)
-  result.add final
+  result.add(newStmtList(newTry), final)
 
-proc isVoodooCall*(n: NimNode): bool =
+proc isVoodooCall*(n: NormalizedNode): bool =
   ## true if this is a call to a voodoo procedure
   if not n.isNil and n.len > 0:
     if n.kind in nnkCallKinds:
-      let callee = n[0]
-      if not callee.isNil and callee.kind == nnkSym:
-        result = callee.getImpl.hasPragma "cpsVoodooCall"
+      let call = asCallKind(n)
+      if call.hasImpl:
+        result = call.impl.hasPragma "cpsVoodooCall"
 
 proc trampoline*[T: Continuation](c: T): T =
   ## This is the basic trampoline: it will run the continuation
@@ -211,18 +203,18 @@ proc trampoline*[T: Continuation](c: T): T =
     c = c.fn(c)
   result = T c
 
-proc isCpsCall*(n: NimNode): bool =
+proc isCpsCall*(n: NormalizedNode): bool =
   ## true if this node holds a call to a cps procedure
   if n.len > 0:
     if n.kind in CallNodes:
-      let callee = n[0]
-      if not callee.isNil and callee.kind == nnkSym:
+      let call = asCall(n)
+      if call.hasImpl:
         # what we're looking for here is a jumper; it could
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
-        result = callee.getImpl.hasPragma("cpsMustJump")
+        result = call.impl.hasPragma("cpsMustJump")
 
-proc isCpsBlock*(n: NimNode): bool =
+proc isCpsBlock*(n: NormalizedNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
@@ -246,11 +238,12 @@ proc isCpsBlock*(n: NimNode): bool =
   else:
     return false
 
-proc pragmaArgument*(n: NimNode; s: string): NimNode =
+proc pragmaArgument*(n: NormalizedNode; s: string): NormalizedNode =
   ## from foo() or proc foo() {.some: Pragma.}, retrieve Pragma
   case n.kind
   of nnkProcDef:
-    for n in n.pragma.items:
+    let p = asProcDef(n)
+    for n in p.pragma.items:
       case n.kind
       of nnkExprColonExpr:
         if $n[0] == s:
@@ -263,17 +256,19 @@ proc pragmaArgument*(n: NimNode; s: string): NimNode =
     if result.isNil:
       result = n.errorAst "failed to find expected " & s & " form"
   of nnkCallKinds:
-    result = pragmaArgument(getImpl n[0], s)
+    result = pragmaArgument(asCall(n).impl, s)
   else:
     result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
 
-proc bootstrapSymbol*(n: NimNode): NimNode =
+proc bootstrapSymbol*(n: NimNode): NormalizedNode =
   ## find the return type of the bootstrap
+  let n = NormalizedNode n
   case n.kind
   of {nnkProcDef} + nnkCallKinds:
     pragmaArgument(n, "cpsBootstrap")
   else:
-    newCall(ident"typeOf", n)
+    ## XXX: darn ambiguous calls
+    normalizedast.newCall("typeOf", n)
 
 proc enbasen*(n: NimNode): NimNode =
   ## find the parent type of the given symbol/type

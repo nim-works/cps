@@ -8,7 +8,7 @@ type
     ## variant of `NodeFilter` but normalizes the node
   Matcher* = proc(n: NimNode): bool
     ## A proc that returns whether a NimNode should be replaced
-  NormalizedMatcher* = proc(n: NormalizedNode): bool
+  NormalizedMatcher* = proc(n: NormalizedNode): bool {.noSideEffect.}
     ## A proc that returns whether a NimNode should be replaced
   NormalizedNode* = distinct NimNode
     ## a normalized node, but this should not be useed directly, use a
@@ -55,7 +55,7 @@ proc errorAst*(s: string, info: NimNode = nil): NormalizedNode =
   if not info.isNil:
     result.NimNode[0].copyLineInfo info
 
-proc errorAst*(n: NimNode; s = "creepy ast"): NormalizedNode =
+proc errorAst*(n: NimNode|NormalizedNode; s = "creepy ast"): NormalizedNode =
   ## embed an error with a message,
   ## the line info is copied from the node
   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
@@ -65,11 +65,6 @@ proc desym*(n: NimNode): NimNode =
   if n.kind == nnkSym:
     result = ident(repr n)
     result.copyLineInfo n
-
-proc genField*(ident = ""): NimNode
-  {.deprecated: "pending https://github.com/nim-lang/Nim/issues/17851".} =
-  ## generate a unique field to put inside an object definition
-  desym genSym(nskField, ident)
 
 proc resymCall*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## this is used to rewrite continuation calls into their results
@@ -431,7 +426,7 @@ func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
       copyNimTree replacement
     else:
       nil
-  
+
   filter(n, replacer)
 func replace*(n: NimNode, match: NormalizedMatcher, replacement: NormalizedNode): NormalizedNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
@@ -453,6 +448,11 @@ func replace*(n: NormalizedNode, match: NormalizedMatcher, replacement: Normaliz
 template replace*(n, noob: NimNode; body: untyped): NimNode {.dirty.} =
   ## requires --define:nimWorkaround14447 so...  yeah.
   let match = proc(it {.inject.}: NimNode): bool = body
+  replace(n, match, noob)
+
+template replace*(n, noob: NormalizedNode; body: untyped): NormalizedNode {.dirty.} =
+  ## requires --define:nimWorkaround14447 so...  yeah.
+  let match = proc(it {.inject.}: NormalizedNode): bool = body
   replace(n, match, noob)
 
 proc multiReplace*(n: NimNode;

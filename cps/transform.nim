@@ -46,6 +46,8 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   if result.body.firstReturn.isNil:
     # annotate it so that outer macros can fill in as needed.
     result.body.add newCpsPending()
+    {.cast(noSideEffect).}:
+      echo "makeContProc - newCpsPending: ", treeRepr result.body
   # tell cpsFloater that we want this to be lifted to the top-level
   result.addPragma bindName"cpsLift"
   result.addPragma "nimcall"
@@ -120,7 +122,7 @@ proc restoreBreak(n: NormalizedNode, label: NormalizedNode = newEmptyNode().Norm
     if match(n):
       let m = newNimNode(nnkBreakStmt, n).add:
                 n.breakLabel
-      m.NormalizedNode
+      m
     else:
       nil
 
@@ -130,8 +132,8 @@ proc restoreContinue(n: NormalizedNode): NormalizedNode =
   ## restore {.cpsContinue.} into continue statements
   proc restorer(n: NormalizedNode): NormalizedNode =
     if n.isCpsContinue:
-      newNimNode(nnkContinueStmt, n).NormalizedNode.add:
-        newEmptyNode().NormalizedNode
+      newNimNode(nnkContinueStmt, n).add:
+        newEmptyNormalizedNode()
     else:
       nil.NormalizedNode
 
@@ -172,16 +174,12 @@ macro cpsWhile(cont, cond, n: typed): untyped =
     var body = newStmtList:
                 nnkIfStmt.newTree(  # a conditional test up top,
                   nnkElifBranch.newTree [cond, it.NimNode], # runs the body if it's true,
-                  nnkElse.newTree newCpsBreak(n)            # else, runs a break clause
+                  nnkElse.newTree newCpsBreak(NormalizedNode n) # else, runs a break clause
                 ).NormalizedNode
-    let
-      m1: NormalizedMatcher = isCpsPending
-      m2: NormalizedMatcher = isCpsContinue
-      m3: NormalizedMatcher = matchCpsBreak()
     body = body.multiReplace(
-      (m1, tail),
-      (m2, tail),
-      (m3, newCpsPending())
+      (NormalizedMatcher isCpsPending, tail),
+      (NormalizedMatcher isCpsContinue, tail),
+      (matchCpsBreak(), NormalizedNode newCpsPending())
     )
     body.copyLineInfo n
     # we return the while proc and a tailcall to enter it the first time
@@ -353,8 +351,8 @@ macro cpsWithException(cont, ex, n: typed): untyped =
           nextCont = result.getContSym()
           ex =
             # In case the continuation is a sym, resym it to this continuation
-            if cont.kind == nnkSym:
-              ex.resym(cont, nextCont.NimNode)
+            if asName(cont).isSymbol:
+              ex.resym(asName(cont), nextCont)
             else:
               ex
 
@@ -368,14 +366,14 @@ macro cpsWithException(cont, ex, n: typed): untyped =
           # of the procedure and thus will bind to symbols outside if they
           # are not already bound.
           result.pragma.add:
-            newCall(bindSym"cpsHasException", nextCont.NimNode, ex)
+            newCall(bindName"cpsHasException", nextCont, ex)
 
         result.body =
           # Put the body in a try-except statement to clear `ex` in the case
           # of an unhandled exception.
           nnkTryStmt.newTree(
             # Rewrites the inner continuations, then use it as the try body.
-            result.body.NormalizedNode.withException(nextCont, ex.NormalizedNode),
+            result.body.NormalizedNode.withException(nextCont, ex),
             # On an exception not handled by the body.
             nnkExceptBranch.newTree(
               macros.newStmtList(
@@ -551,7 +549,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # Add this leg to the AST
     it.add:
       # Make it uses `ex` as its current exception and clear it on exit
-      newCall(bindSym"cpsWithException", cont.NimNode, ex):
+      newCall(bindName"cpsWithException", cont, ex):
         reraise
 
     # Now we create a try-except template to catch any unhandled exception that
@@ -583,7 +581,7 @@ func newAnnotation(env: Env; n: NormalizedNode; a: static[string]): NormalizedNo
   result.copyLineInfo n
   result.add(NormalizedNode env.first)
 
-proc setupChildContinuation(env: var Env; call: NimNode): (Name, NimNode) =
+proc setupChildContinuation(env: var Env; call: Call): (Name, NormalizedNode) =
   ## create a new child continuation variable and add it to the
   ## environment.  return the child's symbol and its environment type.
   let child = genSymVar"child"
@@ -591,7 +589,7 @@ proc setupChildContinuation(env: var Env; call: NimNode): (Name, NimNode) =
   env.localSection newIdentDef(child, etype.TypeExpr)
   result = (child, etype)
 
-proc shimAssign(env: var Env; store, call, tail: NormalizedNode): NormalizedNode =
+proc shimAssign(env: var Env; store: NormalizedNode, call: Call, tail: NormalizedNode): NormalizedNode =
   ## this rewrite supports `x = contProc()` and `let x = contProc()`
   # create the unshimmed assignment
   var assign = newStmtList()
@@ -646,14 +644,18 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
 
   # the result is a copy of the current node
   result = copyNimNode n
-  result.doc "annotate at " & n.lineAndFile
+  result.doc "start annotate at " & n.lineAndFile
+
+  template endAndReturn() {.dirty.} =
+    ## this "wraps" the returned AST in an end comment for easier debugging
+    result.doc "end annotate at " & n.lineAndFile
+    return
 
   # we're going to iterate over the (non-comment) children
   for i, nc in n.pairs:
     if nc.isNil:
       result.add nc
       continue
-    let nc = nc.NormalizedNode
 
     template anyTail(): untyped {.dirty.} =
       if i < n.len - 1:
@@ -666,7 +668,8 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
       # if its direct parent is not a try statement
       if n.kind != nnkTryStmt:
         var jumpCall: NimNode
-        if nc.len > 0 and (getImpl nc[0]).hasPragma"cpsBootstrap":
+        let nc = asCall(nc)
+        if nc.len > 0 and nc.impl.hasPragma"cpsBootstrap":
           jumpCall = env.newAnnotation(nc, "cpsContinuationJump")
           let (child, _) = setupChildContinuation(env, nc)
           jumpCall.add env.annotate(nc)
@@ -676,7 +679,7 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
           jumpCall.add env.annotate(nc)
         jumpCall.add env.annotate(anyTail())
         result.add jumpCall
-        return
+        endAndReturn()
       else:
         # otherwise we wrap the child in a statement list and
         # run annotate on it.
@@ -720,7 +723,7 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
             # subsequent siblings
             env.annotate newStmtList(n[i+1..^1])
           result.add jumpCall
-          return
+          endAndReturn()
 
     case nc.kind
     of nnkReturnStmt:
@@ -731,14 +734,14 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
       result.add:
         env.rewriteReturn:
           env.annotate nc
-      return
+      endAndReturn()
 
     of nnkVarSection, nnkLetSection:
       let section = asVarLet nc
       if section.val.isCpsCall or section.val.isCpsBlock:
         let assign = section
         result.add: # shimming `let x = foo()` or `let (a, b) = bar()`
-          env.shimAssign(assign, assign.val):
+          env.shimAssign(assign, asCall(assign.val)):
             anyTail()
         return
       else:
@@ -749,11 +752,11 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
       if nc.last.isCpsCall:
         result.add:
           if nc.len >= 2:
-            env.shimAssign(nc[0], nc[1]):     # shimming `x = foo()`
+            env.shimAssign(nc[0], asCall(nc[1])):     # shimming `x = foo()`
               anyTail()
           else:
             nc.errorAst "i expected at least two kids on an nkAsgn"
-        return
+        endAndReturn()
       elif nc.last.isCpsBlock:
         result.add:
           nc.errorAst "cps only supports calls here"
@@ -789,7 +792,7 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
         jumpCall.add:
           env.annotate newStmtList(nc[1])
         result.add jumpCall
-        return
+        endAndReturn()
       else:
         # this is not a cps block, so all the break
         # statements should be preserved
@@ -805,7 +808,7 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
         # add body
         jumpCall.add env.annotate newStmtList(nc[1])
         result.add jumpCall
-        return
+        endAndReturn()
       else:
         # this is not a cps block, so all the break and
         # continue statements should be preserved
@@ -835,7 +838,7 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
         jumpCall.add:
           newStmtList env.annotate(tryBody)   # try body
         result.add jumpCall
-        return
+        endAndReturn()
       else:
         # try statement with no cps complications
         result.add env.annotate(nc)
@@ -843,6 +846,7 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
     # not a statement cps is interested in
     else:
       result.add env.annotate(nc)
+  endAndReturn()
 
 macro cpsResolver(T: typed, n: typed): untyped =
   ## resolve any left over cps control-flow annotations
@@ -859,10 +863,11 @@ macro cpsResolver(T: typed, n: typed): untyped =
 
   # grabbing the first argument to the proc as an identifier
   let
-    n = asProcDef(n)
+    n = asProcDef(NormalizedNode n)
+      ## we assume `n` is normalized as cpsResolver runs after other rewrites
     cont = desym n.firstCallParam.name
 
-  debugAnnotation cpsResolver, n:
+  debugAnnotation cpsResolver, n.NimNode:
     # replace all `pending` and `terminate` with the end of continuation
     it = replace(it, proc(x: NormalizedNode): bool = x.isCpsPending or x.isCpsTerminate):
       if n.firstReturn.isNil:
@@ -874,14 +879,15 @@ macro cpsResolver(T: typed, n: typed): untyped =
 
 macro cpsFloater(n: typed): untyped =
   ## float all `{.cpsLift.}` to top-level
-  proc floater(n: NimNode): NimNode =
+  let n = NormalizedNode n
+  proc floater(n: NormalizedNode): NormalizedNode =
     var floated = newStmtList()
-    proc float(n: NimNode): NormalizedNode =
+    proc float(n: NormalizedNode): NormalizedNode =
       if not n.isNil and n.hasPragma("cpsLift"):
         var n = n.stripPragma("cpsLift")
         floated.add:
           floater n
-        result = newEmptyNode().NormalizedNode
+        result = newEmptyNormalizedNode()
     result = newStmtList [floated, filter(n, float)]
 
   result = floater:
@@ -905,7 +911,9 @@ macro cpsManageException(n: typed): untyped =
       # If `n` is a continuation with exception
       if not hasException.isNil:
         # Create a copy of this continuation and rename it
-        let inner = clone(n.ProcDef, n.body)
+        let
+          n = ProcDef n
+          inner = clone(n, n.body)
         inner.name = genSymProc("Managed_" & inner.name.strVal)
         # Copy the continuation pragmas, but remove the "has exception" tag
         inner.pragma = n.pragma.stripPragma("cpsHasException")
@@ -915,24 +923,25 @@ macro cpsManageException(n: typed): untyped =
         # Make an another clone, but with an empty body instead
         #
         # This will be the manager and will replace `n`
-        result = clone(n.ProcDef, newStmtList())
+        let c = clone(n, newStmtList())
+
         # Obtain the continuation name to replace it
-        result.name = n.name
+        c.name = n.name
         # Take its pragmas too, but without cpsHasException, of course
-        result.pragma = n.pragma.stripPragma("cpsHasException")
+        c.pragma = n.pragma.stripPragma("cpsHasException")
 
         # Desym the continuation symbol to detach it from the inner
         # continuation
-        result.params = n.params.replace((desym n.getContSym).NimNode):
-          it == n.getContSym.NimNode
+        c.formalParams = FormalParams:
+          n.formalParams.replace((desym n.getContSym)):
+            it == n.getContSym
 
         # Now let's go down to business
         # Add the inner continuation inside the manager
-        # XXX: work around converters and ambiguous calls due to varargs
-        result.body.add cProcDefToNimNode(inner)
+        c.body.add inner
 
         let
-          cont = result.getContSym
+          cont = c.getContSym
           innerFn = inner.name.NimNode
 
           # Extract the continuation symbol from the annotation
@@ -942,7 +951,7 @@ macro cpsManageException(n: typed): untyped =
           ex = hasException[2].NormalizedNode.resym(exCont, cont)
 
         # Add the manager itself
-        result.body.add:
+        c.body.add:
           NormalizedNode:
             genAst(cont = cont.NimNode, ex = ex.NimNode, innerFn, result = ident"result"):
               # Save the old exception from the enviroment
@@ -964,6 +973,7 @@ macro cpsManageException(n: typed): untyped =
                 # make `oldException` as `e`'s parent, preserving the
                 # exception stack outside of CPS
                 raise e
+        result = c
 
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
@@ -1028,7 +1038,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # keep the original symbol of the proc
-  let originalProcSym = n[0]
+  let originalProcSym = asName(n[0])
   # make the AST easier for us to consume
   var n = normalizeProcDef n
   # establish a new environment with the supplied continuation type;
@@ -1042,11 +1052,11 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   # add parameters into the environment
   for defs in n.callingParams:
     if defs.typ.kind == nnkVarTy:
-      error "cps does not support var parameters", n
+      errorGot "cps does not support var parameters", n
     env.localSection(defs)
 
   # make a name for the new procedure that won't clash
-  let name = genSym(nskProc, $n.name)
+  let name = genSymProc($n.name)
 
   # we can't mutate typed nodes, so copy ourselves
   n = clone n
@@ -1080,11 +1090,11 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
 
   # do some pruning of these typed trees.
   for p in [booty, n]:
-    while len(p) > 7: p.del(7)     # strip out any extra result field
+    while len(p) > 7: p.NimNode.del(7)     # strip out any extra result field
 
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
-  n.params = nnkFormalParams.newTree(T, env.firstDef)
+  n.formalParams = newFormalParams(asTypeExpr(T), env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
   body.introduce {Coop, Pass, Trace, Head, Tail, Alloc, Dealloc}
@@ -1107,10 +1117,12 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   if n.body.firstReturn.isNil:
     # fixes https://github.com/disruptek/cps/issues/145
     # by ensuring that we always rewrite termination
+    {.cast(noSideEffect).}:
+      echo "cpsTransformProc - newCpsPending: ", treeRepr n.body
     n.body.add newCpsPending()
 
   # tag the proc as a cps continuation
-  n.pragma.add bindSym"cpsCont"
+  n.pragma.add bindName"cpsCont"
 
   # run other stages
   {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
@@ -1144,11 +1156,11 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   # before they enter cps, so we don't need to care about those.
   #
   # TODO: we should track down why these hints occur.
-  result = NormalizedNode:
-    quote:
-      {.push hint[ConvFromXtoItselfNotNeeded]: off.}
-      `result`
-      {.pop.}
+  # result = NormalizedNode:
+  #   quote:
+  #     {.push hint[ConvFromXtoItselfNotNeeded]: off.}
+  #     `result`
+  #     {.pop.}
 
   result = workaroundRewrites result
 

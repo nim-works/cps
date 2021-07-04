@@ -25,18 +25,18 @@ type
     Head    = "head"
     Tail    = "tail"
 
-proc introduce*(hook: Hook; n: NimNode) =
+proc introduce*(hook: Hook; n: NormalizedNode) =
   ## introduce a hook into the given scope whatfer later use therein
   var n = n
   case n.kind
   of nnkStmtList:
     n.insert(0, nnkMixinStmt.newTree ident($hook))
   of nnkProcDef:
-    introduce hook, n.body       # TODO: maybe some pragmas at some point?
+    introduce hook, asRoutineDef(n).body # TODO: maybe a pragmas at some point?
   else:
     n.insert(0, n.errorAst "you cannot add a " & $hook & " to a " & $n.kind)
 
-proc introduce*(n: NimNode; hooks: set[Hook]) =
+proc introduce*(n: NormalizedNode; hooks: set[Hook]) =
   ## convenience to introduce a set of hooks
   for hook in hooks.items:
     hook.introduce n

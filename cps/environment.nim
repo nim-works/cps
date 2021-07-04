@@ -242,7 +242,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
       if n.kind == nnkVarTy: n[0] else: n
 
   let
-    field = asName(genField def.name.strVal)
+    field = genField def.name.strVal
     value = newVarLetIdentDef(kind, def.name, stripVar(def.typ), def.val)
     # we stripVar to ident: <no var> type = default
   e = e.set(field, value)
@@ -420,7 +420,7 @@ proc genException*(e: var Env): NimNode =
   ## generates a new symbol of type ref Exception, then put it in the env.
   ##
   ## returns the access to the exception symbol from the env.
-  let ex = asName(genField("ex"))
+  let ex = genField("ex")
   e = e.set ex:
     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
@@ -459,7 +459,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
           `()`(trampoline c)
       {.pop.}
 
-proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
+proc createWhelp*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
   ## the whelp needs to create a continuation
   # XXX: remove NimNode
   let resultName = asName("result")
@@ -484,7 +484,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
   for defs in result.callingParams:
     result = desym(result, defs.name)
 
-proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
+proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   # XXX: remove NimNode
   result = clone(n, newStmtList())
@@ -534,12 +534,12 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NimNode): ProcDef =
             newDotExpr(env.castToChild(c), env.rs.name))
         ]
 
-proc rewriteVoodoo*(env: Env; n: NimNode): NimNode =
+proc rewriteVoodoo*(env: Env; n: NormalizedNode): NormalizedNode =
   ## Rewrite non-yielding cpsCall calls by inserting the continuation as
   ## the first argument
-  proc voodoo(n: NimNode): NimNode =
+  proc voodoo(n: NormalizedNode): NormalizedNode =
     if n.isVoodooCall:
       result = n.copyNimTree
       result[0] = desym result[0]
-      result.insert(1, env.first.NimNode)
+      result.insert(1, env.first.NormalizedNode)
   result = filter(n, voodoo)

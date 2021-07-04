@@ -1,4 +1,4 @@
-import std/macros except newStmtList
+import std/macros except newStmtList, items
 
 import cps/[spec, hooks, normalizedast]
 
@@ -10,7 +10,7 @@ proc firstReturn*(p: NormalizedNode): NormalizedNode =
     result = p
   of nnkTryStmt, nnkStmtList, nnkStmtListExpr:
     for child in p.items:
-      result = child.NormalizedNode.firstReturn
+      result = child.firstReturn
       if not result.isNil:
         break
   of nnkBlockStmt, nnkBlockExpr, nnkFinally, nnkPragmaBlock:
@@ -28,7 +28,7 @@ proc makeReturn*(n: NormalizedNode): NormalizedNode =
         n             # what we're saying here is, don't hook Coop on magics
       else:
         hook(Coop, n) # but we will hook Coop on child continuations
-    nnkReturnStmt.newNimNode(n).add(toAdd).NormalizedNode
+    nnkReturnStmt.newNimNode(n).add(toAdd)
   else:
     n
 
@@ -96,7 +96,7 @@ proc jumperCall*(cont, to: Name; via: NormalizedNode): NormalizedNode =
   ## The `via` argument is expected to be a cps jumper call.
   let jump = copyNimTree via
   # we may need to insert an argument if the call is magical
-  if getImpl(jump[0]).hasPragma "cpsMagicCall":
+  if jump.asCall.impl.hasPragma "cpsMagicCall":
     jump.insert(1, cont.NimNode)
   # we need to desym the jumper; it is currently sem-ed to the
   # variant that doesn't take a continuation.

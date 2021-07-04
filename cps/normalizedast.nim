@@ -4,7 +4,7 @@ from std/sequtils import anyIt, toSeq
 from std/typetraits import distinctBase
 
 from cps/rewrites import NormalizedNode, normalizingRewrites, replace,
-                         desym, resym
+                         desym, resym, resymCall
 
 export NormalizedNode
 
@@ -26,7 +26,7 @@ export NormalizedNode
 #
 # ## Syntax vs Semantic Grammar
 # More about the types, the AST in Nim as exposed by macros is a reflection of
-# a syntax tree and grammar, for untyped ASTs especially, this is entirely
+# a syntax tree and grammar, for untyped ASTs especially this is entirely
 # appropriate. Normalized AST is a more of a semantic grammar and as such
 # attempts to provide higher level types over top the typical AST nodes one
 # might expect. The little insight to take away is that semantics of a language
@@ -72,6 +72,9 @@ type
   Sym* = distinct Name
     ## nnkSym
 
+  DotExpr* = distinct NormalizedNode
+    ## nnkDotExpr
+
   TypeExpr* = distinct NormalizedNode
     ## opaque sum: see `TypeExprKinds`
     ## the type part of a let or var definition or routine param
@@ -81,11 +84,33 @@ type
     ## these are also for routine and generic param definitions. A normalized
     ## IdentDef should only have one identifier.
 
-  ProcDef* = distinct NormalizedNode
+  RoutineDef* = distinct NormalizedNode
+    ## any kind under `macros.RoutineNodes` which has been normalized
+  ProcDef* = distinct RoutineDef
     ## an nnkProcDef node which has been normalized
 
+  FormalParams* = distinct NormalizedNode
+    ## formal params for a routine, includes return param, then calling params
   RoutineParam* = distinct IdentDef
     ## each calling params of proc/func/etc definition is an nnkIdentDefs
+
+  Call* = distinct NormalizedNode
+    ## opaque sum: call node of some variety, see `macros.CallNodes`
+
+  Pragma* = distinct NormalizedNode
+    ## opaque sum: `PragmaStmt`, `PragmaBlock`, and `PragmaExpr`
+  PragmaStmt* = distinct Pragma
+    ## an nnkPragma node, contains 0 or more child `PragmaAtom`
+  PragmaBlock* = distinct Pragma
+    ## an nnkPragmaBlock, like `{.cast(noSideEffect).}: ...`
+  PragmaExpr* = distinct Pragma
+    ## an nnkPragmaExpr, such as `foo{.praggy, maggy.}`
+
+  PragmaAtom* = distinct NormalizedNode
+    ## opaque sum: a single pragma expressions (eg: atom, colon, call, ...)
+
+  TypeSection* = distinct NormalizedNode
+    ## `nnkTypeSection`
 
   # Naming Convention Notes for Var and Let:
   # - first part of name is the Node, while the later parts add/narrow context
@@ -147,6 +172,10 @@ func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
   ## useful for error messages
   error msg & ", got:\n" & repr(got), n
 
+func errorGot*(msg: string, n: NormalizedNode, got: string = repr(n)) =
+  ## useful for error messages
+  errorGot(msg, n, got)
+
 proc normalizeProcDef*(n: NimNode): ProcDef =
   ## ensure this is a normalized procd definition
   expectKind(n, nnkProcDef)
@@ -170,36 +199,6 @@ const
 
   ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
     ## AST nodes for construction operations
-
-proc getPragmaName*(n: NimNode): NimNode =
-  ## retrieve the symbol/identifier from the child node of a nnkPragma
-  case n.kind
-  of nnkCall, nnkExprColonExpr:
-    n[0]
-  else:
-    n
-
-func hasPragma*(n: NimNode; s: static[string]): bool =
-  ## `true` if the `n` holds the pragma `s`
-  case n.kind
-  of nnkPragma:
-    for p in n.items:
-      # just skip ColonExprs, etc.
-      result = p.getPragmaName.eqIdent s
-      if result:
-        break
-  of RoutineNodes:
-    result = hasPragma(n.pragma, s)
-  of nnkObjectTy:
-    result = hasPragma(n[0], s)
-  of nnkRefTy:
-    result = hasPragma(n.last, s)
-  of nnkTypeDef:
-    result = hasPragma(n.last, s)
-  of nnkTypeSection:
-    result = anyIt(toSeq items(n), hasPragma(it, s))
-  else:
-    result = false
 
 # Converters - to reduce the conversion spam
 
@@ -225,15 +224,24 @@ defineToNimNodeConverter(NormalizedNode)
 defineToNimNodeConverter(IdentDef)
 defineToNimNodeConverter(Ident)
 defineToNimNodeConverter(VarSection)
-defineToNimNodeConverter(ProcDef)
+defineToNimNodeConverter(RoutineDef)
 
 # all the types that can convert down to `NormalizedNode`
 allowAutoDowngradeNormalizedNode(Name)
 allowAutoDowngradeNormalizedNode(TypeExpr)
 
+allowAutoDowngradeNormalizedNode(Call)
+
+allowAutoDowngradeNormalizedNode(PragmaStmt)
+allowAutoDowngradeNormalizedNode(PragmaAtom)
+
 allowAutoDowngradeNormalizedNode(IdentDef)
 
+allowAutoDowngradeNormalizedNode(RoutineDef)
 allowAutoDowngradeNormalizedNode(ProcDef)
+
+allowAutoDowngradeNormalizedNode(FormalParams)
+allowAutoDowngradeNormalizedNode(RoutineParam)
 
 allowAutoDowngradeNormalizedNode(VarSection)
 allowAutoDowngradeNormalizedNode(LetSection)
@@ -250,6 +258,7 @@ allowAutoDowngrade(IdentDefVar, IdentDef)
 allowAutoDowngrade(RoutineParam, IdentDef)
 allowAutoDowngrade(LetIdentDef, VarLetIdentDef)
 allowAutoDowngrade(VarIdentDef, VarLetIdentDef)
+allowAutoDowngrade(ProcDef, RoutineDef)
 
 # fn-NormalizedNode
 
@@ -284,22 +293,18 @@ func last*(n: NormalizedNode): NormalizedNode {.borrow.}
 func kind*(n: NormalizedNode): NimNodeKind {.borrow.}
   ## the kind (`NimNodeKind`) of the underlying `NimNode`
 
-proc add*(f, c: NormalizedNode): NormalizedNode {.discardable.} =
+proc add*(f: NimNode|NormalizedNode, c: NormalizedNode): NormalizedNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
-  f.NimNode.add(c.NimNode).NormalizedNode
+  NormalizedNode:
+    f.NimNode.add(c.NimNode)
 proc add*(f: NormalizedNode, cs: NormalizedVarargs): NormalizedNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
   for c in cs:
     f.add(c)
   f
-proc add*(f: NimNode, c: NormalizedNode): NimNode {.borrow, discardable.}
-  ## hopefully this fixes ambiguous call issues
 
-proc newStmtList*(stmts: NormalizedVarargs): NormalizedNode =
-  ## create a new normalized statement
-  result = macros.newStmtList().NormalizedNode
-  for s in stmts:
-    result.NimNode.add s.NimNode
+proc getImpl*(n: NormalizedNode): NormalizedNode {.borrow.}
+  ## the implementaiton of a normalized node should be
 
 # TODO - restrict these to only valid types
 proc `[]`*(n: NormalizedNode; i: int): NormalizedNode {.borrow.}
@@ -313,6 +318,33 @@ proc `[]=`*(n: NormalizedNode; i: int; child: NormalizedNode) {.borrow.}
   ## set the `i`'th child of a normalized node to a normalized child
 proc `[]=`*(n: NormalizedNode; i: BackwardsIndex; child: NormalizedNode) {.borrow.}
   ## set the `i`'th child of a normalized node to a normalized child
+
+proc getPragmaName*(n: NimNode): NimNode {.deprecated: "Replace with Pragma version".} =
+  ## retrieve the symbol/identifier from the child node of a nnkPragma
+  case n.kind
+  of nnkCall, nnkExprColonExpr:
+    n[0]
+  else:
+    n
+
+proc copyLineInfo*(arg, info: NormalizedNode) {.borrow.}
+proc copyLineInfo*(arg: NormalizedNode, info: NimNode) {.borrow.}
+
+iterator items*(n: NormalizedNode): NormalizedNode =
+  ## iterate through the kiddos
+  for c in n.NimNode.items:
+    yield NormalizedNode c
+iterator pairs*(n: NormalizedNode): (int, NormalizedNode) =
+  ## iterate through the kiddos, but also get their index
+  for i, c in n.NimNode.pairs:
+    yield (i, NormalizedNode c)
+
+proc newStmtList*(stmts: NormalizedVarargs): NormalizedNode =
+  ## create a new normalized statement
+  result = macros.newStmtList().NormalizedNode
+  for s in stmts:
+    result.NimNode.add s.NimNode
+
 converter seqNormalizedToSeqNimNode*(n: seq[NormalizedNode]): seq[NimNode] =
   ## convert a `seq[NormalizedNode]` to `seq[NimNode]` for ease of use
   seq[NimNode] n
@@ -330,7 +362,7 @@ func `$`*(a: Name): string {.borrow.}
 func strVal*(n: Name): string {.borrow.}
 
 func isSymbol*(n: Name): bool =
-  n.NimNode.kind == nnkSym
+  not n.isNil and n.kind == nnkSym
 
 # fn-Name - coerce and validation
 proc asName*(n: NimNode): Name =
@@ -365,6 +397,12 @@ proc genSymUnknown*(n: string): Name =
   ## `genSym` an `nskUnknown`
   genSym(nskUnknown, n).Name
 
+proc genField*(ident = ""): Name
+  {.deprecated: "pending https://github.com/nim-lang/Nim/issues/17851".} =
+  ## generate a unique field to put inside an object definition
+  asName:
+    desym genSym(nskField, ident)
+
 proc bindName*(n: static string): Name =
   ## `bindSym` the string as a `Name`
   let r = bindSym(n)
@@ -383,13 +421,17 @@ func typeInst*(n: Name): NimNode {.deprecated: "A Name can be a bare ident and e
   ## gets the type via `getTypeInst`
   getTypeInst n.NimNode
 
-func eqIdent*(a: Name|NimNode, b: Name|NimNode): bool =
-  # XXX: either a converter or higher level refactoring will remove the need
-  #      for this func
-  eqIdent(
-    when a isnot NimNode: a.NimNode else: a,
-    when b isnot NimNode: b.NimNode else: b
-  )
+func isExported*(n: Name): bool =
+  ## true if this has been exported
+  n.NimNode.isExported
+
+func eqIdent*(a: Name|NimNode, b: string): bool =
+  ## bridge eqIdent from macros
+  macros.eqIdent(a.NimNode, b)
+func eqIdent*(a: Name|NimNode, b: distinct Name|NimNode): bool =
+  ## bridge eqIdent from macros
+  macros.eqIdent(a.NimNode, b.NimNode)
+func eqIdent*(a: NormalizedNode, b: Name): bool {.borrow.}
 
 # fn-ExprLike
 type
@@ -417,8 +459,7 @@ binaryExprOrStmt newAssignment:
 proc newCall*(n: NormalizedNode, args: NormalizedVarargs): NormalizedNode =
   ## create a new call, with `n` as name some args
   result = newCall(n.NimNode).NormalizedNode
-  for a in args:
-    result.add a
+  result.add args
 proc newCall*(n: Name, args: NormalizedVarargs): NormalizedNode =
   ## create a new call, with `n` as name some args
   result = newCall(NormalizedNode n, args)
@@ -443,6 +484,25 @@ proc newRefType*(n: Name): TypeExpr =
 
 proc `[]`*(n: TypeExpr, i: int): TypeExpr = TypeExpr n.NimNode[i]
   ## allow iteration through a TypeExpr, in case it's a tuple type with kids
+
+# fn-PragmaAtom
+
+proc asPragmaAtom*(n: Name): PragmaAtom =
+  ## convert a Name to a PragmaAtom
+  PragmaAtom n
+
+proc newPragmaColonExpr*(n: static[string], r: NormalizedNode): PragmaAtom =
+  ## create a new `PragmaAtom` that's a colon expression
+  PragmaAtom newColonExpr(bindName(n), r)
+
+proc getPragmaName*(n: PragmaAtom): Name =
+  ## retrieve the symbol/identifier from the child node of a PragmaAtom, or
+  ## if it's an atom then return itself.
+  Name:
+    if n.kind in {nnkCall, nnkExprColonExpr}:
+      n[0]
+    else:
+      n
 
 # fn-IdentDefLike
 type
@@ -685,6 +745,210 @@ proc newIdentDefVar*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefVa
   ## create a var section with an identdef, eg: `n`: `t` = `val`
   newIdentDefVar(newIdentDef(n, t, val))
 
+# fn-PragmaLike
+
+type
+  PragmaLike* = PragmaBlock | PragmaExpr | PragmaStmt
+    ## abstract over any pragma like thing and provide common operations
+
+proc add(p: PragmaLike, e: PragmaAtom) =
+  ## add a pragma atom of some variety to this PragmaLIke
+  p.NimNode.add e
+  copyLineInfo(p, e) # ensure the lineinfo is correct
+
+iterator items*(n: PragmaLike): PragmaAtom =
+  ## fetch the individual atoms
+  let ps =
+    when n is PragmaBlock:
+      n.NimNode[0]
+    else:
+      n.NimNode
+
+  for p in ps.items:
+    yield p.PragmaAtom
+
+func hasPragma*(n: PragmaLike, s: static[string]): bool =
+  ## `true` if the `n` holds the pragma `s`
+  for p in n.items:
+    # just skip ColonExprs, etc.
+    result = p.getPragmaName.eqIdent s
+    if result:
+      break
+
+# fn-PragmaStmt
+
+proc asPragmaStmt*(n: Name|NormalizedNode): PragmaStmt =
+  ## validate and coerce into a PragmaStmt
+  if n.kind notin {nnkPragma}:
+    errorGot "not a pragmaStmt", n
+  n.PragmaStmt
+
+proc newPragmaStmt*(es: varargs[PragmaAtom]): PragmaStmt =
+  ## create a new PragmaStmt node with `es` pragma exprs, but returns an empty
+  ## node if none are provided.
+  if es.len == 0:
+    result = PragmaStmt newEmptyNormalizedNode()
+  else:
+    result = nnkPragma.newNimNode().PragmaStmt
+  for p in es:
+    result.add p
+
+proc newPragmaStmt*(n: Name): PragmaStmt =
+  ## create a new PragmaStmt node with `n` as a PragmaAtom
+  result = nnkPragma.newNimNode().PragmaStmt
+  result.add asPragmaAtom(n)
+
+proc newPragmaStmtWithInfo*(inf: NormalizedNode, es: varargs[PragmaAtom]): PragmaStmt =
+  ## create a new PragmaStmt node with `es` pragma exprs, but returns an empty
+  ## node if none are provided, and sets the line info
+  result = newPragmaStmt(es)
+  copyLineInfo(result, inf)
+
+# fn-PragmaBlock
+
+proc asPragmaBlock*(n: NormalizedNode): PragmaBlock =
+  ## validate and coerce into a PragmaBlock
+  if n.kind notin {nnkPragmaBlock}:
+    errorGot "not a pragmaStmt", n
+  PragmaBlock n
+
+# fn-PragmaHaver
+
+type
+  PragmaHaver* = RoutineDef | ProcDef | Call
+    ## abstract over things that have pragmas to provide a uniform interface
+
+func pragma*(n: PragmaHaver): PragmaLike =
+  ## fetch all pragma declared on this routine definition or a callee
+  when n is RoutineDef | ProcDef:
+    PragmaStmt n.NimNode.pragma
+  elif n is Call:
+    if n.canGetImpl:
+      n.impl.pragma
+    else:
+      PragmaStmt newEmptyNormalizedNode()
+
+func hasPragma*(n: PragmaHaver, s: static[string]): bool =
+  ## `true` if the `n` holds the pragma `s`
+  n.pragma.hasPragma(s)
+
+# fn-RoutineDefLike
+
+type
+  RoutineDefLike* = RoutineDef | ProcDef
+
+proc addPragma*(n: RoutineDefLike, prag: Name) =
+  ## add a pragma (`prag`) to the definition: `{.prag.}`
+  n.NimNode.addPragma(NimNode prag)
+
+proc addPragma*(n: RoutineDefLike, prag: string) =
+  ## add the pragma (`prag`) as an ident to this definition
+  n.addPragma asName(prag)
+
+proc addPragma*(n: RoutineDefLike, prag: Name, pragArg: NimNode) =
+  ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
+  n.NimNode.addPragma:
+    nnkExprColonExpr.newTree(prag.NimNode, pragArg)
+
+proc addPragma*(n: RoutineDefLike, prag: Name, pragArg: Name) =
+  ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
+  addPragma(n, prag, pragArg.NimNode)
+
+proc addPragma*(n: RoutineDefLike, prag: Name, pragArgs: openArray[Name]) =
+  ## add pragmas of the form `{.raise: [IOError, OSError].}`
+  addPragma(n, prag, pragArgs)
+
+# fn-Call
+
+proc asCallKind*(n: NormalizedNode): Call =
+  ## validate and coerce into a `Call` if it's an `nnkCallKinds` or error
+  if n.kind notin nnkCallKinds:
+    errorGot "node is not a call kind", n
+  Call n
+
+proc asCall*(n: NormalizedNode): Call =
+  ## validate and coerce into a `Call` if it's a CallNode or error
+  if n.kind notin CallNodes:
+    errorGot "node is not a call node", n
+  Call n
+
+func name*(n: Call): Name =
+  ## callee name
+  Name n[0]
+
+proc `name=`(n: Call, newName: Name) =
+  ## set the callee's `n`'s name to `newName
+  n[0] = newName
+
+func canGetImpl*(n: Call): bool =
+  ## the callee's name is a symbol and so an impl can be retrieves
+  n.name.isSymbol
+
+func hasImpl*(n: Call): bool =
+  ## the callee's name is a symbol and an impl is present
+  n.name.isSymbol and n.name.NimNode.getImpl.kind != nnkNilLit
+
+func impl*(n: Call): RoutineDef =
+  ## return the `RoutineDef` associated to this `Call` `n`
+  RoutineDef n.name.NimNode.getImpl
+
+proc resymCall*(n: Call; sym, field: NormalizedNode): Call =
+  ## this is used to rewrite continuation calls into their results
+  Call:
+    resymCall(NormalizedNode n, sym, field)
+proc desym*(n: Call) =
+  ## desyms the callee name
+  n.name = desym n.name
+
+# fn-FormalParams
+
+proc newFormalParams*(ret: TypeExpr, ps: varargs[IdentDef]): FormalParams =
+  ## create new formal params, with a return of `ret`, and calling params `ps`
+  result = FormalParams nnkFormalParams.newTree(NimNode ret)
+  for p in ps:
+    result.add(NormalizedNode p)
+
+# fn-RoutineDef
+
+func asRoutineDef*(n: NormalizedNode): RoutineDef =
+  ## coerce into a `RoutineDef` or error out
+  if n.kind notin RoutineNodes:
+    errorGot "not a routine (proc, template, macro, etc) definition", n
+  n.RoutineDef
+
+func name*(n: RoutineDef): Name =
+  ## get the name of this RoutineDef
+  Name n[0]
+proc `name=`*(n: RoutineDef, name: Name) =
+  ## set the name of this RoutineDef
+  n.NimNode.name = name.NimNode
+
+proc body*(n: RoutineDef): NormalizedNode =
+  n.NimNode.body.NormalizedNode
+proc `body=`*(n: RoutineDef, b: NormalizedNode) =
+  n.NimNode.body = b
+
+func len*(n: RoutineDef): int {.borrow.}
+
+func formalParams*(n: RoutineDef): FormalParams =
+  ## fetch the formal params, first one is the return param
+  FormalParams n.NimNode.params
+
+proc `formalParams=`*(n: RoutineDef, f: FormalParams) =
+  ## set the formal params for this routine, first one is the return param
+  n.NimNode.params = NimNode f
+
+proc firstCallParam*(n: RoutineDef): RoutineParam =
+  ## returns the first call param for this proc def, useful due to CPS
+  ## proc often just have one continuation parameter that we access often.
+  if n.formalParams.len < 2:
+    errorGot "proc definition does not take calling params", n.NimNode
+  n.formalParams[1].RoutineParam
+
+proc `pragma=`*(n: RoutineDef, p: PragmaStmt) =
+  ## set the pragma for this routine, replace the previous one entirely
+  n.NimNode.pragma = p.NimNode
+
 # fn-ProcDef
 
 proc newProcDef*(name: Name, formalParams: openArray[NimNode]): ProcDef =
@@ -692,60 +956,27 @@ proc newProcDef*(name: Name, formalParams: openArray[NimNode]): ProcDef =
   ## and an empty body (`nnkStmtList`)
   newProc(name.Nimnode, formalParams, newStmtList()).ProcDef
 
-func asProcDef*(n: NimNode): ProcDef {.deprecated: "change the parameter to be NormalizedNode".} =
+func asProcDef*(n: NormalizedNode): ProcDef =
   ## coerce into a `ProcDef` or error out
   if n.kind != nnkProcDef:
     errorGot "not a proc definition", n
   n.ProcDef
 
-func name*(n: ProcDef): Name =
+func name*(n: ProcDef): Name {.borrow.}
   ## get the name of this ProcDef
-  n.NimNode.name.Name
-proc `name=`*(n: ProcDef, name: Name) {.borrow.}
+proc `name=`*(n: ProcDef, name: Name) =
+  ## set the name of this ProcDef
+  n.RoutineDef.name = name
 
-proc body*(n: ProcDef): NormalizedNode {.borrow.}
-proc `body=`*(n: ProcDef, b: NormalizedNode) {.borrow.}
+proc `pragma=`*(n: ProcDef, p: PragmaStmt) =
+  ## set the pragma
+  n.RoutineDef.pragma = p
 
 func len*(n: ProcDef): int {.borrow.}
-
-func formalParams(n: ProcDef): NimNode =
-  ## first one will be the return, meant to be used internally
-  n.NimNode.params
-
-proc firstCallParam*(n: ProcDef): RoutineParam =
-  ## returns the first call param for this proc def, useful due to CPS
-  ## proc often just have one continuation parameter that we access often.
-  if n.formalParams.len < 2:
-    errorGot "proc definition does not take calling params", n.NimNode
-  n.formalParams[1].RoutineParam
 
 proc desym*[T: ProcDef](n: T, sym: Name): T =
   ## desym the routine
   desym(n.NormalizedNode, sym.NimNode).T
-
-proc addPragma*(n: ProcDef, prag: Name) {.borrow.}
-  ## add a pragma (`prag`) to the definition: `{.prag.}`
-
-proc addPragma*(n: ProcDef, prag: string) =
-  ## add the pragma (`prag`) as an ident to this definition
-  n.addPragma asName(prag)
-
-proc addPragma*(n: ProcDef, prag: Name, pragArg: NimNode) =
-  ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
-  n.addPragma:
-    nnkExprColonExpr.newTree(prag.NimNode, pragArg)
-
-proc addPragma*(n: ProcDef, prag: Name, pragArg: Name) =
-  ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
-  addPragma(n, prag, pragArg.NimNode)
-
-proc addPragma*(n: ProcDef, prag: Name, pragArgs: openArray[Name]) =
-  ## add pragmas of the form `{.raise: [IOError, OSError].}`
-  addPragma(n, prag, pragArgs)
-
-func hasPragma*(n: ProcDef, s: static[string]): bool =
-  ## `true` if the `n` holds the pragma `s`
-  hasPragma(n.NimNode, s)
 
 func returnParam*(n: ProcDef): NormalizedNode {.deprecated: "refactor to return TypeExpr or Name, depending upon rewrite invariants".} =
   ## the return param or empty if void
@@ -753,7 +984,7 @@ func returnParam*(n: ProcDef): NormalizedNode {.deprecated: "refactor to return 
 
 proc `returnParam=`*(n: ProcDef, ret: Name) =
   ## set the return param
-  n.params[0] = ret.NimNode
+  n.NimNode.params[0] = ret.NimNode
 
 iterator callingParams*(n: ProcDef): RoutineParam =
   ## iterate over formal parameters used to call this routine, excludes the
@@ -767,9 +998,28 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
     ident(repr n.name),         # repr to handle gensymbols
     newEmptyNode(),
     newEmptyNode(),
-    copy n.params,              # parameter normalization will mutate these
+    copy n.NimNode.params,      # parameter normalization will mutate these
     newEmptyNode(),
     newEmptyNode(),
     if body == nil: macros.copy(n.body) else: body
   ).ProcDef
   result.copyLineInfo n
+
+proc hasPragma*(n: NormalizedNode; s: static[string]): bool
+  {.deprecated: "convert to NormalizedNode or a sum type of pragma-havers".} =
+  ## `true` if the `n` holds the pragma `s`
+  case n.kind
+  of nnkPragma:
+    result = asPragmaStmt(n).hasPragma(s)
+  of RoutineNodes:
+    result = asRoutineDef(n).hasPragma(s)
+  of nnkObjectTy:
+    result = hasPragma(n[0], s)
+  of nnkRefTy:
+    result = hasPragma(n.last, s)
+  of nnkTypeDef:
+    result = hasPragma(n.last, s)
+  of nnkTypeSection:
+    result = anyIt(toSeq items(n), hasPragma(it, s))
+  else:
+    result = false

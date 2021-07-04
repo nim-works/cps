@@ -95,7 +95,7 @@ proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
 template whelpIt*(input: typed; body: untyped): untyped =
   var n = normalizingRewrites input
   if n.kind in nnkCallKinds:
-    let p = getImpl n[0]
+    let p = asCallKind(n).impl
     if p.hasPragma "cpsBootstrap":
       var it {.inject.}: NimNode = doWhelp(p, n[1..^1])
       body
