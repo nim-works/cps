@@ -613,9 +613,9 @@ proc newIdentDef*(n: Name, val: NormalizedNode): IdentDef =
   ## the singleton nature
   newIdentDefs(n.NimNode, newEmptyNode(), val).IdentDef
 
-#########################################
+#----------------------------------------
 # Start All the Let and Var Section Stuff
-#########################################
+#----------------------------------------
 
 type
   LetSectionLike* = LetSection | IdentDefLet
