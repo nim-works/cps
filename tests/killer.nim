@@ -2,24 +2,28 @@ import balls
 
 type
   Killer* = object
-    x: int
+    final: int
     n: int
 
 proc `=destroy`*(k: var Killer) =
-  if k.x != k.n:
+  if k.final != k.n:
     fail:
       case k.n
       of 0: "uninitialized"
       of 1: "unused"
-      else: "misused; " & $(k.n - 1) & " uses, expected " & $(k.x - 1)
+      else: "misused; " & $(k.n - 1) & " uses, expected " & $(k.final - 1)
 
-proc newKiller*(x = 1): Killer =
+proc initKiller*(final = 1): Killer =
+  Killer(n: 1, final: final + 1)
+
+proc newKiller*(final = 1): Killer =
   ## FIXME: rename this to initKiller
-  Killer(n: 1, x: x + 1)
+  Killer(n: 1, final: final + 1)
 
+proc inc*(k: var Killer) = system.inc k.n
 template step*(k: Killer): int = k.n - 1
 
 template step*(i: int) {.dirty.} =
-  check k.n == i, "out-of-order"
+  check k.n == i, "expected step " & $k.n & " but hit " & $i
   inc k.n
-  k.x = max(i, k.x)
+  k.final = max(i, k.final)
