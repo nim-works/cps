@@ -197,11 +197,9 @@ suite "hooks":
 
   block:
     ## custom continuation exception handling works
-    skip "🚧 watch your step 🚧"
-    var k = newKiller 3
-
+    var k = newKiller 4
     proc unwind(c: Cont; ex: ref Exception): Continuation {.cpsMagic.} =
-      step 3
+      inc k
       result = cps.unwind(c, ex)
 
     proc bar() {.cps: Cont.} =
