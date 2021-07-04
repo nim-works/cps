@@ -1152,11 +1152,11 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   # before they enter cps, so we don't need to care about those.
   #
   # TODO: we should track down why these hints occur.
-  # result = NormalizedNode:
-  #   quote:
-  #     {.push hint[ConvFromXtoItselfNotNeeded]: off.}
-  #     `result`
-  #     {.pop.}
+  result = NormalizedNode:
+    quote:
+      {.push hint[ConvFromXtoItselfNotNeeded]: off.}
+      `result`
+      {.pop.}
 
   result = workaroundRewrites result
 
