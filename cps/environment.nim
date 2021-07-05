@@ -496,7 +496,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
     # declare `var c: Cont`
     # XXX: conversion must be forced otherwise we end up with an ambiguous call
     #      between the add a single NimNode and add many NimNode (varargs).
-    cVarSectionToNimNode(newVarSection(c, env.root))
+    newVarSection(c, env.root)
 
   # create the continuation using the new variable and point it at the proc
   result.body.add:
