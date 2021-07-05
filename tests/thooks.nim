@@ -1,3 +1,4 @@
+import std/genasts
 import std/macros
 import std/strutils
 import std/sequtils
@@ -30,10 +31,14 @@ suite "hooks":
   block:
     ## control-flow tracing hooks are used automatically
     var found: seq[string]
-    proc trace(c: Cont; name: string; info: LineInfo) =
-      let sub = name.split("_", maxsplit=1)[0]
-      found.add "$#: $# $# $#" % [ $found.len, $sub, $info.column,
-                                   $sizeof(c[]) ]
+    macro trace[T](hook: static[enum]; c: typed;
+                   fun: string; info: LineInfo; body: T) =
+      genAst(c, hook, fun, info, body):
+        let z = if c.isNil: 0 else: sizeof(c[])
+        let sub = fun.split("_", maxsplit=1)[0]
+        found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub,
+                                        $info.column, $z ]
+        body
 
     proc foo() {.cps: Cont.} =
       var i = 0

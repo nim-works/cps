@@ -353,3 +353,11 @@ proc ensimilate*(source, destination: NormNode): Call =
 
   # fallback to typeOf
   result = newCall(newCall(bindName"typeOf", source), destination)
+
+template eq*(a, b: NimNode): NimNode =
+  ## for constructing foo=bar in a call
+  nnkExprEqExpr.newNimNode(a).add(a).add(b)
+
+template eq*(a: string; b: NimNode): NimNode =
+  ## for constructing foo=bar in a call
+  eq(ident(a), b)

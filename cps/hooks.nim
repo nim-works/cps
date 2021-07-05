@@ -52,51 +52,89 @@ proc sym*(hook: Hook): Name =
   ## produce a symbol|ident for the hook procedure
   when false:
     # this is where we can experiment with .dynamicBindSym
-    bindName($hook, brForceOpen)
+    bindSym($hook, brForceOpen)
   else:
     # rely on a `mixin $hook` in (high) scope
     asName($hook)
 
-proc hook*(hook: Hook; n: NormNode): Call =
+macro etype(e: enum): string =
+  ## Coop -> "Coop", not "coop"
+  for sym in (getTypeImpl e)[1..^1]:
+    if sym.intVal == e.intVal:
+      return newLit sym.strVal
+
+template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
+  let event = bindSym(etype hook)
+  let info = makeLineInfo n.lineInfoObj
+  let fun =
+    case n.kind
+    of nnkProcDef:
+      newLit($n.name)
+    of nnkSym, nnkIdent:
+      newLit($n)
+    of nnkCall:
+      newLit($n[0])
+    else:
+      n.errorAst "unsupported entrace input " & $n.kind
+  let trace = newCall(Trace.sym, event, c,
+                      "fun".eq fun, "info".eq info).NormNode
+  newColonExpr(trace, body)
+
+template entrace(hook: static[Hook]; n, body: NormNode): NormNode =
+  entrace(hook, nil.NormNode, n, body)
+
+proc hook*(hook: static[Hook]; n: NormNode): NormNode =
   ## execute the given hook on the given node
   case hook
-  of Alloc: # (unused; see alloc/2)
-    # hook(typedesc[Continuation])
-    newCall(hook.sym, n)
-  of Boot, Coop, Head:
+  of Boot:
     # hook(continuation)
-    newCall(hook.sym, n)
-  of Trace:
-    # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
-    newCall(hook.sym,
-            newLit(repr n.name),
-            makeLineInfo(n.lineInfoObj))
+    Boot.entrace n:
+      newCall(hook.sym, n)
+  of Coop:
+    # hook(continuation)
+    Coop.entrace n:
+      newCall(hook.sym, n)
+  of Head:
+    # hook(continuation)
+    Head.entrace n:
+      newCall(hook.sym, n)
   else:
     # cast to `Call` avoids type mismatch as converters can't figure this out
-    Call n.errorAst("the " & $hook & " hook doesn't take one argument")
+    Call n.errorAst "the " & $hook & " hook doesn't take one argument"
 
-proc hook*(hook: Hook; a, b: NormNode): NormNode =
+proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
   ## execute the given hook with two arguments
   case hook
   of Alloc:
     # hook(Cont, env_234234)
-    NormNode newCall(hook.sym, a, b)
+    Alloc.entrace a, b:
+      newCall(hook.sym, a, b)
   of Unwind:
     # hook(continuation, Cont)
     let unwind = hook.sym.NimNode
-    NormNode:
-      quote:
-        if not `a`.ex.isNil:
-          return `unwind`(`a`, `a`.ex).`b`
-  of Pass, Tail:
+    Unwind.entrace b, a:
+      NormNode:
+        quote:
+          if not `a`.ex.isNil:
+            return `unwind`(`a`, `a`.ex).`b`
+  of Pass:
     # hook(source, destination)
-    newCall(hook.sym, a, b)
+    Pass.entrace a, b:
+      newCall(hook.sym, a, b)
+  of Tail:
+    # hook(source, destination)
+    Tail.entrace a, b:
+      newCall(hook.sym, a, b)
   of Trace:
-    # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
-    newCall(hook.sym, a,
-            newLit(repr b.name),
-            makeLineInfo(b.lineInfoObj))
+    # trace(Pass, continuation, "whileLoop_2323",
+    # LineInfo(filename: "...", line: 23, column: 44)): discard
+    Trace.entrace a, b:
+      nnkDiscardStmt.newTree newEmptyNode()
   of Dealloc:
-    newStmtList(newCall(hook.sym, a, b), newNilLit())
+    # dealloc(env_234234, continuation)
+    newStmtList [
+      Dealloc.entrace(a, b, newCall(hook.sym, a, b)),
+      NormNode newNilLit()
+    ]
   else:
-    b.errorAst("the " & $hook & " hook doesn't take two arguments")
+    b.errorAst "the " & $hook & " hook doesn't take two arguments"

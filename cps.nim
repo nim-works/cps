@@ -160,10 +160,11 @@ template boot*[T: Continuation](c: T): T {.used.} =
   ## The return value specifies the continuation.
   c
 
-template trace*(c: Continuation; fun: string; where: LineInfo) {.used.} =
+macro trace*[T](hook: static[Hook]; c: typed;
+                fun: string; info: LineInfo, body: T): NimNode {.used.} =
   ## Reimplement this symbol to introduce control-flow
-  ## tracing of the entry to each continuation leg.
-  discard
+  ## tracing of the hook and entry to each continuation leg.
+  result = body
 
 proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used, inline.} =
   ## Reimplement this symbol to customize continuation
