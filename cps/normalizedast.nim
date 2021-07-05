@@ -396,7 +396,7 @@ proc genSymType*(n: string): Name =
 proc genSymVar*(n: string = ""): Name =
   ## `genSym` an `nskVar`
   genSym(nskVar, n).Name
-proc genSymLet*(n: string): Name =
+proc genSymLet*(n: string = ""): Name =
   ## `genSym` an `nskLet`
   genSym(nskLet, n).Name
 proc genSymProc*(n: string): Name =

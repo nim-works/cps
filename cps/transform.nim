@@ -293,7 +293,7 @@ proc mergeExceptBranches(n, ex: NormalizedNode): NormalizedNode =
         newStmtList:
           ifStmt.NormalizedNode
 
-func wrapContinuationWith(n: NormalizedNode, cont: Name, replace, templ: NormalizedNode): NormalizedNode =
+func wrapContinuationWith(n: NormalizedNode, cont, replace: Name, templ: NormalizedNode): NormalizedNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
   ## replaced with the `n`.
   ##
@@ -554,7 +554,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     # might occur in the body, then jump to reraise.
     let
       tryTemplate = copyNimNode(tryFinally)
-      placeholder = genSym().NormalizedNode
+      placeholder = genSymLet()
 
     # Use the placeholder for the actual body
     tryTemplate.add placeholder
