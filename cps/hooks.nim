@@ -62,23 +62,24 @@ macro etype(e: enum): string =
   for sym in (getTypeImpl e)[1..^1]:
     if sym.intVal == e.intVal:
       return newLit sym.strVal
+  error "unexpected"
+
+proc pickLit(n: NormNode): NimNode =
+  case n.kind
+  of nnkProcDef:
+    newLit $n.name
+  of nnkSym, nnkIdent:
+    newLit $n
+  of nnkCall:
+    newLit $n[0]
+  else:
+    newLit repr(n)
 
 template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
   let event = bindSym(etype hook)
   let info = makeLineInfo n.lineInfoObj
-  let fun =
-    case n.kind
-    of nnkProcDef:
-      newLit($n.name)
-    of nnkSym, nnkIdent:
-      newLit($n)
-    of nnkCall:
-      newLit($n[0])
-    else:
-      n.errorAst "unsupported entrace input " & $n.kind
-  let trace = newCall(Trace.sym, event, c,
-                      "fun".eq fun, "info".eq info).NormNode
-  newColonExpr(trace, body)
+  let fun = pickLit n
+  newCall(Trace.sym, event, c, "fun".eq fun, "info".eq info, body).NormNode
 
 template entrace(hook: static[Hook]; n, body: NormNode): NormNode =
   entrace(hook, nil.NormNode, n, body)
@@ -129,7 +130,7 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
     # trace(Pass, continuation, "whileLoop_2323",
     # LineInfo(filename: "...", line: 23, column: 44)): discard
     Trace.entrace a, b:
-      nnkDiscardStmt.newTree newEmptyNode()
+      NormNode newNilLit()
   of Dealloc:
     # dealloc(env_234234, continuation)
     newStmtList [
