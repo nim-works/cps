@@ -5,7 +5,7 @@ they are comprised.
 
 ]##
 
-import std/macros except newStmtList
+import std/macros except newStmtList, newTree
 import std/[sets, sequtils, hashes, tables, algorithm, genasts]
 import cps/[spec, hooks, help, rewrites, normalizedast]
 
@@ -159,7 +159,7 @@ when cpsReparent:
 proc makeType*(e: Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
   # XXX: remove NimNode
-  nnkTypeDef.newTree(e.identity.NimNode, newEmptyNode(), e.objectType)
+  nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): Name = e.c
 
@@ -434,17 +434,16 @@ proc createResult*(env: Env, exported = false): ProcDef =
       if env.rs.hasType:
         env.get                  # the return value is env.result
       else:
-        NormalizedNode:
-          nnkDiscardStmt.newTree:
-            newEmptyNode()       # the return value is void
+        nnkDiscardStmt.newTree:
+          newEmptyNode()       # the return value is void
 
   # compose the (exported?) symbol
   var name = nnkAccQuoted.newTree ident"()"
   if exported:
-    name = postfix(name, "*")
+    name = NormalizedNode postfix(name, "*")
 
   result = ProcDef:
-    genAst(name, field = field.NimNode, c = env.first.NimNode,
+    genAst(name = name.NimNode, field = field.NimNode, c = env.first.NimNode,
            cont = env.identity.NimNode, tipe = env.rs.typ, dismissed=Dismissed,
            finished=Finished, running=Running):
       {.push experimental: "callOperator".}
@@ -526,13 +525,13 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
     result.body.add:
       # then at runtime, issue an if statement to
       nnkIfExpr.newTree:
-        nnkElifExpr.newTree [
+        nnkElifExpr.newTree(
           # check if the continuation is not nil, and if so, to
           newCall(bindSym"not", newDotExpr(c, asName"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(asName"result",
             newDotExpr(env.castToChild(c), env.rs.name))
-        ]
+        )
 
 proc rewriteVoodoo*(env: Env; n: NormalizedNode): NormalizedNode =
   ## Rewrite non-yielding cpsCall calls by inserting the continuation as

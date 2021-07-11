@@ -1,4 +1,4 @@
-import std/macros except newStmtList
+import std/macros except newStmtList, newTree
 
 import cps/[spec, normalizedast]
 

@@ -1,5 +1,5 @@
 import std/[tables, hashes, genasts]
-import macros except newStmtList
+import std/macros except newStmtList, newTree
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
             normalizedast]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
@@ -161,6 +161,7 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   ## jump to the loop condition and `{.cpsBreak.}` with `{.cpsPending.}`
   ## to the next control-flow.
   let
+    n = NormalizedNode n
     name = genSymProc("While Loop")
     cont = asName(cont)
     tail = tailCall(desym cont, name)
@@ -171,9 +172,9 @@ macro cpsWhile(cont, cond, n: typed): untyped =
     it.add tail
     var body = newStmtList:
                 nnkIfStmt.newTree(  # a conditional test up top,
-                  nnkElifBranch.newTree [cond, it.NimNode], # runs the body if it's true,
-                  nnkElse.newTree newCpsBreak(NormalizedNode n) # else, runs a break clause
-                ).NormalizedNode
+                  nnkElifBranch.newTree(cond, it), # runs the body if it's true,
+                  nnkElse.newTree newCpsBreak(n) # else, runs a break clause
+                )
     body = body.multiReplace(
       (NormalizedMatcher isCpsPending, tail),
       (NormalizedMatcher isCpsContinue, tail),
@@ -234,7 +235,7 @@ proc mergeExceptBranches(n, ex: NormalizedNode): NormalizedNode =
         let elifBranch = newNimNode(nnkElifBranch, branch)
 
         # Create the matching condition
-        var cond: NimNode
+        var cond: NormalizedNode
         # Collect the exception constraints, which are the nodes before
         # the very last node
         for idx in 0 ..< branch.len - 1:
@@ -249,7 +250,7 @@ proc mergeExceptBranches(n, ex: NormalizedNode): NormalizedNode =
           # defined as object types.
           let match =
             # ex of
-            nnkInfix.newTree(bindSym"of", ex):
+            nnkInfix.newTree(bindName"of", ex):
               # ref T
               nnkRefTy.newTree:
                 branch[idx]
@@ -260,7 +261,7 @@ proc mergeExceptBranches(n, ex: NormalizedNode): NormalizedNode =
             cond = match
           else:
             # Push the matching constraint as an alternative match
-            cond = nnkInfix.newTree(bindSym"or", cond, match)
+            cond = nnkInfix.newTree(bindName"or", cond, match)
 
         # Add the matching condition
         elifBranch.add cond
@@ -285,7 +286,7 @@ proc mergeExceptBranches(n, ex: NormalizedNode): NormalizedNode =
         #   raise ex
         nnkElse.newTree:
           newStmtList:
-            nnkRaiseStmt.newTree(ex).NormalizedNode
+            nnkRaiseStmt.newTree(ex)
 
     # Add the merged except branch to our try statement
     result.add:
@@ -374,7 +375,7 @@ macro cpsWithException(cont, ex, n: typed): untyped =
             result.body.NormalizedNode.withException(nextCont, ex),
             # On an exception not handled by the body.
             nnkExceptBranch.newTree(
-              macros.newStmtList(
+              newStmtList(
                 # Set `ex` to nil.
                 newAssignment(ex, newNilLit()),
                 # Then re-raise the exception.
@@ -511,7 +512,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
         if n.isCpsCont:
           let nextCont = n.getContSym
           result = n
-          result.body = result.body.NormalizedNode.redirectExits(nextCont, final)
+          result.body = asProcDef(result).body.redirectExits(nextCont, final)
         elif n.isScopeExit:
           # If this exit point is not recorded yet
           if n notin exitPoints:
@@ -530,7 +531,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
 
     # Add the specialized finally legs we generated to the AST
     for exit in exitPoints.values:
-      it.add exit.NimNode
+      it.add exit
 
     # While we covered all the exits explicitly written the body, we haven't
     # covered the exits that are not explicitly written in the body, which are
@@ -542,7 +543,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
       newStmtList:
         # de-sym our `ex` so that it uses the continuation of where it is
         # replaced into
-        nnkRaiseStmt.newTree(ex.resym(cont, desym cont)).NormalizedNode
+        nnkRaiseStmt.newTree(ex.resym(cont, desym cont))
 
     # Add this leg to the AST
     it.add:
@@ -568,7 +569,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
           # Then jump to reraise
           cont.tailCall(reraise.name)
         )
-      ).NormalizedNode
+      )
     )
 
     # Wrap the body with this template and we are done
@@ -611,7 +612,8 @@ proc shimAssign(env: var Env; store: NormalizedNode, call: Call, tail: Normalize
   var body =
     NormalizedNode:
       genAst(assign = assign.NimNode, tail = tail.NimNode,
-             child = child.NimNode, etype, dealloc = Dealloc.sym.NimNode):
+             child = child.NimNode, etype = etype.NimNode,
+             dealloc = Dealloc.sym.NimNode):
         assign
         ##if not child.isNil:
         ##  dealloc(etype, child)
@@ -646,7 +648,6 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
 
   template endAndReturn() {.dirty.} =
     ## this "wraps" the returned AST in an end comment for easier debugging
-    result.doc "end annotate at " & n.lineAndFile
     return
 
   # we're going to iterate over the (non-comment) children
@@ -1011,12 +1012,13 @@ macro cpsHandleUnhandledException(n: typed): untyped =
   ## be first copied into the `ex` variable, then raise
   func handle(n: NormalizedNode): NormalizedNode =
     if n.isCpsCont:
-      let cont = n.getContSym
-      result = copy n
+      let
+        cont = n.getContSym
+        fnDef = asRoutineDef(copy n) # more precise type
       # Rewrite continuations within this continuation body as well
-      result.body = result.body.NormalizedNode.filter(handle)
+      fnDef.body = fnDef.body.filter(handle)
       # Put the body in a try-except to capture the unhandled exception
-      result.body = genAstOpt({}, cont = NimNode cont, body = result.body):
+      fnDef.body = genAstOpt({}, cont = NimNode cont, body = NimNode fnDef.body):
         bind getCurrentException
         try:
           body
@@ -1028,6 +1030,7 @@ macro cpsHandleUnhandledException(n: typed): untyped =
         #
         # This is a workaround for https://github.com/nim-lang/Nim/issues/18411
         return (typeof cont) unwind(cont, cont.ex)
+      result = fnDef
 
   debugAnnotation cpsHandleUnhandledException, n:
     it = it.filter(handle)
@@ -1143,7 +1146,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   env = env.storeType(force = off)
 
   # generated proc bodies, remaining proc, whelp, bootstrap
-  result = newStmtList(types, NormalizedNode processMainContinuation, dots, whelp, booty)
+  result = newStmtList(types, processMainContinuation, dots, whelp, booty)
 
   # this is something that happens a lot in cps-generated code, so hide it
   # here to not spam the user with hints.

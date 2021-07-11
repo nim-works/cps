@@ -1,15 +1,14 @@
-import std/macros except newStmtList, items, pairs
+import std/macros except newStmtList, items, pairs, newTree
 import cps/[spec, normalizedast, help, rewrites]
 
 template cpsMustLift() {.pragma.} ## signify a code block that has to be lifted
 
 proc newCpsMustLift(n: NormalizedNode): NormalizedNode =
   ## Wrap `n` in a `cpsMustLift` block.
-  NormalizedNode:
-    nnkPragmaBlock.newTree(
-      nnkPragma.newTree(bindSym"cpsMustLift"),
-      n
-    )
+  nnkPragmaBlock.newTree(
+    nnkPragma.newTree(bindName"cpsMustLift"),
+    n
+  )
 
 proc isCpsMustLift(n: NormalizedNode): bool =
   ## Check whether `n` is a cpsMustLift block
@@ -56,30 +55,25 @@ func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
     ## Rewrite a singular of/elif/else branch
     case branch.kind
     of nnkElifBranch, nnkElifExpr:
-      result =
-        NormalizedNode:
-          # Copy the branch and it's condition
-          copyNimNode(branch).add(branch[0]):
-            NimNode:
-              # Then rewrite the body
-              filterExpr(branch.last, transformer)
-    of nnkElse, nnkElseExpr:
-      result =
-        NormalizedNode:
-          # Copy the branch
-          copyNimNode(branch).add:
-            NimNode:
-              # Then rewrite the body
-              filterExpr(branch.last, transformer)
-    of nnkOfBranch:
-      result = copyNimNode(branch)
-      # Copy all matching conditions, which is every children except the last.
-      for idx in 0 ..< branch.len - 1:
-        result.add copy(branch[idx])
-      # Add the rewritten body
-      result.add:
-        NimNode:
+      result = copyNodeAndTransformIt(branch):
+        # Copy the branch and it's condition
+        it.add(branch[0]):
+          # Then rewrite the body
           filterExpr(branch.last, transformer)
+    of nnkElse, nnkElseExpr:
+      result = copyNodeAndTransformIt(branch):
+        # Copy the branch
+        it.add:
+          # Then rewrite the body
+          filterExpr(branch.last, transformer)
+    of nnkOfBranch:
+      result = copyNodeAndTransformIt(branch):
+        # Copy all matching conditions, which is every children except the last.
+        for idx in 0 ..< branch.len - 1:
+          it.add copy(branch[idx])
+        # Add the rewritten body
+        it.add:
+            filterExpr(branch.last, transformer)
     else:
       result = n.errorAst "unexpected node kind in case/if expression"
 
@@ -89,86 +83,85 @@ func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
     # just emit the assignment.
     result = transformer(n)
   of nnkStmtList, nnkStmtListExpr:
-    result = copyNimNode(n)
+    result = copyNodeAndTransformIt(n):
+      # In a statement list, the last node is the expression, so we copy
+      # the part before it because we won't touch them.
+      for idx in 0 ..< n.len - 1:
+        it.add copy(n[idx])
 
-    # In a statement list, the last node is the expression, so we copy
-    # the part before it because we won't touch them.
-    for idx in 0 ..< n.len - 1:
-      result.add copy(n[idx])
-
-    # Rewrite the last expression to assign to location.
-    result.add:
-      # Convert back to NimNode explicitly because the compiler
-      # can't handle our awesome nodes (our node binds to both
-      # varargs and normal form of add).
-      {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
-      filterExpr(n.last, transformer)
+      # Rewrite the last expression to assign to location.
+      it.add:
+        # Convert back to NimNode explicitly because the compiler
+        # can't handle our awesome nodes (our node binds to both
+        # varargs and normal form of add).
+        {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
+        filterExpr(n.last, transformer)
   of nnkBlockStmt, nnkBlockExpr, nnkPragmaBlock:
-    result = copyNimNode(n)
-    # Copy the label/pragma list
-    result.add copy(n[0])
-    # Rewrite and add the body
-    result.add:
-      filterExpr(n[1], transformer)
+    result = copyNodeAndTransformIt(n):
+      # Copy the label/pragma list
+      it.add copy(n[0])
+      # Rewrite and add the body
+      it.add:
+        filterExpr(n[1], transformer)
   of nnkIfStmt, nnkIfExpr:
     # It appears that the type of the `if` expression remains if we
     # don't destroy it by creating a new node instead of copying and
     # causes all sort of errors.
     {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18351".}
-    result = NormalizedNode newNimNode(n.kind, n)
+    result = newNodeAndTransformIt(n):
 
-    for branch in n.items:
-      result.add:
-        rewriteElifOf:
-          branch
+      for branch in n.items:
+        it.add:
+          rewriteElifOf:
+            branch
   of nnkCaseStmt:
     # It appears that the type of the `case` expression remains if we
     # don't destroy it by creating a new node instead of copying and
     # causes all sort of errors.
     {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18351".}
-    result = NormalizedNode newNimNode(n.kind, n)
+    result = newNodeAndTransformIt(n):
 
-    # Copy the matched expression
-    result.add copy(n[0])
+      # Copy the matched expression
+      it.add copy(n[0])
 
-    # Rewrite and add branches
-    for idx in 1 ..< n.len:
-      result.add:
-        rewriteElifOf:
-          n[idx]
+      # Rewrite and add branches
+      for idx in 1 ..< n.len:
+        it.add:
+          rewriteElifOf:
+            n[idx]
   of nnkTryStmt:
     # Similar to other node types, we must erase the type attached to this
     # statement.
-    result = NormalizedNode newNimNode(n.kind, n)
+    result = newNodeAndTransformIt(n):
 
-    # Rewrite the body
-    result.add:
-      filterExpr(n[0], transformer)
+      # Rewrite the body
+      it.add:
+        filterExpr(n[0], transformer)
 
-    # Rewrite except/finally branches
-    for idx in 1 ..< n.len:
-      let branch = n[idx]
-      case branch.kind
-      of nnkExceptBranch:
-        let newBranch = copyNimNode(branch)
-        # Copy all exception matching predicates, which is every node but
-        # the last
-        for idx in 0 ..< branch.len - 1:
-          newBranch.add copy(branch[idx])
+      # Rewrite except/finally branches
+      for idx in 1 ..< n.len:
+        let branch = n[idx]
+        case branch.kind
+        of nnkExceptBranch:
+          let newBranch = copyNimNode(branch)
+          # Copy all exception matching predicates, which is every node but
+          # the last
+          for idx in 0 ..< branch.len - 1:
+            newBranch.add copy(branch[idx])
 
-        # Rewrite and add the body
-        newBranch.add:
-          filterExpr(branch.last, transformer)
+          # Rewrite and add the body
+          newBranch.add:
+            filterExpr(branch.last, transformer)
 
-        # Add the branch to the new try statement
-        result.add newBranch
-      of nnkFinally:
-        # Per Nim manual, a finally branch cannot contain an expression, thus
-        # we can skip the rewrite
-        result.add copy(branch)
-      else:
-        result.add:
-          branch.errorAst "unexpected node in a try expression"
+          # Add the branch to the new try statement
+          it.add newBranch
+        of nnkFinally:
+          # Per Nim manual, a finally branch cannot contain an expression, thus
+          # we can skip the rewrite
+          it.add copy(branch)
+        else:
+          it.add:
+            branch.errorAst "unexpected node in a try expression"
   of ConvNodes - {nnkConv}:
     # Hidden conversion nodes can be reconstructed by the compiler if needed,
     # so we just skip them and rewrite the body instead.
@@ -343,7 +336,7 @@ macro cpsExprDiscard(n: typed): untyped =
   ## Apply `discard` directly into `n`'s trailling expressions.
   debugAnnotation cpsExprDiscard, n:
     proc addDiscard(n: NormalizedNode): NormalizedNode =
-      NormalizedNode nnkDiscardStmt.newTree(copy n)
+      nnkDiscardStmt.wrap(copy n)
 
     it = filterExpr(it[0], addDiscard)
 
@@ -351,7 +344,7 @@ macro cpsExprReturn(n: typed): untyped =
   ## Apply `return` directly into `n`'s trailling expressions.
   debugAnnotation cpsExprReturn, n:
     proc addReturn(n: NormalizedNode): NormalizedNode =
-      NormalizedNode nnkReturnStmt.newTree(copy n)
+      nnkReturnStmt.wrap(copy n)
 
     it = filterExpr(it[0], addReturn)
 
@@ -359,7 +352,7 @@ macro cpsExprRaise(n: typed): untyped =
   ## Apply `return` directly into `n`'s trailling expressions.
   debugAnnotation cpsExprRaise, n:
     proc addRaise(n: NormalizedNode): NormalizedNode =
-      NormalizedNode nnkRaiseStmt.newTree(copy n)
+      nnkRaiseStmt.wrap(copy n)
 
     it = filterExpr(it[0], addRaise)
 
@@ -375,7 +368,7 @@ macro cpsExprLifter(n: typed): untyped =
           # Lift the bodies inside `n` then add it to the list of lifted bodies
           lift n.last # body to be lifted is the last child
         # Replace `n` with an empty node
-        result = NormalizedNode newEmptyNode()
+        result = newEmptyNormalizedNode()
 
     let rewritten = filter(n, lifter)
     # For expressions we have to be a bit more delicate, as an empty nnkStmtList
@@ -450,7 +443,7 @@ func annotate(n: NormalizedNode): NormalizedNode =
             copyNimNode(child).add(
               # Tag the condition for rewrite and annotate it
               newCall(bindName"cpsExprToTmp",
-                      NormalizedNode getTypeInst(first),
+                      getTypeInst(first),
                       annotate(newStmtList(first))),
               # Annotate the branch body too
               annotate newStmtList(child.last)
@@ -466,12 +459,10 @@ func annotate(n: NormalizedNode): NormalizedNode =
           discard result.add:
             # Create a new else branch and annotate it
             annotate:
-              NormalizedNode:
-                nnkElse.newTree:
-                  newStmtList:
-                    NormalizedNode:
-                      # Put every branch from here on into a new if statement.
-                      nnkIfStmt.newTree(seq[NimNode] n[idx .. ^1])
+              nnkElse.newTree:
+                newStmtList:
+                  # Put every branch from here on into a new if statement.
+                  nnkIfStmt.newTree(varargs[NormalizedNode] n[idx .. ^1])
 
           # We are done with this tree.
           break
@@ -500,7 +491,7 @@ func annotate(n: NormalizedNode): NormalizedNode =
           newCase[0] =
             # Again, we are taking the type from the original since it
             # have the correct type information.
-            newCall(bindName"cpsExprToTmp", NormalizedNode getTypeInst(child[0])):
+            newCall(bindName"cpsExprToTmp", getTypeInst(child[0])):
               newCase[0]
 
           # Put the new case in the expression lifter to lift the rewritten
@@ -540,14 +531,13 @@ func annotate(n: NormalizedNode): NormalizedNode =
           # Run annotate on the if statement to rewrite its condition and body
           annotate:
             newStmtList:
-              NormalizedNode:
-                # A new if statement
-                nnkIfStmt.newTree(
-                  # The first branch being the condition and the body
-                  nnkElifBranch.newTree(child[0], child.last),
-                  # The else branch breaks the loop
-                  nnkElse.newTree(nnkBreakStmt.newTree(newEmptyNode()))
-                )
+              # A new if statement
+              nnkIfStmt.newTree(
+                # The first branch being the condition and the body
+                nnkElifBranch.newTree(child[0], child.last),
+                # The else branch breaks the loop
+                nnkElse.newTree(nnkBreakStmt.newTree(newEmptyNode()))
+              )
 
         result.add newWhile
 
@@ -606,42 +596,40 @@ func annotate(n: NormalizedNode): NormalizedNode =
           discard result.add:
             annotate:
               newStmtList:
-                NormalizedNode:
-                  nnkIfStmt.newTree(
-                    # We produce an if expression in the form of:
-                    # if `a`:
-                    #   `b`
-                    # else:
-                    #   false
-                    #
-                    # This way `b` is only evaluated if `a` is true
-                    nnkElifBranch.newTree(child[1], child[2]),
-                    nnkElse.newTree(newLit false)
-                  )
+                nnkIfStmt.newTree(
+                  # We produce an if expression in the form of:
+                  # if `a`:
+                  #   `b`
+                  # else:
+                  #   false
+                  #
+                  # This way `b` is only evaluated if `a` is true
+                  nnkElifBranch.newTree(child[1], child[2]),
+                  nnkElse.newTree(newLit false)
+                )
 
         elif magic == "Or":
           # To simulate `a or b` short-ciruiting behavior
           result.add:
             annotate:
               newStmtList:
-                NormalizedNode:
-                  nnkIfStmt.newTree(
-                    # We produce an if expression in the form of:
-                    # if `a`:
-                    #   true
-                    # else:
-                    #   `b`
-                    #
-                    # This way `b` is only evaluated if `a` is false
-                    nnkElifBranch.newTree(child[1], newLit true),
-                    nnkElse.newTree(child[2])
-                  )
+                nnkIfStmt.newTree(
+                  # We produce an if expression in the form of:
+                  # if `a`:
+                  #   true
+                  # else:
+                  #   `b`
+                  #
+                  # This way `b` is only evaluated if `a` is false
+                  nnkElifBranch.newTree(child[1], newLit true),
+                  nnkElse.newTree(child[2])
+                )
 
         else:
           # For these nodes, the evaluation order of each child is the same
           # as their order in the AST.
           let
-            newNode: NormalizedNode = copyNimNode(child)
+            newNode = copyNimNode(child)
             lastExpr = child.lastCpsExprAt
 
           template rewriteParam(n: NormalizedNode, body: untyped): untyped =
@@ -684,7 +672,7 @@ func annotate(n: NormalizedNode): NormalizedNode =
                 not grandchild.isSingleStatement:
                 newNode.add:
                   rewriteParam(grandchild):
-                    newCall(bindName"cpsExprToTmp", NormalizedNode getTypeInst(it)):
+                    newCall(bindName"cpsExprToTmp", getTypeInst(it)):
                       annotate:
                         newStmtList(it)
               else:
@@ -729,5 +717,4 @@ macro cpsFlattenExpr*(n: typed): untyped =
       # Always put the body under a statement list in the case where there
       # is only one node in the body.
       newStmtList:
-        NormalizedNode:
-          it.body
+        it.body

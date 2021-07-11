@@ -5,7 +5,7 @@ boring utilities likely useful to multiple pieces of cps machinery
 ]##
 
 import std/[hashes, sequtils]
-import std/macros except newStmtList
+import std/macros except newStmtList, newTree
 
 when (NimMajor, NimMinor) < (1, 5):
   {.fatal: "requires nim-1.5".}

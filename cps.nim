@@ -1,5 +1,5 @@
-import std/[macros]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
+import std/macros except newStmtList
 export Continuation, ContinuationProc, State
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic
 

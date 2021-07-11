@@ -281,8 +281,16 @@ proc onlyNormalizedNode*[T: distinct](n: T): NormalizedNode =
   else:
     errorGot "invalid type, expected some NormalizedNode", n
 
+proc upgradeToNormalizedNode*[T](n: T): NormalizedNode =
+  ## used for conversion in varargs, will convert `NimNode` to `NormalizedNode`
+  when T is NormalizedNode:
+    n
+  else:
+    NormalizedNode n
+
 type
   NormalizedVarargs = varargs[NormalizedNode, onlyNormalizedNode]
+  AnyNodeVarargs = varargs[NormalizedNode, upgradeToNormalizedNode]
 
 template hash*(n: NormalizedNode): Hash =
   ## hash `NormalizedNode`, necessary for what we do in `environment`
@@ -303,16 +311,16 @@ func kind*(n: NormalizedNode): NimNodeKind {.borrow.}
 
 proc add*(f: NimNode|NormalizedNode, c: NormalizedNode): NormalizedNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
-  NormalizedNode:
-    f.NimNode.add(c.NimNode)
+  NormalizedNode f.NimNode.add(c.NimNode)
 proc add*(f: NormalizedNode, cs: NormalizedVarargs): NormalizedNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
-  for c in cs:
-    f.add(c)
-  f
+  NormalizedNode f.add(varargs[NimNode] cs)
 
 proc getImpl*(n: NormalizedNode): NormalizedNode {.borrow.}
   ## the implementaiton of a normalized node should be
+
+proc getTypeInst*(n: NormalizedNode): NormalizedNode {.borrow.}
+  ## return the type instance, via `getTypeInst` of a NimNode
 
 # TODO - restrict these to only valid types
 proc `[]`*(n: NormalizedNode; i: int): NormalizedNode {.borrow.}
@@ -347,11 +355,35 @@ iterator pairs*(n: NormalizedNode): (int, NormalizedNode) =
   for i, c in n.NimNode.pairs:
     yield (i, NormalizedNode c)
 
-proc newStmtList*(stmts: NormalizedVarargs): NormalizedNode =
+proc newStmtList*(stmts: AnyNodeVarargs): NormalizedNode =
   ## create a new normalized statement
-  result = macros.newStmtList().NormalizedNode
-  for s in stmts:
-    result.NimNode.add s.NimNode
+  NormalizedNode macros.newStmtList(varargs[NimNode] stmts)
+
+proc newTree*(kind: NimNodeKind, n: AnyNodeVarargs): NormalizedNode =
+  ## creates a new tree (`newTree`) of `kind`, with child `n`
+  NormalizedNode macros.newTree(kind, varargs[NimNode] n)
+
+template newNodeAndTransformIt*(n: NimNode, body: untyped): untyped =
+  ## creates a node `it`, transformed by the `body`, and provides the result.
+  ## Info and kind of node are derived from `n`. This proc is useful for when
+  ## type information of `n` needs to be wiped, otherwise use
+  ## `copyNodeAndTransformIt`. Assumes `n` and `it` are Normalized.
+  block:
+    var it {.inject.} = NormalizedNode newNimNode(n.kind, n)
+    body
+    it
+
+template copyNodeAndTransformIt*(n: NimNode, body: untyped): untyped =
+  ## copies a node `n` into `it`, transforms `it` with `body`, and provides
+  ## `it` as the expression result. Assumes `n` and `it` are Normalized.
+  block:
+    var it {.inject.} = NormalizedNode copyNimNode(n)
+    body
+    it
+
+proc wrap*(kind: NimNodeKind, n: NormalizedNode): NormalizedNode =
+  ## wraps a node `n` within a new node of `kind`
+  newTree(kind, n)
 
 converter seqNormalizedToSeqNimNode*(n: seq[NormalizedNode]): seq[NimNode] =
   ## convert a `seq[NormalizedNode]` to `seq[NimNode]` for ease of use
@@ -472,14 +504,14 @@ binaryExprOrStmt newColonExpr:
 binaryExprOrStmt newAssignment:
   ## create a new assignment, meant for executable code
 
-proc newCall*(n: NormalizedNode, args: NormalizedVarargs): NormalizedNode =
+proc newCall*(n: NormalizedNode, args: AnyNodeVarargs): NormalizedNode =
   ## create a new call, with `n` as name some args
   result = newCall(n.NimNode).NormalizedNode
   result.add args
-proc newCall*(n: Name, args: NormalizedVarargs): NormalizedNode =
+proc newCall*(n: Name, args: AnyNodeVarargs): NormalizedNode =
   ## create a new call, with `n` as name some args
   result = newCall(NormalizedNode n, args)
-proc newCall*(n: string, args: NormalizedVarargs): NormalizedNode =
+proc newCall*(n: string, args: AnyNodeVarargs): NormalizedNode =
   ## create a new call, with `n` as and ident name, and a single arg
   result = newCall(asName(n), args)
 
@@ -905,7 +937,7 @@ proc addPragma*(n: RoutineDefLike, prag: string) =
 proc addPragma*(n: RoutineDefLike, prag: Name, pragArg: NimNode) =
   ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
   n.NimNode.addPragma:
-    nnkExprColonExpr.newTree(prag.NimNode, pragArg)
+    nnkExprColonExpr.newTree(prag, pragArg)
 
 proc addPragma*(n: RoutineDefLike, prag: Name, pragArg: Name) =
   ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression
