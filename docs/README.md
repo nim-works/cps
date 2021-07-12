@@ -69,7 +69,7 @@ additional functionality:
 
 # What Is This and Why Should I Care?
 
-![CPS](/cps.svg)
+![CPS](/docs/cps.svg)
 
 ## Control-flow on the Stack
 
