@@ -16,7 +16,7 @@ import a dispatcher to define both the type and behavior of your continuations,
 so there is virtually no API and no limitations on composition.
 
 A substantial effort to demystify this style of programming, and what it may
-enable, lives at https://github.com/zevv/cpsdoc.
+enable, lives [in the docs/ subdirectory](https://github.com/disruptek/cps/docs).
 
 For a description of the origins of our approach, see the included papers and
 https://github.com/nim-lang/RFCs/issues/295, where we write in more depth about
