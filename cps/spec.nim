@@ -270,11 +270,11 @@ proc bootstrapSymbol*(n: NimNode): NormalizedNode =
     ## XXX: darn ambiguous calls
     normalizedast.newCall("typeOf", n)
 
-proc enbasen*(n: NimNode): NimNode =
+proc enbasen*(n: NimNode): TypeExpr =
   ## find the parent type of the given symbol/type
   case n.kind
   of nnkOfInherit:
-    n[0]
+    TypeExpr n[0]
   of nnkObjectTy:
     enbasen: n[1]
   of nnkRefTy:
@@ -284,7 +284,7 @@ proc enbasen*(n: NimNode): NimNode =
   of nnkSym:
     enbasen: getImpl n
   else:
-    n
+    TypeExpr n
 
 type
   State* {.pure.} = enum

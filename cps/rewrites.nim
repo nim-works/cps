@@ -499,27 +499,3 @@ proc multiReplace*(n: NormalizedNode;
         break
 
   filter(n, replacer).NormalizedNode
-
-proc ensimilate*(source: NimNode; destination: NimNode): NimNode =
-  ## perform a call to convert the destination to the source's type;
-  ## the source can be any of a few usual suspects...
-  let typ = getTypeImpl source
-  block:
-    if typ.isNil:
-      break
-    else:
-      case typ.kind
-      of nnkEmpty:
-        break
-      of nnkProcTy:
-        result = newCall(typ[0][0], destination)
-      of nnkRefTy:
-        result = newCall(typ[0], destination)
-      elif typ.kind == nnkSym and $typ == "void":
-        break
-      else:
-        result = newCall(typ, destination)
-      return
-
-  # fallback to typeOf
-  result = newCall(newCall(bindSym"typeOf", source), destination)

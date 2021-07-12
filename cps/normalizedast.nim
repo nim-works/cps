@@ -188,6 +188,11 @@ proc normalizeProcDef*(n: NimNode): ProcDef =
   expectKind(n, nnkProcDef)
   result = (normalizingRewrites n).ProcDef
 
+proc normalizeCall*(n: NimNode): Call =
+  ## ensure this is a normalized procd definition
+  expectKind(n, CallNodes)
+  result = (normalizingRewrites n).Call
+
 # XXX: Temporary procs until we get more strongly typed versions
 
 proc copy*(n: NormalizedNode): NormalizedNode {.borrow.}
@@ -285,8 +290,10 @@ proc upgradeToNormalizedNode*[T](n: T): NormalizedNode =
   ## used for conversion in varargs, will convert `NimNode` to `NormalizedNode`
   when T is NormalizedNode:
     n
-  else:
+  elif T is NimNode or T is distinct and distinctBase(T) is NimNode:
     NormalizedNode n
+  else:
+    errorGot "invalid type, expected a NimNode or distinct of one", n
 
 type
   NormalizedVarargs = varargs[NormalizedNode, onlyNormalizedNode]
@@ -299,6 +306,10 @@ template hash*(n: NormalizedNode): Hash =
 proc desym*(n: NormalizedNode, sym: NimNode): NormalizedNode =
   ## desym all occurences of a specific sym
   n.replace(proc(it: NimNode): bool = it == sym, desym sym).NormalizedNode
+
+proc `$`*(n: NormalizedNode): string =
+  ## to string
+  $(n.NimNode) # it borrows the wrong one, looool
 
 func len*(n: NormalizedNode): int {.borrow.}
   ## number of children
@@ -504,14 +515,13 @@ binaryExprOrStmt newColonExpr:
 binaryExprOrStmt newAssignment:
   ## create a new assignment, meant for executable code
 
-proc newCall*(n: NormalizedNode, args: AnyNodeVarargs): NormalizedNode =
+proc newCall*(n: NormalizedNode, args: AnyNodeVarargs): Call =
   ## create a new call, with `n` as name some args
-  result = newCall(n.NimNode).NormalizedNode
-  result.add args
-proc newCall*(n: Name, args: AnyNodeVarargs): NormalizedNode =
+  result = Call macros.newCall(n, varargs[NimNode] args)
+proc newCall*(n: Name, args: AnyNodeVarargs): Call =
   ## create a new call, with `n` as name some args
   result = newCall(NormalizedNode n, args)
-proc newCall*(n: string, args: AnyNodeVarargs): NormalizedNode =
+proc newCall*(n: string, args: AnyNodeVarargs): Call =
   ## create a new call, with `n` as and ident name, and a single arg
   result = newCall(asName(n), args)
 
@@ -544,8 +554,35 @@ proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
     errorGot "not a type expression or empty", n
   n.TypeExpr
 
-proc `[]`*(n: TypeExpr, i: int): TypeExpr = TypeExpr n.NimNode[i]
-  ## allow iteration through a TypeExpr, in case it's a tuple type with kids
+func isNil*(n: TypeExpr): bool {.borrow.}
+  ## true if nil
+
+proc `[]`*(n: TypeExpr, i: int): TypeExpr {.borrow.}
+  ## allow indexing through a TypeExpr, in case it's a tuple type with kids
+
+proc ensimilate*(source, destination: NormalizedNode): Call =
+  ## perform a call to convert the destination to the source's type;
+  ## the source can be any of a few usual suspects...
+  let typ = TypeExpr getTypeImpl source
+  block:
+    if typ.isNil:
+      break
+    else:
+      case typ.kind
+      of nnkEmpty:
+        break
+      of nnkProcTy:
+        result = newCall(typ[0][0], destination)
+      of nnkRefTy:
+        result = newCall(typ[0], destination)
+      elif typ.kind == nnkSym and $typ == "void":
+        break
+      else:
+        result = newCall(typ, destination)
+      return
+
+  # fallback to typeOf
+  result = newCall(newCall(bindName"typeOf", source), destination)
 
 # fn-TypeExprObj
 
@@ -1051,11 +1088,11 @@ func asProcDef*(n: NormalizedNode): ProcDef =
     errorGot "not a proc definition", n
   n.ProcDef
 
-func name*(n: ProcDef): Name {.borrow.}
-  ## get the name of this ProcDef
-proc `name=`*(n: ProcDef, name: Name) =
-  ## set the name of this ProcDef
-  n.RoutineDef.name = name
+# func name*(n: ProcDef): Name {.borrow.}
+#   ## get the name of this ProcDef
+# proc `name=`*(n: ProcDef, name: Name) =
+#   ## set the name of this ProcDef
+#   n.RoutineDef.name = name
 
 proc `pragma=`*(n: ProcDef, p: PragmaStmt) =
   ## set the pragma

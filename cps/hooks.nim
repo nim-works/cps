@@ -69,10 +69,11 @@ proc hook*(hook: Hook; n: NormalizedNode): NormalizedNode =
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
     newCall(hook.sym,
-            newLit(repr n.name).NormalizedNode,
-            makeLineInfo(n.lineInfoObj).NormalizedNode)
+            newLit(repr n.name),
+            makeLineInfo(n.lineInfoObj))
   else:
-    n.errorAst("the " & $hook & " hook doesn't take one argument")
+    # cast to `Call` avoids type mismatch as converters can't figure this out
+    Call n.errorAst("the " & $hook & " hook doesn't take one argument")
 
 proc hook*(hook: Hook; n: Name): NormalizedNode =
   ## execute the given hook on the given node
@@ -84,7 +85,7 @@ proc hook*(hook: Hook; a, b: NormalizedNode): NormalizedNode =
   case hook
   of Alloc:
     # hook(Cont, env_234234)
-    newCall(hook.sym, a, b)
+    NormalizedNode newCall(hook.sym, a, b)
   of Unwind:
     # hook(continuation, Cont)
     let unwind = hook.sym.NimNode
@@ -98,10 +99,10 @@ proc hook*(hook: Hook; a, b: NormalizedNode): NormalizedNode =
   of Trace:
     # trace("whileLoop_2323", LineInfo(filename: "...", line: 23, column: 44))
     newCall(hook.sym, a,
-            newLit(repr b.name).NormalizedNode,
-            makeLineInfo(b.lineInfoObj).NormalizedNode)
+            newLit(repr b.name),
+            makeLineInfo(b.lineInfoObj))
   of Dealloc:
-    newStmtList(newCall(hook.sym, a, b), newNilLit().NormalizedNode)
+    newStmtList(newCall(hook.sym, a, b), newNilLit())
   else:
     b.errorAst("the " & $hook & " hook doesn't take two arguments")
 

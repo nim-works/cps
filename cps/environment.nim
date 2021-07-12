@@ -72,16 +72,17 @@ proc root*(e: Env): Name =
     r = r.parent
   result = r.inherits
 
-proc castToRoot(e: Env; n: NormalizedNode): NormalizedNode =
+proc castToRoot(e: Env; n: NormalizedNode): Call =
   newCall(e.root, n)
 
-proc castToChild(e: Env; n: Name): NormalizedNode =
+proc castToChild(e: Env; n: Name): Call =
   newCall(e.identity, n)
 
 proc maybeConvertToRoot*(e: Env; locals: NormalizedNode): NormalizedNode =
   ## add an Obj(foo: bar).Other conversion if necessary
   if not eqIdent(locals[0], e.root):
-    e.castToRoot(locals)
+    # converters can't figure this out automatically, manually casting
+    NormalizedNode e.castToRoot(locals)
   else:
     locals
 

@@ -89,7 +89,7 @@ proc tailCall*(cont, to: Name; jump: NormalizedNode = nil): NormalizedNode =
     if jump.isNil:
       cont.NormalizedNode  # just return our continuation
     else:
-      jump                    # return the jump target as requested
+      jump                 # return the jump target as requested
 
 proc jumperCall*(cont, to: Name; via: NormalizedNode): NormalizedNode =
   ## Produce a tail call to `to` with `cont` as the continuation

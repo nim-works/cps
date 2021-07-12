@@ -88,18 +88,18 @@ macro cpsVoodoo*(n: untyped): untyped =
   shim.addPragma ident"cpsVoodooCall"
   result.add shim
 
-proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
+proc doWhelp(n: NormalizedNode; args: seq[NormalizedNode]): Call =
   let sym = bootstrapSymbol n
   result = sym.newCall args
 
 template whelpIt*(input: typed; body: untyped): untyped =
-  var n = normalizingRewrites input
+  var n = normalizeCall input
   if n.kind in nnkCallKinds:
     let p = asCallKind(n).impl
     if p.hasPragma "cpsBootstrap":
-      var it {.inject.}: NimNode = doWhelp(p, n[1..^1])
+      var it {.inject.} = doWhelp(p, n[1..^1])
       body
-      it
+      NimNode it
     else:
       n.errorAst "the input to whelpIt must be a .cps. call"
   else:
@@ -116,7 +116,7 @@ macro whelp*(call: typed): untyped =
     it =
       sym.ensimilate:
         Head.hook:
-          newCall(base, it).NormalizedNode
+          newCall(base, it)
 
 macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
@@ -128,7 +128,7 @@ macro whelp*(parent: Continuation; call: typed): untyped =
     it =
       sym.ensimilate:
         Tail.hook(newCall(ident"Continuation", parent).NormalizedNode,
-                  newCall(base, it).NormalizedNode)
+                  newCall(base, it))
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## Reimplement this symbol to configure a continuation

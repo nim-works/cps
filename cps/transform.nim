@@ -59,7 +59,7 @@ macro cpsJump(cont, call, n: typed): untyped =
   ##
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let
-    call = normalizingRewrites call
+    call = normalizeCall call
     name = genSymProc("Post Call")
     cont = asName(cont)
   debugAnnotation cpsJump, n:
@@ -76,7 +76,7 @@ macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
     c = c.NormalizedNode
-    call = call.NormalizedNode
+    call = asCall(NormalizedNode call)
     name = genSymProc("Post Child")
     cont = asName(cont)
   debugAnnotation cpsContinuationJump, n:
@@ -113,7 +113,7 @@ macro cpsMayJump(cont, n, after: typed): untyped =
       it.add tail
     it = newStmtList(makeContProc(name, cont, after), it)
 
-proc restoreBreak(n: NormalizedNode, label: NormalizedNode = newEmptyNode().NormalizedNode): NormalizedNode =
+proc restoreBreak(n: NormalizedNode, label = newEmptyNormalizedNode()): NormalizedNode =
   ## restore {.cpsBreak: label.} into break statements
   let match = matchCpsBreak(label)
   proc restorer(n: NormalizedNode): NormalizedNode =
@@ -1100,8 +1100,8 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
   var body = newStmtList()     # a statement list will wrap the body
   body.introduce {Coop, Pass, Trace, Head, Tail, Alloc, Dealloc}
   body.add:
-    Trace.hook env.first, n  # hooking against the proc (minus cloned body)
-  body.add n.body                    # add in the cloned body of the original proc
+    Trace.hook env.first, n    # hooking against the proc (minus cloned body)
+  body.add n.body              # add in the cloned body of the original proc
 
   # perform sym substitutions (or whatever)
   n.body = env.rewriteSymbolsIntoEnvDotField body
