@@ -199,8 +199,6 @@ proc copy*(n: NormalizedNode): NormalizedNode {.borrow.}
 proc copyNimNode*(n: NormalizedNode): NormalizedNode {.borrow.}
 proc copyNimTree*(n: NormalizedNode): NormalizedNode {.borrow.}
 
-# XXX: make a pragma type and wrap this up
-
 const
   ConvNodes* = {nnkHiddenStdConv..nnkConv}
     ## Conversion nodes in typed AST
@@ -214,9 +212,14 @@ const
 
 # Converters - to reduce the conversion spam
 
-template defineToNimNodeConverter(t: typedesc) =
+macro defineToNimNodeConverter(ts: varargs[typed]) =
   ## because plastering `.NimNode` makes everyone sad
-  converter `c t ToNimNode`*(n: `t`): NimNode = n.NimNode
+  result = newStmtList()
+  for t in ts:
+    let name = ident("c" & strVal(t) & "ToNimNode")
+    result.add:
+      quote:
+        converter `name`*(n: `t`): NimNode = n.NimNode
 
 template allowAutoDowngrade(t: typedesc, r: distinct typedesc) =
   ## defined a converter allowing easy downgrading of types, eg:
@@ -224,54 +227,36 @@ template allowAutoDowngrade(t: typedesc, r: distinct typedesc) =
   ## XXX: check if downgrades are valid
   converter `c t To r`*(n: `t`): `r` = n.`r`
 
-template allowAutoDowngradeNormalizedNode(t: typedesc) =
+macro allowAutoDowngradeNormalizedNode(ts: varargs[typed]) =
   ## because plastering `.NormalizedNode` makes everyone sad
-  allowAutoDowngrade(t, NormalizedNode)
+  result = newStmtList()
+  for t in ts:
+    result.add:
+      quote:
+        allowAutoDowngrade(`t`, NormalizedNode)
 
 # Define the various conversion relations in one place to show an overview
-# XXX: use the power of macros/templates to make this map prettier
 
 # all the types that can convert down to `NimNode`
-defineToNimNodeConverter(NormalizedNode)
-defineToNimNodeConverter(IdentDef)
-defineToNimNodeConverter(Ident)
-defineToNimNodeConverter(VarSection)
-defineToNimNodeConverter(RoutineDef)
+defineToNimNodeConverter(
+    NormalizedNode, IdentDef, Ident, VarSection, RoutineDef
+  )
 
 # all the types that can convert down to `NormalizedNode`
-allowAutoDowngradeNormalizedNode(Name)
-allowAutoDowngradeNormalizedNode(TypeExpr)
-
-allowAutoDowngradeNormalizedNode(Call)
-
-allowAutoDowngradeNormalizedNode(PragmaStmt)
-allowAutoDowngradeNormalizedNode(PragmaAtom)
-
-allowAutoDowngradeNormalizedNode(IdentDef)
-
-allowAutoDowngradeNormalizedNode(RoutineDef)
-allowAutoDowngradeNormalizedNode(ProcDef)
-
-allowAutoDowngradeNormalizedNode(FormalParams)
-allowAutoDowngradeNormalizedNode(RoutineParam)
-
-allowAutoDowngradeNormalizedNode(VarSection)
-allowAutoDowngradeNormalizedNode(LetSection)
-allowAutoDowngradeNormalizedNode(VarLet)
-allowAutoDowngradeNormalizedNode(VarLetIdentDef)
-allowAutoDowngradeNormalizedNode(VarLetTuple)
-
-allowAutoDowngradeNormalizedNode(DefVarLet)
-allowAutoDowngradeNormalizedNode(IdentDefLet)
+allowAutoDowngradeNormalizedNode(
+    Name, TypeExpr, Call, PragmaStmt, PragmaAtom, IdentDef, RoutineDef,
+    ProcDef, FormalParams, RoutineParam, VarSection, LetSection, VarLet,
+    VarLetIdentDef, VarLetTuple, DefVarLet, IdentDefLet
+  )
 
 # types that go from a specific type to a less specific type, "downgrade"
-allowAutoDowngrade(IdentDefLet, IdentDef)
-allowAutoDowngrade(IdentDefVar, IdentDef)
+allowAutoDowngrade(IdentDefLet,  IdentDef)
+allowAutoDowngrade(IdentDefVar,  IdentDef)
 allowAutoDowngrade(RoutineParam, IdentDef)
-allowAutoDowngrade(LetIdentDef, VarLetIdentDef)
-allowAutoDowngrade(VarIdentDef, VarLetIdentDef)
-allowAutoDowngrade(ProcDef, RoutineDef)
-allowAutoDowngrade(TypeExprRef, TypeExpr)
+allowAutoDowngrade(LetIdentDef,  VarLetIdentDef)
+allowAutoDowngrade(VarIdentDef,  VarLetIdentDef)
+allowAutoDowngrade(ProcDef,      RoutineDef)
+allowAutoDowngrade(TypeExprRef,  TypeExpr)
 
 # fn-NormalizedNode
 

@@ -397,7 +397,6 @@ func lastCpsExprAt(n: NormalizedNode): int =
 
 func annotate(n: NormalizedNode): NormalizedNode =
   ## Annotate expressions requiring flattening in `n`'s children.
-  ## XXX: remove NimNode
 
   result = copyNimNode(n)
 

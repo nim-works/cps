@@ -75,11 +75,6 @@ proc hook*(hook: Hook; n: NormalizedNode): NormalizedNode =
     # cast to `Call` avoids type mismatch as converters can't figure this out
     Call n.errorAst("the " & $hook & " hook doesn't take one argument")
 
-proc hook*(hook: Hook; n: Name): NormalizedNode =
-  ## execute the given hook on the given node
-  ## XXX: work out the correct type class for `n`
-  hook(hook, n.NormalizedNode)
-
 proc hook*(hook: Hook; a, b: NormalizedNode): NormalizedNode =
   ## execute the given hook with two arguments
   case hook
@@ -105,8 +100,3 @@ proc hook*(hook: Hook; a, b: NormalizedNode): NormalizedNode =
     newStmtList(newCall(hook.sym, a, b), newNilLit())
   else:
     b.errorAst("the " & $hook & " hook doesn't take two arguments")
-
-proc hook*(hook: Hook; a: Name; b: NormalizedNode): NormalizedNode =
-  ## execute the given hook with two arguments
-  ## XXX: work out the correct type class for `a` and `b`
-  hook(hook, a.NormalizedNode, b)

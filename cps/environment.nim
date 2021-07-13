@@ -128,7 +128,7 @@ proc objectType(e: Env): NimNode =
   var pragma = newEmptyNode()
   var record = nnkRecList.newNimNode(e.identity.NimNode)
   e.populateType record
-  var parent = nnkOfInherit.newNimNode(e.root.NimNode).add e.inherits.NimNode
+  var parent = nnkOfInherit.newNimNode(e.root.NimNode).add e.inherits
   result = nnkRefTy.newTree:
     nnkObjectTy.newTree(pragma, parent, record)
 
@@ -159,7 +159,6 @@ when cpsReparent:
 
 proc makeType*(e: Env): NimNode =
   ## turn an env into a named object typedef `foo = object ...`
-  # XXX: remove NimNode
   nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType)
 
 proc first*(e: Env): Name = e.c
@@ -255,7 +254,6 @@ proc newEnv*(c: Name; store: var NormalizedNode; via: Name, rs: NormalizedNode):
   ## `store` is where we add types and procedures,
   ## `via` is the type from which we inherit,
   ## `rs` is the return type (if not nnkEmpty) of the continuation.
-  # XXX: remove the Name hack
   let via = if via.isNil: errorAst"need a type".Name else: via
 
   result = Env(c: c, store: store, via: via, id: via)
@@ -268,9 +266,7 @@ proc newEnv*(store: var NormalizedNode; via: Name, rs: NormalizedNode): Env=
   newEnv(asName("continuation"), store, via, rs)
 
 proc identity*(e: var Env): Name =
-  # XXX: replace asserts and remove NimNode
-  assert not e.id.isNil
-  assert not e.id.NimNode.isEmpty
+  ## identifier of our continuation type
   result = e.id
 
 proc initialization(e: Env; field: Name, section: VarLetIdentDef): NimNode =
@@ -324,7 +320,6 @@ when false:
 proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
   ## consume a var|let section and yield name, node pairs
   ## representing assignments to local scope
-  # XXX: remove NimNode
   template maybeAdd(x) =
     if not into.isNil:
       into.add x
@@ -400,7 +395,6 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormalizedNode): NormalizedNo
 
 proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
-  # XXX: remove NimNode
   proc resultdot(n: Name): NormalizedNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
@@ -461,7 +455,6 @@ proc createResult*(env: Env, exported = false): ProcDef =
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
   ## the whelp needs to create a continuation
-  # XXX: remove NimNode
   let resultName = asName("result")
     ## the result identifier for the new whelp's proc body
 
@@ -486,7 +479,6 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
 
 proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
-  # XXX: remove NimNode
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot}
@@ -494,8 +486,6 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
   let c = genSymVar("C")
   result.body.add:
     # declare `var c: Cont`
-    # XXX: conversion must be forced otherwise we end up with an ambiguous call
-    #      between the add a single NimNode and add many NimNode (varargs).
     newVarSection(c, env.root)
 
   # create the continuation using the new variable and point it at the proc
