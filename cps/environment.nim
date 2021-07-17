@@ -235,11 +235,9 @@ proc set(e: var Env; key: Name; val: VarLetIdentDef): Env =
 
 proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
   ## add an IdentDef from a Var|Let Section to the env
-  template stripVar(n: NimNode): TypeExpr =
+  template stripVar(n: TypeExpr): TypeExpr =
     ## pull the type out of a VarTy
-    ## XXX: little hacky about how we assume it's a valid type expression
-    TypeExpr:
-      if n.kind == nnkVarTy: n[0] else: n
+    if n.kind == nnkVarTy: n[0] else: n
 
   let
     field = genField def.name.strVal
@@ -439,8 +437,8 @@ proc createResult*(env: Env, exported = false): ProcDef =
 
   result = ProcDef:
     genAst(name = name.NimNode, field = field.NimNode, c = env.first.NimNode,
-           cont = env.identity.NimNode, tipe = env.rs.typ, dismissed=Dismissed,
-           finished=Finished, running=Running):
+           cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
+           dismissed=Dismissed, finished=Finished, running=Running):
       {.push experimental: "callOperator".}
       proc name(c: cont): tipe {.used.} =
         case c.state
@@ -507,7 +505,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
     newAssignment(c, newCall(bindName"trampoline", c))
 
   # do an easy static check, and then
-  if env.rs.typ != asName(result.returnParam):
+  if env.rs.typ != result.returnParam:
     result.body.add:
       result.errorAst:
         "environment return-type doesn't match bootstrap return-type"

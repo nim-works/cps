@@ -326,8 +326,9 @@ proc getTypeInst*(n: NormalizedNode): NormalizedNode {.borrow.}
 # TODO - restrict these to only valid types
 proc `[]`*(n: NormalizedNode; i: int): NormalizedNode {.borrow.}
   ## grab the `i`'th child of a normalized node should be normalized itself
-proc `[]`*(n: NormalizedNode; i: BackwardsIndex): NormalizedNode {.borrow.}
+proc `[]`*(n: NormalizedNode; i: BackwardsIndex): NormalizedNode =
   ## grab the `i`'th child of a normalized node should be normalized itself
+  NormalizedNode n.NimNode[i] # borrow is busted
 proc `[]`*[T, U](n: NormalizedNode, x: HSlice[T, U]): seq[NormalizedNode] =
   ## grab an inclusive `n` slice of normalized children
   seq[NormalizedNode] n.NimNode[x]
@@ -550,6 +551,9 @@ func isNil*(n: TypeExpr): bool {.borrow.}
 proc `[]`*(n: TypeExpr, i: int): TypeExpr {.borrow.}
   ## allow indexing through a TypeExpr, in case it's a tuple type with kids
 
+proc `==`*(a, b: TypeExpr): bool {.borrow.}
+  ## compare two `TypeEpxr`s and see if they're equal
+
 # fn-TypeExprObj
 
 proc asTypeExprObj*(n: NormalizedNode): TypeExprObj =
@@ -604,8 +608,13 @@ type
   DefLike* = IdentDefLike | DefVarLet | TupleDefVarLet
     ## abstract over any IdentDef or VarTuple from a VarLet or a RoutineParam
 
-func typ*(n: DefLike): NimNode = n.NimNode[^2]
-func val*(n: DefLike): NimNode = n.NimNode[^1]
+func typ*(n: DefLike): TypeExpr =
+  ## get the type of this identdef or vartuple
+  TypeExpr:
+    n.NormalizedNode[^2]
+func val*(n: DefLike): NormalizedNode =
+  ## get the value of this identdef or vartuple
+  n.NormalizedNode[^1]
 func hasValue*(n: DefLike): bool =
   ## has a non-Empty initial value defined for the ident, sym or tuple
   ## Yes, proc, you ARE a good proc. You have value, hasValue, in fact.
@@ -617,8 +626,7 @@ func hasType*(n: DefLike): bool =
 
 func inferTypFromImpl*(n: DefLike): TypeExpr =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  TypeExpr:
-    if n.hasType: n.typ else: getTypeImpl(n.val)
+  if n.hasType: n.typ else: TypeExpr getTypeImpl(n.val)
 
 # fn-IdentDef
 
@@ -672,12 +680,20 @@ func def*(n: VarLetLike): DefVarLet|TupleDefVarLet =
   when n is VarLetTuple:
     # the tuple definition (`nnkVarTuple`) from a var or let section
     TupleDefVarLet n[0]
-  elif n is VarLetLike:
+  else:
     DefVarLet n[0]
-func typ*(n: VarLetLike): NimNode = n.def.typ
-  ## the type of this definition (IdentDef or VarTuple)
-func val*(n: VarLetLike): NormalizedNode = n.def.val.NormalizedNode
+func val*(n: VarLetLike): NormalizedNode =
   ## the ident or sym being defined, or tuple being defined
+  n.def.val
+
+func typ*(n: VarLetLike): TypeExpr =
+  ## the type of this definition (IdentDef or VarTuple)
+  when n is VarLetTuple:
+    #return the type based on `getTypeInst`
+    TypeExpr:
+      getTypeInst n.val
+  else:
+    n.def.typ
 func kind*(n: VarLetLike): NimNodeKind = n.NimNode.kind
 func hasValue*(n: VarLetLike): bool = n.def.hasValue
   ## whether an initial value has been specified
@@ -698,8 +714,7 @@ func name*(n: VarLetIdentDefLike): Name = n.identdef.name
   ## will have the name
 func inferTypFromImpl*(n: VarLetIdentDefLike): TypeExpr =
   ## returns the typ if specified or uses `macro.getTypeImpl` to infer it
-  TypeExpr:
-    if n.hasType: n.typ else: getTypeImpl(n.val)
+  if n.hasType: n.typ else: TypeExpr getTypeImpl(n.val)
 
 # fn-VarLet
 
@@ -751,29 +766,25 @@ proc asVarLetIdentDef*(n: VarLet): VarLetIdentDef =
 
 func clone*(n: VarLet, value: NimNode = nil): VarLet =
   ## clone a `VarLet` but with `value` changed
-  let def = copyNimNode(n.def.NimNode)
+  let def = copyNimNode(n.def)
   # copy all nodes in the original definition excluding the last node, which
   # is the value.
-  for idx in 0 ..< n.def.NimNode.len - 1:
-    def.add copy(n.def.NimNode[idx])
+  for idx in 0 ..< n.def.len - 1:
+    def.add copy(n.def[idx])
 
   # add the value replacement
   # if one is not given we copy the value too
   if value.isNil:
     def.add copy(n.def.val)
   else:
-    def.add copy(value)
+    def.add copy(NormalizedNode value)
 
   # copy the varlet and add the new def
   result = asVarLet:
-    copyNimNode(n.NimNode).add def
+    copyNimNode(n).add def
 
 # fn-VarLetTuple
 
-proc typ*(n: VarLetTuple): TypeExpr =
-  ## return the type based on `getTypeInst`
-  TypeExpr:
-    getTypeInst n.val
 iterator indexNamePairs*(n: VarLetTuple): (int, Name) =
   ## return the names of fields on the lhs of a var/let tuple assignment
   
