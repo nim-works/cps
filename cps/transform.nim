@@ -17,9 +17,8 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   let
     contParam = desym cont
     contType = cont.typeInst # XXX: funny thing that, we just desym'd cont
-    contFormalParams = [contType, newIdentDefs(contParam.NimNode, contType)]
 
-  result = newProcDef(name, contFormalParams)
+  result = newProcDef(name, contType, newIdentDef(contParam, contType))
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
   result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc, Unwind}
@@ -819,7 +818,7 @@ proc annotate(parent: var Env; n: NormalizedNode): NormalizedNode =
     of nnkTryStmt:
       if nc.isCpsBlock:
         let
-          final = nc.findChild(it.kind == nnkFinally).NormalizedNode
+          final = nc.findChild(it.kind == nnkFinally)
           noFinally = final.isNil
           noExceptBranch = nc.findChild(it.kind == nnkExceptBranch).isNil
           tryBody =
@@ -905,13 +904,15 @@ macro cpsManageException(n: typed): untyped =
     ## - Should the continuation raise, connect the exception to the stack
     ##   outside of CPS.
     if n.isCpsCont:
-      let hasException = n.pragma.findChild(it.kind == nnkCall and
-                                            it[0] == bindSym"cpsHasException")
+      let
+        n = asRoutineDef(n) # known because of isCpsCont
+        hasException = n.pragma.findChild(it.kind == nnkCall and
+                                          it[0] == bindSym"cpsHasException")
       # If `n` is a continuation with exception
       if not hasException.isNil:
         # Create a copy of this continuation and rename it
         let
-          n = ProcDef n
+          n = asProcDef(n)
           inner = clone(n, n.body)
         inner.name = genSymProc("Managed_" & inner.name.strVal)
         # Copy the continuation pragmas, but remove the "has exception" tag
@@ -947,7 +948,7 @@ macro cpsManageException(n: typed): untyped =
           exCont = asName(hasException[1])
           # Take the exception access from the annotation and resym it to
           # use our symbol
-          ex = hasException[2].NormalizedNode.resym(exCont, cont)
+          ex = hasException[2].resym(exCont, cont)
 
         # Add the manager itself
         c.body.add:
@@ -1095,7 +1096,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormalizedNode =
 
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
-  n.formalParams = newFormalParams(asTypeExpr(T), env.firstDef)
+  n.formalParams = newFormalParams(asTypeExpr(NormalizedNode T), env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
   body.introduce {Coop, Pass, Trace, Head, Tail, Alloc, Dealloc}

@@ -100,7 +100,11 @@ type
     ## each calling params of proc/func/etc definition is an nnkIdentDefs
 
   Call* = distinct NormalizedNode
-    ## opaque sum: call node of some variety, see `macros.CallNodes`
+    ## opaque sum: call node of some variety, see `macros.CallNodes` and
+    ## `macros.nnkCallKinds`
+  CallKind* = Call
+    ## opaque sum: call node of some variety, see `macros.nnkCallKinds`,
+    ## this is an alias as it's not really useful to distinguish the two.
 
   Pragma* = distinct NormalizedNode
     ## opaque sum: `PragmaStmt`, `PragmaBlock`, and `PragmaExpr`
@@ -258,6 +262,24 @@ allowAutoDowngrade(VarIdentDef,  VarLetIdentDef)
 allowAutoDowngrade(ProcDef,      RoutineDef)
 allowAutoDowngrade(TypeExprRef,  TypeExpr)
 
+template createAsTypeFunc(r: typedesc, kinds: set[NimNodeKind], msg: string) =
+  ## creates a `func asX(n: NormalizedNode): X`, or errors out
+  func `as r`*(n: NormalizedNode): `r` =
+    ## coerces a node `n` or errors out
+    if n.kind notin kinds:
+      errorGot `msg`, n
+    `r` n
+
+template createAsTypeAllowEmptyFunc(r: typedesc, kinds: set[NimNodeKind],
+                                    msg: string) =
+  ## creates a `func asXAllowEmpty(n: NormalizedNode): X`, the func coerces the
+  ## type or returns an error node out
+  func `as r AllowEmpty`*(n: NormalizedNode): `r` =
+    ## coerces a node `n` or errors out
+    if n.kind notin {nnkEmpty} + kinds:
+      errorGot `msg`, n
+    `r` n
+
 # fn-NormalizedNode
 
 proc newEmptyNormalizedNode*(): NormalizedNode =
@@ -302,9 +324,6 @@ proc `$`*(n: NormalizedNode): string =
 func len*(n: NormalizedNode): int {.borrow.}
   ## number of children
 
-func last*(n: NormalizedNode): NormalizedNode {.borrow.}
-  ## last child
-
 func kind*(n: NormalizedNode): NimNodeKind {.borrow.}
   ## the kind (`NimNodeKind`) of the underlying `NimNode`
 
@@ -316,6 +335,9 @@ proc add*(f: NimNode|NormalizedNode, c: NormalizedNode): NormalizedNode {.discar
 proc add*(f: NormalizedNode, cs: NormalizedVarargs): NormalizedNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
   NormalizedNode f.add(varargs[NimNode] cs)
+
+template findChild*(n: NormalizedNode; cond: untyped): NormalizedNode =
+  NormalizedNode macros.findChild(n, cond)
 
 proc getImpl*(n: NormalizedNode): NormalizedNode {.borrow.}
   ## the implementaiton of a normalized node should be normalized itself
@@ -340,6 +362,10 @@ proc `[]=`*(n: NormalizedNode; i: int; child: NormalizedNode) {.borrow.}
   ## set the `i`'th child of a normalized node to a normalized child
 proc `[]=`*(n: NormalizedNode; i: BackwardsIndex; child: NormalizedNode) {.borrow.}
   ## set the `i`'th child of a normalized node to a normalized child
+
+func last*[T: RecursiveNode](n: T): T =
+  ## last child
+  n.NimNode.last.T
 
 proc getPragmaName*(n: NimNode): NimNode {.deprecated: "Replace with Pragma version".} =
   ## retrieve the symbol/identifier from the child node of a nnkPragma
@@ -411,16 +437,17 @@ func isSymbol*(n: Name): bool =
   not n.isNil and n.kind == nnkSym
 
 # fn-Name - coerce and validation
-proc asName*(n: NimNode): Name =
+
+const nameKinds = {nnkIdent, nnkSym}
+createAsTypeFunc(Name, nameKinds, "not an ident or sym")
+createAsTypeAllowEmptyFunc(Name, nameKinds, "not an ident or sym, or empty")
+
+func asName*(n: NimNode): Name =
   ## coerce to `Name`
-  if n.kind notin {nnkIdent, nnkSym}:
-    errorGot "not an ident or sym", n
-  n.Name
-proc asNameAllowEmpty*(n: NimNode): Name =
+  asName(NormalizedNode n)
+func asNameAllowEmpty*(n: NimNode): Name =
   ## coerce to `Name`, allow `nnkEmpty`, error out otherwise
-  if n.kind notin {nnkIdent, nnkSym, nnkEmpty}:
-    errorGot "not an ident, sym, or empty", n
-  n.Name
+  asNameAllowEmpty(n)
 
 # fn-Name - construct various Name in various ways (ident/sym)
 
@@ -440,15 +467,23 @@ proc genSymLet*(n: string = ""): Name =
 proc genSymProc*(n: string): Name =
   ## `genSym` an `nskProc`
   genSym(nskProc, n).Name
+proc genSymField*(n: string): Name =
+  ## `genSym` an `nskField`
+  genSym(nskField, n).Name
 proc genSymUnknown*(n: string): Name =
   ## `genSym` an `nskUnknown`
   genSym(nskUnknown, n).Name
+
+proc desym*(n: Name): Name {.borrow.}
+  ## ensures that `Name` is an `nnkIdent`
+proc resym*(fragment: NormalizedNode, sym, replacement: Name): NormalizedNode {.borrow.}
+  ## replace `sym` in the AST `fragment` with the `replacement`
 
 proc genField*(ident = ""): Name
   {.deprecated: "pending https://github.com/nim-lang/Nim/issues/17851".} =
   ## generate a unique field to put inside an object definition
   asName:
-    desym genSym(nskField, ident)
+    desym genSymField(ident)
 
 proc bindName*(n: static string): Name =
   ## `bindSym` the string as a `Name`
@@ -459,15 +494,10 @@ proc bindName*(n: static string, rule: static BindSymRule): Name =
   let r = bindSym(n, rule)
   r.Name
 
-proc desym*(n: Name): Name {.borrow.}
-  ## ensures that `Name` is an `nnkIdent`
-proc resym*(fragment: NormalizedNode, sym, replacement: Name): NormalizedNode {.borrow.}
-  ## replace `sym` in the AST `fragment` with the `replacement`
-
-func typeInst*(n: Name): NimNode
-  {.deprecated: "A Name can be a bare ident and entirely".} =
+func typeInst*(n: Name): TypeExpr
+  {.deprecated: "A Name can be a bare ident and entirely untyped".} =
   ## gets the type via `getTypeInst`
-  getTypeInst n.NimNode
+  getTypeInst n
 
 func isExported*(n: Name): bool =
   ## true if this has been exported
@@ -483,8 +513,6 @@ func eqIdent*(a: NormalizedNode, b: Name): bool {.borrow.}
 
 proc asName*(n: TypeExpr): Name =
   ## coerce to a `Name`, or error
-  # if n.kind notin {nnkIdent, nnkSym}:
-  #   errorGot "not an ident or sym", n
   n.Name
 
 # fn-ExprLike
@@ -521,33 +549,16 @@ proc newCall*(n: string, args: AnyNodeVarargs): Call =
   result = newCall(asName(n), args)
 
 # fn-TypeSection
-
-proc asTypeSection*(n: NormalizedNode): TypeSection =
-  ## coerce to `TypeSection`, error out otherwise
-  if n.kind notin {nnkTypeSection}:
-    errorGot "not a type section", n
-  n.TypeSection
+createAsTypeFunc(TypeSection, {nnkTypeSection}, "not a type section")
 
 # fn-TypeDef
-
-proc asTypeDef*(n: NormalizedNode): TypeDef =
-  ## coerce to `TypeDef`, error out otherwise
-  if n.kind notin {nnkTypeDef}:
-    errorGot "not a type def", n
-  n.TypeDef
+createAsTypeFunc(TypeDef, {nnkTypeDef}, "not a type def")
 
 # fn-TypeExpr
 
-proc asTypeExpr*(n: NimNode): TypeExpr =
-  ## coerce to `TypeExpr`, disallow `nnkEmpty`, error out otherwise
-  if n.kind notin TypeExprKinds:
-    errorGot "not a type expression", n
-  n.TypeExpr
-proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
-  ## coerce to `TypeExpr`, allow `nnkEmpty`, error out otherwise
-  if n.kind notin {nnkEmpty} + TypeExprKinds:
-    errorGot "not a type expression or empty", n
-  n.TypeExpr
+createAsTypeFunc(TypeExpr, TypeExprKinds, "not a type expression")
+createAsTypeAllowEmptyFunc(TypeExpr, TypeExprKinds,
+  "not a type expression or empty")
 
 func isNil*(n: TypeExpr): bool {.borrow.}
   ## true if nil
@@ -557,19 +568,11 @@ proc `==`*(a, b: TypeExpr): bool {.borrow.}
 
 # fn-TypeExprObj
 
-proc asTypeExprObj*(n: NormalizedNode): TypeExprObj =
-  ## coerce to `TypeExprObj`, error out otherwise
-  if n.kind notin {nnkObjectTy}:
-    errorGot "not an object type expression", n
-  n.TypeExprObj
+createAsTypeFunc(TypeExprObj, {nnkObjectTy}, "not an object type expression")
 
 # fn-TypeExprRef
 
-proc asTypeExprRef*(n: NormalizedNode): TypeExprRef =
-  ## coerce to `TypeExprRef`, error out otherwise
-  if n.kind notin {nnkRefTy}:
-    errorGot "not a ref type expression", n
-  n.TypeExprRef
+createAsTypeFunc(TypeExprRef, {nnkRefTy}, "not a ref type expression")
 
 proc newRefType*(n: Name): TypeExprRef =
   ## create a new ref type from `n`
@@ -877,11 +880,10 @@ func hasPragma*(n: PragmaLike, s: static[string]): bool =
 
 # fn-PragmaStmt
 
-proc asPragmaStmt*(n: Name|NormalizedNode): PragmaStmt =
+createAsTypeFunc(PragmaStmt, {nnkPragma}, "not a pragmaStmt")
+proc asPragmaStmt*(n: Name): PragmaStmt =
   ## validate and coerce into a PragmaStmt
-  if n.kind notin {nnkPragma}:
-    errorGot "not a pragmaStmt", n
-  n.PragmaStmt
+  asPragmaStmt(n.NormalizedNode)
 
 proc newPragmaStmt*(es: varargs[PragmaAtom]): PragmaStmt =
   ## create a new PragmaStmt node with `es` pragma exprs, but returns an empty
@@ -906,11 +908,7 @@ proc newPragmaStmtWithInfo*(inf: NormalizedNode, es: varargs[PragmaAtom]): Pragm
 
 # fn-PragmaBlock
 
-proc asPragmaBlock*(n: NormalizedNode): PragmaBlock =
-  ## validate and coerce into a PragmaBlock
-  if n.kind notin {nnkPragmaBlock}:
-    errorGot "not a pragmaStmt", n
-  PragmaBlock n
+createAsTypeFunc(PragmaBlock, {nnkPragmaBlock}, "not a pragmaBlock")
 
 # fn-PragmaHaver
 
@@ -967,17 +965,8 @@ proc addPragma*(n: RoutineDefLike, prag: Name, pragArgs: openArray[Name]) =
 
 # fn-Call
 
-proc asCallKind*(n: NormalizedNode): Call =
-  ## validate and coerce into a `Call` if it's an `nnkCallKinds` or error
-  if n.kind notin nnkCallKinds:
-    errorGot "node is not a call kind", n
-  Call n
-
-proc asCall*(n: NormalizedNode): Call =
-  ## validate and coerce into a `Call` if it's a CallNode or error
-  if n.kind notin CallNodes:
-    errorGot "node is not a call node", n
-  Call n
+createAsTypeFunc(CallKind, nnkCallKinds, "node is not a call kind")
+createAsTypeFunc(Call, CallNodes, "node is not a call node")
 
 template ifCallThenIt*(n: NormalizedNode, body: untyped) =
   ## if `n` is a `CallNodes` then run the `body` with `it` as `Call`
@@ -1034,11 +1023,8 @@ proc newFormalParams*(ret: TypeExpr, ps: varargs[IdentDef]): FormalParams =
 
 # fn-RoutineDef
 
-func asRoutineDef*(n: NormalizedNode): RoutineDef =
-  ## coerce into a `RoutineDef` or error out
-  if n.kind notin RoutineNodes:
-    errorGot "not a routine (proc, template, macro, etc) definition", n
-  n.RoutineDef
+createAsTypeFunc(RoutineDef, RoutineNodes):
+  "not a routine (proc, template, macro, etc) definition"
 
 func name*(n: RoutineDef): Name =
   ## get the name of this RoutineDef
@@ -1073,16 +1059,15 @@ proc `pragma=`*(n: RoutineDef, p: PragmaStmt) =
 
 # fn-ProcDef
 
-proc newProcDef*(name: Name, formalParams: openArray[NimNode]): ProcDef =
-  ## create a new proc def with name and formal params (includes return type)
-  ## and an empty body (`nnkStmtList`)
+proc newProcDef*(name: Name, retType: TypeExpr,
+                 callParams: varargs[IdentDef]): ProcDef =
+  ## create a new proc def with name, returnt type, and calling params and an
+  ## empty body (`nnkStmtList`)
+  var formalParams = @[NimNode retType]
+  formalParams = formalParams & seq[NimNode] @callParams
   newProc(name.Nimnode, formalParams, newStmtList()).ProcDef
 
-func asProcDef*(n: NormalizedNode): ProcDef =
-  ## coerce into a `ProcDef` or error out
-  if n.kind != nnkProcDef:
-    errorGot "not a proc definition", n
-  n.ProcDef
+createAsTypeFunc(ProcDef, {nnkProcDef}, "node is not a proc definition")
 
 proc `pragma=`*(n: ProcDef, p: PragmaStmt) =
   ## set the pragma
