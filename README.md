@@ -18,6 +18,9 @@ so there is virtually no API and no limitations on composition.
 A substantial effort to demystify this style of programming, and what it may
 enable, lives [in the docs/ subdirectory](https://github.com/disruptek/cps/tree/master/docs).
 
+We also have a tutorial to help new users on their way to get starting with CPS,
+this can be found [here](https://github.com/disruptek/cps/blob/master/tutorial/README.md)
+
 For a description of the origins of our approach, see the included papers and
 https://github.com/nim-lang/RFCs/issues/295, where we write in more depth about
 why the implementation exists, goals for future development, etc.
