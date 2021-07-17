@@ -318,20 +318,24 @@ proc add*(f: NormalizedNode, cs: NormalizedVarargs): NormalizedNode {.discardabl
   NormalizedNode f.add(varargs[NimNode] cs)
 
 proc getImpl*(n: NormalizedNode): NormalizedNode {.borrow.}
-  ## the implementaiton of a normalized node should be
+  ## the implementaiton of a normalized node should be normalized itself
 
-proc getTypeInst*(n: NormalizedNode): NormalizedNode {.borrow.}
+proc getTypeInst*(n: NormalizedNode): TypeExpr {.borrow.}
   ## return the type instance, via `getTypeInst` of a NimNode
 
+type
+  RecursiveNode* = NormalizedNode | TypeExpr
+
 # TODO - restrict these to only valid types
-proc `[]`*(n: NormalizedNode; i: int): NormalizedNode {.borrow.}
+proc `[]`*[T: RecursiveNode](n: T; i: int): T =
   ## grab the `i`'th child of a normalized node should be normalized itself
-proc `[]`*(n: NormalizedNode; i: BackwardsIndex): NormalizedNode =
+  T n.NimNode[i]
+proc `[]`*[T: RecursiveNode](n: T; i: BackwardsIndex): T =
   ## grab the `i`'th child of a normalized node should be normalized itself
-  NormalizedNode n.NimNode[i] # borrow is busted
-proc `[]`*[T, U](n: NormalizedNode, x: HSlice[T, U]): seq[NormalizedNode] =
+  T n.NimNode[i]
+proc `[]`*[R: RecursiveNode, T, U](n: R, x: HSlice[T, U]): seq[R] =
   ## grab an inclusive `n` slice of normalized children
-  seq[NormalizedNode] n.NimNode[x]
+  seq[R] n.NimNode[x]
 proc `[]=`*(n: NormalizedNode; i: int; child: NormalizedNode) {.borrow.}
   ## set the `i`'th child of a normalized node to a normalized child
 proc `[]=`*(n: NormalizedNode; i: BackwardsIndex; child: NormalizedNode) {.borrow.}
@@ -548,9 +552,6 @@ proc asTypeExprAllowEmpty*(n: NimNode): TypeExpr =
 func isNil*(n: TypeExpr): bool {.borrow.}
   ## true if nil
 
-proc `[]`*(n: TypeExpr, i: int): TypeExpr {.borrow.}
-  ## allow indexing through a TypeExpr, in case it's a tuple type with kids
-
 proc `==`*(a, b: TypeExpr): bool {.borrow.}
   ## compare two `TypeEpxr`s and see if they're equal
 
@@ -599,7 +600,7 @@ type
     ## abstract over a single var or let sections IdentDef, or a routine param
     ## definition
 
-func name*(n: IdentDefLike): Name = n.NimNode[0].Name
+func name*(n: IdentDefLike): Name = n[0].Name
   ## retrieve the name of this `IdentDefLike`
 
 # fn-DefLike
@@ -690,8 +691,7 @@ func typ*(n: VarLetLike): TypeExpr =
   ## the type of this definition (IdentDef or VarTuple)
   when n is VarLetTuple:
     #return the type based on `getTypeInst`
-    TypeExpr:
-      getTypeInst n.val
+    getTypeInst n.val
   else:
     n.def.typ
 func kind*(n: VarLetLike): NimNodeKind = n.NimNode.kind
@@ -1042,7 +1042,7 @@ func asRoutineDef*(n: NormalizedNode): RoutineDef =
 
 func name*(n: RoutineDef): Name =
   ## get the name of this RoutineDef
-  Name n[0]
+  Name n.NimNode.name
 proc `name=`*(n: RoutineDef, name: Name) =
   ## set the name of this RoutineDef
   n.NimNode.name = name.NimNode
