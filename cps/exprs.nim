@@ -250,10 +250,9 @@ func isSingleStatement(n: NormalizedNode): bool =
 
 func getMagic(n: NormalizedNode): string =
   ## Obtain the magic name of the call `n`
-  if n.kind in CallNodes:
-    var n = asCall(n)
-    if n.canGetImpl:
-      let impl = n.impl
+  ifCallThenIt(n):
+    if it.canGetImpl:
+      let impl = it.impl
       if impl.hasPragma("magic"):
         for pragma in impl.pragma.items:
           case pragma.kind

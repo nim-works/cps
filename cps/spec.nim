@@ -190,10 +190,9 @@ func wrappedFinally*(n, final: NormalizedNode): NormalizedNode =
 proc isVoodooCall*(n: NormalizedNode): bool =
   ## true if this is a call to a voodoo procedure
   if not n.isNil and n.len > 0:
-    if n.kind in nnkCallKinds:
-      let call = asCallKind(n)
-      if call.hasImpl:
-        result = call.impl.hasPragma "cpsVoodooCall"
+    ifCallKindThenIt(n):
+      if it.hasImpl:
+        result = it.impl.hasPragma "cpsVoodooCall"
 
 proc trampoline*[T: Continuation](c: T): T =
   ## This is the basic trampoline: it will run the continuation
@@ -206,13 +205,12 @@ proc trampoline*[T: Continuation](c: T): T =
 proc isCpsCall*(n: NormalizedNode): bool =
   ## true if this node holds a call to a cps procedure
   if n.len > 0:
-    if n.kind in CallNodes:
-      let call = asCall(n)
-      if call.hasImpl:
+    ifCallThenIt(n):
+      if it.hasImpl:
         # what we're looking for here is a jumper; it could
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
-        result = call.impl.hasPragma("cpsMustJump")
+        result = it.impl.hasPragma("cpsMustJump")
 
 proc isCpsBlock*(n: NormalizedNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -330,3 +328,27 @@ macro cpsMagic*(n: untyped): untyped =
   shim.addPragma ident"cpsMustJump"
   shim.addPragma ident"cpsMagicCall"
   result.add shim
+
+proc ensimilate*(source, destination: NormalizedNode): Call =
+  ## perform a call to convert the destination to the source's type;
+  ## the source can be any of a few usual suspects...
+  let typ = TypeExpr getTypeImpl source
+  block:
+    if typ.isNil:
+      break
+    else:
+      case typ.kind
+      of nnkEmpty:
+        break
+      of nnkProcTy:
+        result = newCall(typ[0][0], destination)
+      of nnkRefTy:
+        result = newCall(typ[0], destination)
+      elif typ.kind == nnkSym and $typ == "void":
+        break
+      else:
+        result = newCall(typ, destination)
+      return
+
+  # fallback to typeOf
+  result = newCall(newCall(bindName"typeOf", source), destination)

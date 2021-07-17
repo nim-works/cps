@@ -170,10 +170,10 @@ proc get*(e: Env): NormalizedNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
-proc rewriteResult(e: Env; n: NimNode): NormalizedNode =
+proc rewriteResult(e: Env; n: NormalizedNode): NormalizedNode =
   ## replaces result symbols with the env's result; this should be
   ## safe to run on sem'd ast (for obvious reasons)
-  proc rewriter(n: NimNode): NormalizedNode =
+  proc rewriter(n: NormalizedNode): NormalizedNode =
     ## Rewrite any result symbols to use the result field from the Env.
     case n.kind
     of nnkSym:
@@ -529,7 +529,8 @@ proc rewriteVoodoo*(env: Env; n: NormalizedNode): NormalizedNode =
   ## the first argument
   proc voodoo(n: NormalizedNode): NormalizedNode =
     if n.isVoodooCall:
-      result = n.copyNimTree
-      result[0] = desym result[0]
-      result.insert(1, env.first.NormalizedNode)
+      let it = asCallKind(n.copyNimTree)
+      it.desym
+      it.prependArg(env.first)
+      result = it
   result = filter(n, voodoo)

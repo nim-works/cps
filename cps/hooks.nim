@@ -57,7 +57,7 @@ proc sym*(hook: Hook): Name =
     # rely on a `mixin $hook` in (high) scope
     asName($hook)
 
-proc hook*(hook: Hook; n: NormalizedNode): NormalizedNode =
+proc hook*(hook: Hook; n: NormalizedNode): Call =
   ## execute the given hook on the given node
   case hook
   of Alloc: # (unused; see alloc/2)

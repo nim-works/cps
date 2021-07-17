@@ -283,14 +283,17 @@ proc upgradeToNormalizedNode*[T](n: T): NormalizedNode =
 type
   NormalizedVarargs = varargs[NormalizedNode, onlyNormalizedNode]
   AnyNodeVarargs = varargs[NormalizedNode, upgradeToNormalizedNode]
+  Desymable = NormalizedNode | ProcDef
+
+proc desym*[T: Desymable](n: T, sym: NimNode|Name): T =
+  ## desym all occurences of a specific sym
+  n.NimNode.replace(
+    proc(it: NimNode): bool = it == sym.NimNode, desym sym.NimNode
+  ).T # ensure the return type is the same as what we started with
 
 template hash*(n: NormalizedNode): Hash =
   ## hash `NormalizedNode`, necessary for what we do in `environment`
   hash(n.NimNode)
-
-proc desym*(n: NormalizedNode, sym: NimNode): NormalizedNode =
-  ## desym all occurences of a specific sym
-  n.replace(proc(it: NimNode): bool = it == sym, desym sym).NormalizedNode
 
 proc `$`*(n: NormalizedNode): string =
   ## to string
@@ -307,7 +310,9 @@ func kind*(n: NormalizedNode): NimNodeKind {.borrow.}
 
 proc add*(f: NimNode|NormalizedNode, c: NormalizedNode): NormalizedNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
-  NormalizedNode f.NimNode.add(c.NimNode)
+  {.push hint[ConvFromXtoItselfNotNeeded]: off.}
+  result = NormalizedNode f.NimNode.add(c.NimNode)
+  {.pop.}
 proc add*(f: NormalizedNode, cs: NormalizedVarargs): NormalizedNode {.discardable.} =
   ## hopefully this fixes ambiguous call issues
   NormalizedNode f.add(varargs[NimNode] cs)
@@ -545,30 +550,6 @@ func isNil*(n: TypeExpr): bool {.borrow.}
 proc `[]`*(n: TypeExpr, i: int): TypeExpr {.borrow.}
   ## allow indexing through a TypeExpr, in case it's a tuple type with kids
 
-proc ensimilate*(source, destination: NormalizedNode): Call =
-  ## perform a call to convert the destination to the source's type;
-  ## the source can be any of a few usual suspects...
-  let typ = TypeExpr getTypeImpl source
-  block:
-    if typ.isNil:
-      break
-    else:
-      case typ.kind
-      of nnkEmpty:
-        break
-      of nnkProcTy:
-        result = newCall(typ[0][0], destination)
-      of nnkRefTy:
-        result = newCall(typ[0], destination)
-      elif typ.kind == nnkSym and $typ == "void":
-        break
-      else:
-        result = newCall(typ, destination)
-      return
-
-  # fallback to typeOf
-  result = newCall(newCall(bindName"typeOf", source), destination)
-
 # fn-TypeExprObj
 
 proc asTypeExprObj*(n: NormalizedNode): TypeExprObj =
@@ -620,7 +601,7 @@ func name*(n: IdentDefLike): Name = n.NimNode[0].Name
 # fn-DefLike
 
 type
-  DefLike* = IdentDefLike | DefVarLet
+  DefLike* = IdentDefLike | DefVarLet | TupleDefVarLet
     ## abstract over any IdentDef or VarTuple from a VarLet or a RoutineParam
 
 func typ*(n: DefLike): NimNode = n.NimNode[^2]
@@ -685,8 +666,14 @@ type
                VarSectionLike
     ## abstract over various let or var sections types
 
-func def*(n: VarLetLike): DefVarLet = DefVarLet n[0]
-  ## an IdentDef or VarTuple
+func def*(n: VarLetLike): DefVarLet|TupleDefVarLet =
+  ## an IdentDef or VarTuple as a not very specific type `DefVarLet`
+  ## for `VarLetTuple` a more specific type `TupleDefVarLet` is returned
+  when n is VarLetTuple:
+    # the tuple definition (`nnkVarTuple`) from a var or let section
+    TupleDefVarLet n[0]
+  elif n is VarLetLike:
+    DefVarLet n[0]
 func typ*(n: VarLetLike): NimNode = n.def.typ
   ## the type of this definition (IdentDef or VarTuple)
 func val*(n: VarLetLike): NormalizedNode = n.def.val.NormalizedNode
@@ -783,8 +770,6 @@ func clone*(n: VarLet, value: NimNode = nil): VarLet =
 
 # fn-VarLetTuple
 
-proc def*(n: VarLetTuple): TupleDefVarLet = TupleDefVarLet n[0]
-  ## the tuple definition (`nnkVarTuple`) from a var or let section
 proc typ*(n: VarLetTuple): TypeExpr =
   ## return the type based on `getTypeInst`
   TypeExpr:
@@ -983,6 +968,18 @@ proc asCall*(n: NormalizedNode): Call =
     errorGot "node is not a call node", n
   Call n
 
+template ifCallThenIt*(n: NormalizedNode, body: untyped) =
+  ## if `n` is a `CallNodes` then run the `body` with `it` as `Call`
+  if not n.isNil and n.kind in CallNodes:
+    let it {.inject.} = asCall(n)
+    body
+
+template ifCallKindThenIt*(n: NormalizedNode, body: untyped) =
+  ## if `n` is a `nnCallKinds` then run the `body` with `it` as `Call`
+  if not n.isNil and n.kind in nnkCallKinds:
+    let it {.inject.} = asCallKind(n)
+    body
+
 func name*(n: Call): Name =
   ## callee name
   Name n[0]
@@ -990,6 +987,10 @@ func name*(n: Call): Name =
 proc `name=`(n: Call, newName: Name) =
   ## set the callee's `n`'s name to `newName
   n[0] = newName
+
+proc prependArg*(n: Call, arg: NormalizedNode) =
+  ## add an argument to the call in the first position of the call
+  n.NimNode.insert(1, arg)
 
 func canGetImpl*(n: Call): bool =
   ## the callee's name is a symbol and so an impl can be retrieves
@@ -1006,7 +1007,8 @@ func impl*(n: Call): RoutineDef =
 proc resymCall*(n: Call; sym, field: NormalizedNode): Call =
   ## this is used to rewrite continuation calls into their results
   Call:
-    resymCall(NormalizedNode n, sym, field)
+    rewrites.resymCall(n, sym, field)
+
 proc desym*(n: Call) =
   ## desyms the callee name
   n.name = desym n.name
@@ -1038,8 +1040,6 @@ proc body*(n: RoutineDef): NormalizedNode =
   n.NimNode.body.NormalizedNode
 proc `body=`*(n: RoutineDef, b: NormalizedNode) =
   n.NimNode.body = b
-
-func len*(n: RoutineDef): int {.borrow.}
 
 func formalParams*(n: RoutineDef): FormalParams =
   ## fetch the formal params, first one is the return param
@@ -1073,21 +1073,9 @@ func asProcDef*(n: NormalizedNode): ProcDef =
     errorGot "not a proc definition", n
   n.ProcDef
 
-# func name*(n: ProcDef): Name {.borrow.}
-#   ## get the name of this ProcDef
-# proc `name=`*(n: ProcDef, name: Name) =
-#   ## set the name of this ProcDef
-#   n.RoutineDef.name = name
-
 proc `pragma=`*(n: ProcDef, p: PragmaStmt) =
   ## set the pragma
   n.RoutineDef.pragma = p
-
-func len*(n: ProcDef): int {.borrow.}
-
-proc desym*[T: ProcDef](n: T, sym: Name): T =
-  ## desym the routine
-  desym(n.NormalizedNode, sym.NimNode).T
 
 func returnParam*(n: ProcDef): TypeExpr =
   ## the return param or empty if void
