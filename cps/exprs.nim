@@ -3,19 +3,19 @@ import cps/[spec, normalizedast, help, rewrites]
 
 template cpsMustLift() {.pragma.} ## signify a code block that has to be lifted
 
-proc newCpsMustLift(n: NormalizedNode): NormalizedNode =
+proc newCpsMustLift(n: NormNode): NormNode =
   ## Wrap `n` in a `cpsMustLift` block.
   nnkPragmaBlock.newTree(
     nnkPragma.newTree(bindName"cpsMustLift"),
     n
   )
 
-proc isCpsMustLift(n: NormalizedNode): bool =
+proc isCpsMustLift(n: NormNode): bool =
   ## Check whether `n` is a cpsMustLift block
   n.kind == nnkPragmaBlock and n[0].len == 1 and
     asPragmaBlock(n).hasPragma("cpsMustLift")
 
-func hasCpsExpr(n: NormalizedNode): bool =
+func hasCpsExpr(n: NormNode): bool =
   ## Returns whether `n` has a cps block acting as an expression within it
   ## (ie. the block has a type) and that these expression might need to be
   ## moved outside of `n` for the purpose of transformation.
@@ -44,14 +44,14 @@ func hasCpsExpr(n: NormalizedNode): bool =
     # Otherwise check if its a cps block
     result = n.isCpsBlock
 
-func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
+func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
   ## Given the expression `n`, run `transformer` on every expression tail.
   ##
   ## Returns the filtered tree.
   if n.typeKind == ntyNone:
     return copy n
 
-  proc rewriteElifOf(branch: NormalizedNode): NormalizedNode =
+  proc rewriteElifOf(branch: NormNode): NormNode =
     ## Rewrite a singular of/elif/else branch
     case branch.kind
     of nnkElifBranch, nnkElifExpr:
@@ -169,18 +169,18 @@ func filterExpr[T: NormalizedNode](n: T, transformer: proc(n: T): T): T =
   else:
     result = n.errorAst "cps doesn't know how to rewrite this into assignment"
 
-func assignTo*(location, n: NormalizedNode): NormalizedNode =
+func assignTo*(location, n: NormNode): NormNode =
   ## Rewrite the expression `n` into a statement assigning to `location`.
   ##
   ## Returns a copy of `n` if `n` is not an expression.
-  proc assign(n: NormalizedNode): NormalizedNode =
+  proc assign(n: NormNode): NormNode =
     newAssignment(copy(location), copy(n))
 
   filterExpr(n, assign)
 
-func isMutableLocation(location: NormalizedNode): bool
+func isMutableLocation(location: NormNode): bool
 
-func isMutable(n: NormalizedNode): bool =
+func isMutable(n: NormNode): bool =
   ## Determine whether `n` is mutable, as in if `n` value can be mutated by
   ## changes in the program state.
   case n.kind
@@ -214,7 +214,7 @@ func isMutable(n: NormalizedNode): bool =
       if child.isMutable:
         return true
 
-func isMutableLocation(location: NormalizedNode): bool =
+func isMutableLocation(location: NormNode): bool =
   ## Determine whether `location` is mutable, that is, the address of it
   ## can be modified by other statements.
   case location.kind
@@ -231,7 +231,7 @@ func isMutableLocation(location: NormalizedNode): bool =
       if child.isMutableLocation:
         return true
 
-func isSingleStatement(n: NormalizedNode): bool =
+func isSingleStatement(n: NormNode): bool =
   ## Determine whether `n` is consisted of exactly one statement.
   case n.kind
   of AtomicNodes:
@@ -248,7 +248,7 @@ func isSingleStatement(n: NormalizedNode): bool =
     ## Assume that everything else is complex
     result = false
 
-func getMagic(n: NormalizedNode): string =
+func getMagic(n: NormNode): string =
   ## Obtain the magic name of the call `n`
   ifCallThenIt(n):
     if it.canGetImpl:
@@ -326,7 +326,7 @@ macro cpsExprConv(T, n: typed): untyped =
   {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18352".}
   let T = normalizingRewrites T
   debugAnnotation cpsExprConv, n:
-    proc addConv(n: NormalizedNode): NormalizedNode =
+    proc addConv(n: NormNode): NormNode =
       newCall(T, copy n)
 
     it = filterExpr(it[0], addConv)
@@ -334,7 +334,7 @@ macro cpsExprConv(T, n: typed): untyped =
 macro cpsExprDiscard(n: typed): untyped =
   ## Apply `discard` directly into `n`'s trailling expressions.
   debugAnnotation cpsExprDiscard, n:
-    proc addDiscard(n: NormalizedNode): NormalizedNode =
+    proc addDiscard(n: NormNode): NormNode =
       nnkDiscardStmt.wrap(copy n)
 
     it = filterExpr(it[0], addDiscard)
@@ -342,7 +342,7 @@ macro cpsExprDiscard(n: typed): untyped =
 macro cpsExprReturn(n: typed): untyped =
   ## Apply `return` directly into `n`'s trailling expressions.
   debugAnnotation cpsExprReturn, n:
-    proc addReturn(n: NormalizedNode): NormalizedNode =
+    proc addReturn(n: NormNode): NormNode =
       nnkReturnStmt.wrap(copy n)
 
     it = filterExpr(it[0], addReturn)
@@ -350,7 +350,7 @@ macro cpsExprReturn(n: typed): untyped =
 macro cpsExprRaise(n: typed): untyped =
   ## Apply `return` directly into `n`'s trailling expressions.
   debugAnnotation cpsExprRaise, n:
-    proc addRaise(n: NormalizedNode): NormalizedNode =
+    proc addRaise(n: NormNode): NormNode =
       nnkRaiseStmt.wrap(copy n)
 
     it = filterExpr(it[0], addRaise)
@@ -359,15 +359,15 @@ macro cpsExprLifter(n: typed): untyped =
   ## Move cpsMustLift blocks from `n` to before `n`.
   ## Does not create a new scope.
 
-  proc lift(n: NormalizedNode): NormalizedNode =
+  proc lift(n: NormNode): NormNode =
     let lifted = newStmtList()
-    proc lifter(n: NormalizedNode): NormalizedNode =
+    proc lifter(n: NormNode): NormNode =
       if n.isCpsMustLift:
         lifted.add:
           # Lift the bodies inside `n` then add it to the list of lifted bodies
           lift n.last # body to be lifted is the last child
         # Replace `n` with an empty node
-        result = newEmptyNormalizedNode()
+        result = newEmptyNormNode()
 
     let rewritten = filter(n, lifter)
     # For expressions we have to be a bit more delicate, as an empty nnkStmtList
@@ -385,7 +385,7 @@ macro cpsExprLifter(n: typed): untyped =
   debugAnnotation cpsExprLifter, n:
     it = lift it
 
-func lastCpsExprAt(n: NormalizedNode): int =
+func lastCpsExprAt(n: NormNode): int =
   ## Return the index of which the last cps expression is found
   ##
   ## -1 is returned if there are no cps expression within `n`
@@ -394,7 +394,7 @@ func lastCpsExprAt(n: NormalizedNode): int =
     if child.hasCpsExpr:
       result = idx
 
-func annotate(n: NormalizedNode): NormalizedNode =
+func annotate(n: NormNode): NormNode =
   ## Annotate expressions requiring flattening in `n`'s children.
 
   result = copyNimNode(n)
@@ -460,7 +460,7 @@ func annotate(n: NormalizedNode): NormalizedNode =
               nnkElse.newTree:
                 newStmtList:
                   # Put every branch from here on into a new if statement.
-                  nnkIfStmt.newTree(varargs[NormalizedNode] n[idx .. ^1])
+                  nnkIfStmt.newTree(varargs[NormNode] n[idx .. ^1])
 
           # We are done with this tree.
           break
@@ -630,7 +630,7 @@ func annotate(n: NormalizedNode): NormalizedNode =
             newNode = copyNimNode(child)
             lastExpr = child.lastCpsExprAt
 
-          template rewriteParam(n: NormalizedNode, body: untyped): untyped =
+          template rewriteParam(n: NormNode, body: untyped): untyped =
             ## Given the parameter `n`, transform its expression via `body`.
             ##
             ## The variable `it` is injected into the body as the expression

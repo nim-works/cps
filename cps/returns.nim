@@ -2,7 +2,7 @@ import std/macros except newStmtList, items
 
 import cps/[spec, hooks, normalizedast]
 
-proc firstReturn*(p: NormalizedNode): NormalizedNode =
+proc firstReturn*(p: NormNode): NormNode =
   ## Find the first control-flow return statement or cps
   ## control-flow within statement lists; else, nil.
   case p.kind
@@ -20,7 +20,7 @@ proc firstReturn*(p: NormalizedNode): NormalizedNode =
   else:
     result = nil
 
-proc makeReturn*(n: NormalizedNode): NormalizedNode =
+proc makeReturn*(n: NormNode): NormNode =
   ## generate a `return` of the node if it doesn't already contain a return
   if n.firstReturn.isNil:
     let toAdd = 
@@ -32,7 +32,7 @@ proc makeReturn*(n: NormalizedNode): NormalizedNode =
   else:
     n
 
-proc makeReturn*(pre, n: NormalizedNode): NormalizedNode =
+proc makeReturn*(pre, n: NormNode): NormNode =
   ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
   if not pre.firstReturn.isNil:
     result.add:
@@ -42,7 +42,7 @@ proc makeReturn*(pre, n: NormalizedNode): NormalizedNode =
     if pre.firstReturn.isNil:
       makeReturn n
     else:
-      newEmptyNode().NormalizedNode
+      newEmptyNode().NormNode
     #else:
     #  doc "omitted a return of " & repr(n)
 
@@ -52,12 +52,12 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
-proc terminator*(c: Name; T: NormalizedNode): NormalizedNode =
+proc terminator*(c: Name; T: NormNode): NormNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.
   let (dealloc, pass, coop) = (Dealloc.sym, Pass.sym, Coop.sym)
-  NormalizedNode:
+  NormNode:
     quote:
       if `c`.isNil:
         result = `c`
@@ -78,7 +78,7 @@ proc terminator*(c: Name; T: NormalizedNode): NormalizedNode =
       # critically, terminate control-flow here!
       return
 
-proc tailCall*(cont, to: Name; jump: NormalizedNode = nil): NormalizedNode =
+proc tailCall*(cont, to: Name; jump: NormNode = nil): NormNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   result = newStmtList:
@@ -87,11 +87,11 @@ proc tailCall*(cont, to: Name; jump: NormalizedNode = nil): NormalizedNode =
   # figure out what the return value will be...
   result = makeReturn result:
     if jump.isNil:
-      cont.NormalizedNode  # just return our continuation
+      cont.NormNode  # just return our continuation
     else:
       jump                 # return the jump target as requested
 
-proc jumperCall*(cont, to: Name; via: NormalizedNode): NormalizedNode =
+proc jumperCall*(cont, to: Name; via: NormNode): NormNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   let jump = copyNimTree via

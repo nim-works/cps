@@ -88,7 +88,7 @@ macro cpsVoodoo*(n: untyped): untyped =
   shim.addPragma ident"cpsVoodooCall"
   result.add shim
 
-proc doWhelp(n: NormalizedNode; args: seq[NormalizedNode]): Call =
+proc doWhelp(n: NormNode; args: seq[NormNode]): Call =
   let sym = bootstrapSymbol n
   result = sym.newCall args
 
@@ -127,7 +127,7 @@ macro whelp*(parent: Continuation; call: typed): untyped =
   result = whelpIt call:
     it =
       sym.ensimilate:
-        Tail.hook(newCall(ident"Continuation", parent).NormalizedNode,
+        Tail.hook(newCall(ident"Continuation", parent).NormNode,
                   newCall(base, it))
 
 template head*[T: Continuation](first: T): T {.used.} =

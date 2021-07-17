@@ -25,7 +25,7 @@ type
     Head    = "head"
     Tail    = "tail"
 
-proc introduce*(hook: Hook; n: NormalizedNode) =
+proc introduce*(hook: Hook; n: NormNode) =
   ## introduce a hook into the given scope whatfer later use therein
   var n = n
   case n.kind
@@ -36,7 +36,7 @@ proc introduce*(hook: Hook; n: NormalizedNode) =
   else:
     n.insert(0, n.errorAst "you cannot add a " & $hook & " to a " & $n.kind)
 
-proc introduce*(n: NormalizedNode; hooks: set[Hook]) =
+proc introduce*(n: NormNode; hooks: set[Hook]) =
   ## convenience to introduce a set of hooks
   for hook in hooks.items:
     hook.introduce n
@@ -57,7 +57,7 @@ proc sym*(hook: Hook): Name =
     # rely on a `mixin $hook` in (high) scope
     asName($hook)
 
-proc hook*(hook: Hook; n: NormalizedNode): Call =
+proc hook*(hook: Hook; n: NormNode): Call =
   ## execute the given hook on the given node
   case hook
   of Alloc: # (unused; see alloc/2)
@@ -75,16 +75,16 @@ proc hook*(hook: Hook; n: NormalizedNode): Call =
     # cast to `Call` avoids type mismatch as converters can't figure this out
     Call n.errorAst("the " & $hook & " hook doesn't take one argument")
 
-proc hook*(hook: Hook; a, b: NormalizedNode): NormalizedNode =
+proc hook*(hook: Hook; a, b: NormNode): NormNode =
   ## execute the given hook with two arguments
   case hook
   of Alloc:
     # hook(Cont, env_234234)
-    NormalizedNode newCall(hook.sym, a, b)
+    NormNode newCall(hook.sym, a, b)
   of Unwind:
     # hook(continuation, Cont)
     let unwind = hook.sym.NimNode
-    NormalizedNode:
+    NormNode:
       quote:
         if not `a`.ex.isNil:
           return `unwind`(`a`, `a`.ex).`b`

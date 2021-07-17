@@ -72,17 +72,17 @@ proc root*(e: Env): Name =
     r = r.parent
   result = r.inherits
 
-proc castToRoot(e: Env; n: NormalizedNode): Call =
+proc castToRoot(e: Env; n: NormNode): Call =
   newCall(e.root, n)
 
 proc castToChild(e: Env; n: Name): Call =
   newCall(e.identity, n)
 
-proc maybeConvertToRoot*(e: Env; locals: NormalizedNode): NormalizedNode =
+proc maybeConvertToRoot*(e: Env; locals: NormNode): NormNode =
   ## add an Obj(foo: bar).Other conversion if necessary
   if not eqIdent(locals[0], e.root):
     # converters can't figure this out automatically, manually casting
-    NormalizedNode e.castToRoot(locals)
+    NormNode e.castToRoot(locals)
   else:
     locals
 
@@ -166,14 +166,14 @@ proc first*(e: Env): Name = e.c
 proc firstDef*(e: Env): IdentDef =
   newIdentDef(e.first, e.via, newEmptyNode())
 
-proc get*(e: Env): NormalizedNode =
+proc get*(e: Env): NormNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
-proc rewriteResult(e: Env; n: NormalizedNode): NormalizedNode =
+proc rewriteResult(e: Env; n: NormNode): NormNode =
   ## replaces result symbols with the env's result; this should be
   ## safe to run on sem'd ast (for obvious reasons)
-  proc rewriter(n: NormalizedNode): NormalizedNode =
+  proc rewriter(n: NormNode): NormNode =
     ## Rewrite any result symbols to use the result field from the Env.
     case n.kind
     of nnkSym:
@@ -246,7 +246,7 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: Name; store: var NormalizedNode; via: Name, rs: NormalizedNode): Env =
+proc newEnv*(c: Name; store: var NormNode; via: Name, rs: NormNode): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
@@ -260,7 +260,7 @@ proc newEnv*(c: Name; store: var NormalizedNode; via: Name, rs: NormalizedNode):
     result.seen = initHashSet[string]()
   init result
 
-proc newEnv*(store: var NormalizedNode; via: Name, rs: NormalizedNode): Env=
+proc newEnv*(store: var NormNode; via: Name, rs: NormNode): Env=
   newEnv(asName("continuation"), store, via, rs)
 
 proc identity*(e: var Env): Name =
@@ -376,7 +376,7 @@ proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
       # and add the termination annotation
       result.add newCpsTerminate()
 
-proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormalizedNode): NormalizedNode =
+proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormNode): NormNode =
   ## swap symbols for those in the continuation
   result = n
   let child = e.castToChild e.first
@@ -393,7 +393,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormalizedNode): NormalizedNo
 
 proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
-  proc resultdot(n: Name): NormalizedNode =
+  proc resultdot(n: Name): NormNode =
     newDotExpr(e.castToChild(name), n)
   result = newStmtList:
     newAssignment name:
@@ -433,7 +433,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
   # compose the (exported?) symbol
   var name = nnkAccQuoted.newTree ident"()"
   if exported:
-    name = NormalizedNode postfix(name, "*")
+    name = NormNode postfix(name, "*")
 
   result = ProcDef:
     genAst(name = name.NimNode, field = field.NimNode, c = env.first.NimNode,
@@ -451,7 +451,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
           `()`(trampoline c)
       {.pop.}
 
-proc createWhelp*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
+proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
   let resultName = asName("result")
     ## the result identifier for the new whelp's proc body
@@ -475,7 +475,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
   for defs in result.callingParams:
     result = desym(result, defs.name)
 
-proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
+proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
@@ -522,10 +522,10 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormalizedNode): ProcDef =
             newDotExpr(env.castToChild(c), env.rs.name))
         )
 
-proc rewriteVoodoo*(env: Env; n: NormalizedNode): NormalizedNode =
+proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
   ## Rewrite non-yielding cpsCall calls by inserting the continuation as
   ## the first argument
-  proc voodoo(n: NormalizedNode): NormalizedNode =
+  proc voodoo(n: NormNode): NormNode =
     if n.isVoodooCall:
       let it = asCallKind(n.copyNimTree)
       it.desym

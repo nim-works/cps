@@ -46,7 +46,7 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
-proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormalizedNode =
+proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
   newPragmaStmt(filterIt(ns, it.getPragmaName != liftee))
 
@@ -54,7 +54,7 @@ proc stripPragma*(n: PragmaStmt, s: static[string]): PragmaStmt =
   ## filter a pragma with the matching name
   PragmaStmt filterPragma(toSeq items(asPragmaStmt(n)), bindName(s))
 
-proc stripPragma*(n: NormalizedNode; s: static[string]): NormalizedNode =
+proc stripPragma*(n: NormNode; s: static[string]): NormNode =
   ## filter a pragma with the matching name from various nodes
   case n.kind
   of nnkPragma:
@@ -73,7 +73,7 @@ proc stripPragma*(n: NormalizedNode; s: static[string]): NormalizedNode =
     n[^1] = stripPragma(n.last, s)
     result = n
   of nnkTypeSection:
-    result = NormalizedNode newNimNode(n.kind, n)
+    result = NormNode newNimNode(n.kind, n)
     for item in items(n):
       result.add stripPragma(item, s)
   else:
@@ -89,49 +89,49 @@ func newCpsPending*(): PragmaStmt =
   ## Produce a {.cpsPending.} annotation
   newPragmaStmt(bindName"cpsPending")
 
-func isCpsPending*(n: NormalizedNode): bool =
+func isCpsPending*(n: NormNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.asPragmaStmt.hasPragma("cpsPending")
 
-func newCpsBreak*(n: NormalizedNode, label: NormalizedNode = newNilLit().NormalizedNode): NormalizedNode =
+func newCpsBreak*(n: NormNode, label = newNilLit().NormNode): NormNode =
   ## Produce a {.cpsBreak.} annotation with the given label
   let label =
     if label.kind == nnkEmpty:
-      newNilLit().NormalizedNode
+      newNilLit().NormNode
     else:
       label
 
   newPragmaStmtWithInfo(n, newPragmaColonExpr("cpsBreak", label))
 
-proc isCpsBreak*(n: NormalizedNode): bool =
+proc isCpsBreak*(n: NormNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsBreak")
 
-func newCpsContinue*(n: NormalizedNode): NormalizedNode =
+func newCpsContinue*(n: NormNode): NormNode =
   ## Produce a {.cpsContinue.} annotation
   newPragmaStmtWithInfo(n, asPragmaAtom(bindName"cpsContinue"))
 
-func isCpsContinue*(n: NormalizedNode): bool =
+func isCpsContinue*(n: NormNode): bool =
   ## Return whether a node is a {.cpsContinue.} annotation
   n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsContinue")
 
-proc breakLabel*(n: NormalizedNode): NormalizedNode =
+proc breakLabel*(n: NormNode): NormNode =
   ## Return the break label of a `break` statement or a `cpsBreak` annotation
   if n.isCpsBreak():
     if n[0].len > 1 and n[0][1].kind != nnkNilLit:
       n[0][1]
     else:
-      newEmptyNormalizedNode()
+      newEmptyNormNode()
   elif n.kind == nnkBreakStmt:
     n[0]
   else:
     raise newException(Defect, "this node is not a break: " & $n.kind)
 
-proc isCpsCont*(n: NormalizedNode): bool =
+proc isCpsCont*(n: NormNode): bool =
   ## Return whether the given procedure is a cps continuation
   n.kind in RoutineNodes and n.asRoutineDef.hasPragma("cpsCont")
 
-proc getContSym*(n: NormalizedNode): Name =
+proc getContSym*(n: NormNode): Name =
   ## Retrieve the continuation symbol from `n`, provided that
   ## `n` is a cpsCont.
   if n.isCpsCont:
@@ -139,19 +139,19 @@ proc getContSym*(n: NormalizedNode): Name =
   else:
     nil.Name
 
-proc newCpsTerminate*(): NormalizedNode =
+proc newCpsTerminate*(): NormNode =
   ## Create a new node signifying early termination of the procedure
   newPragmaStmt(bindName"cpsTerminate")
 
-proc isCpsTerminate*(n: NormalizedNode): bool =
+proc isCpsTerminate*(n: NormNode): bool =
   ## Return whether `n` is a cpsTerminate annotation
   n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsTerminate")
 
-proc isScopeExit*(n: NormalizedNode): bool =
+proc isScopeExit*(n: NormNode): bool =
   ## Return whether the given node signify a CPS scope exit
   n.isCpsPending or n.isCpsBreak or n.isCpsContinue or n.isCpsTerminate
 
-template rewriteIt*(n: typed; body: untyped): NormalizedNode =
+template rewriteIt*(n: typed; body: untyped): NormNode =
   var it {.inject.} = normalizingRewrites:
     macros.newStmtList n
   body
@@ -163,22 +163,22 @@ template debugAnnotation*(s: typed; n: NimNode; body: untyped) {.dirty.} =
     body
   debug(astToStr s, result, Transformed, n)
 
-func matchCpsBreak*(label: NormalizedNode): NormalizedMatcher =
+func matchCpsBreak*(label: NormNode): NormMatcher =
   ## create a matcher matching cpsBreak with the given label
   ## and cpsBreak without any label
   result =
-    func (n: NormalizedNode): bool =
+    func (n: NormNode): bool =
       if n.isCpsBreak:
         let breakLabel = n.breakLabel
         breakLabel.kind == nnkEmpty or breakLabel == label
       else:
         false
 
-func matchCpsBreak*(): NormalizedMatcher =
+func matchCpsBreak*(): NormMatcher =
   ## create a matcher matching cpsBreak with an empty label
-  matchCpsBreak(newEmptyNode().NormalizedNode)
+  matchCpsBreak(newEmptyNode().NormNode)
 
-func wrappedFinally*(n, final: NormalizedNode): NormalizedNode =
+func wrappedFinally*(n, final: NormNode): NormNode =
   ## rewrite a try/except/finally into try/try-except/finally
   # create a copy of the try statement minus finally
   let newTry = copyNimNode(n).add(n[0 .. ^2])
@@ -187,7 +187,7 @@ func wrappedFinally*(n, final: NormalizedNode): NormalizedNode =
   result = copyNimNode n
   result.add(newStmtList(newTry), final)
 
-proc isVoodooCall*(n: NormalizedNode): bool =
+proc isVoodooCall*(n: NormNode): bool =
   ## true if this is a call to a voodoo procedure
   if not n.isNil and n.len > 0:
     ifCallKindThenIt(n):
@@ -202,7 +202,7 @@ proc trampoline*[T: Continuation](c: T): T =
     c = c.fn(c)
   result = T c
 
-proc isCpsCall*(n: NormalizedNode): bool =
+proc isCpsCall*(n: NormNode): bool =
   ## true if this node holds a call to a cps procedure
   if n.len > 0:
     ifCallThenIt(n):
@@ -212,7 +212,7 @@ proc isCpsCall*(n: NormalizedNode): bool =
         # or it could be a completely new continuation
         result = it.impl.hasPragma("cpsMustJump")
 
-proc isCpsBlock*(n: NormalizedNode): bool =
+proc isCpsBlock*(n: NormNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
   case n.kind
@@ -236,7 +236,7 @@ proc isCpsBlock*(n: NormalizedNode): bool =
   else:
     return false
 
-proc pragmaArgument*(n: NormalizedNode; s: string): NormalizedNode =
+proc pragmaArgument*(n: NormNode; s: string): NormNode =
   ## from foo() or proc foo() {.some: Pragma.}, retrieve Pragma
   case n.kind
   of nnkProcDef:
@@ -258,9 +258,9 @@ proc pragmaArgument*(n: NormalizedNode; s: string): NormalizedNode =
   else:
     result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
 
-proc bootstrapSymbol*(n: NimNode): NormalizedNode =
+proc bootstrapSymbol*(n: NimNode): NormNode =
   ## find the return type of the bootstrap
-  let n = NormalizedNode n
+  let n = NormNode n
   case n.kind
   of {nnkProcDef} + nnkCallKinds:
     pragmaArgument(n, "cpsBootstrap")
@@ -318,7 +318,7 @@ macro cpsMagic*(n: untyped): untyped =
   ## to which control-flow should return; this is _usually_ the same value
   ## passed into the procedure, but this is not required nor is it checked!
   expectKind(n, nnkProcDef)
-  result = newStmtList NormalizedNode n # preserve the original proc
+  result = newStmtList NormNode n # preserve the original proc
   var shim = makeErrorShim n            # create the shim
   shim.params[0] = newEmptyNode()       # wipe out the return value
 
@@ -329,7 +329,7 @@ macro cpsMagic*(n: untyped): untyped =
   shim.addPragma ident"cpsMagicCall"
   result.add shim
 
-proc ensimilate*(source, destination: NormalizedNode): Call =
+proc ensimilate*(source, destination: NormNode): Call =
   ## perform a call to convert the destination to the source's type;
   ## the source can be any of a few usual suspects...
   let typ = TypeExpr getTypeImpl source

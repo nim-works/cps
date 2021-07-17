@@ -3,7 +3,7 @@ import std/macros except newStmtList
 
 template isNotNil*(x: untyped): bool = not(isNil(x))
 
-func hasDefer*(n: NormalizedNode): bool =
+func hasDefer*(n: NormNode): bool =
   ## Return whether there is a `defer` within the given node
   ## that might cause it to be rewritten.
   case n.kind
@@ -17,13 +17,13 @@ func hasDefer*(n: NormalizedNode): bool =
   else:
     false
 
-proc rewriteDefer*(n: NormalizedNode): NormalizedNode =
+proc rewriteDefer*(n: NormNode): NormNode =
   ## Rewrite the AST of `n` so that all `defer` nodes are
   ## transformed into try-finally
 
   # TODO: This could be made simpler
 
-  proc splitDefer(n: NormalizedNode): tuple[b, d, a: NormalizedNode] =
+  proc splitDefer(n: NormNode): tuple[b, d, a: NormNode] =
     ## Cut the AST into three parts:
     ## - b: all nodes before the defer that could affect `n`
     ## - d: the defer node itself
@@ -36,16 +36,16 @@ proc rewriteDefer*(n: NormalizedNode): NormalizedNode =
       # it's just a defer node; return it as such
       result = (nil, n, nil)
     of nnkStmtList, nnkStmtListExpr:
-      var d, b, a: NormalizedNode
+      var d, b, a: NormNode
       # Make a copy of our node to the part before defer
       b = copyNimNode n
       # The rest of the split stays in a new node of the same kind
-      a = NormalizedNode newNimNode(n.kind, n)
+      a = NormNode newNimNode(n.kind, n)
 
       # Look for the defer in the child nodes
       for idx, child in n.pairs:
         if child.hasDefer:
-          var xb, xa: NormalizedNode
+          var xb, xa: NormNode
           (xb, d, xa) = splitDefer child
           if xb.isNotNil:
             b.add xb
