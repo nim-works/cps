@@ -328,13 +328,11 @@ func kind*(n: NormNode): NimNodeKind {.borrow.}
   ## the kind (`NimNodeKind`) of the underlying `NimNode`
 
 proc add*(f: NimNode|NormNode, c: NormNode): NormNode {.discardable.} =
-  ## hopefully this fixes ambiguous call issues
+  ## add a child node, and return the parent for further chaining.
+  ## created in order to fix ambiguous call issues
   {.push hint[ConvFromXtoItselfNotNeeded]: off.}
   result = NormNode f.NimNode.add(c.NimNode)
   {.pop.}
-proc add*(f: NormNode, cs: NormalizedVarargs): NormNode {.discardable.} =
-  ## hopefully this fixes ambiguous call issues
-  NormNode f.add(varargs[NimNode] cs)
 
 template findChild*(n: NormNode; cond: untyped): NormNode =
   ## finds the first child node matching the condition or nil
@@ -348,6 +346,11 @@ proc getTypeInst*(n: NormNode): TypeExpr {.borrow.}
 
 type
   RecursiveNode* = NormNode | TypeExpr
+
+proc add*[T: RecursiveNode](f: T, cs: NormalizedVarargs): T {.discardable.} =
+  ## add a child node, and return the parent for further chaining.
+  ## created in order to fix ambiguous call issues
+  T f.add(varargs[NimNode] cs)
 
 # TODO - restrict these to only valid types
 proc `[]`*[T: RecursiveNode](n: T; i: int): T =
