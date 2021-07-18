@@ -51,6 +51,18 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
   if n.typeKind == ntyNone:
     return copy n
 
+  func filterExprLast(n: T, transformer: proc(n: T): T): T =
+    ## ensures that the dotExpr is handled correctly, otherwise defaults all
+    ## handling to `filterExpr` to avoid changing arbitrary dotExprs appearing
+    ## as non-last exprs.
+    ## 
+    ## see https://github.com/disruptek/cps/issues/211).
+    case n.kind
+    of nnkDotExpr:
+      transformer(n)
+    else:
+      filterExpr(n, transformer)
+
   proc rewriteElifOf(branch: NormNode): NormNode =
     ## Rewrite a singular of/elif/else branch
     case branch.kind
@@ -59,13 +71,13 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
         # Copy the branch and it's condition
         it.add(branch[0]):
           # Then rewrite the body
-          filterExpr(branch.last, transformer)
+          filterExprLast(branch.last, transformer)
     of nnkElse, nnkElseExpr:
       result = copyNodeAndTransformIt(branch):
         # Copy the branch
         it.add:
           # Then rewrite the body
-          filterExpr(branch.last, transformer)
+          filterExprLast(branch.last, transformer)
     of nnkOfBranch:
       result = copyNodeAndTransformIt(branch):
         # Copy all matching conditions, which is every children except the last.
@@ -73,7 +85,7 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
           it.add copy(branch[idx])
         # Add the rewritten body
         it.add:
-            filterExpr(branch.last, transformer)
+            filterExprLast(branch.last, transformer)
     else:
       result = n.errorAst "unexpected node kind in case/if expression"
 
@@ -91,18 +103,14 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
 
       # Rewrite the last expression to assign to location.
       it.add:
-        # Convert back to NimNode explicitly because the compiler
-        # can't handle our awesome nodes (our node binds to both
-        # varargs and normal form of add).
-        {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
-        filterExpr(n.last, transformer)
+        filterExprLast(n.last, transformer)
   of nnkBlockStmt, nnkBlockExpr, nnkPragmaBlock:
     result = copyNodeAndTransformIt(n):
       # Copy the label/pragma list
       it.add copy(n[0])
       # Rewrite and add the body
       it.add:
-        filterExpr(n[1], transformer)
+        filterExprLast(n[1], transformer)
   of nnkIfStmt, nnkIfExpr:
     # It appears that the type of the `if` expression remains if we
     # don't destroy it by creating a new node instead of copying and
@@ -136,7 +144,7 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
 
       # Rewrite the body
       it.add:
-        filterExpr(n[0], transformer)
+        filterExprLast(n[0], transformer)
 
       # Rewrite except/finally branches
       for idx in 1 ..< n.len:
@@ -151,7 +159,7 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
 
           # Rewrite and add the body
           newBranch.add:
-            filterExpr(branch.last, transformer)
+            filterExprLast(branch.last, transformer)
 
           # Add the branch to the new try statement
           it.add newBranch
@@ -165,7 +173,7 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
   of ConvNodes - {nnkConv}:
     # Hidden conversion nodes can be reconstructed by the compiler if needed,
     # so we just skip them and rewrite the body instead.
-    result = filterExpr(n.last, transformer)
+    result = filterExprLast(n.last, transformer)
   else:
     result = n.errorAst "cps doesn't know how to rewrite this into assignment"
 

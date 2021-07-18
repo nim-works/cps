@@ -497,3 +497,15 @@ suite "expression flattening":
       check (noop(); step 1; [42])[(noop(); step 2; 0)] == 42
 
     foo()
+
+  test "flatten dot expressions":
+    type
+      P = object
+        val: int
+    var k = newKiller(1)
+    proc foo(p: P): int {.cps: Cont.} =
+      noop()
+      step 1
+      p.val
+
+    check foo(P(val: 42)) == 42
