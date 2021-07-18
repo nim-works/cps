@@ -78,9 +78,9 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
       result = n.errorAst "unexpected node kind in case/if expression"
 
   case n.kind
-  of AtomicNodes, CallNodes, ConstructNodes, nnkConv:
-    # For calls, conversions, constructions, constants and basic symbols, we
-    # just emit the assignment.
+  of AccessNodes, CallNodes, ConstructNodes, nnkConv:
+    # For calls, conversions, constructions, constants, basic symbols, field
+    # access, we just emit the assignment.
     result = transformer(n)
   of nnkStmtList, nnkStmtListExpr:
     result = copyNodeAndTransformIt(n):
@@ -162,12 +162,6 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
     ## Hidden conversion nodes can be reconstructed by the compiler if needed,
     ## so we just skip them and rewrite the body instead.
     result = filterExpr(n.last, transformer)
-  of nnkDotExpr:
-    ## this is either the first expr we encountered or we were passed this and
-    ## so we treat it as a terminal operation regardless
-    ##
-    ## see https://github.com/disruptek/cps/issues/211).
-    result = transformer(n)
   else:
     result = n.errorAst "cps doesn't know how to rewrite this into assignment"
 
