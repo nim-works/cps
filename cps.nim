@@ -1,5 +1,5 @@
-import std/[macros]
-import cps/[spec, transform, rewrites, hooks, exprs]
+import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
+import std/macros except newStmtList
 export Continuation, ContinuationProc, State
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic
 
@@ -88,18 +88,18 @@ macro cpsVoodoo*(n: untyped): untyped =
   shim.addPragma ident"cpsVoodooCall"
   result.add shim
 
-proc doWhelp(n: NimNode; args: seq[NimNode]): NimNode =
+proc doWhelp(n: NormNode; args: seq[NormNode]): Call =
   let sym = bootstrapSymbol n
   result = sym.newCall args
 
 template whelpIt*(input: typed; body: untyped): untyped =
-  var n = normalizingRewrites input
+  var n = normalizeCall input
   if n.kind in nnkCallKinds:
-    let p = getImpl n[0]
+    let p = asCallKind(n).impl
     if p.hasPragma "cpsBootstrap":
-      var it {.inject.}: NimNode = doWhelp(p, n[1..^1])
+      var it {.inject.} = doWhelp(p, n[1..^1])
       body
-      it
+      NimNode it
     else:
       n.errorAst "the input to whelpIt must be a .cps. call"
   else:
@@ -108,9 +108,10 @@ template whelpIt*(input: typed; body: untyped): untyped =
 macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
   ## running it; instead, return the continuation as a value.
-  let sym = bootstrapSymbol call
-  let base = enbasen:  # find the parent type of the environment
-    (getImpl sym).pragmaArgument"cpsEnvironment"
+  let
+    sym = bootstrapSymbol call
+    base = enbasen:  # find the parent type of the environment
+      (getImpl sym).pragmaArgument"cpsEnvironment"
   result = whelpIt call:
     it =
       sym.ensimilate:
@@ -126,7 +127,7 @@ macro whelp*(parent: Continuation; call: typed): untyped =
   result = whelpIt call:
     it =
       sym.ensimilate:
-        Tail.hook(newCall(ident"Continuation", parent),
+        Tail.hook(newCall(ident"Continuation", parent).NormNode,
                   newCall(base, it))
 
 template head*[T: Continuation](first: T): T {.used.} =
