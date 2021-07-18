@@ -173,19 +173,21 @@ type
 const TypeExprKinds = {
     nnkIdent, nnkSym,   # the simple atoms
     nnkVarTy, nnkRefTy, # the weirder ones
-    nnkTupleConstr      # still have tuples in a few areas
+    nnkTupleConstr,     # still have tuples in a few areas
+    nnkBracketExpr,     # seqs and the like
+    nnkProcTy,          # proc type
     # nnkEmpty          # excluded as it's only allowed in some cases
   }
   ## list of type NimNodeKind
   ## XXX: this is an incomplete list
 
-func errorGot(msg: string, n: NimNode, got: string = repr(n)) =
+func errorGot(msg: string, n: NimNode, got: string = treeRepr(n)) =
   ## useful for error messages
   error msg & ", got:\n" & repr(got), n
 
-func errorGot*(msg: string, n: NormNode, got: string = repr(n)) =
+func errorGot*(msg: string, n: NormNode, got: string = treeRepr(n.NimNode)) =
   ## useful for error messages
-  errorGot(msg, n, got)
+  errorGot(msg, n.NimNode, got)
 
 proc normalizeProcDef*(n: NimNode): ProcDef =
   ## ensure this is a normalized procd definition
