@@ -489,3 +489,15 @@ suite "expression flattening":
       42.Natural
 
     check foo() == 42
+
+  test "flatten dot expressions":
+    type
+      P = object
+        val: int
+    var k = newKiller(1)
+    proc foo(p: P): int {.cps: Cont.} =
+      noop()
+      step 1
+      p.val
+
+    check foo(P(val: 42)) == 42

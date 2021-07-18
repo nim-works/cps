@@ -183,7 +183,8 @@ const TypeExprKinds = {
 
 func errorGot(msg: string, n: NimNode, got: string = treeRepr(n)) =
   ## useful for error messages
-  error msg & ", got:\n" & repr(got), n
+  {.cast(noSideEffect).}:
+    error msg & ", got:\n" & repr(got), n
 
 func errorGot*(msg: string, n: NormNode, got: string = treeRepr(n.NimNode)) =
   ## useful for error messages
