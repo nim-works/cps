@@ -210,8 +210,8 @@ const
   ConvNodes* = {nnkHiddenStdConv..nnkConv}
     ## Conversion nodes in typed AST
 
-  AccessNodes* = AtomicNodes + {nnkDotExpr, nnkDerefExpr, nnkHiddenDeref,
-                                nnkAddr, nnkHiddenAddr}
+  AccessNodes* = AtomicNodes + {nnkBracketExpr, nnkDotExpr, nnkDerefExpr,
+                                nnkHiddenDeref, nnkAddr, nnkHiddenAddr}
     ## AST nodes for operations accessing a resource
 
   ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
