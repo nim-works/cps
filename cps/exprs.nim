@@ -78,7 +78,7 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
       result = n.errorAst "unexpected node kind in case/if expression"
 
   case n.kind
-  of AtomicNodes, CallNodes, ConstructNodes, nnkConv:
+  of AtomicNodes, CallNodes, ConstructNodes, nnkConv, nnkBracketExpr:
     # For calls, conversions, constructions, constants and basic symbols, we
     # just emit the assignment.
     result = transformer(n)
@@ -585,7 +585,7 @@ func annotate(n: NormNode): NormNode =
         rase.copyLineInfo(child)
         result.add rase
 
-      of nnkBracket, nnkTupleConstr, nnkObjConstr, CallNodes:
+      of nnkBracket, nnkBracketExpr, nnkTupleConstr, nnkObjConstr, CallNodes:
         let magic = child.getMagic
         # These are boolean `and` or `or` operators, which have a special
         # evaluation ordering despite using CallNodes

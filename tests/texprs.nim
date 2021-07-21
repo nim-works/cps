@@ -489,3 +489,11 @@ suite "expression flattening":
       42.Natural
 
     check foo() == 42
+
+  test "flatten bracket expressions (array access)":
+    var k = newKiller(2)
+
+    proc foo() {.cps: Cont.} =
+      check (noop(); step 1; [42])[(noop(); step 2; 0)] == 42
+
+    foo()
