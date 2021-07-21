@@ -26,30 +26,14 @@ suite "returns and results":
 
   block:
     ## continuations can return values via bootstrap
-    block:
-      var k = newKiller 1
-      proc foo(x: int): int {.cps: Cont.} =
-        noop()
-        step 1
-        return x * x
+    var k = newKiller 1
+    proc foo(x: int): int {.cps: Cont.} =
+      noop()
+      step 1
+      return x * x
 
-      let x = foo(3)
-      check x == 9
-
-    block:
-      ## implicit return values via bootstrap
-      type
-        P = object
-          val: int
-
-      var k = newKiller 1
-      proc foo(p: P): int {.cps: Cont.} =
-        noop()
-        step 1
-        p.val
-
-      let x = foo(P())
-      check x == 0
+    let x = foo(3)
+    check x == 9
 
   block:
     ## continuations can return values via whelp
