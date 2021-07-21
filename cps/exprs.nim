@@ -581,7 +581,23 @@ func annotate(n: NormNode): NormNode =
         rase.copyLineInfo(child)
         result.add rase
 
-      of nnkBracket, nnkBracketExpr, nnkTupleConstr, nnkObjConstr, CallNodes:
+      of nnkDotExpr:
+        # In typed AST, dot expression indicates a field access, of which only the first node may
+        # contain a cps expression, as the other node will always be a field symbol.
+        #
+        # This rewrite is separated from the more general Left-to-Right rewrite below since we can't
+        # wrap the field symbol under a nnkStmtList
+        result.add:
+          # Lift the expression out of this node after the rewrite
+          newCall(bindName"cpsExprLifter"):
+            copyNimNode(child).add(
+              # Move the expression into a temporary
+              newCall(bindName"cpsExprToTmp", getTypeInst(child[0]), annotate(newStmtList child[0])),
+              # Copy the field symbol
+              copyNimNode child[1]
+            )
+
+      of AccessNodes - AtomicNodes - {nnkDotExpr}, ConstructNodes, CallNodes:
         let magic = child.getMagic
         # These are boolean `and` or `or` operators, which have a special
         # evaluation ordering despite using CallNodes

@@ -502,10 +502,10 @@ suite "expression flattening":
     type
       P = object
         val: int
-    var k = newKiller(1)
-    proc foo(p: P): int {.cps: Cont.} =
-      noop()
-      step 1
-      p.val
 
-    check foo(P(val: 42)) == 42
+    var k = newKiller(1)
+
+    proc foo() {.cps: Cont.} =
+      check (noop(); step 1; P(val: 42)).val == 42
+
+    foo()
