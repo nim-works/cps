@@ -1075,8 +1075,8 @@ proc newProcDef*(name: Name, retType: TypeExpr,
   ## create a new proc def with name, returnt type, and calling params and an
   ## empty body (`nnkStmtList`)
   var formalParams = @[NimNode retType]
-  formalParams = formalParams & seq[NimNode] @callParams
-  newProc(name.Nimnode, formalParams, newStmtList()).ProcDef
+  formalParams.add seq[NimNode](@callParams)
+  newProc(name.NimNode, formalParams, newStmtList()).ProcDef
 
 createAsTypeFunc(ProcDef, {nnkProcDef}, "node is not a proc definition")
 
