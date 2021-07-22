@@ -603,14 +603,12 @@ func annotate(n: NormNode): NormNode =
         result.add:
           # Lift the inner expression out
           newCall(bindName"cpsExprLifter"):
-            # FIXME: @saem please show me how to remove this
-            NormNode:
-              # Create an explicit deref node with lineinfo copied from the original
-              newNimNode(nnkDerefExpr, child).add:
-                # Rewrite the inner CPS expression into a temporary
-                newCall(bindName"cpsExprToTmp", getTypeInst(child[0])):
-                  newStmtList:
-                    annotate child[0]
+            # Create an explicit deref node with lineinfo copied from the original
+            newNimNode(nnkDerefExpr, child).add:
+              # Rewrite the inner CPS expression into a temporary
+              newCall(bindName"cpsExprToTmp", getTypeInst(child[0])):
+                newStmtList:
+                  annotate child[0]
 
       of AccessNodes - AtomicNodes - HiddenNodes - {nnkDotExpr}, ConstructNodes, CallNodes:
         let magic = child.getMagic
