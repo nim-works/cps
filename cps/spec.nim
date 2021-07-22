@@ -221,9 +221,8 @@ proc isCpsBlock*(n: NormNode): bool =
      nnkPragmaBlock, nnkIdentDefs, nnkVarSection, nnkLetSection:
     return n.last.isCpsBlock
   of nnkStmtList, nnkStmtListExpr, nnkIfStmt, nnkIfExpr, nnkCaseStmt,
-     nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt, nnkBracket,
-     nnkBracketExpr, nnkTupleConstr, nnkObjConstr, nnkAsgn, nnkVarTuple,
-     nnkDotExpr:
+     nnkWhileStmt, nnkElifBranch, nnkElifExpr, nnkTryStmt, nnkAsgn,
+     nnkVarTuple, AccessNodes - AtomicNodes, ConstructNodes:
     for n in n.items:
       if n.isCpsBlock:
         return true

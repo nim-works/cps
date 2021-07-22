@@ -217,6 +217,10 @@ const
   ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
     ## AST nodes for construction operations
 
+  HiddenNodes* = {nnkHiddenCallConv, nnkHiddenStdConv, nnkHiddenSubConv,
+                  nnkHiddenAddr, nnkHiddenDeref}
+    ## "Hidden" AST nodes
+
 # Converters - to reduce the conversion spam
 
 macro defineToNimNodeConverter(ts: varargs[typed]) =

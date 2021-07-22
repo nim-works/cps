@@ -509,3 +509,27 @@ suite "expression flattening":
       check (noop(); step 1; P(val: 42)).val == 42
 
     foo()
+
+  test "flatten dereference expressions":
+    type
+      P = ref object
+        val: int
+
+    var k = newKiller(1)
+
+    proc foo() {.cps: Cont.} =
+      check (noop(); step 1; P(val: 42))[].val == 42
+
+    foo()
+
+  test "flatten hidden dereference expressions":
+    type
+      P = ref object
+        val: int
+
+    var k = newKiller(1)
+
+    proc foo() {.cps: Cont.} =
+      check (noop(); step 1; P(val: 42)).val == 42
+
+    foo()
