@@ -650,6 +650,14 @@ func annotate(n: NormNode): NormNode =
                   nnkElse.newTree(child[2])
                 )
 
+        elif magic == "Addr":
+          # We can't handle this stuff since the semantics of addr is undefined
+          #
+          # See leorize's analysis:
+          # https://matrix.to/#/!WkVPhTZzbUBGGVSkoK:matrix.org/$SUfctUKcYXLRyTiot4TqNuSCBkLBpA5Xt6qauceoTQ0?via=libera.chat&via=matrix.org&via=envs.net
+          result.add:
+            child.errorAst("Obtaining the address of a CPS expression is not supported")
+
         else:
           # For these nodes, the evaluation order of each child is the same
           # as their order in the AST.

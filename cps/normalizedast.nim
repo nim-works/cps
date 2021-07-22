@@ -211,7 +211,7 @@ const
     ## Conversion nodes in typed AST
 
   AccessNodes* = AtomicNodes + {nnkBracketExpr, nnkDotExpr, nnkDerefExpr,
-                                nnkHiddenDeref, nnkAddr, nnkHiddenAddr}
+                                nnkHiddenDeref, nnkHiddenAddr}
     ## AST nodes for operations accessing a resource
 
   ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
