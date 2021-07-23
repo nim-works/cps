@@ -577,6 +577,12 @@ func isNil*(n: TypeExpr): bool {.borrow.}
 proc `==`*(a, b: TypeExpr): bool {.borrow.}
   ## compare two `TypeEpxr`s and see if they're equal
 
+proc typeKind*(n: TypeExpr): NimTypeKind {.borrow.}
+  ## get the type kind of a type expr
+
+proc sameType*(a, b: TypeExpr): bool {.borrow.}
+  ## compare the type associated with the `TypeExpr`s and see if they're equal
+
 # fn-TypeExprObj
 
 createAsTypeFunc(TypeExprObj, {nnkObjectTy}, "not an object type expression")

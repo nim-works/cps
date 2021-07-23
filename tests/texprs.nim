@@ -533,3 +533,21 @@ suite "expression flattening":
       check (noop(); step 1; P(val: 42)).val == 42
 
     foo()
+
+  test "flatten magic calls with mutable variables":
+    var k = newKiller(3)
+
+    proc foo() {.cps: Cont.} =
+      var x: string
+      # add(var string, string) is a magic
+      x.add (noop(); step 1; "test")
+      check x == "test"
+
+      var y: seq[string]
+      # add(var seq[T], T) is a magic with generics
+      y.add (noop(); step 2; "test")
+      check y == @["test"]
+
+      step 3
+
+    foo()
