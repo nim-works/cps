@@ -136,3 +136,16 @@ suite "returns and results":
     trampoline c
     check "call operator works correctly":
       c() == 6
+
+  block:
+    ## discarding a continuation return value works
+    var k = newKiller(2)
+    proc bar(): string {.cps: Cont.} =
+      step 1
+      result = "test"
+
+    proc foo() {.cps: Cont.} =
+      discard bar()
+      step 2
+
+    foo()

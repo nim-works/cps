@@ -841,6 +841,16 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
         # try statement with no cps complications
         result.add env.annotate(nc)
 
+    of nnkDiscardStmt:
+      # If the discarded expression is a cps call
+      if nc[0].isCpsCall:
+        result.add:
+          # Rewrite it into an inline call, which cause them to be treated like
+          # result-less calls by the transformation.
+          env.annotate newStmtList(nc[0])
+      else:
+        result.add env.annotate(nc)
+
     # not a statement cps is interested in
     else:
       result.add env.annotate(nc)
