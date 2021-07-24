@@ -149,3 +149,15 @@ suite "returns and results":
       step 2
 
     foo()
+
+  block:
+    ## returning a continuation return value works
+    var k = newKiller(1)
+    proc bar(): string {.cps: Cont.} =
+      step 1
+      result = "test"
+
+    proc foo(): string {.cps: Cont.} =
+      return bar()
+
+    check foo() == "test"
