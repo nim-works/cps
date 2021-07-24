@@ -164,6 +164,12 @@ macro trace*[T](hook: static[Hook]; c: typed;
                 fun: string; info: LineInfo, body: T): untyped {.used.} =
   ## Reimplement this symbol to introduce control-flow
   ## tracing of each hook and entry to each continuation leg.
+  ##
+  ## The `c` argument varies with the hook; for `Pass`, `Tail`,
+  ## `Unwind`, and `Trace` hooks, it will represent a source
+  ## continuation.  Its value will be `nil` for `Boot`, `Coop`,
+  ## and `Head` hooks.  The `trace` macro receives the _output_
+  ## of hooks as its `body` argument.
   result =
     if body.kind == nnkNilLit:
       newEmptyNode()
