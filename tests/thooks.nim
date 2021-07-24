@@ -1,6 +1,9 @@
+import std/genasts
 import std/macros
 import std/strutils
 import std/sequtils
+
+from cps/hooks import Hook
 
 include preamble
 import killer
@@ -30,10 +33,19 @@ suite "hooks":
   block:
     ## control-flow tracing hooks are used automatically
     var found: seq[string]
-    proc trace(c: Cont; name: string; info: LineInfo) =
-      let sub = name.split("_", maxsplit=1)[0]
-      found.add "$#: $# $# $#" % [ $found.len, $sub, $info.column,
-                                   $sizeof(c[]) ]
+    macro trace[T](hook: static[Hook]; c: typed;
+                   fun: string; info: LineInfo; body: T): untyped =
+      var body =
+        if body.kind == nnkNilLit:
+          newEmptyNode()
+        else:
+          body
+      result =
+        genAst(c, hook, fun, info, body):
+          let sub = fun.split("_", maxsplit=1)[0]
+          found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub,
+                                          $info.column, astToStr c ]
+          body
 
     proc foo() {.cps: Cont.} =
       var i = 0
@@ -49,13 +61,19 @@ suite "hooks":
     let s = found.join("\10")
     const
       expected = """
-        0: foo 4 32
-        1: While Loop 12 32
-        2: Post Call 8 32
-        3: While Loop 12 32
-        4: Post Call 8 32
-        5: While Loop 12 32
-        6: Post Call 8 32
+        alloc 0: cps environment 8 Cont
+        head 1: trace 8 nil
+        boot 2: C 8 nil
+        trace 3: foo 4 continuation
+        coop 4: continuation 12 nil
+        trace 5: While Loop 12 continuation
+        trace 6: Post Call 8 continuation
+        coop 7: continuation 12 nil
+        trace 8: While Loop 12 continuation
+        trace 9: Post Call 8 continuation
+        coop 10: continuation 12 nil
+        trace 11: While Loop 12 continuation
+        trace 12: Post Call 8 continuation
       """.dedent(8).strip()
     check "trace output doesn't match":
       s == expected
