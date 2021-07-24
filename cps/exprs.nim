@@ -1,3 +1,4 @@
+import std/[enumerate, sequtils]
 import std/macros except newStmtList, items, pairs, newTree
 import cps/[spec, normalizedast, help, rewrites]
 
@@ -78,9 +79,9 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
       result = n.errorAst "unexpected node kind in case/if expression"
 
   case n.kind
-  of AtomicNodes, CallNodes, ConstructNodes, nnkConv, nnkBracketExpr:
-    # For calls, conversions, constructions, constants and basic symbols, we
-    # just emit the assignment.
+  of AccessNodes, CallNodes, ConstructNodes, nnkConv:
+    # For calls, conversions, constructions, constants, basic symbols, field
+    # access, we just emit the assignment.
     result = transformer(n)
   of nnkStmtList, nnkStmtListExpr:
     result = copyNodeAndTransformIt(n):
@@ -91,10 +92,6 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
 
       # Rewrite the last expression to assign to location.
       it.add:
-        # Convert back to NimNode explicitly because the compiler
-        # can't handle our awesome nodes (our node binds to both
-        # varargs and normal form of add).
-        {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18350".}
         filterExpr(n.last, transformer)
   of nnkBlockStmt, nnkBlockExpr, nnkPragmaBlock:
     result = copyNodeAndTransformIt(n):
@@ -163,8 +160,8 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
           it.add:
             branch.errorAst "unexpected node in a try expression"
   of ConvNodes - {nnkConv}:
-    # Hidden conversion nodes can be reconstructed by the compiler if needed,
-    # so we just skip them and rewrite the body instead.
+    ## Hidden conversion nodes can be reconstructed by the compiler if needed,
+    ## so we just skip them and rewrite the body instead.
     result = filterExpr(n.last, transformer)
   else:
     result = n.errorAst "cps doesn't know how to rewrite this into assignment"
@@ -585,7 +582,36 @@ func annotate(n: NormNode): NormNode =
         rase.copyLineInfo(child)
         result.add rase
 
-      of nnkBracket, nnkBracketExpr, nnkTupleConstr, nnkObjConstr, CallNodes:
+      of nnkDotExpr:
+        # In typed AST, dot expression indicates a field access, of which only the first node may
+        # contain a cps expression, as the other node will always be a field symbol.
+        #
+        # This rewrite is separated from the more general Left-to-Right rewrite below since we can't
+        # wrap the field symbol under a nnkStmtList
+        result.add:
+          # Lift the expression out of this node after the rewrite
+          newCall(bindName"cpsExprLifter"):
+            copyNimNode(child).add(
+              # Move the expression into a temporary
+              newCall(bindName"cpsExprToTmp", getTypeInst(child[0]), annotate(newStmtList child[0])),
+              # Copy the field symbol
+              copyNimNode child[1]
+            )
+
+      of nnkHiddenDeref:
+        # For hidden dereference, we have to convert them into explicit dereference since the compiler
+        # chokes on any modified hidden nodes
+        result.add:
+          # Lift the inner expression out
+          newCall(bindName"cpsExprLifter"):
+            # Create an explicit deref node with lineinfo copied from the original
+            newNimNode(nnkDerefExpr, child).add:
+              # Rewrite the inner CPS expression into a temporary
+              newCall(bindName"cpsExprToTmp", getTypeInst(child[0])):
+                newStmtList:
+                  annotate child[0]
+
+      of AccessNodes - AtomicNodes - HiddenNodes - {nnkDotExpr}, ConstructNodes, CallNodes:
         let magic = child.getMagic
         # These are boolean `and` or `or` operators, which have a special
         # evaluation ordering despite using CallNodes
@@ -626,16 +652,21 @@ func annotate(n: NormNode): NormNode =
         else:
           # For these nodes, the evaluation order of each child is the same
           # as their order in the AST.
-          let
-            newNode = copyNimNode(child)
-            lastExpr = child.lastCpsExprAt
 
-          template rewriteParam(n: NormNode, body: untyped): untyped =
-            ## Given the parameter `n`, transform its expression via `body`.
+          type
+            Operand = object
+              # The operand of an operation, ie. a parameter
+              node: NormNode # The node of the operand
+              typ: TypeExpr # The type of the expression within the operand
+              mutable: bool # Whether the operand is mutable
+
+          template rewriteOperand(o: Operand, body: untyped): untyped =
+            ## Given the operand `n`, transform its expression via `body` and
+            ## emit a copy of the operand's node with the transformed expression.
             ##
             ## The variable `it` is injected into the body as the expression
             ## to be transformed.
-            let node = n
+            let node = o.node
             case node.kind
             of nnkExprColonExpr:
               # This is a named parameter and the expression needs rewriting is
@@ -647,49 +678,97 @@ func annotate(n: NormNode): NormNode =
               let it {.inject.} = node
               body
 
-          for idx, gc in child.pairs:
-            let grandchild = gc
-            if child.kind == nnkObjConstr and idx == 0:
-              # The first node of an object constructor needs to be copied
-              # verbatim since it has to be a type symbol and wrapping it in any
-              # container like nnkStmtList will cause sem issues.
-              newNode.add copy(grandchild)
-
-            elif idx <= lastExpr:
-              # For all nodes up to the last position with a cps expression,
-              # we need to lift them so that they are executed before the cps
-              # expression.
-              #
-              # We need to lift them if one of the following conditions is true:
-              #
-              # The child is:
-              # - A CPS expression or contains a CPS expression
-              # - Consisted of mutiple statements
-              # - Mutable
-              if grandchild.hasCpsExpr or grandchild.isMutable or
-                not grandchild.isSingleStatement:
-                newNode.add:
-                  rewriteParam(grandchild):
-                    newCall(bindName"cpsExprToTmp", getTypeInst(it)):
-                      annotate:
-                        newStmtList(it)
+          iterator operands(n: NormNode): Operand =
+            ## Yields the operands of an operation.
+            ##
+            ## In the case where the operation is a magic call, the operand type
+            ## will be corrected as necessary.
+            # A seq containing the parameter of the magic routine, empty if `n` is not
+            # a magic.
+            let magicParams =
+              if n.getMagic != "":
+                toSeq callingParams(ProcDef getImpl(n[0]))
               else:
-                newNode.add:
-                  rewriteParam(grandchild):
-                    annotate:
-                      newStmtList(it)
-            else:
-              # Nodes after the last CPS expr doesn't have to be lifted
-              discard newNode.add:
-                rewriteParam(grandchild):
-                  annotate:
-                    newStmtList(it)
+                newSeq[RoutineParam]()
 
-          # Add the newly annotated node to the AST under the expression lifter
+            for idx, child in n.pairs:
+              let
+                # Capture the expression of the operand to derive its type
+                expr =
+                  case child.kind
+                  of nnkExprColonExpr:
+                    # This is a named parameter, the expression is the last node.
+                    child.last
+                  else: child
+                exprType = getTypeInst(expr)
+
+              var result = Operand(
+                node: child, typ: exprType, mutable: child.isMutable
+              )
+
+              # In the case where this is a magic call and the parameter corresponds to a parameter
+              # of the call.
+              #
+              # Note that we minus one here because parameters in the call node start at index 1.
+              if idx - 1 in 0 ..< magicParams.len:
+                let magicType = magicParams[idx - 1].inferTypFromImpl
+                # {.magic.} calls, unlike normal procedure, the compiler will not emit `nnkHiddenAddr`
+                # for `var` parameters, thus making regular analysis incorrect.
+                #
+                # As a workaround, we have to obtain this information directly from the symbol definition.
+                if magicType.typeKind == ntyVar and not magicType.sameType(result.typ):
+                  # If the parameter is a `var T` but the type differs from the operand.
+                  # Modify the operand type to `var operand.typ`.
+                  result.typ = TypeExpr nnkVarTy.newTree(result.typ)
+                  # Modify the mutable analysis to check whether the operand location is mutable instead.
+                  result.mutable = child.isMutableLocation
+
+              yield result
+
+          # Put the annotated operation under the expr lifter
           result.add:
             newCall(bindSym"cpsExprLifter"):
               newStmtList:
-                newNode
+                copyNodeAndTransformIt(child):
+                  # The last position with a cps expression
+                  let lastExpr = child.lastCpsExprAt
+
+                  for idx, operand in enumerate(child.operands):
+                    if child.kind == nnkObjConstr and idx == 0:
+                      # The first operand of an object constructor needs to be copied
+                      # verbatim since it has to be a type symbol and wrapping it in any
+                      # container like nnkStmtList will cause sem issues.
+                      it.add copy(operand.node)
+
+                    elif idx <= lastExpr:
+                      # For all nodes up to the last position with a cps expression,
+                      # we need to lift them so that they are executed before the cps
+                      # expression.
+                      #
+                      # We need to lift them if one of the following conditions is true:
+                      #
+                      # The child is:
+                      # - A CPS expression or contains a CPS expression
+                      # - Consisted of mutiple statements
+                      # - Mutable
+                      if operand.node.hasCpsExpr or operand.mutable or
+                        not operand.node.isSingleStatement:
+                        it.add:
+                          rewriteOperand(operand):
+                            newCall(bindName"cpsExprToTmp", operand.typ):
+                              annotate:
+                                newStmtList(it)
+                      else:
+                        it.add:
+                          rewriteOperand(operand):
+                            annotate:
+                              newStmtList(it)
+                    else:
+                      # Nodes after the last CPS expr doesn't have to be lifted
+                      discard it.add:
+                        rewriteOperand(operand):
+                          annotate:
+                            newStmtList(it)
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child

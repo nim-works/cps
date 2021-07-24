@@ -183,7 +183,8 @@ const TypeExprKinds = {
 
 func errorGot(msg: string, n: NimNode, got: string = treeRepr(n)) =
   ## useful for error messages
-  error msg & ", got:\n" & repr(got), n
+  {.cast(noSideEffect).}:
+    error msg & ", got:\n" & repr(got), n
 
 func errorGot*(msg: string, n: NormNode, got: string = treeRepr(n.NimNode)) =
   ## useful for error messages
@@ -209,12 +210,16 @@ const
   ConvNodes* = {nnkHiddenStdConv..nnkConv}
     ## Conversion nodes in typed AST
 
-  AccessNodes* = AtomicNodes + {nnkDotExpr, nnkDerefExpr, nnkHiddenDeref,
-                                nnkAddr, nnkHiddenAddr}
+  AccessNodes* = AtomicNodes + {nnkBracketExpr, nnkDotExpr, nnkDerefExpr,
+                                nnkHiddenDeref, nnkHiddenAddr}
     ## AST nodes for operations accessing a resource
 
   ConstructNodes* = {nnkBracket, nnkObjConstr, nnkTupleConstr}
     ## AST nodes for construction operations
+
+  HiddenNodes* = {nnkHiddenCallConv, nnkHiddenStdConv, nnkHiddenSubConv,
+                  nnkHiddenAddr, nnkHiddenDeref}
+    ## "Hidden" AST nodes
 
 # Converters - to reduce the conversion spam
 
@@ -571,6 +576,12 @@ func isNil*(n: TypeExpr): bool {.borrow.}
 
 proc `==`*(a, b: TypeExpr): bool {.borrow.}
   ## compare two `TypeEpxr`s and see if they're equal
+
+proc typeKind*(n: TypeExpr): NimTypeKind {.borrow.}
+  ## get the type kind of a type expr
+
+proc sameType*(a, b: TypeExpr): bool {.borrow.}
+  ## compare the type associated with the `TypeExpr`s and see if they're equal
 
 # fn-TypeExprObj
 
@@ -1070,8 +1081,8 @@ proc newProcDef*(name: Name, retType: TypeExpr,
   ## create a new proc def with name, returnt type, and calling params and an
   ## empty body (`nnkStmtList`)
   var formalParams = @[NimNode retType]
-  formalParams = formalParams & seq[NimNode] @callParams
-  newProc(name.Nimnode, formalParams, newStmtList()).ProcDef
+  formalParams.add seq[NimNode](@callParams)
+  newProc(name.NimNode, formalParams, newStmtList()).ProcDef
 
 createAsTypeFunc(ProcDef, {nnkProcDef}, "node is not a proc definition")
 
