@@ -352,7 +352,7 @@ proc localSection*(e: var Env; n: RoutineParam; into: NimNode = nil) {.borrow.}
   ## consume proc definition params and yield name, node pairs representing
   ## assignments to local scope.
 
-proc rewriteReturn*(e: var Env; n: NimNode): NimNode =
+proc rewriteReturn*(e: var Env; n: NormNode): NormNode =
   ## Rewrite a return statement to use our result field.
   if n.len != 1:
     result = n.errorAst "return len != 1"

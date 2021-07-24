@@ -730,8 +730,8 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
       # return statement without regard to the contents of `result`
       # because it may hold, eg. `ElifBranch ...` or similar.
       result.add:
-        env.rewriteReturn:
-          env.annotate nc
+        env.annotate:
+          env.rewriteReturn nc
       endAndReturn()
 
     of nnkVarSection, nnkLetSection:
