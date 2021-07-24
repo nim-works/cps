@@ -61,9 +61,9 @@ suite "hooks":
     let s = found.join("\10")
     const
       expected = """
-        alloc 0: cps environment 15 Cont
-        head 1: trace 16 nil
-        boot 2: c 16 nil
+        alloc 0: cps environment 8 Cont
+        head 1: trace 8 nil
+        boot 2: C 8 nil
         trace 3: foo 4 continuation
         coop 4: continuation 12 nil
         trace 5: While Loop 12 continuation
