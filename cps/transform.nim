@@ -9,7 +9,7 @@ export Continuation, ContinuationProc, cpsCall, cpsMustJump
 when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
   {.error: "i'm afraid of what you may have become".}
 
-proc annotate(parent: var Env; n: NormNode): NormNode
+proc annotate(env: var Env; n: NormNode): NormNode
 
 proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   ## creates a continuation proc with `name` using continuation
@@ -625,21 +625,12 @@ proc shimAssign(env: var Env; store: NormNode, call: Call, tail: NormNode): Norm
   shim.add env.annotate(body)
   result = shim
 
-proc annotate(parent: var Env; n: NormNode): NormNode =
+proc annotate(env: var Env; n: NormNode): NormNode =
   ## annotate `input` or otherwise prepare it for conversion into a
-  ## mutually-recursive cps convertible form; the `parent` environment
-  ## may be mutated as a side-effect, otherwise a new environment will be
-  ## created which points to this parent.
-
-  # the accumulated environment
-  var env =
-    if n.kind == nnkStmtList:
-      newEnv(parent)
-    else:
-      parent
+  ## mutually-recursive cps convertible form
 
   # first, rewrite any symbols that have been moved to the env
-  var n = rewriteSymbolsIntoEnvDotField(parent, n)
+  var n = rewriteSymbolsIntoEnvDotField(env, n)
 
   # the result is a copy of the current node
   result = copyNimNode n
