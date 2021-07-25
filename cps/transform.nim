@@ -629,9 +629,6 @@ proc annotate(env: var Env; n: NormNode): NormNode =
   ## annotate `input` or otherwise prepare it for conversion into a
   ## mutually-recursive cps convertible form
 
-  # first, rewrite any symbols that have been moved to the env
-  var n = rewriteSymbolsIntoEnvDotField(env, n)
-
   # the result is a copy of the current node
   result = copyNimNode n
   result.doc "start annotate at " & n.lineAndFile
@@ -1105,17 +1102,17 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
     Trace.hook env.first, n    # hooking against the proc (minus cloned body)
   body.add n.body              # add in the cloned body of the original proc
 
-  # perform sym substitutions (or whatever)
-  n.body = env.rewriteSymbolsIntoEnvDotField body
-
   # transform defers
-  n.body = rewriteDefer n.body
+  n.body = rewriteDefer body
 
   # rewrite non-yielding cps calls
   n.body = env.rewriteVoodoo n.body
 
   # annotate the proc's body
   n.body = env.annotate n.body
+
+  # perform sym substitutions (or whatever)
+  n.body = env.rewriteSymbolsIntoEnvDotField n.body
 
   if n.body.firstReturn.isNil:
     # fixes https://github.com/disruptek/cps/issues/145
