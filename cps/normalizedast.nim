@@ -17,7 +17,7 @@ export NormNode
 # * Normalized procs - ensure invariants by centralizing the AST operations
 #
 # # Nim (macros) AST vs Normalized AST
-# 
+#
 # Major Difference:
 # 1. Nim's AST focuses on syntax and syntax grammar
 # 2. Normalized AST maintains the invariants per the rewrites module
@@ -51,7 +51,7 @@ export NormNode
 # the type to a common type can be used -- an opaque type representing the sum.
 #
 # # Naming Conventions:
-# 
+#
 # To be Completed
 #
 # # Longer Term ToDos:
@@ -148,7 +148,7 @@ type
     ## a let section, with a single nnkIdentDefs or vartuple
   VarSection* = distinct VarLet
     ## a var section, with a single nnkIdentDefs or vartuple
-  
+
   VarIdentDef* = distinct VarLetIdentDef
     ## a var section with a single nnkIdentDefs, never a vartuple
   LetIdentDef* = distinct VarLetIdentDef
@@ -181,12 +181,12 @@ const TypeExprKinds = {
   ## list of type NimNodeKind
   ## XXX: this is an incomplete list
 
-func errorGot(msg: string, n: NimNode, got: string = treeRepr(n)) =
+func errorGot(msg: string, n: NimNode, got = treeRepr(n)) =
   ## useful for error messages
   {.cast(noSideEffect).}:
-    error msg & ", got:\n" & repr(got), n
+    error msg & ", got:\n" & got, n
 
-func errorGot*(msg: string, n: NormNode, got: string = treeRepr(n.NimNode)) =
+func errorGot*(msg: string, n: NormNode, got = treeRepr(n.NimNode)) =
   ## useful for error messages
   errorGot(msg, n.NimNode, got)
 
@@ -540,12 +540,12 @@ template binaryExprOrStmt(name: untyped, comments: untyped) =
 
 binaryExprOrStmt newDotExpr:
   ## create a new dot expression, meant for executable code. In the future
-  ## this is unlikely to work for type expressions for example  
-  
+  ## this is unlikely to work for type expressions for example
+
 binaryExprOrStmt newColonExpr:
   ## create a new colon expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
-  
+
 binaryExprOrStmt newAssignment:
   ## create a new assignment, meant for executable code
 
@@ -757,7 +757,7 @@ func validateAndCoerce(n: NimNode, T: typedesc = type VarLet): T =
     when T is VarLetTuple: true
     elif T is VarLetLike:  false
     else:                  {.error.}
-  
+
   if n.kind notin sectionKinds:
     errorGot "not a " & sectionName & " section", n
   elif n.len != 1:
@@ -807,7 +807,7 @@ func clone*(n: VarLet, value: NimNode = nil): VarLet =
 
 iterator indexNamePairs*(n: VarLetTuple): (int, Name) =
   ## return the names of fields on the lhs of a var/let tuple assignment
-  
+
   let fields = seq[Name] n.def.NormNode[0 ..^ 3]
     ## get the names of the tuple fields from a TupleDefVarLet
 
