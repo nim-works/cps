@@ -23,7 +23,7 @@ proc firstReturn*(p: NormNode): NormNode =
 proc makeReturn*(n: NormNode): NormNode =
   ## generate a `return` of the node if it doesn't already contain a return
   if n.firstReturn.isNil:
-    let toAdd = 
+    let toAdd =
       if n.kind in nnkCallKinds:
         n             # what we're saying here is, don't hook Coop on magics
       else:
@@ -56,7 +56,10 @@ proc terminator*(c: Name; T: NormNode): NormNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.
-  let (dealloc, pass, coop) = (Dealloc.sym, Pass.sym, Coop.sym)
+  let coop = NimNode hook(Coop, asName"result")
+  let pass = NimNode hook(Pass, c, c.dot "mom")
+  let dealloc = NimNode hook(Dealloc, T, c)
+  let c = NimNode c
   NormNode:
     quote:
       if `c`.isNil:
@@ -66,15 +69,13 @@ proc terminator*(c: Name; T: NormNode): NormNode =
         if `c`.mom.isNil:
           result = `c`
         else:
-          # we're converting to Cont here for sigmatch reasons despite the
-          # fact that Continuation is probably the only rational type
-          # pass(continuation, Cont(c.mom))
-          result = (typeof `c`) `pass`(`c`, Continuation `c`.mom)
+          # pass(continuation, c.mom)
+          result = (typeof `c`) `pass`
           if result != `c`:
-            # perform a cooperative yield when we pass control to mom
-            result = `coop` result
+            # perform a cooperative yield if pass() chose mom
+            result = `coop`
             # dealloc(env_234234, continuation)
-            `dealloc`(`T`, `c`)
+            discard `dealloc`
       # critically, terminate control-flow here!
       return
 

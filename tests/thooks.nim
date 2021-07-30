@@ -42,10 +42,14 @@ suite "hooks":
           body
       result =
         genAst(c, hook, fun, info, body):
+          let last = if hook == Dealloc: "😎" else: astToStr c
           let sub = fun.split("_", maxsplit=1)[0]
           found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub,
-                                          $info.column, astToStr c ]
+                                          $info.column, last ]
           body
+
+    proc bar() {.cps: Cont.} =
+      noop()
 
     proc foo() {.cps: Cont.} =
       var i = 0
@@ -56,6 +60,7 @@ suite "hooks":
           continue
         if i > 2:
           break
+        bar()
 
     foo()
     let s = found.join("\10")
@@ -68,12 +73,32 @@ suite "hooks":
         coop 4: continuation 12 nil
         trace 5: While Loop 12 continuation
         trace 6: Post Call 8 continuation
-        coop 7: continuation 12 nil
-        trace 8: While Loop 12 continuation
-        trace 9: Post Call 8 continuation
-        coop 10: continuation 12 nil
-        trace 11: While Loop 12 continuation
-        trace 12: Post Call 8 continuation
+        tail 7: Cont 17 Continuation(continuation)
+        alloc 8: cps environment 8 Cont
+        boot 9: result 9 nil
+        pass 10: cps environment 8 continuation
+        trace 11: bar 4 continuation
+        trace 12: Post Call 6 continuation
+        pass 13: continuation.mom 9 continuation
+        coop 14: result 9 nil
+        dealloc 15: continuation 12 😎
+        trace 16: Post Child 8 continuation
+        coop 17: continuation 12 nil
+        trace 18: While Loop 12 continuation
+        trace 19: Post Call 8 continuation
+        tail 20: Cont 17 Continuation(continuation)
+        alloc 21: cps environment 8 Cont
+        boot 22: result 9 nil
+        pass 23: cps environment 8 continuation
+        trace 24: bar 4 continuation
+        trace 25: Post Call 6 continuation
+        pass 26: continuation.mom 9 continuation
+        coop 27: result 9 nil
+        dealloc 28: continuation 12 😎
+        trace 29: Post Child 8 continuation
+        coop 30: continuation 12 nil
+        trace 31: While Loop 12 continuation
+        trace 32: Post Call 8 continuation
       """.dedent(8).strip()
     check "trace output doesn't match":
       s == expected
