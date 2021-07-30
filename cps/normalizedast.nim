@@ -542,6 +542,14 @@ binaryExprOrStmt newDotExpr:
   ## create a new dot expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
 
+template dot*(a, b: NormNode): NormNode =
+  ## for constructing foo.bar
+  newDotExpr(a, b)
+
+template dot*(a: NormNode; b: string): NormNode =
+  ## for constructing `.`(foo, "bar")
+  dot(a, asName(b))
+
 binaryExprOrStmt newColonExpr:
   ## create a new colon expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
