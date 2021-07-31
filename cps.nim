@@ -231,9 +231,9 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
   ## The `trace` macro receives the _output_ of the traced hook as its
   ## `body` argument.
 
+  var body = body
+  result = newStmtList()
   if cpsHasStackTrace:
-    var body = body
-    result = newStmtList()
     var tipe = getTypeInst body
     if tipe.looksLegit:
       let continuation = nskLet.genSym"continuation"
@@ -246,12 +246,9 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
       # pass that input to the stack trace along with the other params
       cpsStackTrace(hook, source, target, fun = fun.strVal,
                     info = info.makeLineInfo, body)
-    result.add:
-      # the final result of the statement list is the input
-      body.nilAsEmpty
-  else:
-    # evaporate
-    result = body.nilAsEmpty
+  result.add:
+    # the final result of the statement list is the input
+    body.nilAsEmpty
 
 proc alloc*[T: Continuation](U: typedesc[T]; E: typedesc): E {.used, inline.} =
   ## Reimplement this symbol to customize continuation allocation; `U`
