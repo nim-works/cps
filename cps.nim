@@ -268,6 +268,6 @@ proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
     stdmsg().writeLine "compile with --define:cpsHasTraceDeque=on"
   else:
     for index in 0 ..< c.frames.len:
-      template frame: TraceFrame = c.frames[index]
+      template frame: TraceFrame = c.frames[c.frames.len - index - 1]
       stdmsg().writeLine:
         &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
