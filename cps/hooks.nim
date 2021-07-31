@@ -11,20 +11,6 @@ perform a late binding to by name.
 
 ]##
 
-type
-  Hook* = enum ##
-    ## these are hook procedure names; the string value matches the name
-    ## of the symbol we'll call to perform the hook.
-    Coop    = "coop"      ## returns control to the dispatcher
-    Trace   = "trace"     ## executed at entry to each continuation leg
-    Alloc   = "alloc"     ## performs allocation of a new continuation
-    Dealloc = "dealloc"   ## performs deallocation of a continuation
-    Pass    = "pass"      ## transfers control-flow between continuations
-    Boot    = "boot"      ## prepares a continuation for initial use
-    Unwind  = "unwind"    ## controlled "bubble-up" for exception handling
-    Head    = "head"      ## invoked when a new continuation has no parent
-    Tail    = "tail"      ## invoked when a new continuation has a parent
-
 proc introduce*(hook: Hook; n: NormNode) =
   ## introduce a hook into the given scope whatfer later use therein
   var n = n

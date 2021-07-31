@@ -46,6 +46,19 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
+  Hook* = enum ##
+    ## these are hook procedure names; the string value matches the name
+    ## of the symbol we'll call to perform the hook.
+    Coop    = "coop"      ## returns control to the dispatcher
+    Trace   = "trace"     ## executed at entry to each continuation leg
+    Alloc   = "alloc"     ## performs allocation of a new continuation
+    Dealloc = "dealloc"   ## performs deallocation of a continuation
+    Pass    = "pass"      ## transfers control-flow between continuations
+    Boot    = "boot"      ## prepares a continuation for initial use
+    Unwind  = "unwind"    ## controlled "bubble-up" for exception handling
+    Head    = "head"      ## invoked when a new continuation has no parent
+    Tail    = "tail"      ## invoked when a new continuation has a parent
+
 proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
   newPragmaStmt(filterIt(ns, it.getPragmaName != liftee))

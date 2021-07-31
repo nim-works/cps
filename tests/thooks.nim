@@ -2,7 +2,7 @@ import std/genasts
 import std/macros
 import std/strutils
 
-from cps/hooks import Hook
+from cps/spec import Hook
 
 include preamble
 import killer
