@@ -232,25 +232,23 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
   ## `body` argument.
 
   if cpsHasStackTrace:
+    var body = body
     result = newStmtList()
     var tipe = getTypeInst body
-    var continuation =
-      if tipe.looksLegit:
-        nskLet.genSym"continuation"
-      else:
-        newNilLit()
     if tipe.looksLegit:
+      let continuation = nskLet.genSym"continuation"
       result.add:
         # assign the input to a variable that can be repeated evaluated
         nnkLetSection.newTree:
-          nnkIdentDefs.newTree(continuation, tipe, body.nilAsEmpty)
+          nnkIdentDefs.newTree(continuation, tipe, body)
+      body = continuation
     result.add:
       # pass that input to the stack trace along with the other params
       cpsStackTrace(hook, source, target, fun = fun.strVal,
-                    info = info.makeLineInfo, continuation)
+                    info = info.makeLineInfo, body)
     result.add:
       # the final result of the statement list is the input
-      continuation.nilAsEmpty
+      body.nilAsEmpty
   else:
     # evaporate
     result = body.nilAsEmpty
