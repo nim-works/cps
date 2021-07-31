@@ -172,7 +172,7 @@ proc addFrame(c: NimNode; frame: NimNode): NimNode =
   genAst(c, frame):
     if not c.isNil:
       while c.stack.len >= cpsStackTraceSize:
-        c.stack.popLast
+        discard c.stack.popLast
       c.stack.addFirst frame
 
 proc cpsStackTrace*(hook: Hook; c, n: NimNode; fun: string;
