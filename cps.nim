@@ -163,12 +163,14 @@ template boot*[T: Continuation](c: T): T {.used.} =
 
 {.experimental: "dynamicBindSym".}
 proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode =
+  ## prepare a stack frame constructor
   result = nnkObjConstr.newTree bindSym"StackFrame"
   result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
   result.add: "info".colon info.makeLineInfo
   result.add: "fun".colon fun.newLit
 
 proc addFrame(c: NimNode; frame: NimNode): NimNode =
+  ## add a stack frame object to the stack
   genAst(c, frame):
     if not c.isNil:
       while c.stack.len >= cpsStackTraceSize:
@@ -179,7 +181,6 @@ proc cpsStackTrace*(hook: Hook; c, n: NimNode; fun: string;
                     info: LineInfo, body: NimNode): NimNode {.used.} =
   ## This is the default "stacktrace" implementation which can be
   ## reused when implementing your own `trace` macros.
-
   let frame = initFrame(hook, fun, info)
   result =
     case hook
