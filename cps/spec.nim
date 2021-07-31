@@ -49,12 +49,12 @@ type
     when cpsHasStackTrace:
       stack*: Deque[StackFrame]
 
-  StackFrame* = object
-    hook: Hook
-    fun: string
-    info: LineInfo
-
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+
+  StackFrame* = object ## a record of where the continuation has been
+    hook: Hook         ## the hook that provoked the trace entry
+    fun: string        ## a short label for the notable symbol
+    info: LineInfo     ## the source of the notable symbol
 
   Hook* = enum ##
     ## these are hook procedure names; the string value matches the name
