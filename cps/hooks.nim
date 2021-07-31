@@ -99,7 +99,7 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
   of Unwind:
     # hook(continuation, Cont)
     let unwind = hook.sym.NimNode
-    Unwind.entrace b, a:
+    Unwind.entrace a, b:
       NormNode:
         quote:
           if not `a`.ex.isNil:
