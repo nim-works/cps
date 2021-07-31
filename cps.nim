@@ -163,23 +163,23 @@ template boot*[T: Continuation](c: T): T {.used.} =
 
 {.experimental: "dynamicBindSym".}
 proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode =
-  ## prepare a stack frame constructor
-  result = nnkObjConstr.newTree bindSym"StackFrame"
+  ## prepare a tracing frame constructor
+  result = nnkObjConstr.newTree bindSym"TraceFrame"
   result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
   result.add: "info".colon info.makeLineInfo
   result.add: "fun".colon fun.newLit
 
 proc addFrame(c: NimNode; frame: NimNode): NimNode =
-  ## add a stack frame object to the stack
+  ## add a frame object to the deque
   genAst(c, frame):
     if not c.isNil:
-      while c.stack.len >= cpsStackTraceSize:
-        discard c.stack.popLast
-      c.stack.addFirst frame
+      while c.frames.len >= cpsTraceDequeSize:
+        discard popLast(c.frames)
+      addFirst(c.frames, frame)
 
-proc cpsStackTrace*(hook: Hook; c, n: NimNode; fun: string;
+proc cpsTraceDeque*(hook: Hook; c, n: NimNode; fun: string;
                     info: LineInfo, body: NimNode): NimNode {.used.} =
-  ## This is the default "stacktrace" implementation which can be
+  ## This is the default tracing implementation which can be
   ## reused when implementing your own `trace` macros.
   let frame = initFrame(hook, fun, info)
   result =
@@ -233,7 +233,7 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
 
   var body = body
   result = newStmtList()
-  if cpsHasStackTrace:
+  if cpsHasTraceDeque:
     var tipe = getTypeInst body
     if tipe.looksLegit:
       let continuation = nskLet.genSym"continuation"
@@ -243,8 +243,8 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
           nnkIdentDefs.newTree(continuation, tipe, body)
       body = continuation
     result.add:
-      # pass that input to the stack trace along with the other params
-      cpsStackTrace(hook, source, target, fun = fun.strVal,
+      # pass that input to the trace along with the other params
+      cpsTraceDeque(hook, source, target, fun = fun.strVal,
                     info = info.makeLineInfo, body)
   result.add:
     # the final result of the statement list is the input

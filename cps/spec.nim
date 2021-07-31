@@ -34,8 +34,8 @@ template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## continuation symbol used.
 
 const
-  cpsHasStackTrace* {.booldefine, used.} = compileOption"stacktrace"
-  cpsStackTraceSize* {.intdefine, used.} = 4_096
+  cpsHasTraceDeque* {.booldefine, used.} = compileOption"stacktrace"
+  cpsTraceDequeSize* {.intdefine, used.} = 4_096
 
 type
   Continuation* = ref object of RootObj
@@ -46,12 +46,12 @@ type
     ## the `mom` will hold that parent Continuation to form a
     ## linked-list approximating a stack.
     ex*: ref Exception ## The unhandled exception of the continuation.
-    when cpsHasStackTrace:
-      stack*: Deque[StackFrame]
+    when cpsHasTraceDeque:
+      frames*: Deque[TraceFrame]
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
-  StackFrame* = object ## a record of where the continuation has been
+  TraceFrame* = object ## a record of where the continuation has been
     hook: Hook         ## the hook that provoked the trace entry
     fun: string        ## a short label for the notable symbol
     info: LineInfo     ## the source of the notable symbol
