@@ -182,26 +182,13 @@ proc cpsTraceDeque*(hook: Hook; c, n: NimNode; fun: string;
   ## This is the default tracing implementation which can be
   ## reused when implementing your own `trace` macros.
   let frame = initFrame(hook, fun, info)
-  result =
-    case hook
-    of Coop:
-      addFrame(body, frame)
-    of Trace:
-      addFrame(c, frame)
-    of Alloc:
-      addFrame(body, frame)
-    of Dealloc:
-      addFrame(body, frame)
-    of Pass:
-      newStmtList(addFrame(c, frame), addFrame(body, frame))
-    of Boot:
-      addFrame(body, frame)
-    of Unwind:
-      addFrame(body, frame)
-    of Head:
-      addFrame(body, frame)
-    of Tail:
-      newStmtList(addFrame(c, frame), addFrame(body, frame))
+  case hook
+  of Trace:
+    addFrame(c, frame)
+  of Pass, Tail:
+    newStmtList(addFrame(c, frame), addFrame(body, frame))
+  else:
+    addFrame(body, frame)
 
 proc looksLegit(n: NimNode): bool =
   case n.kind
