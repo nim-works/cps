@@ -119,7 +119,7 @@ suite "hooks":
   block:
     ## custom continuation deallocators can nil the continuation
     shouldRun 4:
-      proc dealloc[T: Cont](t: typedesc; c: sink T) =
+      proc dealloc[T: Cont](c: sink T; E: typedesc[T]): E =
         ran()
         c = nil
 
@@ -140,7 +140,7 @@ suite "hooks":
   block:
     ## custom continuation deallocators work with whelp
     shouldRun 4:
-      proc dealloc[T: Cont](t: typedesc; c: sink T) =
+      proc dealloc[T: Cont](c: sink T; E: typedesc[T]): E =
         ran()
         c = nil
 

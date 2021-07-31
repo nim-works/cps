@@ -133,9 +133,7 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
       NormNode newNilLit()
   of Dealloc:
     # dealloc(env_234234, continuation)
-    newStmtList [
-      Dealloc.entrace(a, b, newCall(hook.sym, a, b)),
-      NormNode newNilLit()
-    ]
+    Dealloc.entrace a, b:
+      newCall(hook.sym, a, b)
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"

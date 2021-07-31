@@ -58,7 +58,7 @@ proc terminator*(c: Name; T: NormNode): NormNode =
   ## or simply set the fn to nil and return the continuation.
   let coop = NimNode hook(Coop, asName"result")
   let pass = NimNode hook(Pass, c, c.dot "mom")
-  let dealloc = NimNode hook(Dealloc, T, c)
+  let dealloc = NimNode hook(Dealloc, c, T)
   let c = NimNode c
   NormNode:
     quote:

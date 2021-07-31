@@ -181,11 +181,12 @@ proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used, inline.}
   ## allocation.
   new c
 
-template dealloc*[T: Continuation](t: typedesc[T];
-                                   c: sink Continuation) {.used.} =
-  ## Reimplement this symbol to customize continuation
-  ## deallocation.
-  discard
+proc dealloc*[T: Continuation](c: sink T; E: typedesc[T]): E {.used, inline.} =
+  ## Reimplement this symbol to customize continuation deallocation;
+  ## `c` is the continuation to be deallocated, while `E` is the type of
+  ## its environment.  This procedure should generally return `nil`, as
+  ## its result may be assigned to another continuation reference.
+  nil
 
 {.push experimental: "callOperator".}
 template `()`(c: Continuation): untyped {.used.} =
