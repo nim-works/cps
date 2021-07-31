@@ -164,9 +164,9 @@ template boot*[T: Continuation](c: T): T {.used.} =
 {.experimental: "dynamicBindSym".}
 proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode =
   result = nnkObjConstr.newTree bindSym"StackFrame"
-  result.add: "hook".dots newCall(bindSym"Hook", hook.ord.newLit)
-  result.add: "info".dots info.makeLineInfo
-  result.add: "fun".dots fun.newLit
+  result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
+  result.add: "info".colon info.makeLineInfo
+  result.add: "fun".colon fun.newLit
 
 proc addFrame(c: NimNode; frame: NimNode): NimNode =
   genAst(c, frame):
@@ -233,8 +233,6 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
   if cpsHasStackTrace:
     result = newStmtList()
     var tipe = getTypeInst body
-    echo treeRepr(tipe)
-    echo tipe.kind
     var continuation =
       if tipe.looksLegit:
         nskLet.genSym"continuation"

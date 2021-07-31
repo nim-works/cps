@@ -393,13 +393,13 @@ template eq*(a: string; b: NimNode): NimNode =
   ## for constructing foo=bar in a call
   eq(ident(a), b)
 
-template dots*(a, b: NimNode): NimNode =
+template colon*(a, b: NimNode): NimNode =
   ## for constructing foo: bar in a ctor
   nnkExprColonExpr.newNimNode(a).add(a).add(b)
 
-template dots*(a: string; b: NimNode): NimNode =
+template colon*(a: string; b: NimNode): NimNode =
   ## for constructing foo: bar in a ctor
-  dots(ident(a), b)
+  colon(ident(a), b)
 
 proc nilAsEmpty*(n: NimNode): NimNode =
   ## normalize nil, nnkNilLit to nnkEmpty
