@@ -138,9 +138,8 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
   of Trace:
     # trace(Pass, continuation, "whileLoop_2323",
     # LineInfo(filename: "...", line: 23, column: 44)): nil
-    #NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
     Trace.entrace a, b:
-      NormNode newEmptyNode()
+      NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
   of Dealloc:
     # dealloc(env_234234, continuation)
     Dealloc.entrace a, b:

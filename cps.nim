@@ -202,6 +202,13 @@ proc cpsStackTrace*(hook: Hook; c, n: NimNode; fun: string;
     of Tail:
       newStmtList(addFrame(c, frame), addFrame(body, frame))
 
+proc looksLegit(n: NimNode): bool =
+  case n.kind
+  of nnkNilLit: false
+  of nnkEmpty: false
+  of nnkSym: n.repr != "nil"
+  else: true
+
 macro trace*[T](hook: static[Hook]; source, target: typed;
                 fun: string; info: LineInfo; body: T): untyped {.used.} =
   ## Reimplement this symbol to introduce control-flow tracing of each
@@ -229,15 +236,15 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
     echo treeRepr(tipe)
     echo tipe.kind
     var continuation =
-      if tipe.kind in {nnkNilLit, nnkEmpty}:
-        newNilLit()
-      else:
+      if tipe.looksLegit:
         nskLet.genSym"continuation"
-    if tipe.kind notin {nnkNilLit, nnkEmpty}:
+      else:
+        newNilLit()
+    if tipe.looksLegit:
       result.add:
         # assign the input to a variable that can be repeated evaluated
         nnkLetSection.newTree:
-          nnkIdentDefs.newTree(continuation, tipe, body.emptyAsNil)
+          nnkIdentDefs.newTree(continuation, tipe, body.nilAsEmpty)
     result.add:
       # pass that input to the stack trace along with the other params
       cpsStackTrace(hook, source, target, fun = fun.strVal,
