@@ -256,3 +256,18 @@ template `()`(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
 {.pop.}
+
+when cpsHasTraceDeque:
+  import std/strformat
+
+proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
+  ## write a traceback for the current continuation
+  if c.isNil:
+    stdmsg().writeLine "dismissed continuations have no trace deque"
+  elif not cpsHasTraceDeque:
+    stdmsg().writeLine "compile with --define:cpsHasTraceDeque=on"
+  else:
+    for index in 0 ..< c.frames.len:
+      template frame: TraceFrame = c.frames[index]
+      stdmsg().writeLine:
+        &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
