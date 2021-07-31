@@ -12,7 +12,7 @@ suite "hooks":
   block:
     ## cooperative yield hooks are used automatically
     shouldRun 6:
-      proc coop(c: Cont): Cont {.cpsMagic.} =
+      proc coop(c: Cont): Cont {.cpsMagic, used.} =
         ran()
         result = c
 
