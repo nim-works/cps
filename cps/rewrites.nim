@@ -300,6 +300,21 @@ proc normalizingRewrites*(n: NimNode): NormNode =
             for i in unwrapped.items:
               result.add i
 
+    proc rewriteCheckedFieldExpr(n: NimNode): NimNode =
+      ## Rewrite a checked field access into a normal access as this
+      ## node is "special" and cannot be modified by a macro.
+      case n.kind
+      of nnkCheckedFieldExpr:
+        # This node have two children:
+        # - The first one being the DotExpr.
+        # - The second one being the internal "check" by the compiler.
+        #
+        # We transform this back to field access by taking the access node.
+        # The compiler can write it back later.
+        result = normalizingRewrites n[0]
+      else:
+        discard
+
     case n.kind
     of nnkIdentDefs:
       rewriteIdentDefs n
@@ -313,6 +328,8 @@ proc normalizingRewrites*(n: NimNode): NormNode =
       rewriteExceptBranch n
     of CallNodes:
       rewriteVarargsTypedCalls n
+    of nnkCheckedFieldExpr:
+      rewriteCheckedFieldExpr n
     else:
       nil
 
