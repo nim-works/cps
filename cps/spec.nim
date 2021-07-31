@@ -401,6 +401,10 @@ template colon*(a: string; b: NimNode): NimNode =
   ## for constructing foo: bar in a ctor
   colon(ident(a), b)
 
+template colon*(a: string | NimNode; b: string | int): NimNode =
+  ## for constructing foo: bar in a ctor
+  colon(a, newLit(b))
+
 proc nilAsEmpty*(n: NimNode): NimNode =
   ## normalize nil, nnkNilLit to nnkEmpty
   if n.isNil or n.kind == nnkNilLit:

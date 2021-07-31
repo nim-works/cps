@@ -30,9 +30,9 @@ proc introduce*(n: NormNode; hooks: set[Hook]) =
 proc makeLineInfo*(n: LineInfo): NimNode =
   ## turn a compile-time LineInfo object into a runtime LineInfo object
   result = nnkObjConstr.newTree bindSym"LineInfo"
-  result.add: "filename".colon n.filename.newLit
-  result.add: "line".colon n.line.newLit
-  result.add: "column".colon n.column.newLit
+  result.add: "filename".colon n.filename
+  result.add: "line".colon n.line
+  result.add: "column".colon n.column
 
 proc findColonLit(n: NimNode; s: string; T: typedesc): T =
   let child =

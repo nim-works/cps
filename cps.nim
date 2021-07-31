@@ -167,7 +167,7 @@ proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode =
   result = nnkObjConstr.newTree bindSym"TraceFrame"
   result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
   result.add: "info".colon info.makeLineInfo
-  result.add: "fun".colon fun.newLit
+  result.add: "fun".colon fun
 
 proc addFrame(c: NimNode; frame: NimNode): NimNode =
   ## add a frame object to the deque
