@@ -1,3 +1,4 @@
+import std/os
 import std/genasts
 import std/macros
 import std/strutils
@@ -32,7 +33,7 @@ suite "hooks":
   block:
     ## control-flow tracing hooks are used automatically
     var found: seq[string]
-    macro trace[T](hook: static[Hook]; c: typed;
+    macro trace[T](hook: static[Hook]; c, n: typed;
                    fun: string; info: LineInfo; body: T): untyped =
       var body =
         if body.kind == nnkNilLit:
@@ -43,8 +44,9 @@ suite "hooks":
         genAst(c, hook, fun, info, body):
           let last = if hook == Dealloc: "😎" else: astToStr c
           let sub = fun.split("_", maxsplit=1)[0]
-          found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub,
-                                          $info.column, last ]
+          var path = info.filename.lastPathPart
+          path = if path == "thooks.nim": "👍" else: path
+          found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub, last, path ]
           body
 
     proc bar() {.cps: Cont.} =
@@ -65,42 +67,42 @@ suite "hooks":
     let s = found.join("\10")
     const
       expected = """
-        alloc 0: cps environment 8 Cont
-        head 1: trace 8 nil
-        boot 2: C 8 nil
-        trace 3: foo 4 continuation
-        coop 4: continuation 12 nil
-        trace 5: While Loop 12 continuation
-        trace 6: Post Call 8 continuation
-        tail 7: Cont 17 Continuation(continuation)
-        alloc 8: cps environment 8 Cont
-        boot 9: result 9 nil
-        pass 10: cps environment 8 continuation
-        trace 11: bar 4 continuation
-        trace 12: Post Call 6 continuation
-        pass 13: continuation.mom 9 continuation
-        coop 14: result 9 nil
-        dealloc 15: continuation 12 😎
-        trace 16: Post Child 8 continuation
-        coop 17: continuation 12 nil
-        trace 18: While Loop 12 continuation
-        trace 19: Post Call 8 continuation
-        tail 20: Cont 17 Continuation(continuation)
-        alloc 21: cps environment 8 Cont
-        boot 22: result 9 nil
-        pass 23: cps environment 8 continuation
-        trace 24: bar 4 continuation
-        trace 25: Post Call 6 continuation
-        pass 26: continuation.mom 9 continuation
-        coop 27: result 9 nil
-        dealloc 28: continuation 12 😎
-        trace 29: Post Child 8 continuation
-        coop 30: continuation 12 nil
-        trace 31: While Loop 12 continuation
-        trace 32: Post Call 8 continuation
+        alloc 0: cps environment Cont normalizedast.nim
+        head 1: trace nil normalizedast.nim
+        boot 2: C nil normalizedast.nim
+        trace 3: foo continuation 👍
+        coop 4: continuation nil genasts.nim
+        trace 5: While Loop continuation 👍
+        trace 6: Post Call continuation 👍
+        tail 7: Cont Continuation(continuation) normalizedast.nim
+        alloc 8: cps environment Cont normalizedast.nim
+        boot 9: result nil normalizedast.nim
+        pass 10: cps environment continuation normalizedast.nim
+        trace 11: bar continuation 👍
+        trace 12: Post Call continuation 👍
+        pass 13: continuation.mom continuation normalizedast.nim
+        coop 14: result nil normalizedast.nim
+        dealloc 15: cps environment 😎 genasts.nim
+        trace 16: Post Child continuation normalizedast.nim
+        coop 17: continuation nil genasts.nim
+        trace 18: While Loop continuation 👍
+        trace 19: Post Call continuation 👍
+        tail 20: Cont Continuation(continuation) normalizedast.nim
+        alloc 21: cps environment Cont normalizedast.nim
+        boot 22: result nil normalizedast.nim
+        pass 23: cps environment continuation normalizedast.nim
+        trace 24: bar continuation 👍
+        trace 25: Post Call continuation 👍
+        pass 26: continuation.mom continuation normalizedast.nim
+        coop 27: result nil normalizedast.nim
+        dealloc 28: cps environment 😎 genasts.nim
+        trace 29: Post Child continuation normalizedast.nim
+        coop 30: continuation nil genasts.nim
+        trace 31: While Loop continuation 👍
+        trace 32: Post Call continuation 👍
       """.dedent(8).strip()
-    check "trace output doesn't match":
-      s == expected
+    if s != expected:
+      fail "trace output doesn't match; received:\n" & s
 
   block:
     ## custom continuation allocators are used automatically

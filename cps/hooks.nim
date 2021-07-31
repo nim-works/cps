@@ -27,12 +27,34 @@ proc introduce*(n: NormNode; hooks: set[Hook]) =
   for hook in hooks.items:
     hook.introduce n
 
-proc makeLineInfo(n: LineInfo): NimNode =
+proc makeLineInfo*(n: LineInfo): NimNode =
   ## turn a compile-time LineInfo object into a runtime LineInfo object
   result = nnkObjConstr.newTree bindSym"LineInfo"
-  result.add newColonExpr(ident"filename", n.filename.newLit)
-  result.add newColonExpr(ident"line", n.line.newLit)
-  result.add newColonExpr(ident"column", n.column.newLit)
+  result.add: "filename".dots n.filename.newLit
+  result.add: "line".dots n.line.newLit
+  result.add: "column".dots n.column.newLit
+
+proc findColonLit(n: NimNode; s: string; T: typedesc): T =
+  let child =
+    n.findChild:
+      it.kind == nnkExprColonExpr and it.len == 2 and it[0].strVal == s
+  if child.isNil:
+    raise ValueError.newException "parse error: " & treeRepr(n)
+  else:
+    when T is BiggestInt:
+      result = child[1].intVal
+    elif T is int:
+      result = child[1].intVal.int
+    elif T is string:
+      result = child[1].strVal
+    else:
+      raise Defect.newException "we can't be friends"
+
+proc makeLineInfo*(n: NimNode): LineInfo =
+  ## return a run-time LineInfo into a compile-time LineInfo object
+  LineInfo(filename: n.findColonLit("filename", string),
+           line: n.findColonLit("line", int),
+           column: n.findColonLit("column", int))
 
 proc sym*(hook: Hook): Name =
   ## produce a symbol|ident for the hook procedure
@@ -43,47 +65,48 @@ proc sym*(hook: Hook): Name =
     # rely on a `mixin $hook` in (high) scope
     asName($hook)
 
-macro etype(e: enum): string =
-  ## Coop -> "Coop", not "coop"
-  for sym in (getTypeImpl e)[1..^1]:
-    if sym.intVal == e.intVal:
-      return newLit sym.strVal
-  error "unexpected"
-
-proc pickLit(n: NormNode): NimNode =
+proc abbreviation(n: NimNode): NimNode =
+  ## "abbreviate" a node so it can be passed succinctly
   case n.kind
   of nnkProcDef:
-    newLit $n.name
-  of nnkSym, nnkIdent:
-    newLit $n
-  of nnkCall:
-    newLit $n[0]
+    n.name
+  of nnkSym, nnkIdent, nnkDotExpr:
+    n
+  of nnkCallKinds:
+    n[0]
   else:
-    newLit repr(n)
+    n.errorAst "dunno how to abbreviate " & $n.kind
+
+proc nameForNode*(n: NimNode): string =
+  ## produce some kind of useful string that names a node
+  let abbrev = abbreviation n
+  case abbrev.kind
+  of nnkSym, nnkIdent:
+    $abbrev
+  else:
+    repr n
 
 template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
   let event = bindSym(etype hook)
   let info = makeLineInfo n.lineInfoObj
-  let fun = pickLit n
-  newCall(Trace.sym, event, c, "fun".eq fun, "info".eq info, body).NormNode
-
-template entrace(hook: static[Hook]; n, body: NormNode): NormNode =
-  entrace(hook, nil.NormNode, n, body)
+  let fun = newLit(nameForNode n.NimNode)
+  newCall(Trace.sym, event, c.NimNode, abbreviation n.NimNode,
+          "fun".eq fun, "info".eq info, body.NimNode).NormNode
 
 proc hook*(hook: static[Hook]; n: NormNode): NormNode =
   ## execute the given hook on the given node
   case hook
   of Boot:
     # hook(continuation)
-    Boot.entrace n:
+    Boot.entrace nil.NormNode, n:
       newCall(hook.sym, n)
   of Coop:
     # hook(continuation)
-    Coop.entrace n:
+    Coop.entrace nil.NormNode, n:
       newCall(hook.sym, n)
   of Head:
     # hook(continuation)
-    Head.entrace n:
+    Head.entrace nil.NormNode, n:
       newCall(hook.sym, n)
   else:
     # cast to `Call` avoids type mismatch as converters can't figure this out
@@ -114,9 +137,10 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
       newCall(hook.sym, a, b)
   of Trace:
     # trace(Pass, continuation, "whileLoop_2323",
-    # LineInfo(filename: "...", line: 23, column: 44)): discard
+    # LineInfo(filename: "...", line: 23, column: 44)): nil
+    #NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
     Trace.entrace a, b:
-      NormNode newNilLit()
+      NormNode newEmptyNode()
   of Dealloc:
     # dealloc(env_234234, continuation)
     Dealloc.entrace a, b:

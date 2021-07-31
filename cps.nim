@@ -1,5 +1,6 @@
+import std/[genasts, deques]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
-import std/macros except newStmtList
+import std/macros except newStmtList, newTree
 export Continuation, ContinuationProc, State
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic
 
@@ -160,26 +161,100 @@ template boot*[T: Continuation](c: T): T {.used.} =
   ## The return value specifies the continuation.
   c
 
-macro trace*[T](hook: static[Hook]; c: typed;
-                fun: string; info: LineInfo, body: T): untyped {.used.} =
-  ## Reimplement this symbol to introduce control-flow
-  ## tracing of each hook and entry to each continuation leg.
-  ##
-  ## The `c` argument varies with the hook; for `Pass`, `Tail`,
-  ## `Unwind`, and `Trace` hooks, it will represent a source
-  ## continuation.  Its value will be `nil` for `Boot`, `Coop`,
-  ## and `Head` hooks.  The `trace` macro receives the _output_
-  ## of hooks as its `body` argument.
-  result =
-    if body.kind == nnkNilLit:
-      newEmptyNode()
-    else:
-      body
+{.experimental: "dynamicBindSym".}
+proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode =
+  result = nnkObjConstr.newTree bindSym"StackFrame"
+  result.add: "hook".dots newCall(bindSym"Hook", hook.ord.newLit)
+  result.add: "info".dots info.makeLineInfo
+  result.add: "fun".dots fun.newLit
 
-proc alloc*[T: Continuation](root: typedesc[T]; c: typedesc): c {.used, inline.} =
-  ## Reimplement this symbol to customize continuation
-  ## allocation.
-  new c
+proc addFrame(c: NimNode; frame: NimNode): NimNode =
+  genAst(c, frame):
+    if not c.isNil:
+      while c.stack.len >= cpsStackTraceSize:
+        c.stack.popLast
+      c.stack.addFirst frame
+
+proc cpsStackTrace*(hook: Hook; c, n: NimNode; fun: string;
+                    info: LineInfo, body: NimNode): NimNode {.used.} =
+  ## This is the default "stacktrace" implementation which can be
+  ## reused when implementing your own `trace` macros.
+
+  let frame = initFrame(hook, fun, info)
+  result =
+    case hook
+    of Coop:
+      addFrame(body, frame)
+    of Trace:
+      addFrame(c, frame)
+    of Alloc:
+      addFrame(body, frame)
+    of Dealloc:
+      addFrame(body, frame)
+    of Pass:
+      newStmtList(addFrame(c, frame), addFrame(body, frame))
+    of Boot:
+      addFrame(body, frame)
+    of Unwind:
+      addFrame(body, frame)
+    of Head:
+      addFrame(body, frame)
+    of Tail:
+      newStmtList(addFrame(c, frame), addFrame(body, frame))
+
+macro trace*[T](hook: static[Hook]; source, target: typed;
+                fun: string; info: LineInfo; body: T): untyped {.used.} =
+  ## Reimplement this symbol to introduce control-flow tracing of each
+  ## hook and entry to each continuation leg. The `fun` argument holds a
+  ## simple stringification of the `target` that emitted the trace, while
+  ## `target` holds the symbol itself.
+
+  ## The `source` argument varies with the hook; for `Pass`, `Tail`,
+  ## `Unwind`, and `Trace` hooks, it will represent a source continuation.
+  ## Its value will be `nil` for `Boot`, `Coop`, and `Head` hooks, as
+  ## these hooks operate on a single target continuation.
+
+  ## The `Alloc` hook takes a user's typedesc and a CPS environment type
+  ## as arguments, while the `Dealloc` hook takes as arguments the live
+  ## continuation to deallocate and its CPS environment type.
+
+  ## The second argument to the `Unwind` hook is the user's typedesc.
+
+  ## The `trace` macro receives the _output_ of the traced hook as its
+  ## `body` argument.
+
+  if cpsHasStackTrace:
+    result = newStmtList()
+    var tipe = getTypeInst body
+    echo treeRepr(tipe)
+    echo tipe.kind
+    var continuation =
+      if tipe.kind in {nnkNilLit, nnkEmpty}:
+        newNilLit()
+      else:
+        nskLet.genSym"continuation"
+    if tipe.kind notin {nnkNilLit, nnkEmpty}:
+      result.add:
+        # assign the input to a variable that can be repeated evaluated
+        nnkLetSection.newTree:
+          nnkIdentDefs.newTree(continuation, tipe, body.emptyAsNil)
+    result.add:
+      # pass that input to the stack trace along with the other params
+      cpsStackTrace(hook, source, target, fun = fun.strVal,
+                    info = info.makeLineInfo, continuation)
+    result.add:
+      # the final result of the statement list is the input
+      continuation.nilAsEmpty
+  else:
+    # evaporate
+    result = body.nilAsEmpty
+
+proc alloc*[T: Continuation](U: typedesc[T]; E: typedesc): E {.used, inline.} =
+  ## Reimplement this symbol to customize continuation allocation; `U`
+  ## is the type supplied by the user as the `cps` macro argument,
+  ## while `E` is the type of the environment composed for the specific
+  ## continuation.
+  new E
 
 proc dealloc*[T: Continuation](c: sink T; E: typedesc[T]): E {.used, inline.} =
   ## Reimplement this symbol to customize continuation deallocation;
