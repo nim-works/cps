@@ -446,3 +446,23 @@ suite "tasteful tests":
     foo()
 
     check r == 2
+
+  block:
+    ## accessing a field of a variant object
+    type
+      O = object
+        case switch: bool
+        of true:
+          x: int
+        else:
+          discard
+
+    r = 0
+    proc foo() {.cps: Cont.} =
+      noop()
+      inc r
+      let o = O(switch: true, x: 42)
+      check o.x == 42
+
+    foo()
+    check r == 1
