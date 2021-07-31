@@ -1,7 +1,6 @@
 import std/genasts
 import std/macros
 import std/strutils
-import std/sequtils
 
 from cps/hooks import Hook
 
