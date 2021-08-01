@@ -400,7 +400,9 @@ iterator pairs*(n: NormNode): (int, NormNode) =
 
 proc newStmtList*(stmts: AnyNodeVarargs): NormNode =
   ## create a new normalized statement
-  NormNode macros.newStmtList(varargs[NimNode] stmts)
+  result = NormNode macros.newStmtList(varargs[NimNode] stmts)
+  if stmts.len > 0:
+    result.copyLineInfo stmts[0]
 
 proc newTree*(kind: NimNodeKind, n: AnyNodeVarargs): NormNode =
   ## creates a new tree (`newTree`) of `kind`, with child `n`
