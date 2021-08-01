@@ -1068,7 +1068,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
     env.localSection(defs)
 
   # make a name for the new procedure that won't clash
-  let name = genSymProc($n.name)
+  let name = genSymProc($n.name, info = n)
 
   # we can't mutate typed nodes, so copy ourselves
   n = clone n
