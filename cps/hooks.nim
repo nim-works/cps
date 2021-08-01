@@ -34,7 +34,7 @@ proc makeLineInfo*(n: LineInfo): NimNode =
   result.add: "line".colon n.line
   result.add: "column".colon n.column
 
-proc findColonLit(n: NimNode; s: string; T: typedesc): T =
+proc findColonLit*(n: NimNode; s: string; T: typedesc): T =
   let child =
     n.findChild:
       it.kind == nnkExprColonExpr and it.len == 2 and it[0].strVal == s

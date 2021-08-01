@@ -4,6 +4,7 @@ import std/macros
 import std/strutils
 
 from cps/spec import Hook
+from cps/hooks import findColonLit
 
 include preamble
 import killer
@@ -40,15 +41,21 @@ suite "hooks":
           newEmptyNode()
         else:
           body
-      result =
-        genAst(c, hook, fun, info, body):
-          var last = if hook == Dealloc: "😎" else: astToStr c
-          let sub = fun.split("_", maxsplit=1)[0]
-          last = if hook == Stack: last.split("_", maxsplit=1)[0] else: last
-          var path = info.filename.lastPathPart
-          path = if path == "thooks.nim": "👍" else: path
-          found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub, last, path ]
-          body
+      let fun =
+        if hook == Stack: c.findColonLit("fun", string)
+                    else: fun.strVal
+      genAst(c, hook, fun, info, body):
+        var last =
+          case hook
+          of Dealloc: "😎"
+          of Stack: fun
+          else: astToStr c
+        let sub = fun.split("_", maxsplit=1)[0]
+        last = if hook == Stack: last.split("_", maxsplit=1)[0] else: last
+        var path = info.filename.lastPathPart
+        path = if path == "thooks.nim": "👍" else: path
+        found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub, last, path ]
+        body
 
     proc bar() {.cps: Cont.} =
       noop()
@@ -70,7 +77,7 @@ suite "hooks":
       expected = """
         alloc 0: cps environment Cont 👍
         head 1: trace nil 👍
-        stack 2: trace foo 👍
+        stack 2: foo foo 👍
         boot 3: C nil 👍
         trace 4: foo continuation 👍
         coop 5: continuation nil genasts.nim
@@ -78,9 +85,9 @@ suite "hooks":
         trace 7: Post Call continuation 👍
         tail 8: Cont Continuation(continuation) normalizedast.nim
         alloc 9: cps environment Cont 👍
-        stack 10: trace bar normalizedast.nim
+        stack 10: bar bar normalizedast.nim
         boot 11: result nil normalizedast.nim
-        pass 12: cps environment continuation normalizedast.nim
+        pass 12: cps environment continuation 👍
         trace 13: bar continuation 👍
         trace 14: Post Call continuation 👍
         pass 15: continuation.mom continuation normalizedast.nim
@@ -92,9 +99,9 @@ suite "hooks":
         trace 21: Post Call continuation 👍
         tail 22: Cont Continuation(continuation) normalizedast.nim
         alloc 23: cps environment Cont 👍
-        stack 24: trace bar normalizedast.nim
+        stack 24: bar bar normalizedast.nim
         boot 25: result nil normalizedast.nim
-        pass 26: cps environment continuation normalizedast.nim
+        pass 26: cps environment continuation 👍
         trace 27: bar continuation 👍
         trace 28: Post Call continuation 👍
         pass 29: continuation.mom continuation normalizedast.nim
