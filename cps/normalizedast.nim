@@ -466,24 +466,30 @@ proc asName*(n: string): Name =
   ## `nnkIdent` as `Name`
   (ident n).Name
 
-proc genSymType*(n: string): Name =
+template withLineInfoPlease(body: typed): untyped =
+  let sym = body
+  if not info.isNil:
+    copyLineInfo(sym, info)
+  sym
+
+proc genSymType*(n: string; info: NormNode = nil): Name =
   ## `genSym` an `nskType`
-  genSym(nskType, n).Name
-proc genSymVar*(n: string = ""): Name =
+  withLineInfoPlease: genSym(nskType, n).Name
+proc genSymVar*(n: string = ""; info: NormNode = nil): Name =
   ## `genSym` an `nskVar`
-  genSym(nskVar, n).Name
-proc genSymLet*(n: string = ""): Name =
+  withLineInfoPlease: genSym(nskVar, n).Name
+proc genSymLet*(n: string = ""; info: NormNode = nil): Name =
   ## `genSym` an `nskLet`
-  genSym(nskLet, n).Name
-proc genSymProc*(n: string): Name =
+  withLineInfoPlease: genSym(nskLet, n).Name
+proc genSymProc*(n: string; info: NormNode = nil): Name =
   ## `genSym` an `nskProc`
-  genSym(nskProc, n).Name
-proc genSymField*(n: string): Name =
+  withLineInfoPlease: genSym(nskProc, n).Name
+proc genSymField*(n: string; info: NormNode = nil): Name =
   ## `genSym` an `nskField`
-  genSym(nskField, n).Name
-proc genSymUnknown*(n: string): Name =
+  withLineInfoPlease: genSym(nskField, n).Name
+proc genSymUnknown*(n: string; info: NormNode = nil): Name =
   ## `genSym` an `nskUnknown`
-  genSym(nskUnknown, n).Name
+  withLineInfoPlease: genSym(nskUnknown, n).Name
 
 proc desym*(n: Name): Name {.borrow.}
   ## ensures that `Name` is an `nnkIdent`

@@ -90,8 +90,10 @@ template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
   let event = bindSym(etype hook)
   let info = makeLineInfo n.lineInfoObj
   let fun = newLit(nameForNode n.NimNode)
-  newCall(Trace.sym, event, c.NimNode, abbreviation n.NimNode,
-          "fun".eq fun, "info".eq info, body.NimNode).NormNode
+  let call = newCall(Trace.sym, event, c.NimNode, abbreviation n.NimNode,
+                     "fun".eq fun, "info".eq info, body.NimNode).NormNode
+  copyLineInfo(call, n)
+  call
 
 proc hook*(hook: static[Hook]; n: NormNode): NormNode =
   ## execute the given hook on the given node

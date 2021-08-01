@@ -93,7 +93,7 @@ proc init(e: var Env) =
     e.fn = asName"fn"
   if e.mom.isNil:
     e.mom = asName"mom"
-  e.id = genSymType("cps environment")
+  e.id = genSymType("cps environment", info = e.via)
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarIdentDef(e.rs))
 
@@ -481,7 +481,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.addPragma "used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot}
 
-  let c = genSymVar("C")
+  let c = genSymVar("C", info = n)
   result.body.add:
     # declare `var c: Cont`
     newVarSection(c, env.root)

@@ -33,8 +33,8 @@ suite "hooks":
   block:
     ## control-flow tracing hooks are used automatically
     var found: seq[string]
-    macro trace[T](hook: static[Hook]; c, n: typed;
-                   fun: string; info: LineInfo; body: T): untyped =
+    macro trace(hook: static[Hook]; c, n: typed;
+                fun: string; info: LineInfo; body: typed): untyped =
       var body =
         if body.kind == nnkNilLit:
           newEmptyNode()
@@ -67,15 +67,15 @@ suite "hooks":
     let s = found.join("\10")
     const
       expected = """
-        alloc 0: cps environment Cont normalizedast.nim
-        head 1: trace nil normalizedast.nim
-        boot 2: C nil normalizedast.nim
+        alloc 0: cps environment Cont 👍
+        head 1: trace nil 👍
+        boot 2: C nil 👍
         trace 3: foo continuation 👍
         coop 4: continuation nil genasts.nim
         trace 5: While Loop continuation 👍
         trace 6: Post Call continuation 👍
         tail 7: Cont Continuation(continuation) normalizedast.nim
-        alloc 8: cps environment Cont normalizedast.nim
+        alloc 8: cps environment Cont 👍
         boot 9: result nil normalizedast.nim
         pass 10: cps environment continuation normalizedast.nim
         trace 11: bar continuation 👍
@@ -88,7 +88,7 @@ suite "hooks":
         trace 18: While Loop continuation 👍
         trace 19: Post Call continuation 👍
         tail 20: Cont Continuation(continuation) normalizedast.nim
-        alloc 21: cps environment Cont normalizedast.nim
+        alloc 21: cps environment Cont 👍
         boot 22: result nil normalizedast.nim
         pass 23: cps environment continuation normalizedast.nim
         trace 24: bar continuation 👍
