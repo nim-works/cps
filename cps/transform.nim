@@ -36,6 +36,8 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
           contParam.ex = nil
   result.body.add:                  # insert a hook ahead of the source,
     Trace.hook contParam, result    # hooking against the proc (minus body)
+  result.body.add:                  # update the continuation's line info
+    updateLineInfoForContinuationStackFrame(contParam.NimNode, source)
   result.body.add:                  # perform convenience rewrites on source
     normalizingRewrites macros.newStmtList(source)
 
@@ -81,6 +83,9 @@ macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
       makeContProc(name, cont, n)
+    it.add:
+      # update the parent's stack frame with the call site of the child
+      updateLineInfoForContinuationStackFrame(cont.NimNode, call.NimNode)
     it.add:
       # install the return point in the current continuation
       newAssignment(newDotExpr(cont, asName"fn"), name)

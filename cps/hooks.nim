@@ -143,3 +143,17 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
       NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"
+
+proc initFrame*(hook: Hook; fun: string; info: LineInfo): NimNode =
+  ## prepare a tracing frame constructor
+  result = nnkObjConstr.newTree bindSym"TraceFrame"
+  result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
+  result.add: "info".colon info.makeLineInfo
+  result.add: "fun".colon fun
+
+proc updateLineInfoForContinuationStackFrame*(c, n: NimNode): NimNode =
+  ## `c` holds the continuation symbol, while `n` is a node with info
+  when cpsStackFrames:
+    newAssignment(c.dot("stack").dot("info"), n.lineInfoObj.makeLineInfo)
+  else:
+    newEmptyNode()

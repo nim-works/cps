@@ -161,14 +161,6 @@ template boot*[T: Continuation](c: T): T {.used.} =
   ## The return value specifies the continuation.
   c
 
-{.experimental: "dynamicBindSym".}
-proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode =
-  ## prepare a tracing frame constructor
-  result = nnkObjConstr.newTree bindSym"TraceFrame"
-  result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
-  result.add: "info".colon info.makeLineInfo
-  result.add: "fun".colon fun
-
 proc addFrame(continuation: NimNode; frame: NimNode): NimNode =
   ## add `frame` to `continuation`'s `.frames` dequeue
   genAst(frame, c = continuation):
@@ -221,7 +213,7 @@ template capturedContinuation(result, c, body: untyped): untyped {.used.} =
     # use the `continuation` variable to prevent re-evaluation of `c`
     c = continuation
 
-macro stack*[T: Continuation](procedure: typed; target: T): T {.used.} =
+macro stack*[T: Continuation](frame: TraceFrame; target: T): T {.used.} =
   ## Reimplement this symbol to alter the recording of "stack" frames.
   ## The return value evaluates to the continuation.
   result = newStmtList()
@@ -229,10 +221,8 @@ macro stack*[T: Continuation](procedure: typed; target: T): T {.used.} =
   when cpsStackFrames:
     result.capturedContinuation target:
       result.add:
-        # assign to the continuation's "stack",
-        newAssignment continuation.dot "stack":
-          # a frame representing the procedure
-          initFrame(Stack, $procedure, procedure.lineInfoObj)
+        # assign the frame to the continuation's "stack"
+        newAssignment(continuation.dot "stack", frame)
   # the final result is the input continuation
   result.add target
 
@@ -254,8 +244,8 @@ macro trace*(hook: static[Hook]; source, target: typed;
   ## as arguments, while the `Dealloc` hook takes as arguments the live
   ## continuation to deallocate and its CPS environment type.
 
-  ## The `Stack` hook takes a `source` symbol naming the CPS procedure,
-  ## and a `target` continuation in which to record the frame.
+  ## The `Stack` hook takes a `frame` object and a `target` continuation
+  ## in which to record the frame.
 
   ## The `trace` macro receives the _output_ of the traced hook as its
   ## `body` argument.
