@@ -285,6 +285,8 @@ development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label
 - Nim's `for` loops work, but you cannot perform any CPS control-flow inside of
   them; if in doubt, use a `while` loop instead.
 
+- One cannot `.borrow.` a CPS procedure and get CPS semantics.
+
 - Generic continuations such as the following won't work without changes to
 the compiler.
 
@@ -298,6 +300,41 @@ type
 
 If you are not running with `define:danger` and `gc:arc` and `panics:on` then
 performance considerations really aren't your primary consideration, right?
+
+### Tracing
+
+There are two tracing systems that are enabled by default via Nim's built-in
+`stackTrace:on` compiler option, which defaults to `on` outside of `release`
+and `danger` builds.
+
+#### Stack Frames
+
+Stack semantics are implemented by a single `TraceFrame` object stored on each
+continuation and these serve to capture the progress of control-flow through
+multiple levels of CPS calls just as they do so for normal stack-based code.
+
+The `renderStackFrames()` and `writeStackFrames()` procedures return a sequence
+of strings or write them to the standard message stream, respectively. You can
+run these procedures without arguments in any continuation.
+
+You can extend the `Stack` hook to alter its behavior.
+
+Force-enable the stack frame support with `--define:cpsStackFrames=on`.
+
+#### Trace Deque
+
+The trace deque system stores the last _N_ hooks executed by the continuation,
+where _N_ defaults to `4096` (see below).  A single continuation has multiple
+hooks executed during its lifecycle, so these traces can be very detailed.
+
+The `renderTraceDeque()` and `writeTraceDeque()` procedures return a sequence
+of strings or write them to the standard message stream, respectively. You can
+run these procedures without arguments in any continuation.
+
+You can extend the `Trace` hook to alter its behavior.
+
+Force-enable the trace deque support with `--define:cpsTraceDeque=on` and
+alter the size of the deque with e.g. `--define:traceDequeSize=100`.
 
 ### Using `cpsDebug`
 
@@ -315,7 +352,7 @@ rewrite phase. Interesting places to start include the following:
 
 ### Using `trace`
 
-Implement `trace` and it will be called at each continuation leg; [see the documentation for details](https://disruptek.github.io/cps/cps.html#trace.t%2CContinuation%2Cstring%2CLineInfo).
+Implement `trace` and it will be called at each continuation leg; [see the documentation for details](https://disruptek.github.io/cps/cps.html#trace.m%2Cstatic%5BHook%5D%2Ctyped%2Ctyped%2Cstring%2CLineInfo%2Ctyped).
 
 ## License
 MIT
