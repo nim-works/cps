@@ -581,7 +581,7 @@ func newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
 proc setupChildContinuation(env: var Env; call: Call): (Name, NormNode) =
   ## create a new child continuation variable and add it to the
   ## environment.  return the child's symbol and its environment type.
-  let child = genSymVar"child"
+  let child = genSymVar("child", info = call)
   let etype = pragmaArgument(call, "cpsEnvironment")
   env.localSection newIdentDef(child, etype.TypeExpr)
   result = (child, etype)
