@@ -1,6 +1,3 @@
-import balls
-import cps
-
 include preamble
 import killer
 
