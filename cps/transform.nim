@@ -76,7 +76,7 @@ macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   let
     c = c.NormNode
     call = asCall(NormNode call)
-    name = genSymProc("Post Child")
+    name = genSymProc("Post Child", info = n.NormNode)
     cont = asName(cont)
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
