@@ -4,7 +4,7 @@ boring utilities likely useful to multiple pieces of cps machinery
 
 ]##
 
-import std/[hashes, sequtils]
+import std/[hashes, sequtils, deques]
 import std/macros except newStmtList, newTree
 
 when (NimMajor, NimMinor) < (1, 5):
@@ -33,6 +33,10 @@ template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## the continuation has an exception stored in `ex`, with `cont` being the
 ## continuation symbol used.
 
+const
+  cpsHasTraceDeque* {.booldefine, used.} = compileOption"stacktrace"
+  cpsTraceDequeSize* {.intdefine, used.} = 4_096
+
 type
   Continuation* = ref object of RootObj
     fn*: proc(c: Continuation): Continuation {.nimcall.} ##
@@ -41,10 +45,16 @@ type
     ## If this Continuation was invoked by another Continuation,
     ## the `mom` will hold that parent Continuation to form a
     ## linked-list approximating a stack.
-    ex*: ref Exception ##
-    ## The unhandled exception of the continuation.
+    ex*: ref Exception ## The unhandled exception of the continuation.
+    when cpsHasTraceDeque:
+      frames*: Deque[TraceFrame]
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+
+  TraceFrame* = object ## a record of where the continuation has been
+    hook*: Hook        ## the hook that provoked the trace entry
+    fun*: string       ## a short label for the notable symbol
+    info*: LineInfo    ## the source of the notable symbol
 
   Hook* = enum ##
     ## these are hook procedure names; the string value matches the name
@@ -382,3 +392,36 @@ template eq*(a, b: NimNode): NimNode =
 template eq*(a: string; b: NimNode): NimNode =
   ## for constructing foo=bar in a call
   eq(ident(a), b)
+
+template colon*(a, b: NimNode): NimNode =
+  ## for constructing foo: bar in a ctor
+  nnkExprColonExpr.newNimNode(a).add(a).add(b)
+
+template colon*(a: string; b: NimNode): NimNode =
+  ## for constructing foo: bar in a ctor
+  colon(ident(a), b)
+
+template colon*(a: string | NimNode; b: string | int): NimNode =
+  ## for constructing foo: bar in a ctor
+  colon(a, newLit(b))
+
+proc nilAsEmpty*(n: NimNode): NimNode =
+  ## normalize nil, nnkNilLit to nnkEmpty
+  if n.isNil or n.kind == nnkNilLit:
+    newEmptyNode()
+  else:
+    n
+
+proc emptyAsNil*(n: NimNode): NimNode =
+  ## normalize nil, nnkEmpty to nnkNilLit
+  if n.isNil or n.kind == nnkEmpty:
+    newNilLit()
+  else:
+    n
+
+macro etype*(e: enum): string =
+  ## Coop -> "Coop", not "coop"
+  for sym in (getTypeImpl e)[1..^1]:
+    if sym.intVal == e.intVal:
+      return newLit sym.strVal
+  error "unexpected"
