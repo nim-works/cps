@@ -34,8 +34,9 @@ template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## continuation symbol used.
 
 const
-  cpsHasTraceDeque* {.booldefine, used.} = compileOption"stacktrace"
-  cpsTraceDequeSize* {.intdefine, used.} = 4_096
+  cpsStackFrames* {.booldefine, used.} = compileOption"stacktrace"
+  cpsTraceDeque* {.booldefine, used.} = compileOption"stacktrace"
+  traceDequeSize* {.intdefine, used.} = 4_096
 
 type
   Continuation* = ref object of RootObj
@@ -46,8 +47,10 @@ type
     ## the `mom` will hold that parent Continuation to form a
     ## linked-list approximating a stack.
     ex*: ref Exception ## The unhandled exception of the continuation.
-    when cpsHasTraceDeque:
-      frames*: Deque[TraceFrame]
+    when cpsTraceDeque:
+      frames*: Deque[TraceFrame]    ## Tracing for all prior hooks
+    when cpsStackFrames:
+      stack*: TraceFrame            ## Stack-like semantic record
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
@@ -68,6 +71,7 @@ type
     Unwind  = "unwind"    ## controlled "bubble-up" for exception handling
     Head    = "head"      ## invoked when a new continuation has no parent
     Tail    = "tail"      ## invoked when a new continuation has a parent
+    Stack   = "stack"     ## invoked to annotate stack semantics
 
 proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty

@@ -42,8 +42,9 @@ suite "hooks":
           body
       result =
         genAst(c, hook, fun, info, body):
-          let last = if hook == Dealloc: "😎" else: astToStr c
+          var last = if hook == Dealloc: "😎" else: astToStr c
           let sub = fun.split("_", maxsplit=1)[0]
+          last = if hook == Stack: last.split("_", maxsplit=1)[0] else: last
           var path = info.filename.lastPathPart
           path = if path == "thooks.nim": "👍" else: path
           found.add "$# $#: $# $# $#" % [ $hook, $found.len, $sub, last, path ]
@@ -69,37 +70,40 @@ suite "hooks":
       expected = """
         alloc 0: cps environment Cont 👍
         head 1: trace nil 👍
-        boot 2: C nil 👍
-        trace 3: foo continuation 👍
-        coop 4: continuation nil genasts.nim
-        trace 5: While Loop continuation 👍
-        trace 6: Post Call continuation 👍
-        tail 7: Cont Continuation(continuation) normalizedast.nim
-        alloc 8: cps environment Cont 👍
-        boot 9: result nil normalizedast.nim
-        pass 10: cps environment continuation normalizedast.nim
-        trace 11: bar continuation 👍
-        trace 12: Post Call continuation 👍
-        pass 13: continuation.mom continuation normalizedast.nim
-        coop 14: result nil normalizedast.nim
-        dealloc 15: cps environment 😎 genasts.nim
-        trace 16: Post Child continuation normalizedast.nim
-        coop 17: continuation nil genasts.nim
-        trace 18: While Loop continuation 👍
-        trace 19: Post Call continuation 👍
-        tail 20: Cont Continuation(continuation) normalizedast.nim
-        alloc 21: cps environment Cont 👍
-        boot 22: result nil normalizedast.nim
-        pass 23: cps environment continuation normalizedast.nim
-        trace 24: bar continuation 👍
-        trace 25: Post Call continuation 👍
-        pass 26: continuation.mom continuation normalizedast.nim
-        coop 27: result nil normalizedast.nim
-        dealloc 28: cps environment 😎 genasts.nim
-        trace 29: Post Child continuation normalizedast.nim
-        coop 30: continuation nil genasts.nim
-        trace 31: While Loop continuation 👍
-        trace 32: Post Call continuation 👍
+        stack 2: trace foo 👍
+        boot 3: C nil 👍
+        trace 4: foo continuation 👍
+        coop 5: continuation nil genasts.nim
+        trace 6: While Loop continuation 👍
+        trace 7: Post Call continuation 👍
+        tail 8: Cont Continuation(continuation) normalizedast.nim
+        alloc 9: cps environment Cont 👍
+        stack 10: trace bar normalizedast.nim
+        boot 11: result nil normalizedast.nim
+        pass 12: cps environment continuation normalizedast.nim
+        trace 13: bar continuation 👍
+        trace 14: Post Call continuation 👍
+        pass 15: continuation.mom continuation normalizedast.nim
+        coop 16: result nil normalizedast.nim
+        dealloc 17: cps environment 😎 genasts.nim
+        trace 18: Post Child continuation normalizedast.nim
+        coop 19: continuation nil genasts.nim
+        trace 20: While Loop continuation 👍
+        trace 21: Post Call continuation 👍
+        tail 22: Cont Continuation(continuation) normalizedast.nim
+        alloc 23: cps environment Cont 👍
+        stack 24: trace bar normalizedast.nim
+        boot 25: result nil normalizedast.nim
+        pass 26: cps environment continuation normalizedast.nim
+        trace 27: bar continuation 👍
+        trace 28: Post Call continuation 👍
+        pass 29: continuation.mom continuation normalizedast.nim
+        coop 30: result nil normalizedast.nim
+        dealloc 31: cps environment 😎 genasts.nim
+        trace 32: Post Child continuation normalizedast.nim
+        coop 33: continuation nil genasts.nim
+        trace 34: While Loop continuation 👍
+        trace 35: Post Call continuation 👍
       """.dedent(8).strip()
     if s != expected:
       fail "trace output doesn't match; received:\n" & s

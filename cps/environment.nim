@@ -460,7 +460,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.addPragma "used"  # avoid gratuitous warnings
   result.returnParam = env.identity
   result.name = genSymProc"whelp"
-  result.introduce {Alloc, Boot}
+  result.introduce {Alloc, Boot, Stack}
 
   # create the continuation as the result and point it at the proc
   result.body.add:
@@ -469,7 +469,8 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   # hook the bootstrap
   result.body.add:
     newAssignment resultName:
-      Boot.hook resultName
+      Stack.hook goto:
+        Boot.hook resultName
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
@@ -479,7 +480,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
-  result.introduce {Alloc, Boot}
+  result.introduce {Alloc, Boot, Stack}
 
   let c = genSymVar("C", info = n)
   result.body.add:
@@ -494,7 +495,8 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.body.add:
     newAssignment c:
       Head.hook:
-        Boot.hook c
+        Stack.hook goto:
+          Boot.hook c
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:

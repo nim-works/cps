@@ -98,17 +98,9 @@ template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
 proc hook*(hook: static[Hook]; n: NormNode): NormNode =
   ## execute the given hook on the given node
   case hook
-  of Boot:
+  of Boot, Coop, Head:
     # hook(continuation)
-    Boot.entrace nil.NormNode, n:
-      newCall(hook.sym, n)
-  of Coop:
-    # hook(continuation)
-    Coop.entrace nil.NormNode, n:
-      newCall(hook.sym, n)
-  of Head:
-    # hook(continuation)
-    Head.entrace nil.NormNode, n:
+    hook.entrace nil.NormNode, n:
       newCall(hook.sym, n)
   else:
     # cast to `Call` avoids type mismatch as converters can't figure this out
@@ -117,10 +109,6 @@ proc hook*(hook: static[Hook]; n: NormNode): NormNode =
 proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
   ## execute the given hook with two arguments
   case hook
-  of Alloc:
-    # hook(Cont, env_234234)
-    Alloc.entrace a, b:
-      newCall(hook.sym, a, b)
   of Unwind:
     # hook(continuation, Cont)
     let unwind = hook.sym.NimNode
@@ -130,21 +118,28 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
           if not `a`.ex.isNil:
             return `unwind`(`a`, `a`.ex).`b`
   of Pass:
-    # hook(source, destination)
     Pass.entrace a, b:
       newCall(hook.sym, a, b)
   of Tail:
-    # hook(source, destination)
     Tail.entrace a, b:
+      newCall(hook.sym, a, b)
+  of Alloc:
+    Alloc.entrace a, b:
+      newCall(hook.sym, a, b)
+  of Dealloc:
+    Dealloc.entrace a, b:
+      newCall(hook.sym, a, b)
+  of Stack:
+    # hook(source, destination), or
+    # dealloc(continuation, env_234234), or
+    # alloc(Cont, env_234234), or
+    # stack(symbol, continuation)
+    Stack.entrace a, b:
       newCall(hook.sym, a, b)
   of Trace:
     # trace(Pass, continuation, "whileLoop_2323",
     # LineInfo(filename: "...", line: 23, column: 44)): nil
     Trace.entrace a, b:
       NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
-  of Dealloc:
-    # dealloc(env_234234, continuation)
-    Dealloc.entrace a, b:
-      newCall(hook.sym, a, b)
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"

@@ -173,7 +173,7 @@ proc addFrame(continuation: NimNode; frame: NimNode): NimNode =
   ## add `frame` to `continuation`'s `.frames` dequeue
   genAst(frame, c = continuation):
     if not c.isNil:
-      while len(c.frames) >= cpsTraceDequeSize:
+      while len(c.frames) >= traceDequeSize:
         discard popLast(c.frames)
       addFirst(c.frames, frame)
 
@@ -184,16 +184,16 @@ proc addToContinuations(frame: NimNode; conts: varargs[NimNode]): NimNode =
     result.add:
       c.addFrame frame
 
-proc cpsTraceDeque*(hook: Hook; c, n: NimNode; fun: string;
-                    info: LineInfo, body: NimNode): NimNode {.used.} =
+proc traceDeque*(hook: Hook; c, n: NimNode; fun: string;
+                 info: LineInfo, body: NimNode): NimNode {.used.} =
   ## This is the default tracing implementation which can be
   ## reused when implementing your own `trace` macros.
   initFrame(hook, fun, info).
     addToContinuations:
       case hook
-      of Trace:      @[c]
-      of Pass, Tail: @[c, body]
-      else:          @[body]
+      of Trace:        @[c]
+      of Pass, Tail:   @[c, body]
+      else:            @[body]
 
 template isNilOrVoid(n: NimNode): bool =
   ## true if the node, a type, is nil|void;
@@ -203,6 +203,38 @@ template isNilOrVoid(n: NimNode): bool =
   of nnkNilLit, nnkEmpty:    true
   of nnkSym, nnkIdent:       n.repr == "nil"
   else:                      false
+
+template capturedContinuation(result, c, body: untyped): untyped {.used.} =
+  ## if the input node `c` appears to be typed as not nil|empty,
+  ## then produce a pattern where this expression is stashed in
+  ## a temporary and injected into the body before being assigned
+  ## to the first argument. this work is stored in `result`.
+  let tipe = getTypeInst c
+  if not tipe.isNilOrVoid:
+    # assign the continuation to a variable to prevent re-evaluation
+    let continuation {.inject.} = nskLet.genSym"continuation"
+    result.add:
+      # assign the input to a variable that can be repeated evaluated
+      nnkLetSection.newTree:
+        nnkIdentDefs.newTree(continuation, tipe, c)
+    body
+    # use the `continuation` variable to prevent re-evaluation of `c`
+    c = continuation
+
+macro stack*[T: Continuation](procedure: typed; target: T): T {.used.} =
+  ## Reimplement this symbol to alter the recording of "stack" frames.
+  ## The return value evaluates to the continuation.
+  result = newStmtList()
+  var target = target
+  when cpsStackFrames:
+    result.capturedContinuation target:
+      result.add:
+        # assign to the continuation's "stack",
+        newAssignment continuation.dot "stack":
+          # a frame representing the procedure
+          initFrame(Stack, $procedure, procedure.lineInfoObj)
+  # the final result is the input continuation
+  result.add target
 
 macro trace*(hook: static[Hook]; source, target: typed;
              fun: string; info: LineInfo; body: typed): untyped {.used.} =
@@ -216,31 +248,26 @@ macro trace*(hook: static[Hook]; source, target: typed;
   ## Its value will be `nil` for `Boot`, `Coop`, and `Head` hooks, as
   ## these hooks operate on a single target continuation.
 
+  ## The second argument to the `Unwind` hook is the user's typedesc.
+
   ## The `Alloc` hook takes a user's typedesc and a CPS environment type
   ## as arguments, while the `Dealloc` hook takes as arguments the live
   ## continuation to deallocate and its CPS environment type.
 
-  ## The second argument to the `Unwind` hook is the user's typedesc.
+  ## The `Stack` hook takes a `source` symbol naming the CPS procedure,
+  ## and a `target` continuation in which to record the frame.
 
   ## The `trace` macro receives the _output_ of the traced hook as its
   ## `body` argument.
 
-  var body = body
   result = newStmtList()
-  when cpsHasTraceDeque:
-    var tipe = getTypeInst body
-    if not tipe.isNilOrVoid:
-      let continuation = nskLet.genSym"continuation"
+  var body = body
+  when cpsTraceDeque:
+    result.capturedContinuation body:
       result.add:
-        # assign the input to a variable that can be repeated evaluated
-        nnkLetSection.newTree:
-          nnkIdentDefs.newTree(continuation, tipe, body)
-      # use the `continuation` variable to prevent re-evaluation of `body`
-      body = continuation
-    result.add:
-      # pass that input to the trace along with the other params
-      cpsTraceDeque(hook, source, target, fun = fun.strVal,
-                    info = info.makeLineInfo, body)
+        # pass the continuation to the trace along with the other params
+        traceDeque(hook, source, target, fun = fun.strVal,
+                   info = info.makeLineInfo, continuation)
   result.add:
     # the final result of the statement list is the input
     body.nilAsEmpty
@@ -265,20 +292,42 @@ template `()`(c: Continuation): untyped {.used.} =
   discard
 {.pop.}
 
-when cpsHasTraceDeque:
-  import std/strformat
+when cpsTraceDeque or cpsStackFrames:
+  from std/strformat import `&`
+when cpsStackFrames:
+  from std/algorithm import reverse
+
+proc renderStackFrames*(c: Continuation): seq[string] {.cpsVoodoo.} =
+  ## Render a "stack" trace for the continuation as a sequence of lines.
+  if c.isNil:
+    return @["dismissed continuations have no stack trace"]
+  when not cpsStackFrames:
+    return @["compile with --stackTrace:on or --define:cpsStackFrames=on"]
+  else:
+    var c = c
+    while not c.isNil:
+      template frame: TraceFrame = c.stack
+      result.add:
+        &"{frame.info.filename}({frame.info.line}) {frame.fun}"
+      c = c.mom
+    reverse result
 
 proc renderTraceDeque*(c: Continuation): seq[string] {.cpsVoodoo.} =
   ## Render a traceback for the continuation as a sequence of lines.
   if c.isNil:
     return @["dismissed continuations have no trace deque"]
-  when not cpsHasTraceDeque:
-    return @["compile with --define:cpsHasTraceDeque=on"]
+  when not cpsTraceDeque:
+    return @["compile with --stackTrace:on or --define:cpsTraceDeque=on"]
   else:
     for index in 0 ..< c.frames.len:
       template frame: TraceFrame = c.frames[c.frames.len - index - 1]
       result.add:
         &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
+
+proc writeStackFrames*(c: Continuation) {.cpsVoodoo.} =
+  ## Write a "stack" trace for the continuation.
+  for line in c.renderStackFrames.items:
+    stdmsg().writeLine line
 
 proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
   ## Write a traceback for the continuation.
