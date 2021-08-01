@@ -169,36 +169,43 @@ proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode =
   result.add: "info".colon info.makeLineInfo
   result.add: "fun".colon fun
 
-proc addFrame(c: NimNode; frame: NimNode): NimNode =
-  ## add a frame object to the deque
-  genAst(c, frame):
+proc addFrame(continuation: NimNode; frame: NimNode): NimNode =
+  ## add `frame` to `continuation`'s `.frames` dequeue
+  genAst(frame, c = continuation):
     if not c.isNil:
-      while c.frames.len >= cpsTraceDequeSize:
+      while len(c.frames) >= cpsTraceDequeSize:
         discard popLast(c.frames)
       addFirst(c.frames, frame)
+
+proc addToContinuations(frame: NimNode; conts: varargs[NimNode]): NimNode =
+  ## add `frame` to the `.frames` deque of `conts` continuations
+  result = newStmtList()
+  for c in conts.items:
+    result.add:
+      c.addFrame frame
 
 proc cpsTraceDeque*(hook: Hook; c, n: NimNode; fun: string;
                     info: LineInfo, body: NimNode): NimNode {.used.} =
   ## This is the default tracing implementation which can be
   ## reused when implementing your own `trace` macros.
-  let frame = initFrame(hook, fun, info)
-  case hook
-  of Trace:
-    addFrame(c, frame)
-  of Pass, Tail:
-    newStmtList(addFrame(c, frame), addFrame(body, frame))
-  else:
-    addFrame(body, frame)
+  initFrame(hook, fun, info).
+    addToContinuations:
+      case hook
+      of Trace:      @[c]
+      of Pass, Tail: @[c, body]
+      else:          @[body]
 
-proc looksLegit(n: NimNode): bool =
+template isNilOrVoid(n: NimNode): bool =
+  ## true if the node, a type, is nil|void;
+  ##
+  ## NOTE: if you name your type `nil`, you deserve what you get
   case n.kind
-  of nnkNilLit: false
-  of nnkEmpty: false
-  of nnkSym: n.repr != "nil"
-  else: true
+  of nnkNilLit, nnkEmpty:    true
+  of nnkSym, nnkIdent:       n.repr == "nil"
+  else:                      false
 
-macro trace*[T](hook: static[Hook]; source, target: typed;
-                fun: string; info: LineInfo; body: T): untyped {.used.} =
+macro trace*(hook: static[Hook]; source, target: typed;
+             fun: string; info: LineInfo; body: typed): untyped {.used.} =
   ## Reimplement this symbol to introduce control-flow tracing of each
   ## hook and entry to each continuation leg. The `fun` argument holds a
   ## simple stringification of the `target` that emitted the trace, while
@@ -220,14 +227,15 @@ macro trace*[T](hook: static[Hook]; source, target: typed;
 
   var body = body
   result = newStmtList()
-  if cpsHasTraceDeque:
+  when cpsHasTraceDeque:
     var tipe = getTypeInst body
-    if tipe.looksLegit:
+    if not tipe.isNilOrVoid:
       let continuation = nskLet.genSym"continuation"
       result.add:
         # assign the input to a variable that can be repeated evaluated
         nnkLetSection.newTree:
           nnkIdentDefs.newTree(continuation, tipe, body)
+      # use the `continuation` variable to prevent re-evaluation of `body`
       body = continuation
     result.add:
       # pass that input to the trace along with the other params
@@ -260,15 +268,19 @@ template `()`(c: Continuation): untyped {.used.} =
 when cpsHasTraceDeque:
   import std/strformat
 
-proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
-  ## write a traceback for the current continuation
+proc renderTraceDeque*(c: Continuation): seq[string] {.cpsVoodoo.} =
+  ## Render a traceback for the continuation as a sequence of lines.
   if c.isNil:
-    stdmsg().writeLine "dismissed continuations have no trace deque"
+    return @["dismissed continuations have no trace deque"]
+  when not cpsHasTraceDeque:
+    return @["compile with --define:cpsHasTraceDeque=on"]
   else:
-    when not cpsHasTraceDeque:
-      stdmsg().writeLine "compile with --define:cpsHasTraceDeque=on"
-    else:
-      for index in 0 ..< c.frames.len:
-        template frame: TraceFrame = c.frames[c.frames.len - index - 1]
-        stdmsg().writeLine:
-          &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
+    for index in 0 ..< c.frames.len:
+      template frame: TraceFrame = c.frames[c.frames.len - index - 1]
+      result.add:
+        &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
+
+proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
+  ## Write a traceback for the continuation.
+  for line in c.renderTraceDeque.items:
+    stdmsg().writeLine line
