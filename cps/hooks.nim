@@ -27,13 +27,6 @@ proc introduce*(n: NormNode; hooks: set[Hook]) =
   for hook in hooks.items:
     hook.introduce n
 
-proc makeLineInfo*(n: LineInfo): NimNode =
-  ## turn a compile-time LineInfo object into a runtime LineInfo object
-  result = nnkObjConstr.newTree bindSym"LineInfo"
-  result.add: "filename".colon n.filename
-  result.add: "line".colon n.line
-  result.add: "column".colon n.column
-
 proc findColonLit*(n: NimNode; s: string; T: typedesc): T =
   let child =
     n.findChild:
@@ -55,6 +48,10 @@ proc makeLineInfo*(n: NimNode): LineInfo =
   LineInfo(filename: n.findColonLit("filename", string),
            line: n.findColonLit("line", int),
            column: n.findColonLit("column", int))
+
+template makeLineInfo*(n: LineInfo): NimNode =
+  ## turn a compile-time LineInfo object into a runtime LineInfo object
+  newLit n
 
 proc sym*(hook: Hook): Name =
   ## produce a symbol|ident for the hook procedure
