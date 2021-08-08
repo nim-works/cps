@@ -46,7 +46,7 @@ suite "cps api":
       not c.finished
       c.state == State.Running
       c.running
-    trampoline c
+    c = cps.trampoline c
     check "whelp state after trampoline surprised us":
       not c.dismissed
       c.state == State.Finished
