@@ -2,11 +2,14 @@ import std/[genasts, deques]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
 export Continuation, ContinuationProc, State
-export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic
+export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
+export cpsMagic, cpsVoodoo, trampoline, trampolineIt
+export writeStackFrames, writeTraceDeque
+export renderStackFrames, renderTraceDeque
 
 # exporting some symbols that we had to bury for bindSym reasons
 from cps/returns import pass
-export pass, trampoline, unwind
+export pass, unwind
 
 # we only support arc/orc due to its eager expr evaluation qualities
 when not(defined(gcArc) or defined(gcOrc)):
@@ -43,20 +46,6 @@ template dismissed*(c: Continuation): bool =
 
 {.pop.}
 
-macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
-  ## This trampoline allows the user to interact with the continuation
-  ## prior to each leg of its execution.  The continuation will be
-  ## exposed by a variable named `it` inside the `body`.
-  #
-  # this is a lame workaround for the fact that the compiler pukes
-  # on the conversions in the template version...
-  result = quote:
-    var c: Continuation = `supplied`
-    while c.running:
-      var it {.inject.}: `T` = c
-      `body`
-      c = c.fn(c)
-
 macro cps*(T: typed, n: typed): untyped =
   ## This is the .cps. macro performing the proc transformation
   when defined(nimdoc):
@@ -76,18 +65,6 @@ macro cps*(T: typed, n: typed): untyped =
             n
     else:
       result = getAst(cpsTransform(T, n))
-
-macro cpsVoodoo*(n: untyped): untyped =
-  ## Similar to a `cpsMagic` where the first argument is concerned, but
-  ## may specify a return value which is usable inside the CPS procedure.
-  expectKind(n, nnkProcDef)
-  result = newStmtList n            # preserve the original proc
-  var shim = makeErrorShim n        # create the shim
-
-  # we use this pragma to identify the primitive and rewrite it inside
-  # CPS so that it again binds to the version that takes a continuation.
-  shim.addPragma ident"cpsVoodooCall"
-  result.add shim
 
 proc doWhelp(n: NormNode; args: seq[NormNode]): Call =
   let sym = bootstrapSymbol n
@@ -281,45 +258,3 @@ template `()`(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
 {.pop.}
-
-when cpsTraceDeque or cpsStackFrames:
-  from std/strformat import `&`
-when cpsStackFrames:
-  from std/algorithm import reverse
-
-proc renderStackFrames*(c: Continuation): seq[string] {.cpsVoodoo.} =
-  ## Render a "stack" trace for the continuation as a sequence of lines.
-  if c.isNil:
-    return @["dismissed continuations have no stack trace"]
-  when not cpsStackFrames:
-    return @["compile with --stackTrace:on or --define:cpsStackFrames=on"]
-  else:
-    var c = c
-    while not c.isNil:
-      template frame: TraceFrame = c.stack
-      result.add:
-        &"{frame.info.filename}({frame.info.line}) {frame.fun}"
-      c = c.mom
-    reverse result
-
-proc renderTraceDeque*(c: Continuation): seq[string] {.cpsVoodoo.} =
-  ## Render a traceback for the continuation as a sequence of lines.
-  if c.isNil:
-    return @["dismissed continuations have no trace deque"]
-  when not cpsTraceDeque:
-    return @["compile with --stackTrace:on or --define:cpsTraceDeque=on"]
-  else:
-    for index in 0 ..< c.frames.len:
-      template frame: TraceFrame = c.frames[c.frames.len - index - 1]
-      result.add:
-        &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
-
-proc writeStackFrames*(c: Continuation) {.cpsVoodoo.} =
-  ## Write a "stack" trace for the continuation.
-  for line in c.renderStackFrames.items:
-    stdmsg().writeLine line
-
-proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
-  ## Write a traceback for the continuation.
-  for line in c.renderTraceDeque.items:
-    stdmsg().writeLine line

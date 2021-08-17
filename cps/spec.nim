@@ -221,14 +221,6 @@ proc isVoodooCall*(n: NormNode): bool =
       if it.hasImpl:
         result = it.impl.hasPragma "cpsVoodooCall"
 
-proc trampoline*[T: Continuation](c: T): T =
-  ## This is the basic trampoline: it will run the continuation
-  ## until the continuation is no longer in the `Running` state.
-  var c: Continuation = c
-  while not c.isNil and not c.fn.isNil:
-    c = c.fn(c)
-  result = T c
-
 proc isCpsCall*(n: NormNode): bool =
   ## true if this node holds a call to a cps procedure
   if n.len > 0:
@@ -356,6 +348,97 @@ macro cpsMagic*(n: untyped): untyped =
   shim.addPragma ident"cpsMustJump"
   shim.addPragma ident"cpsMagicCall"
   result.add shim
+
+macro cpsVoodoo*(n: untyped): untyped =
+  ## Similar to a `cpsMagic` where the first argument is concerned, but
+  ## may specify a return value which is usable inside the CPS procedure.
+  expectKind(n, nnkProcDef)
+  result = newStmtList n            # preserve the original proc
+  var shim = makeErrorShim n        # create the shim
+
+  # we use this pragma to identify the primitive and rewrite it inside
+  # CPS so that it again binds to the version that takes a continuation.
+  shim.addPragma ident"cpsVoodooCall"
+  result.add shim
+
+when cpsTraceDeque or cpsStackFrames:
+  from std/strformat import `&`
+when cpsStackFrames:
+  from std/algorithm import reverse
+
+proc renderStackFramesImpl(c: Continuation): seq[string] =
+  if c.isNil:
+    return @["dismissed continuations have no stack trace"]
+  else:
+    when not cpsStackFrames:
+      return @["compile with --stackTrace:on or --define:cpsStackFrames=on"]
+    else:
+      var c = c
+      while not c.isNil:
+        template frame: TraceFrame = c.stack
+        result.add:
+          &"{frame.info.filename}({frame.info.line}) {frame.fun}"
+        c = c.mom
+      reverse result
+
+proc renderStackFrames*(c: Continuation): seq[string] {.cpsVoodoo.} =
+  ## Render a "stack" trace for the continuation as a sequence of lines.
+  renderStackFramesImpl c
+
+proc renderTraceDeque*(c: Continuation): seq[string] {.cpsVoodoo.} =
+  ## Render a traceback for the continuation as a sequence of lines.
+  if c.isNil:
+    return @["dismissed continuations have no trace deque"]
+  when not cpsTraceDeque:
+    return @["compile with --stackTrace:on or --define:cpsTraceDeque=on"]
+  else:
+    for index in 0 ..< c.frames.len:
+      template frame: TraceFrame = c.frames[c.frames.len - index - 1]
+      result.add:
+        &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
+
+proc writeStackFramesImpl(c: Continuation) =
+  for line in c.renderStackFramesImpl.items:
+    stdmsg().writeLine line
+
+proc writeStackFrames*(c: Continuation) {.cpsVoodoo.} =
+  ## Write a "stack" trace for the continuation.
+  writeStackFramesImpl c
+
+proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
+  ## Write a traceback for the continuation.
+  for line in c.renderTraceDeque.items:
+    stdmsg().writeLine line
+
+proc trampoline*[T: Continuation](c: T): T =
+  ## This is the basic trampoline: it will run the continuation
+  ## until the continuation is no longer in the `Running` state.
+  var c: Continuation = c
+  while not c.isNil and not c.fn.isNil:
+    try:
+      c = c.fn(c)
+    except Exception:
+      writeStackFramesImpl c
+      raise
+  result = T c
+
+macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
+  ## This trampoline allows the user to interact with the continuation
+  ## prior to each leg of its execution.  The continuation will be
+  ## exposed by a variable named `it` inside the `body`.
+  #
+  # this is a lame workaround for the fact that the compiler pukes
+  # on the conversions in the template version...
+  result = quote:
+    var c: Continuation = `supplied`
+    while c.running:
+      var it {.inject.}: `T` = c
+      `body`
+      try:
+        c = c.fn(c)
+      except Exception:
+        writeStackFramesImpl c
+        raise
 
 proc ensimilate*(source, destination: NormNode): Call =
   ## perform a call to convert the destination to the source's type;
