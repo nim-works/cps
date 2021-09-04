@@ -530,9 +530,10 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
   ## the first argument
   proc voodoo(n: NormNode): NormNode =
     if n.isVoodooCall:
-      let it = asCallKind(n.copyNimTree)
-      it.desym
+      let it = asCallKind n.copyNimTree
       # https://github.com/nim-lang/Nim/issues/18365
-      it.prependArg(env.first)
+      let contType = pragmaArgument(it.impl, "cpsUserType")
+      it.prependArg newCall(contType, env.first)
+      desym it
       result = it
   result = filter(n, voodoo)
