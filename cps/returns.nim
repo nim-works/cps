@@ -95,7 +95,7 @@ proc tailCall*(cont, to: Name; jump: NormNode = nil): NormNode =
 proc jumperCall*(cont, to: Name; via: NormNode): NormNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
-  let jump = asCallKind via.copyNimTree
+  let jump = asCall via.copyNimTree
   # we may need to insert an argument if the call is magical
   if jump.impl.hasPragma "cpsMagicCall":
     # https://github.com/nim-lang/Nim/issues/18365

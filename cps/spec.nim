@@ -245,20 +245,24 @@ func wrappedFinally*(n, final: NormNode): NormNode =
 
 proc isVoodooCall*(n: NormNode): bool =
   ## true if this is a call to a voodoo procedure
-  if not n.isNil and n.len > 0:
-    ifCallKindThenIt(n):
-      if it.hasImpl:
-        result = it.impl.hasPragma "cpsVoodooCall"
+  ifCallThenIt n:
+    if it.hasImpl:
+      result = it.impl.hasPragma "cpsVoodooCall"
 
 proc isCpsCall*(n: NormNode): bool =
   ## true if this node holds a call to a cps procedure
-  if n.len > 0:
-    ifCallThenIt(n):
-      if it.hasImpl:
+  ifCallThenIt n:
+    if it.hasImpl:
+      # guard issuing hasPragma on a typedef in the case
+      # where we're looking at a call such as MyType(foo).
+      # XXX: we might actually need to unwrap the symbol
+      #      recursively to ensure it doesn't ultimately
+      #      represent a type...
+      if it[0].kind != nnkSym or it[0].symKind != nskType:
         # what we're looking for here is a jumper; it could
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
-        result = it.impl.hasPragma("cpsMustJump")
+        result = it.impl.hasPragma "cpsMustJump"
 
 proc isCpsBlock*(n: NormNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
