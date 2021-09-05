@@ -77,10 +77,10 @@ macro cpsJump(cont, call: typed): untyped =
 macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
-    c = c.NormNode
-    call = asCall(NormNode call)
-    name = genSymProc("Post Child", info = n.NormNode)
-    cont = asName(cont)
+    c = c.NormNode                                      # store child here
+    call = asCall(NormNode call)                        # child bootstrap call
+    name = genSymProc("Post Child", info = n.NormNode)  # return to this proc
+    cont = asName(cont)                                 # current continuation
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
       makeContProc(name, cont, n)
