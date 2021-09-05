@@ -17,7 +17,7 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   let
     contParam = desym cont
     # https://github.com/nim-lang/Nim/issues/18365
-    contType = TypeExpr: bindSym"Continuation"
+    contType = TypeExpr: bindName"Continuation"
 
   result = newProcDef(name, contType, newIdentDef(contParam, contType))
   result.copyLineInfo source        # grab lineinfo from the source body
