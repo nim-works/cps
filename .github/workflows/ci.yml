@@ -51,7 +51,7 @@ jobs:
           cd cps
           nimble --accept develop
           cd examples
-          env GITHUB_ACTIONS=false balls
+          env GITHUB_ACTIONS=false balls --path=".."
 
       - name: Run tests
         shell: bash
