@@ -100,13 +100,13 @@ macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
   let sym = bootstrapSymbol call
-  let base = enbasen:  # find the parent type of the environment
-    (getImpl sym).pragmaArgument"cpsEnvironment"
+  let base =
+    enbasen:  # find the parent type of the environment
+      (getImpl sym).pragmaArgument"cpsEnvironment"
   result = whelpIt call:
     it =
       sym.ensimilate:
-        Tail.hook(newCall(ident"Continuation", parent).NormNode,
-                  newCall(base, it))
+        Tail.hook(parent.NormNode, newCall(base, it))
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## Reimplement this symbol to configure a continuation

@@ -164,7 +164,8 @@ proc makeType*(e: Env): NimNode =
 proc first*(e: Env): Name = e.c
 
 proc firstDef*(e: Env): IdentDef =
-  newIdentDef(e.first, e.via, newEmptyNode())
+  # https://github.com/nim-lang/Nim/issues/18365
+  newIdentDef(e.first, asTypeExpr bindName"Continuation", newEmptyNode())
 
 proc get*(e: Env): NormNode =
   ## retrieve a continuation's result value from the env
@@ -529,8 +530,10 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
   ## the first argument
   proc voodoo(n: NormNode): NormNode =
     if n.isVoodooCall:
-      let it = asCallKind(n.copyNimTree)
-      it.desym
-      it.prependArg(env.first)
+      let it = asCall n.copyNimTree
+      # https://github.com/nim-lang/Nim/issues/18365
+      let contType = pragmaArgument(it.impl, "cpsUserType")
+      it.prependArg newCall(contType, env.first)
+      desym it
       result = it
   result = filter(n, voodoo)

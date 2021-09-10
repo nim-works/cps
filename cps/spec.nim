@@ -19,6 +19,7 @@ template cpsMagicCall*() {.pragma.}     ## a cps call
 template cpsVoodooCall*() {.pragma.}    ## a voodoo call
 template cpsMustJump*() {.pragma.}      ## cps calls and magic calls jump
 template cpsPending*() {.pragma.}       ## this is the last continuation
+template cpsUserType*(tipe: typed) {.pragma.} ## to recover Cont from a magic
 template cpsBreak*(label: typed = nil) {.pragma.} ##
 ## this is a break statement in a cps block
 template cpsContinue*() {.pragma.}      ##
@@ -72,6 +73,34 @@ type
     Head    = "head"      ## invoked when a new continuation has no parent
     Tail    = "tail"      ## invoked when a new continuation has a parent
     Stack   = "stack"     ## invoked to annotate stack semantics
+
+template dot*(a, b: NimNode): NimNode =
+  ## for constructing foo.bar
+  newDotExpr(a, b)
+
+template dot*(a: NimNode; b: string): NimNode =
+  ## for constructing `.`(foo, "bar")
+  dot(a, ident(b))
+
+template eq*(a, b: NimNode): NimNode =
+  ## for constructing foo=bar in a call
+  nnkExprEqExpr.newNimNode(a).add(a).add(b)
+
+template eq*(a: string; b: NimNode): NimNode =
+  ## for constructing foo=bar in a call
+  eq(ident(a), b)
+
+template colon*(a, b: NimNode): NimNode =
+  ## for constructing foo: bar in a ctor
+  nnkExprColonExpr.newNimNode(a).add(a).add(b)
+
+template colon*(a: string; b: NimNode): NimNode =
+  ## for constructing foo: bar in a ctor
+  colon(ident(a), b)
+
+template colon*(a: string | NimNode; b: string | int): NimNode =
+  ## for constructing foo: bar in a ctor
+  colon(a, newLit(b))
 
 proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
@@ -216,20 +245,24 @@ func wrappedFinally*(n, final: NormNode): NormNode =
 
 proc isVoodooCall*(n: NormNode): bool =
   ## true if this is a call to a voodoo procedure
-  if not n.isNil and n.len > 0:
-    ifCallKindThenIt(n):
-      if it.hasImpl:
-        result = it.impl.hasPragma "cpsVoodooCall"
+  ifCallThenIt n:
+    if it.hasImpl:
+      result = it.impl.hasPragma "cpsVoodooCall"
 
 proc isCpsCall*(n: NormNode): bool =
   ## true if this node holds a call to a cps procedure
-  if n.len > 0:
-    ifCallThenIt(n):
-      if it.hasImpl:
+  ifCallThenIt n:
+    if it.hasImpl:
+      # guard issuing hasPragma on a typedef in the case
+      # where we're looking at a call such as MyType(foo).
+      # XXX: we might actually need to unwrap the symbol
+      #      recursively to ensure it doesn't ultimately
+      #      represent a type...
+      if it[0].kind != nnkSym or it[0].symKind != nskType:
         # what we're looking for here is a jumper; it could
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
-        result = it.impl.hasPragma("cpsMustJump")
+        result = it.impl.hasPragma "cpsMustJump"
 
 proc isCpsBlock*(n: NormNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
@@ -320,6 +353,10 @@ proc makeErrorShim*(n: NimNode): NimNode =
   # value.  While this version will throw an exception at runtime, it
   # may be used inside CPS as magic(); for better programmer ergonomics.
   var shim = copyNimTree n
+  # stash the type of the first argument into a pragma so we can use it
+  # when converting the continuation to the proper magic call inside cps
+  shim.addPragma:
+    bindSym"cpsUserType".colon shim.params[1][1]
   del(shim.params, 1)               # delete the 1st Continuation argument
   let msg = newLit($n.name & "() is only valid in {.cps.} context")
   shim.body =                       # raise a defect when invoked directly
@@ -463,34 +500,6 @@ proc ensimilate*(source, destination: NormNode): Call =
 
   # fallback to typeOf
   result = newCall(newCall(bindName"typeOf", source), destination)
-
-template dot*(a, b: NimNode): NimNode =
-  ## for constructing foo.bar
-  newDotExpr(a, b)
-
-template dot*(a: NimNode; b: string): NimNode =
-  ## for constructing `.`(foo, "bar")
-  dot(a, ident(b))
-
-template eq*(a, b: NimNode): NimNode =
-  ## for constructing foo=bar in a call
-  nnkExprEqExpr.newNimNode(a).add(a).add(b)
-
-template eq*(a: string; b: NimNode): NimNode =
-  ## for constructing foo=bar in a call
-  eq(ident(a), b)
-
-template colon*(a, b: NimNode): NimNode =
-  ## for constructing foo: bar in a ctor
-  nnkExprColonExpr.newNimNode(a).add(a).add(b)
-
-template colon*(a: string; b: NimNode): NimNode =
-  ## for constructing foo: bar in a ctor
-  colon(ident(a), b)
-
-template colon*(a: string | NimNode; b: string | int): NimNode =
-  ## for constructing foo: bar in a ctor
-  colon(a, newLit(b))
 
 proc nilAsEmpty*(n: NimNode): NimNode =
   ## normalize nil, nnkNilLit to nnkEmpty

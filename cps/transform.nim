@@ -16,7 +16,8 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   ## `cont` with the given body.
   let
     contParam = desym cont
-    contType = cont.typeInst # XXX: funny thing that, we just desym'd cont
+    # https://github.com/nim-lang/Nim/issues/18365
+    contType = TypeExpr: bindName"Continuation"
 
   result = newProcDef(name, contType, newIdentDef(contParam, contType))
   result.copyLineInfo source        # grab lineinfo from the source body
@@ -76,10 +77,10 @@ macro cpsJump(cont, call: typed): untyped =
 macro cpsContinuationJump(cont, call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
-    c = c.NormNode
-    call = asCall(NormNode call)
-    name = genSymProc("Post Child", info = n.NormNode)
-    cont = asName(cont)
+    c = c.NormNode                                      # store child here
+    call = asCall(NormNode call)                        # child bootstrap call
+    name = genSymProc("Post Child", info = n.NormNode)  # return to this proc
+    cont = asName(cont)                                 # current continuation
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
       makeContProc(name, cont, n)
@@ -1110,7 +1111,9 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
 
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
-  n.formalParams = newFormalParams(asTypeExpr(NormNode T), env.firstDef)
+  n.formalParams =
+    # https://github.com/nim-lang/Nim/issues/18365
+    newFormalParams(asTypeExpr bindName"Continuation", env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
   body.introduce {Coop, Pass, Trace, Head, Tail, Alloc, Dealloc}
