@@ -66,20 +66,30 @@ macro cps*(T: typed, n: typed): untyped =
     else:
       result = getAst(cpsTransform(T, n))
 
+proc adaptArguments(sym: NormNode; args: seq[NormNode]): seq[NormNode] =
+  ## convert any arguments in the list as necessary to match those of
+  ## the provided callable symbol.
+  var i = 0
+  for n in sym.getImpl.asProcDef.callingParams:
+    result.add:
+      if sameType(n.typ, args[i].getTypeInst):
+        args[i]
+      else:
+        newCall(n.typ, args[i])
+    inc i
+
 proc doWhelp(n: NormNode; args: seq[NormNode]): Call =
   let sym = bootstrapSymbol n
+  # convert arguments to the bootstrap's as necessary, (think: .borrow.)
+  let args = adaptArguments(sym, args)
   result = sym.newCall args
 
 template whelpIt*(input: typed; body: untyped): untyped =
   var n = normalizeCall input
   if n.kind in nnkCallKinds:
-    let p = asCallKind(n).impl
-    if p.hasPragma "cpsBootstrap":
-      var it {.inject.} = doWhelp(p, n[1..^1])
-      body
-      NimNode it
-    else:
-      n.errorAst "the input to whelpIt must be a .cps. call"
+    var it {.inject.} = doWhelp(n[0], n[1..^1])
+    body
+    NimNode it
   else:
     n.errorAst "the input to whelpIt must be a .cps. call"
 
