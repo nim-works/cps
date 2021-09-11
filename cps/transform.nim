@@ -1031,9 +1031,12 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
       result.ex = e
       #result = handler(result, result.fn)
 
-macro cpsHandleUnhandledException(n: typed): untyped =
+macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
   ## be first copied into the `ex` variable, then raise
+  if contType.isNil:
+    raise ValueError.newException "nil contType"
+
   func handle(n: NormNode): NormNode =
     if n.isCpsCont:
       let
@@ -1042,18 +1045,19 @@ macro cpsHandleUnhandledException(n: typed): untyped =
       # Rewrite continuations within this continuation body as well
       fnDef.body = fnDef.body.filter(handle)
       # Put the body in a try-except to capture the unhandled exception
-      fnDef.body = genAstOpt({}, cont = NimNode cont, body = NimNode fnDef.body):
+      fnDef.body = genAstOpt({}, contType, cont = NimNode cont,
+                             body = NimNode fnDef.body):
         bind getCurrentException
         try:
           body
         except:
           cont.ex = getCurrentException()
-        # A continuation body created with makeContProc (which is all of them)
-        # will have a terminator in the body, thus this part can only be reached
-        # iff the except branch happened to deter the jump
+        # A continuation body created with makeContProc (which is all of
+        # them) will have a terminator in the body, thus this part can
+        # only be reached iff the except branch happened to deter the jump
         #
-        # This is a workaround for https://github.com/nim-lang/Nim/issues/18411
-        return (typeof cont) unwind(cont, cont.ex)
+        # Workaround for https://github.com/nim-lang/Nim/issues/18411
+        return Continuation: unwind(contType(cont), cont.ex)
       result = fnDef
 
   debugAnnotation cpsHandleUnhandledException, n:
@@ -1155,7 +1159,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
     newCall(bindSym"cpsFloater"):
       newCall(bindSym"cpsResolver", NimNode env.identity, NimNode env.root):
         newCall(bindSym"cpsManageException"):
-          newCall(bindSym"cpsHandleUnhandledException"):
+          newCall(bindSym"cpsHandleUnhandledException", NimNode env.root):
             NormNode n
 
   # storing the source environment on helpers
