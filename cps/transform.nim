@@ -1034,8 +1034,9 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
 macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
   ## be first copied into the `ex` variable, then raise
-  if contType.isNil:
-    raise ValueError.newException "nil contType"
+
+  {.warning: "https://github.com/nim-lang/Nim/issues/18352".}
+  let contType = contType
 
   func handle(n: NormNode): NormNode =
     if n.isCpsCont:

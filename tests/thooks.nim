@@ -80,35 +80,35 @@ suite "hooks":
         stack 2: foo foo 👍
         boot 3: C nil 👍
         trace 4: foo continuation 👍
-        coop 5: continuation nil genasts.nim
+        coop 5: Cont nil genasts.nim
         trace 6: While Loop continuation 👍
         trace 7: Post Call continuation 👍
-        tail 8: Cont Continuation(continuation) normalizedast.nim
+        tail 8: Cont continuation normalizedast.nim
         alloc 9: cps environment Cont 👍
         stack 10: bar bar normalizedast.nim
         boot 11: result nil normalizedast.nim
-        pass 12: cps environment continuation 👍
+        pass 12: cps environment Cont(continuation) 👍
         trace 13: bar continuation 👍
         trace 14: Post Call continuation 👍
-        pass 15: continuation.mom continuation normalizedast.nim
+        pass 15: continuation.mom Cont(continuation) normalizedast.nim
         coop 16: result nil normalizedast.nim
         dealloc 17: cps environment 😎 genasts.nim
         trace 18: Post Child continuation normalizedast.nim
-        coop 19: continuation nil genasts.nim
+        coop 19: Cont nil genasts.nim
         trace 20: While Loop continuation 👍
         trace 21: Post Call continuation 👍
-        tail 22: Cont Continuation(continuation) normalizedast.nim
+        tail 22: Cont continuation normalizedast.nim
         alloc 23: cps environment Cont 👍
         stack 24: bar bar normalizedast.nim
         boot 25: result nil normalizedast.nim
-        pass 26: cps environment continuation 👍
+        pass 26: cps environment Cont(continuation) 👍
         trace 27: bar continuation 👍
         trace 28: Post Call continuation 👍
-        pass 29: continuation.mom continuation normalizedast.nim
+        pass 29: continuation.mom Cont(continuation) normalizedast.nim
         coop 30: result nil normalizedast.nim
         dealloc 31: cps environment 😎 genasts.nim
         trace 32: Post Child continuation normalizedast.nim
-        coop 33: continuation nil genasts.nim
+        coop 33: Cont nil genasts.nim
         trace 34: While Loop continuation 👍
         trace 35: Post Call continuation 👍
       """.dedent(8).strip()
