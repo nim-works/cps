@@ -869,7 +869,7 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
       result.add env.annotate(nc)
   endAndReturn()
 
-macro cpsResolver(T: typed, n: typed): untyped =
+macro cpsResolver(T: typed; contType: typed; n: typed): untyped =
   ## resolve any left over cps control-flow annotations
   ##
   ## this is not needed, but it's here so we can change this to
@@ -892,7 +892,7 @@ macro cpsResolver(T: typed, n: typed): untyped =
     # replace all `pending` and `terminate` with the end of continuation
     it = replace(it, proc(x: NormNode): bool = x.isCpsPending or x.isCpsTerminate):
       if n.firstReturn.isNil:
-        terminator(cont, T.NormNode)
+        terminator(cont, contType.asName, T.NormNode)
       else:
         doc"omitted a return in the resolver".NormNode
 
@@ -1153,7 +1153,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
   let processMainContinuation =
     newCall(bindSym"cpsFloater"):
-      newCall(bindSym"cpsResolver", NimNode env.identity):
+      newCall(bindSym"cpsResolver", NimNode env.identity, NimNode env.root):
         newCall(bindSym"cpsManageException"):
           newCall(bindSym"cpsHandleUnhandledException"):
             NormNode n

@@ -54,13 +54,13 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
-proc terminator*(c: Name; T: NormNode): NormNode =
+proc terminator*(c: Name; contType: Name; T: NormNode): NormNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.
   let coop = NimNode hook(Coop, asName"result")
-  let pass = NimNode hook(Pass, c, c.dot "mom")
-  let dealloc = NimNode hook(Dealloc, c, T)
+  let pass = NimNode hook(Pass, newCall(contType, c), c.dot "mom")
+  let dealloc = NimNode hook(Dealloc, newCall(contType, c), T)
   let c = NimNode c
   NormNode:
     quote:
