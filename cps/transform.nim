@@ -11,7 +11,7 @@ when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
 
 proc annotate(parent: var Env; n: NormNode): NormNode
 
-proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
+proc makeContProc(name, cont, contType: Name; source: NimNode): ProcDef =
   ## creates a continuation proc with `name` using continuation
   ## `cont` with the given body.
   let
@@ -54,7 +54,7 @@ proc makeContProc(name: Name, cont: Name, source: NimNode): ProcDef =
   # let other macros know this is a continuation
   result.addPragma bindName"cpsCont"
 
-macro cpsJump(cont, call, n: typed): untyped =
+macro cpsJump(cont, contType, call, n: typed): untyped =
   ## Rewrite `n` into a tail call via `call` where `cont` is the symbol of
   ## the continuation and `fn` is the identifier/symbol of the function
   ## field.
@@ -63,27 +63,29 @@ macro cpsJump(cont, call, n: typed): untyped =
   let
     call = normalizeCall call
     name = genSymProc("Post Call")
-    cont = asName(cont)
+    cont = cont.asName
+    contType = contType.asName
   debugAnnotation cpsJump, n:
     it = newStmtList:
-      makeContProc(name, cont, n)
+      makeContProc(name, cont, contType, n)
     it.add:
-      jumperCall(cont, name, call)
+      jumperCall(cont, contType, name, call)
 
-macro cpsJump(cont, call: typed): untyped =
+macro cpsJump(cont, contType, call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
-  result = getAst(cpsJump(cont, call, macros.newStmtList()))
+  result = getAst(cpsJump(cont, contType, call, macros.newStmtList()))
 
-macro cpsContinuationJump(cont, call, c, n: typed): untyped =
+macro cpsContinuationJump(cont, contType, call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
     c = c.NormNode                                      # store child here
     call = asCall(NormNode call)                        # child bootstrap call
     name = genSymProc("Post Child", info = n.NormNode)  # return to this proc
-    cont = asName(cont)                                 # current continuation
+    cont = cont.asName                                  # current continuation
+    contType = contType.asName                          # so-called user type
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
-      makeContProc(name, cont, n)
+      makeContProc(name, cont, contType, n)
     it.add:
       # update the parent's stack frame with the call site of the child
       updateLineInfoForContinuationStackFrame(cont.NimNode, call.NimNode)
@@ -97,11 +99,12 @@ macro cpsContinuationJump(cont, call, c, n: typed): untyped =
     # NOTE: mom should now be set via the tail() hook from whelp
     #
     # return the child continuation
-    it = it.makeReturn:
-      newCall newCall("typeof", cont):
-        Pass.hook(cont, c)    # we're basically painting the future
+    it = makeReturn(contType, it):
+      newCall bindName"Continuation":
+        Pass.hook newCall(NormNode contType, cont):
+          c    # we're basically painting the future
 
-macro cpsMayJump(cont, n, after: typed): untyped =
+macro cpsMayJump(cont, contType, n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump
   ## to enter `after`.
   ##
@@ -109,13 +112,14 @@ macro cpsMayJump(cont, n, after: typed): untyped =
   ## with tail calls to `after`.
   let
     name = genSymProc("Finish")
-    cont = asName(cont)
-    tail = tailCall(desym cont, name)
+    cont = cont.asName
+    contType = contType.asName
+    tail = tailCall(desym cont, contType, name)
   debugAnnotation cpsMayJump, n:
     it = it.replace(isCpsPending, tail)
     if it.firstReturn.isNil:
       it.add tail
-    it = newStmtList(makeContProc(name, cont, after), it)
+    it = newStmtList(makeContProc(name, cont, contType, after), it)
 
 proc restoreBreak(n: NormNode, label = newEmptyNormNode()): NormNode =
   ## restore {.cpsBreak: label.} into break statements
@@ -157,7 +161,7 @@ macro cpsBlock(cont, n: typed): untyped =
   ## This is just an alias to cpsBlock with an empty label.
   result = getAst(cpsBlock(cont, newEmptyNode(), n))
 
-macro cpsWhile(cont, cond, n: typed): untyped =
+macro cpsWhile(cont, contType, cond, n: typed): untyped =
   ## A while statement tainted by a `cpsJump` and may require a jump to
   ## exit the loop.
   ##
@@ -167,8 +171,9 @@ macro cpsWhile(cont, cond, n: typed): untyped =
   let
     n = NormNode n
     name = genSymProc("While Loop")
-    cont = asName(cont)
-    tail = tailCall(desym cont, name)
+    cont = cont.asName
+    contType = contType.asName
+    tail = tailCall(desym cont, contType, name)
   tail.copyLineInfo n
   debugAnnotation cpsWhile, n:
     # a key first step is to ensure that the loop body, uh, loops, by
@@ -186,7 +191,7 @@ macro cpsWhile(cont, cond, n: typed): untyped =
     )
     body.copyLineInfo n
     # we return the while proc and a tailcall to enter it the first time
-    it = newStmtList(makeContProc(name, cont, body), tail)
+    it = newStmtList(makeContProc(name, cont, contType, body), tail)
 
 proc mergeExceptBranches(n, ex: NormNode): NormNode =
   ## Rewrite the try statement `n` so that all `except` branches are merged
@@ -393,14 +398,15 @@ macro cpsWithException(cont, ex, n: typed): untyped =
   debugAnnotation cpsWithException, n:
     it = it[0].withException(cont, ex)
 
-macro cpsTryExcept(cont, ex, n: typed): untyped =
+macro cpsTryExcept(cont, contType, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
   ## may require a jump to enter any handler.
   ##
   ## Only rewrite try with except branches.
   ##
   let
-    cont = asName(cont)
+    cont = cont.asName
+    contType = contType.asName
     ex = normalizingRewrites ex
     temp = genSymUnknown"placeholder"
     handler = genSymProc"Except"
@@ -424,7 +430,7 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
           # capture the exception to ex
           newAssignment(ex, newCall(bindName"getCurrentException")),
           # jump to the handler
-          cont.tailCall(handler)
+          cont.tailCall(contType, handler)
         ]
 
     # the completed rewrite starts with adding our handler
@@ -432,14 +438,14 @@ macro cpsTryExcept(cont, ex, n: typed): untyped =
       # the handler uses the exception `ex` as its current exception
       newCall(bindName"cpsWithException", cont, ex):
         # the body of the handler is the merged except branch
-        makeContProc(handler, cont):
+        makeContProc(handler, cont, contType):
           it.findChild(it.kind == nnkExceptBranch)[0]
 
     it = rewrote.add:
       # then swap the temporary placeholder with the original try body
       wrapContinuationWith(it[0], cont, temp, newTry)
 
-macro cpsTryFinally(cont, ex, n: typed): untyped =
+macro cpsTryFinally(cont, contType, ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
   ## may require a jump to enter finally.
   ##
@@ -456,10 +462,11 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
     let finallyBody = tryFinally.last.last
 
     # make cont a Name for that typed feeling
-    let cont = asName(cont)
+    let cont = cont.asName
+    let contType = contType.asName
 
     # Turn the finally into a continuation leg.
-    let final = makeContProc(genSymProc("Finally"), cont, finallyBody)
+    let final = makeContProc(genSymProc"Finally", cont, contType, finallyBody)
 
     # A property of `finally` is that it inserts itself in the middle
     # of any scope exit attempt before performing the scope exit.
@@ -526,7 +533,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
 
           # Replace it with a tail call to finally with the exit point as the
           # destination.
-          result = cont.tailCall exitPoints[n].name
+          result = cont.tailCall(contType, exitPoints[n].name)
 
       n.filter(redirector)
 
@@ -571,7 +578,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
           # Stash the exception
           newAssignment(ex, newCall(bindName"getCurrentException")),
           # Then jump to reraise
-          cont.tailCall(reraise.name)
+          cont.tailCall(contType, reraise.name)
         )
       )
     )
@@ -582,7 +589,7 @@ macro cpsTryFinally(cont, ex, n: typed): untyped =
 func newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
   result = newCall bindName(a)
   result.copyLineInfo n
-  result.add(NormNode env.first)
+  result.add(NormNode env.first, NormNode env.root)
 
 proc setupChildContinuation(env: var Env; call: Call): (Name, NormNode) =
   ## create a new child continuation variable and add it to the
@@ -590,6 +597,7 @@ proc setupChildContinuation(env: var Env; call: Call): (Name, NormNode) =
   let child = genSymVar("child", info = call)
   let etype = pragmaArgument(call, "cpsEnvironment")
   env.localSection newIdentDef(child, etype.TypeExpr)
+  # XXX: also sniff and return the child continuation's "user type"?
   result = (child, etype)
 
 proc shimAssign(env: var Env; store: NormNode, call: Call, tail: NormNode): NormNode =

@@ -20,19 +20,21 @@ proc firstReturn*(p: NormNode): NormNode =
   else:
     result = nil
 
-proc makeReturn*(n: NormNode): NormNode =
+proc makeReturn*(contType: Name; n: NormNode): NormNode =
   ## generate a `return` of the node if it doesn't already contain a return
   if n.firstReturn.isNil:
     let toAdd =
       if n.kind in nnkCallKinds:
         n             # what we're saying here is, don't hook Coop on magics
       else:
-        hook(Coop, n) # but we will hook Coop on child continuations
+        Coop.hook:
+          newCall contType:
+            n         # but we will hook Coop on child continuations
     nnkReturnStmt.newNimNode(n).add(toAdd)
   else:
     n
 
-proc makeReturn*(pre, n: NormNode): NormNode =
+proc makeReturn*(contType: Name; pre, n: NormNode): NormNode =
   ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
   if not pre.firstReturn.isNil:
     result.add:
@@ -40,7 +42,7 @@ proc makeReturn*(pre, n: NormNode): NormNode =
   result = newStmtList pre
   result.add:
     if pre.firstReturn.isNil:
-      makeReturn n
+      makeReturn(contType, n)
     else:
       newEmptyNode().NormNode
     #else:
@@ -79,20 +81,20 @@ proc terminator*(c: Name; T: NormNode): NormNode =
       # critically, terminate control-flow here!
       return
 
-proc tailCall*(cont, to: Name; jump: NormNode = nil): NormNode =
+proc tailCall*(cont, contType, to: Name; jump: NormNode = nil): NormNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   result = newStmtList:
-    newAssignment(newDotExpr(cont, asName("fn")), to)
+    newAssignment(newDotExpr(cont, "fn".asName), to)
 
   # figure out what the return value will be...
-  result = makeReturn result:
+  result = makeReturn(contType, result):
     if jump.isNil:
-      cont.NormNode  # just return our continuation
+      cont.NormNode        # just return our continuation
     else:
       jump                 # return the jump target as requested
 
-proc jumperCall*(cont, to: Name; via: NormNode): NormNode =
+proc jumperCall*(cont, contType, to: Name; via: NormNode): NormNode =
   ## Produce a tail call to `to` with `cont` as the continuation
   ## The `via` argument is expected to be a cps jumper call.
   let jump = asCall via.copyNimTree
@@ -104,4 +106,4 @@ proc jumperCall*(cont, to: Name; via: NormNode): NormNode =
   # we need to desym the jumper; it is currently sem-ed to the
   # variant that doesn't take a continuation.
   desym jump
-  result = tailCall(cont, to, jump)
+  result = tailCall(cont, contType, to, jump)
