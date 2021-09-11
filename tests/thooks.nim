@@ -83,7 +83,7 @@ suite "hooks":
         coop 5: Cont nil genasts.nim
         trace 6: While Loop continuation 👍
         trace 7: Post Call continuation 👍
-        tail 8: Cont continuation normalizedast.nim
+        tail 8: Cont continuation 👍
         alloc 9: cps environment Cont 👍
         stack 10: bar bar normalizedast.nim
         boot 11: result nil normalizedast.nim
@@ -97,7 +97,7 @@ suite "hooks":
         coop 19: Cont nil genasts.nim
         trace 20: While Loop continuation 👍
         trace 21: Post Call continuation 👍
-        tail 22: Cont continuation normalizedast.nim
+        tail 22: Cont continuation 👍
         alloc 23: cps environment Cont 👍
         stack 24: bar bar normalizedast.nim
         boot 25: result nil normalizedast.nim
