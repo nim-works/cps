@@ -145,7 +145,7 @@ proc restoreContinue(n: NormNode): NormNode =
 
   filter(n, restorer)
 
-macro cpsBlock(cont, label, n: typed): untyped =
+macro cpsBlock(cont, contType, label, n: typed): untyped =
   ## The block with `label` is tainted by a `cpsJump` and may require a
   ## jump to break out of the block.
   ##
@@ -154,12 +154,12 @@ macro cpsBlock(cont, label, n: typed): untyped =
   debugAnnotation cpsBlock, n:
     it = it.replace(matchCpsBreak(label.NormNode), newCpsPending())
 
-macro cpsBlock(cont, n: typed): untyped =
+macro cpsBlock(cont, contType, n: typed): untyped =
   ## A block statement tainted by a `cpsJump` and may require a jump to
   ## enter `after`.
   ##
   ## This is just an alias to cpsBlock with an empty label.
-  result = getAst(cpsBlock(cont, newEmptyNode(), n))
+  result = getAst(cpsBlock(cont, contType, newEmptyNode(), n))
 
 macro cpsWhile(cont, contType, cond, n: typed): untyped =
   ## A while statement tainted by a `cpsJump` and may require a jump to
