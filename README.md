@@ -7,56 +7,83 @@
 [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
 [![IRC](https://img.shields.io/badge/chat-%23cps%20on%20libera.chat-brightgreen?style=flat)](https://web.libera.chat/#cps)
 
-This project provides a `cps` pragma which you can add to a procedure to
-automatically rewrite it to use continuations for control-flow. This provides
-the benefits of CPS while abstracting away the verbosity of continuations.
+<!-- Have to include a quote or its not nim right? -->
 
-The `cps` pragma performs only the control-flow rewrite; you implement or
+<sup>*The only way to deal with an unfree world is to become so absolutely free that your very existence is an act of rebellion.* - Albert Camus</sup>
+
+Welcome to `cps`. This project will let you develop 'freely' in Continuation-Passing Style unburdened by all the verbosity.
+
+Learning and programming in nim cps allows an **insurpassable** level of flexibility in control flow *without* turning your code into everyones favourite italian dish :spaghetti:
+
+><sub>It is **:star:guaranteed:star:** CPS will get your head :fish:*swimming*:fish: with ideas on how to introduce continuations to solve many different problems that may typically be solved using :spaghetti: code (such as with callback styled event driven programming).</sub>
+>
+><sup>Make sure to take care of yourself and take time away from thinking about all the possibilities</sup>
+
+## Quick Links
+
+### [Teach me](https://github.com/disruptek/cps/blob/master/tutorial/README.md)
+
+### [Explain it to me](https://github.com/disruptek/cps/tree/master/docs)
+
+## What is CPS
+
+![CPS](/docs/cps.svg)
+
+## About the project
+
+*<sub>This project provides a `cps` pragma which automatically rewrites procedures to use continuations for control-flow. You can now program in CPS without the verbosity!</sub>*
+
+The `cps` pragma handles the control-flow rewrite; you implement or
 import a dispatcher to define both the type and behavior of your continuations,
-so there is virtually no API and no limitations on composition.
+so there is virtually no limitations on composition.
 
-A substantial effort to demystify this style of programming, and what it may
-enable, lives [in the docs/ subdirectory](https://github.com/disruptek/cps/tree/master/docs).
+If you are looking for some batteries included implementations/libraries to use/reference then see our [packages/examples](#) section.
 
-We also have [a tutorial to help new users on their way to get starting with
-CPS](https://github.com/disruptek/cps/blob/master/tutorial/README.md).
+### The origin & future for CPS
 
-For a description of the origins of our approach, see the included papers and
-https://github.com/nim-lang/RFCs/issues/295, where we write in more depth about
-why the implementation exists, goals for future development, etc.
+See the [papers](https://github.com/disruptek/cps/tree/master/papers) for the basis behind the development of CPS.
 
-## What Are These Continuations Good For?
+See our [RFC](https://github.com/nim-lang/RFCs/issues/295) why we started this implementation and goals for future development.
 
-The continuations produced by this macro...
+### Benefits of Nim-CPS
 
-- compose efficient and idiomatic asynchronous code
-- are over a thousand times lighter than threads
-- are leak-free under Nim's ARC/ORC memory management
+<sup>CPS has no runtime library requirements</sup>
+
+#### The continuations produced by this macro...
+
+- compose **efficient** and **idiomatic** asynchronous code
+- are over a thousand times **lighter** than threads
+- are **leak-free** under Nim's ARC/ORC memory management
 - may be based upon your own custom `ref object` type
 - may be dispatched using your own custom dispatcher
-- may be moved between threads to parallelize execution
-- are faster and lighter than async/await futures
-- are 5-15% faster than native closure iterators
-- exploit no unsafe features of the language (`cast`, `ptr`, `addr`, `emit`)
+- may be moved between threads to **parallelize** execution
+- are **faster** and **lighter** than async/await futures
+- are 5-15% **faster** than native closure iterators
+- exploit **no unsafe features** of the language (`cast`, `ptr`, `addr`, `emit`)
 
-## This is Work In Progress!
+
+### This project is a WIP
 
 The macro itself should be considered beta quality.  Corner-cases are being
 nailed down and the API is being adjusted as demonstration applications are
 built and rough edges are identified.
 
-## Uh, So Should I Use it?
+[Here's](#debugging) some issues we've found so far.
 
-Yes. We need more people building toys and small projects and giving feedback
-on what works well and what doesn't.
+**HOWEVER** we actively encourage its use. We need more people building toys and small projects and giving feedback on what works well and what doesn't.
+
+Let us know what you think: [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
+
+The community is extensively helpful to any who reach out and bugs/fixes are implemented regularly as we receive feedback.
 
 The `Continuation` type may be changed into a generic soon. If that doesn't
 scare you, then you are as safe to use CPS in larger projects as the quality of
 your tests; the API won't break you badly.
 
-#### CPS has no runtime library requirements
+<!-- cabboose: This part bloats the main page imo; it is definitely helpful and deserves a spot in the linked tutorial page if anything, however the formatting of the current tutorial probably fits better than this at the moment. -->
+<!-- TODO reformat and fit into tutorial section -->
 
-## Cool, How Do I Use It?
+<!-- ## Cool, How Do I Use It?
 
 ### Architecture
 
@@ -221,29 +248,25 @@ echo "i counted ", later(), " trips through the goto"
 
 ### TBD
 
-We'll talk about voodoo here and walk through the coroutine demo, since it pulls together prior concepts and adds voodoo and multiple continuations.
+We'll talk about voodoo here and walk through the coroutine demo, since it pulls together prior concepts and adds voodoo and multiple continuations. -->
 
-## Dispatchers
+## Tutorial
 
-### Notes on the Example Dispatcher
+The tutorial and associated documents are located [here](https://github.com/disruptek/cps/blob/master/tutorial/README.md)
 
-An example dispatcher was included in the past, but demonstrating dispatch
-conflated the purpose of the `cps` macro and made misconceptions about the role
-of continuation-versus-dispatcher common. The reference dispatcher can now be
-found at https://github.com/disruptek/eventqueue and you can also jump directly
-to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
+## Packages/Examples
 
-### Other Available Dispatchers
+### Packages
 
-- https://github.com/alaviss/nim-sys -- next generation OS services
-- https://github.com/disruptek/passenger -- create a graph of continuation runtime
-- https://github.com/disruptek/supervisors -- simple dispatch patterns for composition
+| Author | Package | Description |
+| --: | :--: | :-- |
+| disruptek | [eventqueue](https://github.com/disruptek/eventqueue) | An example of using cps to make a dispatcher |
+| disruptek | [passenger](https://github.com/disruptek/passenger) | Create a graph of continuation runtime |
+| disruptek | [supervisors](https://github.com/disruptek/supervisors) | Simple dispatch patterns for composition |
+| alaviss | [nim-sys](https://github.com/alaviss/nim-sys) | Reiterations of the std lib sys interface; the next generation of OS services |
 
-## Documentation
 
-See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
-
-## Examples
+### Examples
 
 A small collection of examples provides good demonstration of multiple patterns
 of CPS composition. Each example runs independently, with no other requirements,
@@ -262,6 +285,10 @@ yet demonstrates different exploits of `cps`.
 |[LuaCoroutines](https://github.com/disruptek/cps/blob/master/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
 |[ThreadPool](https://github.com/disruptek/cps/blob/master/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
 |[WebServer](https://github.com/zevv/cpstest)|Zevv's "Real World Test" WebServer And More|
+
+## Documentation
+
+See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
 
 ## Debugging
 
