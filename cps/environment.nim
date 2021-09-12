@@ -470,7 +470,8 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.body.add:
     newAssignment resultName:
       Stack.hook initFrame(Stack, $goto, goto.lineInfoObj).NormNode:
-        Boot.hook resultName
+        newCall env.identity:
+          Boot.hook newCall(env.root, resultName)
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
