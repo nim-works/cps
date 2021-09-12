@@ -78,7 +78,7 @@ suite "hooks":
         alloc 0: cps environment Cont 👍
         head 1: trace nil 👍
         stack 2: foo foo 👍
-        boot 3: C nil 👍
+        boot 3: c nil 👍
         trace 4: foo continuation 👍
         coop 5: Cont nil genasts.nim
         trace 6: While Loop continuation 👍

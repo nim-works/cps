@@ -483,7 +483,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.addPragma "used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot, Stack}
 
-  let c = genSymVar("C", info = n)
+  let c = genSymVar("c", info = n)
   result.body.add:
     # declare `var c: Cont`
     newVarSection(c, env.root)
