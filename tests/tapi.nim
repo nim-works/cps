@@ -115,3 +115,36 @@ suite "cps api":
       step 2
 
     foo()
+
+  block:
+    ## one can whelp a cps'd proc that was borrowed
+    type
+      D = distinct int
+
+    proc bar(x: int) {.cps: Continuation.} =
+      discard
+
+    proc bar(d: D) {.borrow.}
+
+    discard whelp bar(42.D)
+
+  block:
+    ## one can call a cps'd proc that was borrowed... from inside cps
+    type
+      D = distinct int
+
+    var k = newKiller 3
+
+    proc bar(x: int; y = 0.0) {.cps: Continuation.} =
+      check y == 3.5
+      check x == 42
+      step 2
+
+    proc bar(d: D; y = 0.0) {.borrow.}
+
+    proc foo() {.cps: Continuation.} =
+      step 1
+      bar(y = 3.5, d = 42.D)
+      step 3
+
+    foo()

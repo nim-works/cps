@@ -315,8 +315,15 @@ proc bootstrapSymbol*(n: NimNode): NormNode =
   ## find the return type of the bootstrap
   let n = NormNode n
   case n.kind
-  of {nnkProcDef} + nnkCallKinds:
-    pragmaArgument(n, "cpsBootstrap")
+  of nnkCallKinds:
+    bootstrapSymbol n[0]
+  of nnkSym:
+    bootstrapSymbol n.getImpl
+  of nnkProcDef:
+    if n.hasPragma "borrow":
+      bootstrapSymbol n.last
+    else:
+      pragmaArgument(n, "cpsBootstrap")
   else:
     ## XXX: darn ambiguous calls
     normalizedast.newCall("typeOf", n)
