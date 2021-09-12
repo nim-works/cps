@@ -285,8 +285,6 @@ development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label
 - Nim's `for` loops work, but you cannot perform any CPS control-flow inside of
   them; if in doubt, use a `while` loop instead.
 
-- One cannot `.borrow.` a CPS procedure and get CPS semantics.
-
 - Generic continuations such as the following won't work without changes to
 the compiler.
 
