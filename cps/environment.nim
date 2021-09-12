@@ -454,8 +454,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
-  let resultName = asName("result")
-    ## the result identifier for the new whelp's proc body
+  let resultName = "result".asName
 
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
