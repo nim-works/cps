@@ -179,35 +179,34 @@ suite "cps api":
     foo()
     check r == 3
 
-  # Not using block here since using can only be used on the top-level
-  using c: Cont
-
   block:
     ## magic/voodoo can be defined with `using`
-    var k = newKiller 4
+    skip "`using` can only be used on top-level, and if it is, balls fails the test in debug mode":
+      using c: Cont
+      var k = newKiller 4
 
-    proc magic(c): Cont {.cpsMagic.} =
-      step 2
-      check not c.dismissed, "continuation was dismissed"
-      check not c.finished, "continuation was finished"
-      result = c
+      proc magic(c): Cont {.cpsMagic.} =
+        step 2
+        check not c.dismissed, "continuation was dismissed"
+        check not c.finished, "continuation was finished"
+        result = c
 
-    proc voodoo(c): int {.cpsVoodoo.} =
-      step 3
-      check not c.dismissed, "continuation was dismissed"
-      check not c.finished, "continuation was finished"
-      result = 2
+      proc voodoo(c): int {.cpsVoodoo.} =
+        step 3
+        check not c.dismissed, "continuation was dismissed"
+        check not c.finished, "continuation was finished"
+        result = 2
 
-    proc foo(): int {.cps: Cont.} =
-      noop()
-      step 1
-      check k.step == 1, "right"
-      magic()
-      check k.step == 2, "magic failed to run"
-      noop()
-      check voodoo() == 2, "voodoo failed to yield 2"
-      noop()
-      step 4
-      return 3
+      proc foo(): int {.cps: Cont.} =
+        noop()
+        step 1
+        check k.step == 1, "right"
+        magic()
+        check k.step == 2, "magic failed to run"
+        noop()
+        check voodoo() == 2, "voodoo failed to yield 2"
+        noop()
+        step 4
+        return 3
 
-    check foo() == 3
+      check foo() == 3
