@@ -532,7 +532,7 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
     if n.isVoodooCall:
       let it = asCall n.copyNimTree
       # https://github.com/nim-lang/Nim/issues/18365
-      it.prependArg newCall(env.inherits, env.first)
+      it.prependArg newCall(env.root, env.first)
       desym it
       result = it
   result = filter(n, voodoo)
