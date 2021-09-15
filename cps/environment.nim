@@ -454,8 +454,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
-  let resultName = asName("result")
-    ## the result identifier for the new whelp's proc body
+  let resultName = "result".asName
 
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
@@ -471,7 +470,8 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.body.add:
     newAssignment resultName:
       Stack.hook initFrame(Stack, $goto, goto.lineInfoObj).NormNode:
-        Boot.hook resultName
+        newCall env.identity:
+          Boot.hook newCall(env.root, resultName)
 
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
@@ -483,7 +483,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.addPragma "used"  # avoid gratuitous warnings
   result.introduce {Alloc, Boot, Stack}
 
-  let c = genSymVar("C", info = n)
+  let c = genSymVar("c", info = n)
   result.body.add:
     # declare `var c: Cont`
     newVarSection(c, env.root)
@@ -532,8 +532,7 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
     if n.isVoodooCall:
       let it = asCall n.copyNimTree
       # https://github.com/nim-lang/Nim/issues/18365
-      let contType = pragmaArgument(it.impl, "cpsUserType")
-      it.prependArg newCall(contType, env.first)
+      it.prependArg newCall(env.root, env.first)
       desym it
       result = it
   result = filter(n, voodoo)

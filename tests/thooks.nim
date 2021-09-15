@@ -78,15 +78,15 @@ suite "hooks":
         alloc 0: cps environment Cont 👍
         head 1: trace nil 👍
         stack 2: foo foo 👍
-        boot 3: C nil 👍
+        boot 3: c nil 👍
         trace 4: foo continuation 👍
         coop 5: Cont nil genasts.nim
         trace 6: While Loop continuation 👍
         trace 7: Post Call continuation 👍
         tail 8: Cont continuation 👍
         alloc 9: cps environment Cont 👍
-        stack 10: bar bar normalizedast.nim
-        boot 11: result nil normalizedast.nim
+        stack 10: bar bar 👍
+        boot 11: Cont nil 👍
         pass 12: cps environment Cont(continuation) 👍
         trace 13: bar continuation 👍
         trace 14: Post Call continuation 👍
@@ -99,8 +99,8 @@ suite "hooks":
         trace 21: Post Call continuation 👍
         tail 22: Cont continuation 👍
         alloc 23: cps environment Cont 👍
-        stack 24: bar bar normalizedast.nim
-        boot 25: result nil normalizedast.nim
+        stack 24: bar bar 👍
+        boot 25: Cont nil 👍
         pass 26: cps environment Cont(continuation) 👍
         trace 27: bar continuation 👍
         trace 28: Post Call continuation 👍
@@ -200,19 +200,22 @@ suite "hooks":
 
   block:
     ## custom continuation bootstrap hook works
-    var k = newKiller 1
+    shouldRun 2:
 
-    proc bar() {.cps: Cont.} =
-      noop()
+      proc bar() {.cps: Cont.} =
+        noop()
 
-    proc boot(c: Cont): Cont =
-      step 1
-      result = c
+      proc boot(c: Cont): Cont =
+        ran()
+        result = c
 
-    proc foo() {.cps: Cont.} =
-      bar()
+      proc foo() {.cps: Cont.} =
+        bar()
 
-    foo()
+      foo()
+
+      var c = whelp foo()
+      c = cps.trampoline c
 
   block:
     ## custom continuation head/tail setup hooks work

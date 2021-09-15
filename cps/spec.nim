@@ -19,7 +19,6 @@ template cpsMagicCall*() {.pragma.}     ## a cps call
 template cpsVoodooCall*() {.pragma.}    ## a voodoo call
 template cpsMustJump*() {.pragma.}      ## cps calls and magic calls jump
 template cpsPending*() {.pragma.}       ## this is the last continuation
-template cpsUserType*(tipe: typed) {.pragma.} ## to recover Cont from a magic
 template cpsBreak*(label: typed = nil) {.pragma.} ##
 ## this is a break statement in a cps block
 template cpsContinue*() {.pragma.}      ##
@@ -360,10 +359,6 @@ proc makeErrorShim*(n: NimNode): NimNode =
   # value.  While this version will throw an exception at runtime, it
   # may be used inside CPS as magic(); for better programmer ergonomics.
   var shim = copyNimTree n
-  # stash the type of the first argument into a pragma so we can use it
-  # when converting the continuation to the proper magic call inside cps
-  shim.addPragma:
-    bindSym"cpsUserType".colon shim.params[1][1]
   del(shim.params, 1)               # delete the 1st Continuation argument
   let msg = newLit($n.name & "() is only valid in {.cps.} context")
   shim.body =                       # raise a defect when invoked directly
