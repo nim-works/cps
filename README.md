@@ -348,7 +348,7 @@ rewrite phase. Interesting places to start include the following:
 - `cpsTryFinally`
 - etc.
 
-Note that only one `--define:cpsDebug=...` can be enabled at a time (multiple defines will use only the final one) - for a final transformation use `cpsTransform`
+Note that only one `--define:cpsDebug=...` can be enabled at a time - multiple defines will use only the final one.
 
 ### Using `trace`
 
