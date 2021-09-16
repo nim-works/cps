@@ -348,6 +348,8 @@ rewrite phase. Interesting places to start include the following:
 - `cpsTryFinally`
 - etc.
 
+Note that only one `--define:cpsDebug=...` can be enabled at a time - multiple defines will use only the final one.
+
 ### Using `trace`
 
 Implement `trace` and it will be called at each continuation leg; [see the documentation for details](https://disruptek.github.io/cps/cps.html#trace.m%2Cstatic%5BHook%5D%2Ctyped%2Ctyped%2Cstring%2CLineInfo%2Ctyped).
