@@ -6,26 +6,43 @@ on:
   push:
     branches:
       - master
-    paths:
-      - '**.cfg'
-      - '**.nims'
-      - '**.nim'
-      - '**.nimble'
-      - 'tests/**'
-      - '.github/workflows/ci.yml'
   pull_request:
     branches:
       - '*'
-    paths:
-      - '**.cfg'
-      - '**.nims'
-      - '**.nim'
-      - '**.nimble'
-      - 'tests/**'
-      - '.github/workflows/ci.yml'
+
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+    steps:
+      # For PRs the path filter check with Github API, so no need to checkout
+      # for them.
+      - if: github.event_name != 'pull_request'
+        name: Checkout (if not PR)
+        uses: actions/checkout@v2
+
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            src:
+              - '**.cfg'
+              - '**.nims'
+              - '**.nim'
+              - '**.nimble'
+              - 'tests/**'
+              - '.github/workflows/ci.yml'
+
   build:
+    # Build if the files we care about are changed.
+    needs: changes
+    # Make sure to always run regardless of whether the filter success or not.
+    # When the filter fails there won't be an output, so checking for `false`
+    # state is better than checking for `true`.
+    if: needs.changes.outputs.src != 'false'
+
     strategy:
       fail-fast: false
       matrix:
@@ -84,3 +101,12 @@ jobs:
           build_dir: cps/docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Set check-required on this
+  success:
+    needs: build
+    runs-on: ubuntu-latest
+    name: 'All check passes'
+    steps:
+      - run: |
+          echo "This is a workaround for Github's broken software"
