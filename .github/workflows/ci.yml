@@ -96,7 +96,7 @@ jobs:
         if: >
           github.event_name == 'push' && github.ref == 'refs/heads/master' &&
           matrix.os == 'macos-latest' && matrix.nim == 'devel'
-        uses: crazy-max/ghaction-github-pages@v1
+        uses: crazy-max/ghaction-github-pages@v2.5.0
         with:
           build_dir: cps/docs
         env:
