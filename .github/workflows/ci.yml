@@ -13,6 +13,9 @@ on:
 
 jobs:
   changes:
+    # Disable the filter on scheduled runs because we don't want to skip those
+    if: github.event_name != 'schedule' 
+    continue-on-error: true # Makes sure errors won't stop us
     runs-on: ubuntu-latest
     outputs:
       src: ${{ steps.filter.outputs.src }}
