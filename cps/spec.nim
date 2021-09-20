@@ -449,7 +449,7 @@ proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
   for line in c.renderTraceDeque.items:
     stdmsg().writeLine line
 
-proc trampoline*[T: Continuation](c: T): T =
+proc trampoline*[T: Continuation](c: sink T): T =
   ## This is the basic trampoline: it will run the continuation
   ## until the continuation is no longer in the `Running` state.
   var c: Continuation = c
