@@ -13,6 +13,9 @@ on:
 
 jobs:
   changes:
+    # Disable the filter on scheduled runs because we don't want to skip those
+    if: github.event_name != 'schedule' 
+    continue-on-error: true # Makes sure errors won't stop us
     runs-on: ubuntu-latest
     outputs:
       src: ${{ steps.filter.outputs.src }}
@@ -41,7 +44,10 @@ jobs:
     # Make sure to always run regardless of whether the filter success or not.
     # When the filter fails there won't be an output, so checking for `false`
     # state is better than checking for `true`.
-    if: needs.changes.outputs.src != 'false'
+    #
+    # The always() function here is required for the job to always run despite
+    # what Github docs said, see: https://github.com/actions/runner/issues/491
+    if: always() && needs.changes.outputs.src != 'false'
 
     strategy:
       fail-fast: false
