@@ -21,7 +21,7 @@ when not defined(nimPanics):
   {.warning: "cps supports --panics:on only; " &
              " see https://github.com/disruptek/cps/issues/110".}
 
-proc state*(c: Continuation): State =
+proc state*(c: Continuation): State {.inline.} =
   ## Get the current state of a continuation
   if c == nil:
     State.Dismissed
