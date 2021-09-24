@@ -36,7 +36,7 @@ The continuations produced by this macro...
 - may be dispatched using your own custom dispatcher
 - may be moved between threads to parallelize execution
 - are faster and lighter than async/await futures
-- are _now_ *3.5x slower* than native closure iterators
+- are _now_ *2.5x slower* than native closure iterators
 - exploit no unsafe features of the language (`cast`, `ptr`, `addr`, `emit`)
 
 ## This is Work In Progress!
