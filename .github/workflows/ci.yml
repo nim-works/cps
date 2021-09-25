@@ -14,7 +14,7 @@ on:
 jobs:
   changes:
     # Disable the filter on scheduled runs because we don't want to skip those
-    if: github.event_name != 'schedule' 
+    if: github.event_name != 'schedule'
     continue-on-error: true # Makes sure errors won't stop us
     runs-on: ubuntu-latest
     outputs:
@@ -53,7 +53,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['macos-latest'] #, 'ubuntu-latest']
-        nim: ['devel']
+        nim: ['devel', 'version-1-6']
     name: '${{ matrix.os }} (${{ matrix.nim }})'
     runs-on: ${{ matrix.os }}
     steps:
