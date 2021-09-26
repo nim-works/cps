@@ -471,7 +471,7 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
   result = quote:
     var c: Continuation = `supplied`
     while c.running:
-      var it {.inject.}: `T` = c
+      var it {.used, inject.}: `T` = c
       `body`
       try:
         c = c.fn(c)
