@@ -75,12 +75,16 @@ proc pump() {.stream.} =
   while sIn.running:
     discard sIn.resume()
 
-var s = Continuation:
-  toStream(1..10) ->
-  map(x => x * 3) ->
-  filter(x => (x mod 2) == 0) ->
-  print() ->
-  pump()
 
-while s.running:
-  s = s.fn(s)
+when isMainModule:
+  # create a lazy stream
+  var s = Continuation:
+    toStream(1..10) ->
+    map(x => x * 3) ->
+    filter(x => (x mod 2) == 0) ->
+    print() ->
+    pump()
+
+  # lazily "run" it
+  while s.running:
+    s = s.fn(s)
