@@ -78,13 +78,16 @@ proc pump() {.stream.} =
 
 when isMainModule:
   # create a lazy stream
-  var s = Continuation:
+  var s =
     toStream(1..10) ->
     map(x => x * 3) ->
     filter(x => (x mod 2) == 0) ->
     print() ->
     pump()
 
+  # working around a nim codegen bug with refc/m&s 🙄
+  var c = Continuation s
+
   # lazily "run" it
-  while s.running:
-    s = s.fn(s)
+  while c.running:
+    c = c.fn(c)
