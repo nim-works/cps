@@ -955,7 +955,7 @@ func pragma*(n: PragmaHaver): PragmaLike =
   when n is RoutineDef | ProcDef:
     PragmaStmt n.NimNode.pragma
   elif n is Call:
-    if n.canGetImpl:
+    if n.hasImpl:
       n.impl.pragma
     else:
       PragmaStmt newEmptyNormNode()
@@ -1030,12 +1030,15 @@ func canGetImpl*(n: Call): bool =
   n.name.isSymbol
 
 func hasImpl*(n: Call): bool =
-  ## the callee's name is a symbol and an impl is present
-  n.name.isSymbol and n.name.NimNode.getImpl.kind != nnkNilLit
+  ## the callee's name is a symbol and a routine impl is present
+  n.name.isSymbol and n.name.NimNode.getImpl.kind in RoutineNodes
 
 func impl*(n: Call): RoutineDef =
   ## return the `RoutineDef` associated to this `Call` `n`
-  RoutineDef n.name.NimNode.getImpl
+  if n.hasImpl:
+    result = RoutineDef n.name.NimNode.getImpl
+  else:
+    error("call does not have an implementation", n.name.NimNode)
 
 proc resymCall*(n: Call; sym, field: NormNode): Call =
   ## this is used to rewrite continuation calls into their results

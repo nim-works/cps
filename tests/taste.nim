@@ -466,3 +466,34 @@ suite "tasteful tests":
 
     foo()
     check r == 1
+
+  block:
+    ## calling a non-local function pointer
+    r = 0
+    proc bar() =
+      inc r
+
+    let fn = bar
+    proc foo() {.cps: Cont.} =
+      noop()
+      inc r
+      fn()
+
+    foo()
+    check r == 2
+
+  block:
+    ## calling a local proc variable
+    skip "pending #185":
+      r = 0
+      proc bar() =
+        inc r
+
+      proc foo() {.cps: Cont.} =
+        let fn = bar
+        noop()
+        inc r
+        fn()
+
+      foo()
+      check r == 2
