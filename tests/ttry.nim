@@ -414,3 +414,22 @@ suite "try statements":
       step 6
 
     trampoline whelp(foobar())
+
+  block:
+    ## try statement with a single statement which is a cps assignment
+    var k = newKiller(2)
+    proc bar(): int {.cps: Cont.} =
+      step 1
+      42
+
+    proc foo() {.cps: Cont.} =
+      var x = 0
+      try:
+        x = bar()
+      except:
+        fail "This branch should not be executed"
+
+      step 2
+      check x == 42
+
+    trampoline whelp(foo())

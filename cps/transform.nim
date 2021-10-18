@@ -674,42 +674,45 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
       else:
         newStmtList()
 
+    # if our direct parent is a try statement
+    if n.kind == nnkTryStmt:
+      # if this is the first node
+      if i == 0:
+        # and its a cps block
+        if nc.isCpsBlock:
+          # wrap it in a statement list then process it.
+          #
+          # we have to do this due to the structure of a try statement:
+          #
+          # TryStmt
+          #   <block being tried>
+          #   ExceptBranch
+          #   Finally
+          #
+          # if "block" happens to be a single statement, of which a nnkStmtList
+          # will not be emitted by the compiler, then our splitting logic will
+          # assume that the neighboring ExceptBranch/Finally is a part of the
+          # same execution context, which is incorrect.
+          result.add:
+            env.annotate newStmtList(nc)
+
+          continue
+
     # if it's a cps call,
     if nc.isCpsCall:
-      # if its direct parent is not a try statement
-      if n.kind != nnkTryStmt:
-        var jumpCall: NimNode
-        let nc = asCall(nc)
-        if nc.len > 0 and nc.impl.hasPragma"cpsBootstrap":
-          jumpCall = env.newAnnotation(nc, "cpsContinuationJump")
-          let (child, _) = setupChildContinuation(env, nc)
-          jumpCall.add env.annotate(nc)
-          jumpCall.add env.annotate(child)
-        else:
-          jumpCall = env.newAnnotation(nc, "cpsJump")
-          jumpCall.add env.annotate(nc)
-        jumpCall.add env.annotate(anyTail())
-        result.add jumpCall
-        endAndReturn()
+      var jumpCall: NimNode
+      let nc = asCall(nc)
+      if nc.len > 0 and nc.impl.hasPragma"cpsBootstrap":
+        jumpCall = env.newAnnotation(nc, "cpsContinuationJump")
+        let (child, _) = setupChildContinuation(env, nc)
+        jumpCall.add env.annotate(nc)
+        jumpCall.add env.annotate(child)
       else:
-        # otherwise we wrap the child in a statement list and
-        # run annotate on it.
-        #
-        # we have to do this due to the structure of a try statement:
-        #
-        # TryStmt
-        #   <call being tried>
-        #   ExceptBranch
-        #   Finally
-        #
-        # since the call and the except/finally branches are different
-        # execution branches, we wrap it in a statement list so we know
-        # that it is a separated execution branch.
-        result.add:
-          env.annotate newStmtList(nc)
-
-        # we are done with this child
-        continue
+        jumpCall = env.newAnnotation(nc, "cpsJump")
+        jumpCall.add env.annotate(nc)
+      jumpCall.add env.annotate(anyTail())
+      result.add jumpCall
+      endAndReturn()
 
     # we deal with the body of a try when processing the try itself,
     # so check to see if our parent is a try statement, and if not...
