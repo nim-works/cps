@@ -47,7 +47,7 @@ jobs:
     #
     # The always() function here is required for the job to always run despite
     # what Github docs said, see: https://github.com/actions/runner/issues/491
-    if: always() && needs.changes.outputs.src != 'false'
+    if: always() && !cancelled() && needs.changes.outputs.src != 'false'
 
     strategy:
       fail-fast: false
@@ -111,8 +111,12 @@ jobs:
   # Set check-required on this
   success:
     needs: build
+    if: always()
     runs-on: ubuntu-latest
     name: 'All check passes'
     steps:
-      - run: |
-          echo "This is a workaround for Github's broken software"
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        name: 'Fail when previous jobs fails'
+        run: |
+          echo "::error::One of the previous jobs failed"
+          exit 1
