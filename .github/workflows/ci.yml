@@ -47,7 +47,7 @@ jobs:
     #
     # The always() function here is required for the job to always run despite
     # what Github docs said, see: https://github.com/actions/runner/issues/491
-    if: always() && needs.changes.outputs.src != 'false'
+    if: always() && !cancelled() && needs.changes.outputs.src != 'false'
 
     strategy:
       fail-fast: false
