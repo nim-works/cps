@@ -111,8 +111,12 @@ jobs:
   # Set check-required on this
   success:
     needs: build
+    if: success() || failure()
     runs-on: ubuntu-latest
     name: 'All check passes'
     steps:
-      - run: |
-          echo "This is a workaround for Github's broken software"
+      - if: contains(needs.*.result, 'failure')
+        name: 'Fail when previous jobs fails'
+        run: |
+          echo "::error"
+          exit 1
