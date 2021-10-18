@@ -111,11 +111,11 @@ jobs:
   # Set check-required on this
   success:
     needs: build
-    if: success() || failure()
+    if: always()
     runs-on: ubuntu-latest
     name: 'All check passes'
     steps:
-      - if: contains(needs.*.result, 'failure')
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         name: 'Fail when previous jobs fails'
         run: |
           echo "::error"
