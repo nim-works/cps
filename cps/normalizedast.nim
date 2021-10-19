@@ -176,6 +176,7 @@ const TypeExprKinds = {
     nnkTupleConstr,     # still have tuples in a few areas
     nnkBracketExpr,     # seqs and the like
     nnkProcTy,          # proc type
+    nnkTupleTy,         # full-fledged tuple declaration
     # nnkEmpty          # excluded as it's only allowed in some cases
   }
   ## list of type NimNodeKind

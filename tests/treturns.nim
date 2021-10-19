@@ -161,3 +161,14 @@ suite "returns and results":
       return bar()
 
     check foo() == "test"
+
+  block:
+    ## returning a tuple declaration works
+    var k = newKiller(1)
+    proc foo(): tuple[x, y: int] {.cps: Cont.} =
+      noop()
+      step 1
+      result.x = 10
+      result.y = 20
+
+    check foo() == (10, 20)
