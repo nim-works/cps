@@ -332,10 +332,11 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
       rhs = defs.typ
       tups = nnkTupleConstr.newTree
     for index, name in defs.indexNamePairs:
+      let name = asSym(name)
       # we need to insert the variable and then write a new
       # accessor that plucks the field from the env
       let (field, _) = e.addIdentDef n.kind:
-        newIdentDef(name, rhs[index], newEmptyNode())
+        newIdentDef(name, name.typeInst, newEmptyNode())
       tups.add newDotExpr(child, field)
     maybeAdd newAssignment(tups, defs.val)
   else:

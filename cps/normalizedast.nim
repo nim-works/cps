@@ -258,7 +258,7 @@ defineToNimNodeConverter(
 allowAutoDowngradeNormalizedNode(
     Name, TypeExpr, Call, PragmaStmt, PragmaAtom, IdentDef, RoutineDef,
     ProcDef, FormalParams, RoutineParam, VarSection, LetSection, VarLet,
-    VarLetIdentDef, VarLetTuple, DefVarLet, IdentDefLet
+    VarLetIdentDef, VarLetTuple, DefVarLet, IdentDefLet, Sym
   )
 
 # types that go from a specific type to a less specific type, "downgrade"
@@ -534,6 +534,15 @@ func eqIdent*(a: NormNode, b: Name): bool {.borrow.}
 proc asName*(n: TypeExpr): Name =
   ## coerce to a `Name`, or error
   n.Name
+
+# fn-Sym
+
+createAsTypeFunc(Sym, {nnkSym}, "not a sym")
+allowAutoDowngrade(Sym, Name)
+
+func typeInst*(n: Sym): TypeExpr =
+  ## gets the type via `getTypeInst`
+  getTypeInst n
 
 # fn-ExprLike
 type

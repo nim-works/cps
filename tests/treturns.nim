@@ -163,12 +163,36 @@ suite "returns and results":
     check foo() == "test"
 
   block:
-    ## returning a tuple declaration works
-    var k = newKiller(1)
-    proc foo(): tuple[x, y: int] {.cps: Cont.} =
+    ## returning an anonymous tuple declaration type
+    var k = newKiller(2)
+    proc bar(): tuple[x, y: int] {.cps: Cont.} =
       noop()
       step 1
       result.x = 10
       result.y = 20
 
-    check foo() == (10, 20)
+    proc foo() {.cps: Cont.} =
+      let (x, y) = bar()
+      step 2
+      check (x, y) == (10, 20)
+
+    foo()
+
+  block:
+    ## returning a named tuple type
+    var k = newKiller(2)
+
+    type T = tuple[x, y: int]
+
+    proc bar(): T {.cps: Cont.} =
+      noop()
+      step 1
+      result.x = 10
+      result.y = 20
+
+    proc foo() {.cps: Cont.} =
+      let (x, y) = bar()
+      step 2
+      check (x, y) == (10, 20)
+
+    foo()
