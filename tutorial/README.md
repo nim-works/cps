@@ -22,7 +22,7 @@ a bit on the background: https://github.com/zevv/cpsdoc
 ## Baby steps: my first cps program
 
 The complete code for this chapter can be found at
-https://github.com/disruptek/cps/blob/master/cpstut/cpstut1.nim
+https://github.com/disruptek/cps/blob/master/tutorial/cpstut1.nim
 
 CPS is available as a regular nim library that you must import before CPS is
 available in your program. The module offers a number of macros and templates,
@@ -169,7 +169,7 @@ Because trampolining is a very common operation, CPS offers a template called
 ## A more elaborate example: cooperative scheduling
 
 The complete code for this chapter can be found at
-https://github.com/disruptek/cps/blob/master/cpstut/cpstut2.nim
+https://github.com/disruptek/cps/blob/master/tutorial/cpstut2.nim
 
 The above function was pretty simple and minimal, as it was transformed to
 only one single leg; it served the purpose of showing how to instantiate and
@@ -349,7 +349,7 @@ handful of bytes per coroutine, and do not require OS context switching.
 ## Growing your own continuations
 
 The complete code for this chapter can be found at
-https://github.com/disruptek/cps/blob/master/cpstut/cpstut3.nim
+https://github.com/disruptek/cps/blob/master/tutorial/cpstut3.nim
 
 The example from the chapter above works just fine, but has one ugly drawback:
 the work queue is a global variable that is accessed from the `cpsMagic` proc. A
@@ -416,7 +416,7 @@ mywork.work()
 ## Going deeper: calling CPS from CPS
 
 The complete code for this chapter can be found at
-https://github.com/disruptek/cps/blob/master/cpstut/cpstut4.nim
+https://github.com/disruptek/cps/blob/master/tutorial/cpstut4.nim
 
 In the above examples we have seen how to write and run your own CPS functions
 using `whelp` and a trampoline. By moving the continuation objects around you
