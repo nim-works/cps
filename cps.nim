@@ -85,6 +85,7 @@ proc doWhelp(n: NormNode; args: seq[NormNode]): Call =
   result = sym.newCall args
 
 template whelpIt*(input: typed; body: untyped): untyped =
+  ## Instantiate the given continuation call and inject `it` in the body.
   var n = normalizeCall input
   if n.kind in nnkCallKinds:
     var it {.inject.} = doWhelp(n[0], n[1..^1])
@@ -93,14 +94,25 @@ template whelpIt*(input: typed; body: untyped): untyped =
   else:
     n.errorAst "the input to whelpIt must be a .cps. call"
 
+template wrapWhelpIt(call: typed; logic: untyped): untyped =
+  ## discover the bootstrap symbol `sym` and parent environment type `base`
+  ## and inject them into the `logic`, which is passed as the `body` argument
+  ## of a whelpIt `call` ...  get it?
+  let sym {.inject.} = bootstrapSymbol call
+  if sym.kind != nnkSym:
+    # assume it's an error of some sort and pass it through
+    NimNode sym
+  else:
+    let base {.inject.} =
+      enbasen:  # find the parent type of the environment
+        (getImpl sym).pragmaArgument"cpsEnvironment"
+    whelpIt call:
+      logic
+
 macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
   ## running it; instead, return the continuation as a value.
-  let
-    sym = bootstrapSymbol call
-    base = enbasen:  # find the parent type of the environment
-      (getImpl sym).pragmaArgument"cpsEnvironment"
-  result = whelpIt call:
+  wrapWhelpIt call:
     it =
       sym.ensimilate:
         Head.hook:
@@ -109,11 +121,7 @@ macro whelp*(call: typed): untyped =
 macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
   ## supplied parent for the purposes of exception handling and similar.
-  let sym = bootstrapSymbol call
-  let base =
-    enbasen:  # find the parent type of the environment
-      (getImpl sym).pragmaArgument"cpsEnvironment"
-  result = whelpIt call:
+  wrapWhelpIt call:
     it =
       sym.ensimilate:
         Tail.hook(parent.NormNode, newCall(base, it))
