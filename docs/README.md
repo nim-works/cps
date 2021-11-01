@@ -1,4 +1,3 @@
-
 # CPS - also known as Continuation-Passing Style - for Nim.
 
 People watching the Nim community have likely heard the term "CPS" over the last
@@ -426,18 +425,18 @@ implementation of CPS could bring to Nim, and what this would look like. First
 inspiration for in implementation was suggested by @Araq, who pointed to a
 paper describing a rudimentary CPS implementation for the C language.
 
-https://github.com/disruptek/cps/blob/master/papers/1011.4558.pdf
+https://github.com/nim-works/cps/blob/master/papers/1011.4558.pdf
 
 Using the algorithms in this paper as inspiration, a first implementation of
 Nim-CPS was built using Nim's powerful metaprogramming. This allowed CPS to be
 available as a library only, without needing support from the compiler or the
 language.
 
-[Nim-CPS repository on GitHub](https://www.github.com/disruptek/cps)
+[Nim-CPS repository on GitHub](https://www.github.com/nim-works/cps)
 
 ## What Nim-CPS can do for you, today
 
-[The repository links to a series of examples @Zevv prepared to showcase CPS](https://github.com/disruptek/cps#examples)
+[The repository links to a series of examples @Zevv prepared to showcase CPS](https://github.com/nim-works/cps#examples)
 
 [The repository also includes a walkthrough that shows the implementation of `GOTO`
 from scratch using CPS.](https://github.com/disruptek/cps#application)

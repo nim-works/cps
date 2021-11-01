@@ -1,9 +1,9 @@
 # Continuation-Passing Style
 
-[![Test Matrix](https://github.com/disruptek/cps/workflows/CI/badge.svg)](https://github.com/disruptek/cps/actions?query=workflow%3ACI)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/cps?style=flat)](https://github.com/disruptek/cps/releases/latest)
+[![Test Matrix](https://github.com/nim-works/cps/workflows/CI/badge.svg)](https://github.com/nim-works/cps/actions?query=workflow%3ACI)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/nim-works/cps?style=flat)](https://github.com/nim-works/cps/releases/latest)
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.5.1%2B-informational?style=flat&logo=nim)
-[![License](https://img.shields.io/github/license/disruptek/cps?style=flat)](#license)
+[![License](https://img.shields.io/github/license/nim-works/cps?style=flat)](#license)
 [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
 [![IRC](https://img.shields.io/badge/chat-%23cps%20on%20libera.chat-brightgreen?style=flat)](https://web.libera.chat/#cps)
 
@@ -16,10 +16,10 @@ import a dispatcher to define both the type and behavior of your continuations,
 so there is virtually no API and no limitations on composition.
 
 A substantial effort to demystify this style of programming, and what it may
-enable, lives [in the docs/ subdirectory](https://github.com/disruptek/cps/tree/master/docs).
+enable, lives [in the docs/ subdirectory](https://github.com/nim-works/cps/tree/master/docs).
 
 We also have [a tutorial to help new users on their way to get starting with
-CPS](https://github.com/disruptek/cps/blob/master/tutorial/README.md).
+CPS](https://github.com/nim-works/cps/blob/master/tutorial/README.md).
 
 For a description of the origins of our approach, see the included papers and
 https://github.com/nim-lang/RFCs/issues/295, where we write in more depth about
@@ -230,8 +230,7 @@ We'll talk about voodoo here and walk through the coroutine demo, since it pulls
 An example dispatcher was included in the past, but demonstrating dispatch
 conflated the purpose of the `cps` macro and made misconceptions about the role
 of continuation-versus-dispatcher common. The reference dispatcher can now be
-found at https://github.com/disruptek/eventqueue and you can also jump directly
-to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
+found at https://github.com/disruptek/eventqueue.
 
 ### Other Available Dispatchers
 
@@ -241,7 +240,7 @@ to [the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
 
 ## Documentation
 
-See [the documentation for the cps module](https://disruptek.github.io/cps/cps.html) as generated directly from the source.
+See [the documentation for the cps module](https://nim-works.github.io/cps/cps.html) as generated directly from the source.
 
 ## Examples
 
@@ -251,16 +250,16 @@ yet demonstrates different exploits of `cps`.
 
 | Example | Description |
 |     --: | :--         |
-|[Channels](https://github.com/disruptek/cps/blob/master/examples/channels.nim)|A channel connects sender and receiver continuations|
-|[Goto](https://github.com/disruptek/cps/blob/master/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
-|[Iterator](https://github.com/disruptek/cps/blob/master/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
-|[Coroutines](https://github.com/disruptek/cps/blob/master/examples/coroutines.nim)|A pair of continuations communicate as coroutines|
-|[Lazy](https://github.com/disruptek/cps/blob/master/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
-|[TryCatch](https://github.com/disruptek/cps/blob/master/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
-|[CpsCps](https://github.com/disruptek/cps/blob/master/examples/cpscps.nim)|Continuations can efficiently call other continuations|
-|[Work](https://github.com/disruptek/cps/blob/master/examples/work.nim)|Implementation of a simple continuation scheduler|
-|[LuaCoroutines](https://github.com/disruptek/cps/blob/master/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
-|[ThreadPool](https://github.com/disruptek/cps/blob/master/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
+|[Channels](https://github.com/nim-works/cps/blob/master/examples/channels.nim)|A channel connects sender and receiver continuations|
+|[Goto](https://github.com/nim-works/cps/blob/master/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
+|[Iterator](https://github.com/nim-works/cps/blob/master/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
+|[Coroutines](https://github.com/nim-works/cps/blob/master/examples/coroutines.nim)|A pair of continuations communicate as coroutines|
+|[Lazy](https://github.com/nim-works/cps/blob/master/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
+|[TryCatch](https://github.com/nim-works/cps/blob/master/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
+|[CpsCps](https://github.com/nim-works/cps/blob/master/examples/cpscps.nim)|Continuations can efficiently call other continuations|
+|[Work](https://github.com/nim-works/cps/blob/master/examples/work.nim)|Implementation of a simple continuation scheduler|
+|[LuaCoroutines](https://github.com/nim-works/cps/blob/master/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
+|[ThreadPool](https://github.com/nim-works/cps/blob/master/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
 |[WebServer](https://github.com/zevv/cpstest)|Zevv's "Real World Test" WebServer And More|
 |[Background](https://github.com/disruptek/background)|Run any function on a background thread|
 
@@ -353,7 +352,7 @@ Note that only one `--define:cpsDebug=...` can be enabled at a time - multiple d
 
 ### Using `trace`
 
-Implement `trace` and it will be called at each continuation leg; [see the documentation for details](https://disruptek.github.io/cps/cps.html#trace.m%2Cstatic%5BHook%5D%2Ctyped%2Ctyped%2Cstring%2CLineInfo%2Ctyped).
+Implement `trace` and it will be called at each continuation leg; [see the documentation for details](https://nim-works.github.io/cps/cps.html#trace.m%2Cstatic%5BHook%5D%2Ctyped%2Ctyped%2Cstring%2CLineInfo%2Ctyped).
 
 ## License
 MIT

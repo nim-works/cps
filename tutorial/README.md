@@ -1,5 +1,4 @@
 
-
 # Introduction
 
 What you are reading is a little tutorial to get started with Nim CPS. This
@@ -8,8 +7,8 @@ writing your own CPS programs.
 
 The latest greatest CPS can be found at https://github.com/nim-works/cps/
 
-If you are not familiar with the concept of CPS I recomment first reading up
-a bit on the background: https://github.com/zevv/cpsdoc
+If you are not familiar with the concept of CPS I recommend first reading up
+a bit on the background: https://github.com/nim-works/cps/blob/master/docs/README.md
 
 ## Table of contents
 
@@ -27,7 +26,7 @@ a bit on the background: https://github.com/zevv/cpsdoc
 The complete code for this chapter can be found at
 https://github.com/nim-works/cps/blob/master/tutorial/cpstut1.nim
 
-CPS is available as a regular nim library that you must import before CPS is
+CPS is available as a regular Nim library that you must import before CPS is
 available in your program. The module offers a number of macros and templates,
 for details refer to the module documentation at
 https://nim-works.github.io/cps/cps.html
@@ -140,14 +139,14 @@ This means the continuation is now done and complete:
 doAssert c.state == Finished
 ```
 
-or again, the shorthand
+or again, the shorthand:
 
 ```nim
 doAssert c.finished()
 ```
 
 In real life, your CPS functions will have more then one leg. You would
-typically want to call the `fn()` proc repeatedly until the continunation
+typically want to call the `fn()` proc repeatedly until the continuation
 is no longer running. This is a typical CPS idiom, and looks like this:
 
 ```nim
@@ -514,7 +513,7 @@ With the above changes, this is what the control flow will now look like this:
                    :                         :                              :
  --[donkey..]      :                         :         [..donkey..]         :
             |      :                         :         |          |         :
-            [saHi..] - - - - - - - - - - - - [..sayHi..]          [..sayHi..] - - - - - - - -
+            [sayHi.] - - - - - - - - - - - - [..sayHi..]          [..sayHi..] - - - - - - - -
                    :                         :                              :
                    :                         :                              :
                    :                         :                              :
