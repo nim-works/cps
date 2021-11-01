@@ -230,7 +230,8 @@ We'll talk about voodoo here and walk through the coroutine demo, since it pulls
 An example dispatcher was included in the past, but demonstrating dispatch
 conflated the purpose of the `cps` macro and made misconceptions about the role
 of continuation-versus-dispatcher common. The reference dispatcher can now be
-found at https://github.com/disruptek/eventqueue.
+found at https://github.com/disruptek/eventqueue and you can also jump directly to
+[the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
 
 ### Other Available Dispatchers
 
@@ -253,7 +254,7 @@ yet demonstrates different exploits of `cps`.
 |[Channels](https://github.com/nim-works/cps/blob/master/examples/channels.nim)|A channel connects sender and receiver continuations|
 |[Goto](https://github.com/nim-works/cps/blob/master/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
 |[Iterator](https://github.com/nim-works/cps/blob/master/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
-|[Coroutines](https://github.com/nim-works/cps/blob/master/examples/coroutines.nim)|A pair of continuations communicate as coroutines|
+|[Coroutines](https://github.com/nim-works/cps/blob/master/examples/coroutine.nim)|A pair of continuations communicate as coroutines|
 |[Lazy](https://github.com/nim-works/cps/blob/master/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
 |[TryCatch](https://github.com/nim-works/cps/blob/master/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
 |[CpsCps](https://github.com/nim-works/cps/blob/master/examples/cpscps.nim)|Continuations can efficiently call other continuations|
