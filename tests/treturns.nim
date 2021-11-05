@@ -196,3 +196,31 @@ suite "returns and results":
       check (x, y) == (10, 20)
 
     foo()
+
+  block:
+    ## converting a cps return value
+    var k = newKiller(3)
+
+    proc bar(): int {.cps: Cont.} =
+      noop()
+      42
+
+    proc foo() {.cps: Cont.} =
+      let x = Natural bar()
+      let x1 = Natural int Natural bar()
+
+      step 1
+      check x == 42
+
+      var y: Natural
+      y = Natural bar()
+      y = Natural int Natural bar()
+
+      step 2
+      check y == 42
+
+      discard Natural bar()
+      discard Natural int Natural bar()
+      step 3
+
+    foo()

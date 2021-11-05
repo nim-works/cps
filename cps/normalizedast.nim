@@ -106,6 +106,9 @@ type
     ## opaque sum: call node of some variety, see `macros.nnkCallKinds`,
     ## this is an alias as it's not really useful to distinguish the two.
 
+  Conv* = distinct NormNode
+    ## an nnkConv node
+
   Pragma* = distinct NormNode
     ## opaque sum: `PragmaStmt`, `PragmaBlock`, and `PragmaExpr`
   PragmaStmt* = distinct Pragma
@@ -256,7 +259,7 @@ defineToNimNodeConverter(
 
 # all the types that can convert down to `NormNode`
 allowAutoDowngradeNormalizedNode(
-    Name, TypeExpr, Call, PragmaStmt, PragmaAtom, IdentDef, RoutineDef,
+    Name, TypeExpr, Call, Conv, PragmaStmt, PragmaAtom, IdentDef, RoutineDef,
     ProcDef, FormalParams, RoutineParam, VarSection, LetSection, VarLet,
     VarLetIdentDef, VarLetTuple, DefVarLet, IdentDefLet, Sym
   )
@@ -345,6 +348,18 @@ proc add*(f: NimNode|NormNode, c: NormNode): NormNode {.discardable.} =
 template findChild*(n: NormNode; cond: untyped): NormNode =
   ## finds the first child node matching the condition or nil
   NormNode macros.findChild(n, cond)
+
+proc findChildRecursive*(n: NormNode, cmp: proc(n: NormNode): bool): NormNode =
+  ## finds the first child node where `cmp(node)` returns true, recursively
+  ##
+  ## returns nil if none found
+  if cmp(n):
+    result = n
+  else:
+    for child in n.items:
+      result = findChildRecursive(NormNode(child), cmp)
+      if not result.isNil:
+        return
 
 proc getImpl*(n: NormNode): NormNode {.borrow.}
   ## the implementaiton of a normalized node should be normalized itself
@@ -1058,6 +1073,18 @@ proc resymCall*(n: Call; sym, field: NormNode): Call =
 proc desym*(n: Call) =
   ## desyms the callee name
   n.name = desym n.name
+
+# fn-Conv
+
+createAsTypeFunc(Conv, {nnkConv}, "node is not a conv node")
+
+proc typ*(n: Conv): TypeExpr =
+  ## the type being converted to
+  n[0].asTypeExpr
+
+proc expr*(n: Conv): NormNode =
+  ## the expression being converted
+  n[1]
 
 # fn-FormalParams
 
