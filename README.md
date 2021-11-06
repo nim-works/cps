@@ -27,7 +27,7 @@ why the implementation exists, goals for future development, etc.
 
 ## What Are These Continuations Good For?
 
-The continuations produced by this macro...
+The continuations produced by this macro…
 
 - compose efficient and idiomatic asynchronous code
 - are over a thousand times lighter than threads
@@ -41,7 +41,7 @@ The continuations produced by this macro...
 
 ## This is Work In Progress!
 
-The macro itself should be considered beta quality.  Corner-cases are being
+The macro itself should be considered beta quality. Corner-cases are being
 nailed down and the API is being adjusted as demonstration applications are
 built and rough edges are identified.
 
@@ -169,7 +169,7 @@ assert many + 1 == count(many)  # (this might take awhile to finish)
 ```
 
 Sometimes you don't want to do a lot of counting right away, but, y'know, maybe
-a bit later, after your nap.  In that case, you can use `whelp` to instantiate
+a bit later, after your nap. In that case, you can use `whelp` to instantiate
 your continuation with arguments, without actually running it.
 
 ```nim
@@ -219,9 +219,137 @@ echo "it's later!  time to count!"
 echo "i counted ", later(), " trips through the goto"
 ```
 
-### TBD
+### Walkthrough for the `coroutine.nim` example
 
-We'll talk about voodoo here and walk through the coroutine demo, since it pulls together prior concepts and adds voodoo and multiple continuations.
+[examples/coroutine.nim](https://github.com/nim-works/cps/blob/master/examples/coroutine.nim)
+shows a basic implementation of coroutines communicating with each other on top
+of CPS.
+
+We're going to follow through the execution of this example looking into the 
+details as we go, but first let's introduce the `Coroutine` type:
+
+```nim
+type
+  Coroutine = ref object of Continuation
+    data: int
+    cResume: Coroutine
+```
+
+This is a Continuation extended with the `data` on which we're going to perform
+a computation and a Coroutine object which has a pointer to some continuation
+leg. This will allow us to resume the execution of one coroutine from the other.
+
+The execution starts with instantiating our coroutines, which is necessary for
+continuations. The order is reversed because we need to pass a specific instance
+of the consumer to the filter. `filter` also takes an anonymous function as its
+second argumet, in our case it's a simple doubling written in a short form
+provided by the `std/sugar` module.
+
+```nim
+let coro2 = whelp consumer()
+let coro1 = whelp filter(coro2, x => x * 2)
+```
+
+Both coroutines are already "running" (`coroX.running == true`) but nothing is
+executed yet. For this we need to actually launch them:
+
+```nim
+coro1.resume()
+coro2.resume()
+```
+
+The `resume` proc is our dispatcher for the coroutines and it's what actually
+calls the execution via the function pointer inside the continuation:
+
+```nim
+proc resume(c: Coroutine): Coroutine {.discardable.} =
+  var c = Continuation c
+  while c.running:
+    c = c.fn(c)
+  result = Coroutine c
+```
+
+Before invoking that function we need to convert the Coroutine to its base class
+first. Then, the filter coroutine gets launched:
+
+```nim
+proc filter(dest: Coroutine, f: proc(x: int): int) {.cps:Coroutine.} =
+  while true:
+    jield()
+    let n = f(recv())
+    dest.send(n)
+```
+
+As the first coroutine launches, it yields (suspends execution) by calling
+`jield` immediately (*yeild* is a keyword in Nim). This is necessary because we
+haven't actually sent any data to process, yet we need the Coroutines launched
+and waiting for it. We could move the suspension points later, but we don't want
+the coroutines processing the initialized-by-default value prior to the data we
+send them.
+
+```nim
+proc jield(c: Coroutine): Coroutine {.cpsMagic.} =
+  c.cResume = c
+  return nil
+```
+
+Our `jield` proc is a special function, as signified by the `{.cpsMagic.}`
+pragma. It allows controlling the execution flow of the continuation by
+returning the continuation leg to run next. Usually, it's the same as the proc's
+argument, but in our case, we store the passed continuation in the `cResume`.
+This way our coroutine could be resumed later, and since the `jield` returns `nil`
+the coroutine gets suspended.
+
+`coro2` is launched next by calling `resume` and in the same manner `consumer`
+starts running and yields immediately.
+
+Next we start feeding our coroutines the data in a loop:
+
+```nim
+for i in 1..10:
+  coro1.send(i)
+```
+
+The `send` proc just sets the data the coroutine holds to the supplied number
+and calls `resume`, which takes us back to the previous `jield`, currently in
+the `filter` continuation. There we receive the data and try to process it with
+the passed function:
+
+```nim
+let n = f(recv())
+```
+
+The `recv` proc is another special one. `{.cpsVoodoo.}` allows returning the
+contents of the concrete instance of the running continuation (which is not
+accessible directly from the coroutine code of `filter` and `consumer`):
+
+```nim
+proc recv(c: Coroutine): int {.cpsVoodoo.} =
+  c.data
+```
+
+After applying the `f` proc to the received data we pass in to the `consumer`
+coroutine.
+
+```nim
+dest.send(n)
+```
+
+Again, the *sending* is just updating the state of the continuation and resuming
+it from `dest.cResume`. *Receiving*, then done by `consumer`, is just getting that
+data from the continuation.
+
+Setting the `value` to the received integer we're finally able to print it: 
+
+```nim
+let value = recv()
+echo value
+```
+
+Since we're at the end of the code of both coroutines, their loops bring us to 
+yielding again, now in the opposite order: first the `consumer` and right next 
+the `filter` suspend execution which returns us to the main loop, ready to go
+again.
 
 ## Dispatchers
 
@@ -323,7 +451,7 @@ Force-enable the stack frame support with `--define:cpsStackFrames=on`.
 #### Trace Deque
 
 The trace deque system stores the last _N_ hooks executed by the continuation,
-where _N_ defaults to `4096` (see below).  A single continuation has multiple
+where _N_ defaults to `4096` (see below). A single continuation has multiple
 hooks executed during its lifecycle, so these traces can be very detailed.
 
 The `renderTraceDeque()` and `writeTraceDeque()` procedures return a sequence
