@@ -259,7 +259,8 @@ discard coro2.resume()
 ```
 
 The `resume` proc is our dispatcher for the coroutines and it's what actually
-runs the continuation via the call to a function pointer held by continuation:
+runs the continuation via the call to the function pointer stored in the
+continuation:
 
 ```nim
 proc resume(c: Coroutine): Coroutine {.discardable.} =
