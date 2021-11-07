@@ -210,3 +210,14 @@ suite "cps api":
         return 3
 
       check foo() == 3
+
+  block:
+    ## magic/voodoo can be overloaded
+    type
+      C = ref object of Continuation
+      O = ref object of C
+
+    proc sayYourNameV(c: C): string {.cpsVoodoo.} = return "I am C"
+    proc sayYourNameV(c: O): string {.cpsVoodoo.} = return "I am O"
+    proc sayYourNameM(c: C): C {.cpsMagic.} = discard "I am C"
+    proc sayYourNameM(c: O): O {.cpsMagic.} = discard "I am O"

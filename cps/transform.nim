@@ -1077,19 +1077,21 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
       # Rewrite continuations within this continuation body as well
       fnDef.body = fnDef.body.filter(handle)
       # Put the body in a try-except to capture the unhandled exception
-      fnDef.body = genAstOpt({}, contType, cont = NimNode cont,
-                             body = NimNode fnDef.body):
-        bind getCurrentException
-        try:
-          body
-        except:
-          cont.ex = getCurrentException()
-        # A continuation body created with makeContProc (which is all of
-        # them) will have a terminator in the body, thus this part can
-        # only be reached iff the except branch happened to deter the jump
-        #
-        # Workaround for https://github.com/nim-lang/Nim/issues/18411
-        return Continuation: unwind(contType(cont), cont.ex)
+      fnDef.body =
+        genAstOpt({}, contType, cont = NimNode cont,
+                  unwind = ident"unwind", # just a desym of the unwind()
+                  body = NimNode fnDef.body):
+          bind getCurrentException
+          try:
+            body
+          except:
+            cont.ex = getCurrentException()
+          # A continuation body created with makeContProc (which is all of
+          # them) will have a terminator in the body, thus this part can
+          # only be reached iff the except branch happened to deter the jump
+          #
+          # Workaround for https://github.com/nim-lang/Nim/issues/18411
+          return Continuation unwind(contType(cont), cont.ex)
       result = fnDef
 
   debugAnnotation cpsHandleUnhandledException, n:
