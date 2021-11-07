@@ -600,8 +600,15 @@ proc setupChildContinuation(env: var Env; call: Call): (Name, NormNode) =
   # XXX: also sniff and return the child continuation's "user type"?
   result = (child, etype)
 
-proc shimAssign(env: var Env; store: NormNode, call: Call, tail: NormNode): NormNode =
-  ## this rewrite supports `x = contProc()` and `let x = contProc()`
+proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): NormNode =
+  ## this rewrite supports `x = contProc()`, `let x = contProc()`,
+  ## `x = Type(contProc())` and `let x = Type(contProc())`
+  if not expr.isCpsConvCall:
+    return expr.errorAst("cps don't know how to shim this")
+
+  let call = asCall:
+    expr.findChildRecursive(isCpsCall)
+
   # create the unshimmed assignment
   var assign = newStmtList()
   case store.kind
@@ -611,9 +618,9 @@ proc shimAssign(env: var Env; store: NormNode, call: Call, tail: NormNode): Norm
   of nnkSym, nnkIdent, nnkDotExpr:
     # perform a normal assignment
     assign.add:
-      newAssignment(store, call)
+      newAssignment(store, expr)
   else:
-    raise Defect.newException "unsupported store kind: " & $store.kind
+    return store.errorAst("unsupported store")
 
   # swap the call in the assignment statement(s)
   let (child, etype) = setupChildContinuation(env, call)
@@ -752,21 +759,23 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
 
     of nnkVarSection, nnkLetSection:
       let section = asVarLet nc
-      if section.val.isCpsCall or section.val.isCpsBlock:
+      if section.val.isCpsConvCall:
         let assign = section
-        result.add: # shimming `let x = foo()` or `let (a, b) = bar()`
-          env.shimAssign(assign, asCall(assign.val)):
+        # shimming `let x = foo()` or `let (a, b) = bar()` or `let x = T(foo())`
+        result.add:
+          env.shimAssign(assign, assign.val):
             anyTail()
-        return
+        endAndReturn()
       else:
         # add definitions into the environment
         env.localSection(section, result)
 
     of nnkAsgn:
-      if nc.last.isCpsCall:
+      if nc.last.isCpsConvCall:
+        # shimming `x = foo()` or `x = T(foo())`
         result.add:
           if nc.len >= 2:
-            env.shimAssign(nc[0], asCall(nc[1])):     # shimming `x = foo()`
+            env.shimAssign(nc[0], nc[1]):
               anyTail()
           else:
             nc.errorAst "i expected at least two kids on an nkAsgn"
@@ -864,6 +873,25 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
           # Rewrite it into an inline call, which cause them to be treated like
           # result-less calls by the transformation.
           env.annotate newStmtList(nc[0])
+      elif nc[0].isCpsConvCall:
+        # If the discarded expression is a conversion of a call result
+        let conv = nc[0].asConv
+
+        # Rewrite it into
+        #
+        # let tmp: Type = Type(call)
+        #
+        # And let assignment rewrite handle the rest.
+        #
+        # TODO: either make `tmp` not stored in the continuation, or get rid of
+        # it entirely.
+        result.add:
+          env.annotate:
+            newStmtList:
+              newLetIdentDef(genSymLet(info = nc), conv.typ):
+                # XXX: Not sure why I have to convert here, the type is already
+                # specified in allowAutoDowngradeNormalizedNode
+                NormNode conv
       else:
         result.add env.annotate(nc)
 

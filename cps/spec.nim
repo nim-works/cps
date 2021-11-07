@@ -263,6 +263,15 @@ proc isCpsCall*(n: NormNode): bool =
         # or it could be a completely new continuation
         result = it.impl.hasPragma "cpsMustJump"
 
+proc isCpsConvCall*(n: NormNode): bool =
+  ## true if this node holds a cps call that might be nested within one or more
+  ## conversions.
+  case n.kind
+  of nnkConv:
+    isCpsConvCall(n.last)
+  else:
+    isCpsCall(n)
+
 proc isCpsBlock*(n: NormNode): bool =
   ## `true` if the block `n` contains a cps call anywhere at all;
   ## this is used to figure out if a block needs tailcall handling...
