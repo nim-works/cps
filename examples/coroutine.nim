@@ -4,10 +4,10 @@ import cps, std/sugar
 type
   Coroutine = ref object of Continuation
     data: int
-    cResume: Coroutine
+    next: Coroutine
 
 # Used to both launch and continue the execution of coroutines
-proc resume(c: Coroutine): Coroutine {.discardable.} =
+proc resume(c: Coroutine): Coroutine =
   var c = Continuation c
   while c.running:
     c = c.fn(c)
@@ -18,12 +18,12 @@ proc recv(c: Coroutine): int {.cpsVoodoo.} =
 
 # Suspend execution of the coroutine
 proc jield(c: Coroutine): Coroutine {.cpsMagic.} =
-  c.cResume = c
+  c.next = c
   return nil
 
 proc send(c: Coroutine, n: int) =
   c.data = n
-  resume c.cResume
+  discard c.next.resume()
 
 # This coroutine receives the data, applies f and sends the result to consumer
 proc filter(dest: Coroutine, f: proc(x: int): int) {.cps:Coroutine.} =
@@ -42,8 +42,8 @@ proc consumer() {.cps:Coroutine.} =
 let coro2 = whelp consumer()
 let coro1 = whelp filter(coro2, x => x * 2)
 
-coro1.resume()
-coro2.resume()
+discard coro1.resume()
+discard coro2.resume()
 
 # This prints numbers from 2 to 20 in 2 increment.
 for i in 1..10:
