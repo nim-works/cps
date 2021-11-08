@@ -1102,6 +1102,16 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   debugAnnotation cpsHandleUnhandledException, n:
     it = it.filter(handle)
 
+proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
+  ## looks like cpsTransformProc but applies to proc typedefs;
+  ## this is where we create our calling convention concept
+  let params = copyNimTree n[0]
+  let R = copyNimTree params[0]
+  params[0] = T
+  let P = nnkProcTy.newTree(params, newEmptyNode())
+  result = nnkBracketExpr.newTree(bindSym"Whelp", T, R, P)
+  result = workaroundRewrites result.NormNode
+
 proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   ## rewrite the target procedure in Continuation-Passing Style
 

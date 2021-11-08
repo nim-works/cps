@@ -1,7 +1,7 @@
 import std/[genasts, deques]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
-export Continuation, ContinuationProc, State
+export Continuation, ContinuationProc, State, Whelp
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 export cpsMagic, cpsVoodoo, trampoline, trampolineIt
 export writeStackFrames, writeTraceDeque
@@ -63,6 +63,12 @@ macro cps*(T: typed, n: typed): untyped =
           # Add the flattening phase which will be run first
           newCall(bindSym"cpsFlattenExpr"):
             n
+    of nnkProcTy:
+      # converting a cps callback
+      result = cpsCallbackTypeDef(T, n)
+      result = workaroundRewrites result.NormNode
+      echo treeRepr(result)
+      echo repr(result)
     else:
       result = getAst(cpsTransform(T, n))
 

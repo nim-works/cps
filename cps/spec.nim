@@ -54,6 +54,10 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
+  Whelp*[C: Continuation; R; P: proc] = object
+    fn: P                 ## a pointer to a specific `whelp` function
+    rs: proc (cont: C): R ## the type signature of the `()` functions
+
   TraceFrame* = object ## a record of where the continuation has been
     hook*: Hook        ## the hook that provoked the trace entry
     fun*: string       ## a short label for the notable symbol
