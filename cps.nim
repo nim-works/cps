@@ -66,7 +66,6 @@ macro cps*(T: typed, n: typed): untyped =
     of nnkProcTy:
       # converting a cps callback
       result = cpsCallbackTypeDef(T, n)
-      result = workaroundRewrites result.NormNode
       echo treeRepr(result)
       echo repr(result)
     else:
