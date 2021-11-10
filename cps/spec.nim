@@ -359,18 +359,7 @@ type
     Dismissed  ## The continuation is currently somewhere else
     Finished   ## The continuation is finished and can no longer be resumed
 
-proc wrapErrorShim(n: NimNode): NimNode =
-  ## Wrap a proc definition in a guard to avoid symbol redefinition errors.
-  expectKind(n, nnkProcDef)
-  # when not declaredInScope(fn):
-  result =
-    nnkWhenStmt.newTree:
-      nnkElifBranch.newTree:
-        prefix(newCall(bindSym"declaredInScope", n.name), "not")
-  #   proc fn() = error "you can only do this in cps"
-  result.last.add n
-
-proc makeErrorShim(n: NimNode): NimNode =
+proc makeErrorShim*(n: NimNode): NimNode =
   ## Upgrades a procedure to serve as a CPS primitive, generating
   ## errors out of `.cps.` context and taking continuations as input.
   expectKind(n, nnkProcDef)
@@ -379,7 +368,6 @@ proc makeErrorShim(n: NimNode): NimNode =
   # value.  While this version will throw an exception at runtime, it
   # may be used inside CPS as magic(); for better programmer ergonomics.
   var shim = copyNimTree n
-  shim.addPragma ident"used"
   del(shim.params, 1)               # delete the 1st Continuation argument
   let msg = newLit($n.name & "() is only valid in {.cps.} context")
   shim.body =                       # raise a defect when invoked directly
@@ -397,12 +385,8 @@ macro cpsMagic*(n: untyped): untyped =
   ## The target procedure of a cpsMagic pragma returns the `Continuation`
   ## to which control-flow should return; this is _usually_ the same value
   ## passed into the procedure, but this is not required nor is it checked!
-  ##
-  ## You can overload `cpsVoodoo` procedures with `cpsVoodoo`, and `cpsMagic`
-  ## with `cpsMagic`, but you cannot mix the two.
   expectKind(n, nnkProcDef)
-  let n = copyNimTree n
-  n.addPragma ident"used"
+  result = newStmtList NormNode n # preserve the original proc
   var shim = makeErrorShim n            # create the shim
   shim.params[0] = newEmptyNode()       # wipe out the return value
 
@@ -411,25 +395,19 @@ macro cpsMagic*(n: untyped): untyped =
   # continuation.
   shim.addPragma ident"cpsMustJump"
   shim.addPragma ident"cpsMagicCall"
-  shim = wrapErrorShim shim         # `when not declaredInScope(fn): shim`
-  result = newStmtList(shim, n)     # preserve the original proc
+  result.add shim
 
 macro cpsVoodoo*(n: untyped): untyped =
   ## Similar to a `cpsMagic` where the first argument is concerned, but
   ## may specify a return value which is usable inside the CPS procedure.
-  ##
-  ## You can overload `cpsVoodoo` procedures with `cpsVoodoo`, and `cpsMagic`
-  ## with `cpsMagic`, but you cannot mix the two.
   expectKind(n, nnkProcDef)
-  let n = copyNimTree n
-  n.addPragma ident"used"
+  result = newStmtList n            # preserve the original proc
   var shim = makeErrorShim n        # create the shim
 
   # we use this pragma to identify the primitive and rewrite it inside
   # CPS so that it again binds to the version that takes a continuation.
   shim.addPragma ident"cpsVoodooCall"
-  shim = wrapErrorShim shim         # `when not declaredInScope(fn): shim`
-  result = newStmtList(shim, n)     # preserve the original proc
+  result.add shim
 
 when cpsTraceDeque or cpsStackFrames:
   from std/strformat import `&`

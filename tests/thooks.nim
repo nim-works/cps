@@ -256,7 +256,7 @@ suite "hooks":
   block:
     ## custom continuation exception handling works
     var k = newKiller 4
-    proc unwind(c: Cont; ex: ref Exception): Continuation {.cpsMagic.} =
+    proc unwind(c: Cont; ex: ref Exception): Continuation {.cpsMagic, used.} =
       inc k
       result = cps.unwind(c, ex)
 

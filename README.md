@@ -412,10 +412,6 @@ yet demonstrates different exploits of `cps`.
 See [this list of open Nim issues surfaced by CPS
 development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label%3ACPS); some repercussions include the following:
 
-- You can overload `cpsVoodoo` procedures with `cpsVoodoo`, and `cpsMagic`
-  with `cpsMagic`, but other overloads run the risk of clashing with the
-  shim produced by these procedure macros.
-
 - Exceptions are evaluated differently under `panics:on` and `panics:off`, so
   you may need to use `panics:on` in order to produce correct code.
 
