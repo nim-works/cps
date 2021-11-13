@@ -1106,11 +1106,18 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   debugAnnotation cpsHandleUnhandledException, n:
     it = it.filter(handle)
 
+proc copyOrVoid*(n: NimNode): NimNode =
+  ## if the node is empty, `ident"void"`; else, a copy of the node
+  if n.isEmpty:
+    ident"void"
+  else:
+    copyNimTree n
+
 proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
   ## looks like cpsTransformProc but applies to proc typedefs;
   ## this is where we create our calling convention concept
   let params = copyNimTree n[0]
-  let R = copyNimTree params[0]
+  let R = copyOrVoid params[0]
   params[0] = T
   let P = nnkProcTy.newTree(params, newEmptyNode())
   result = nnkBracketExpr.newTree(bindSym"Whelp", T, R, P)
@@ -1224,6 +1231,14 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   # copy the exported-ness from the original proc so that it can be used
   # from other modules
   let recover = env.createRecover(exported = originalProcSym.isExported)
+  # pluck out the procedure from between any .push/pop.
+  let recoverProc = recover.NimNode.findChild(it.kind == nnkProcDef)
+
+  for p in [whelp, booty]:
+    # storing the source environment on helpers
+    p.addPragma(bindName"cpsEnvironment", env.identity)
+    # storing the result fetcher on helpers
+    p.addPragma(bindName"cpsResult", recoverProc.name)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)

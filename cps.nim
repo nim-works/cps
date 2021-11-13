@@ -66,8 +66,6 @@ macro cps*(T: typed, n: typed): untyped =
     of nnkProcTy:
       # converting a cps callback
       result = cpsCallbackTypeDef(T, n)
-      echo treeRepr(result)
-      echo repr(result)
     else:
       result = getAst(cpsTransform(T, n))
 
@@ -114,14 +112,41 @@ template wrapWhelpIt(call: typed; logic: untyped): untyped =
     whelpIt call:
       logic
 
+macro call*[C; R; P](w: Whelp[C, R, P]; args: varargs[typed]): C =
+  ## Invoke a callback with the given arguments; returns a continuation.
+  result = newCall(w.dot ident"fn")
+  for arg in args.items:
+    result.add arg
+
+proc createCallback(sym: NimNode): NimNode =
+  ## create a new Whelp object construction
+  let env = (getImpl sym).NormNode.pragmaArgument"cpsEnvironment"
+  let rs = (getImpl sym).NormNode.pragmaArgument"cpsResult"
+  let boot = bootstrapSymbol sym
+  when true:
+    let tipe = nnkBracketExpr.newTree bindSym"Whelp"
+    tipe.add env   # the cps environment type
+    tipe.add:      # the return type of the result fetcher
+      copyOrVoid (getImpl rs).params[0]
+    tipe.add:      # the proc() type of the bootstrap
+      nnkProcTy.newTree(copyNimTree (getImpl boot).params, newEmptyNode())
+  else:
+    let tipe = bindSym"Whelp"
+  result = NimNode nnkObjConstr.newTree(tipe, "fn".colon boot, "rs".colon rs)
+
 macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
   ## running it; instead, return the continuation as a value.
-  wrapWhelpIt call:
-    it =
-      sym.ensimilate:
-        Head.hook:
-          newCall(base, it)
+  result =
+    case call.kind
+    of nnkSym:
+      createCallback call
+    else:
+      wrapWhelpIt call:
+        it =
+          sym.ensimilate:
+            Head.hook:
+              newCall(base, it)
 
 macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the

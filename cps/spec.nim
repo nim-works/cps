@@ -28,6 +28,8 @@ template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
+template cpsResult*(result: typed) {.pragma.}  ##
+## the procedure that returns the result of the continuation
 template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## the continuation has an exception stored in `ex`, with `cont` being the
@@ -55,8 +57,8 @@ type
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
   Whelp*[C: Continuation; R; P: proc] = object
-    fn: P                 ## a pointer to a specific `whelp` function
-    rs: proc (cont: C): R ## the type signature of the `()` functions
+    fn: P                 ## the bootstrap for continuation C
+    rs: proc (c: C): R    ## the result fetcher for continuation C
 
   TraceFrame* = object ## a record of where the continuation has been
     hook*: Hook        ## the hook that provoked the trace entry
