@@ -19,7 +19,7 @@ when not(defined(gcArc) or defined(gcOrc)):
 # we only support panics because we don't want to run finally on defect
 when not defined(nimPanics):
   {.warning: "cps supports --panics:on only; " &
-             " see https://github.com/disruptek/cps/issues/110".}
+             " see https://github.com/nim-works/cps/issues/110".}
 
 proc state*(c: Continuation): State {.inline.} =
   ## Get the current state of a continuation

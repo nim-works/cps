@@ -1199,7 +1199,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   n.body = env.annotate n.body
 
   if n.body.firstReturn.isNil:
-    # fixes https://github.com/disruptek/cps/issues/145
+    # fixes https://github.com/nim-works/cps/issues/145
     # by ensuring that we always rewrite termination
     n.body.add newCpsPending()
 
