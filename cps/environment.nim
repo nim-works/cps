@@ -443,7 +443,7 @@ proc createRecover*(env: Env, exported = false): ProcDef =
     genAstOpt({}, name, ename, field, c = env.first.NimNode,
               cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
               dismissed=Dismissed, finished=Finished, running=Running):
-      proc ename(c: cont): tipe {.used.} =
+      proc ename(c: cont): tipe {.used, nimcall.} =
         case c.state
         of dismissed:
           raise Defect.newException:
@@ -459,6 +459,7 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
 
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
+  result.addPragma "nimcall"
   result.returnParam = env.identity
   result.name = genSymProc"whelp"
   result.introduce {Alloc, Boot, Stack}
@@ -482,6 +483,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
+  result.addPragma "nimcall"
   result.introduce {Alloc, Boot, Stack}
 
   let c = genSymVar("c", info = n)

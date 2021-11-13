@@ -30,6 +30,8 @@ template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
 template cpsResult*(result: typed) {.pragma.}  ##
 ## the procedure that returns the result of the continuation
+template cpsReturnType*(tipe: typed) {.pragma.}  ##
+## the return type of the continuation
 template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## the continuation has an exception stored in `ex`, with `cont` being the
@@ -56,9 +58,11 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
-  Whelp*[C: Continuation; R; P: proc] = object
-    fn: P                 ## the bootstrap for continuation C
-    rs: proc (c: C): R    ## the result fetcher for continuation C
+  Whelp[C; R; P] = object
+    fn*: P                            ##
+    ## the bootstrap for continuation C
+    rs*: proc (c: C): R {.nimcall.}   ##
+    ## the result fetcher for continuation C
 
   TraceFrame* = object ## a record of where the continuation has been
     hook*: Hook        ## the hook that provoked the trace entry
@@ -538,3 +542,44 @@ macro etype*(e: enum): string =
     if sym.intVal == e.intVal:
       return newLit sym.strVal
   error "unexpected"
+
+proc copyOrVoid*(n: NimNode): NimNode =
+  ## if the node is empty, `ident"void"`; else, a copy of the node
+  if n.isEmpty:
+    ident"void"
+  else:
+    copyNimTree n
+
+proc createCallback*(sym: NimNode): NimNode =
+  ## create a new Whelp object construction
+  let fn = bootstrapSymbol sym    # grab the whelp()
+  let impl = fn.getImpl.NormNode  # convenience
+  let env = impl.pragmaArgument"cpsEnvironment"
+  let rs = impl.pragmaArgument"cpsResult"
+  let tipe = nnkBracketExpr.newTree bindSym"Whelp"
+  tipe.add env   # the cps environment type
+  tipe.add:      # the return type of the result fetcher
+    copyOrVoid impl.pragmaArgument"cpsReturnType"
+  let params = replacedSymsWithIdents copyNimTree(fn.getImpl.params)
+  params[0] = env
+  tipe.add:      # the proc() type of the bootstrap
+    nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
+  result =
+    NimNode:
+      nnkObjConstr.newTree(tipe, "fn".colon fn, "rs".colon rs)
+
+proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
+  ## looks like cpsTransformProc but applies to proc typedefs;
+  ## this is where we create our calling convention concept
+  let params = copyNimTree n[0]
+  let R = copyOrVoid params[0]
+  params[0] = T
+  let P = nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
+  result = nnkBracketExpr.newTree(bindSym"Whelp", T, R, P)
+  result = workaroundRewrites result.NormNode
+
+macro call*[C; R; P](w: Whelp[C, R, P]; args: varargs[typed]): C =
+  ## Invoke a callback with the given arguments; returns a continuation.
+  result = newCall(w.dot ident"fn")
+  for arg in args.items:
+    result.add arg

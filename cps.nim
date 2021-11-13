@@ -1,9 +1,9 @@
 import std/[genasts, deques]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
-export Continuation, ContinuationProc, State, Whelp
+export Continuation, ContinuationProc, State
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
-export cpsMagic, cpsVoodoo, trampoline, trampolineIt
+export cpsMagic, cpsVoodoo, trampoline, trampolineIt, call
 export writeStackFrames, writeTraceDeque
 export renderStackFrames, renderTraceDeque
 
@@ -111,28 +111,6 @@ template wrapWhelpIt(call: typed; logic: untyped): untyped =
         (getImpl sym).pragmaArgument"cpsEnvironment"
     whelpIt call:
       logic
-
-macro call*[C; R; P](w: Whelp[C, R, P]; args: varargs[typed]): C =
-  ## Invoke a callback with the given arguments; returns a continuation.
-  result = newCall(w.dot ident"fn")
-  for arg in args.items:
-    result.add arg
-
-proc createCallback(sym: NimNode): NimNode =
-  ## create a new Whelp object construction
-  let env = (getImpl sym).NormNode.pragmaArgument"cpsEnvironment"
-  let rs = (getImpl sym).NormNode.pragmaArgument"cpsResult"
-  let boot = bootstrapSymbol sym
-  when true:
-    let tipe = nnkBracketExpr.newTree bindSym"Whelp"
-    tipe.add env   # the cps environment type
-    tipe.add:      # the return type of the result fetcher
-      copyOrVoid (getImpl rs).params[0]
-    tipe.add:      # the proc() type of the bootstrap
-      nnkProcTy.newTree(copyNimTree (getImpl boot).params, newEmptyNode())
-  else:
-    let tipe = bindSym"Whelp"
-  result = NimNode nnkObjConstr.newTree(tipe, "fn".colon boot, "rs".colon rs)
 
 macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin
