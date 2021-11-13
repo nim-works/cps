@@ -702,7 +702,7 @@ func annotate(n: NormNode): NormNode =
                   else: child
                 exprType = getTypeInst(expr)
 
-              var result = Operand(
+              var op = Operand(
                 node: child, typ: exprType, mutable: child.isMutable
               )
 
@@ -716,14 +716,14 @@ func annotate(n: NormNode): NormNode =
                 # for `var` parameters, thus making regular analysis incorrect.
                 #
                 # As a workaround, we have to obtain this information directly from the symbol definition.
-                if magicType.typeKind == ntyVar and not magicType.sameType(result.typ):
+                if magicType.typeKind == ntyVar and not magicType.sameType(op.typ):
                   # If the parameter is a `var T` but the type differs from the operand.
                   # Modify the operand type to `var operand.typ`.
-                  result.typ = TypeExpr nnkVarTy.newTree(result.typ)
+                  op.typ = TypeExpr nnkVarTy.newTree(op.typ)
                   # Modify the mutable analysis to check whether the operand location is mutable instead.
-                  result.mutable = child.isMutableLocation
+                  op.mutable = child.isMutableLocation
 
-              yield result
+              yield op
 
           # Put the annotated operation under the expr lifter
           result.add:
