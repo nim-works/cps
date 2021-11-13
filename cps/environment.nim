@@ -329,7 +329,6 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
     let
       defs = n.asVarLetTuple()
       child = e.castToChild(e.first)
-      rhs = defs.typ
       tups = nnkTupleConstr.newTree
     for index, name in defs.indexNamePairs:
       let name = asSym(name)
