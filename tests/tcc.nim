@@ -63,42 +63,43 @@ suite "calling convention":
     check cb.result(d) == 5.0
 
   block:
-    ## run a callback from inside cps
+    ## run a callback from inside cps with callback type
     var k = newKiller 4
+
+    type
+      ContCall = proc(a: int): int {.cps: Cont.}
 
     proc bar(a: int): int {.cps: Cont.} =
       noop()
       step 3
       return a * 2
 
-    const cb = whelp bar
-
-    proc foo(c: typeOf cb) {.cps: Cont.} =
+    proc foo(c: ContCall) {.cps: Cont.} =
       step 1
       let x = c.call(4)
       step 2
       check c.result(x) == 8
       step 4
 
-    foo cb
+    foo: whelp bar
 
-when false:
   block:
     ## run a callback in cps with natural syntax
-    var k = newKiller 3
+    skip "pending discussion":
+      var k = newKiller 3
 
-    proc bar(a: int): int {.cps: Cont.} =
-      noop()
-      step 2
-      return a * 2
+      proc bar(a: int): int {.cps: Cont.} =
+        noop()
+        step 2
+        return a * 2
 
-    const cb = whelp bar
-    type Callback = typeOf cb
+      const cb = whelp bar
+      type Callback = typeOf cb
 
-    proc foo(c: Callback) {.cps: Cont.} =
-      step 1
-      let x = c(4)
-      check x == 8
-      step 3
+      proc foo(c: Callback) {.cps: Cont.} =
+        step 1
+        let x = c(4)
+        check x == 8
+        step 3
 
-    foo cb
+      foo cb
