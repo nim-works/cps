@@ -88,18 +88,19 @@ suite "calling convention":
     skip "pending discussion":
       var k = newKiller 3
 
+      type
+        ContCall = proc(a: int): int {.cps: Cont.}
+
       proc bar(a: int): int {.cps: Cont.} =
         noop()
         step 2
         return a * 2
 
-      const cb = whelp bar
-      type Callback = typeOf cb
-
-      proc foo(c: Callback) {.cps: Cont.} =
+      proc foo(c: ContCall) {.cps: Cont.} =
         step 1
         let x = c(4)
         check x == 8
         step 3
 
+      const cb = whelp bar
       foo cb
