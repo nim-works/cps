@@ -31,23 +31,22 @@ suite "calling convention":
 
   block:
     ## produce callbacks that match whelp types
-    skip "not supported by the compiler yet":
-      type
-        C = ref object of Continuation
-        H {.used.} = proc(x: int): float {.cps: C.}
-        I {.used.} = proc(): float {.cps: C.}
-        P {.used.} = proc(x: int) {.cps: C.}
-        S {.used.} = proc() {.cps: C.}
+    type
+      C = ref object of Continuation
+      H {.used.} = proc(x: int): float {.cps: C.}
+      I {.used.} = proc(): float {.cps: C.}
+      P {.used.} = proc(x: int) {.cps: C.}
+      S {.used.} = proc() {.cps: C.}
 
-      proc toH(x: int): float {.cps: C.} = discard
-      proc toI(): float {.cps: C.} = discard
-      proc toP(x: int) {.cps: C.} = discard
-      proc toS() {.cps: C.} = discard
+    proc toH(x: int): float {.cps: C.} = discard
+    proc toI(): float {.cps: C.} = discard
+    proc toP(x: int) {.cps: C.} = discard
+    proc toS() {.cps: C.} = discard
 
-      let h {.used.}: H = whelp toH
-      let i {.used.}: I = whelp toI
-      let p {.used.}: P = whelp toP
-      let s {.used.}: S = whelp toS
+    let h {.used.}: H = whelp toH
+    let i {.used.}: I = whelp toI
+    let p {.used.}: P = whelp toP
+    let s {.used.}: S = whelp toS
 
   block:
     ## execute a callback with arguments
