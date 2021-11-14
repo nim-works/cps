@@ -25,7 +25,9 @@ template cpsContinue*() {.pragma.}      ##
 ## this is a continue statement in a cps block
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
-## the symbol for creating a continuation
+## the symbol for creating a continuation -- technically, a whelp()
+template cpsWhelpShim*(whelp: typed) {.pragma.}  ##
+## the symbol for creating a continuation which returns a continuation base
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
 template cpsResult*(result: typed) {.pragma.}  ##
@@ -552,21 +554,22 @@ proc copyOrVoid*(n: NimNode): NimNode =
 
 proc createCallback*(sym: NimNode): NimNode =
   ## create a new Whelp object construction
-  let fn = bootstrapSymbol sym    # grab the whelp()
-  let impl = fn.getImpl.NormNode  # convenience
-  let env = impl.pragmaArgument"cpsEnvironment"
+  let fn = sym.getImpl.ProcDef.pragmaArgument"cpsWhelpShim" # grab the whelp()
+  let impl = fn.getImpl.ProcDef                     # convenience
   let rs = impl.pragmaArgument"cpsResult"
   let tipe = nnkBracketExpr.newTree bindSym"Whelp"
-  tipe.add env   # the cps environment type
-  tipe.add:      # the return type of the result fetcher
+  tipe.add impl.returnParam # the base cps environment type
+  tipe.add:                 # the return type of the result fetcher
     copyOrVoid impl.pragmaArgument"cpsReturnType"
-  let params = replacedSymsWithIdents copyNimTree(fn.getImpl.params)
-  params[0] = env
+  var params = copyNimTree impl.formalParams # prepare params list
+  # consider desym'ing foo(a: int; b = a) before deleting this loop
+  for defs in impl.callingParams:
+    params = desym(params, defs.name)
   tipe.add:      # the proc() type of the bootstrap
     nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
   result =
     NimNode:
-      nnkObjConstr.newTree(tipe, "fn".colon fn, "rs".colon rs)
+      nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
 
 proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
   ## looks like cpsTransformProc but applies to proc typedefs;
@@ -577,6 +580,10 @@ proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
   let P = nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
   result = nnkBracketExpr.newTree(bindSym"Whelp", T, R, P)
   result = workaroundRewrites result.NormNode
+
+proc result*[C, R, P](whelp: Whelp[C, R, P]; continuation: C): R =
+  ## Using its callback, recover the result of the given continuation.
+  whelp.rs(continuation)
 
 macro call*[C; R; P](w: Whelp[C, R, P]; args: varargs[typed]): C =
   ## Invoke a callback with the given arguments; returns a continuation.

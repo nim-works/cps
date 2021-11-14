@@ -431,6 +431,11 @@ proc createRecover*(env: Env, exported = false): ProcDef =
         nnkDiscardStmt.newTree:
           newEmptyNode()       # the return value is void
 
+  # the result fetcher used in the Whelp "calling convention" shim
+  var fetcher = nskProc.genSym"result"
+  if exported:
+    fetcher = NormNode postfix(fetcher, "*")
+
   # compose the (exported?) symbol
   let name = NimNode ident"recover"
   var ename =
@@ -440,10 +445,13 @@ proc createRecover*(env: Env, exported = false): ProcDef =
       name
 
   result = ProcDef:
-    genAstOpt({}, name, ename, field, c = env.first.NimNode,
-              cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
-              dismissed=Dismissed, finished=Finished, running=Running):
-      proc ename(c: cont): tipe {.used, nimcall.} =
+    genAstOpt({}, ename = ename.NimNode, cont = env.identity.NimNode,
+           field = field.NimNode, c = env.first.NimNode,
+           fetcher = fetcher.NimNode, contBase = env.inherits.NimNode,
+           tipe = env.rs.typ.NimNode,
+           dismissed=Dismissed, finished=Finished, running=Running):
+
+      proc fetcher(c: contBase): tipe {.used, nimcall.} =
         case c.state
         of dismissed:
           raise Defect.newException:
@@ -451,9 +459,14 @@ proc createRecover*(env: Env, exported = false): ProcDef =
         of finished:
           field
         of running:
-          name(trampoline c)
+          fetcher(trampoline c)
 
-proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
+      {.push experimental: "callOperator".}
+      proc ename(c: cont): tipe {.used, nimcall.} =
+        fetcher(contBase c)
+      {.pop.}
+
+proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
   let resultName = "result".asName
 
@@ -478,6 +491,18 @@ proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   # rewrite the symbols used in the arguments to identifiers
   for defs in result.callingParams:
     result = desym(result, defs.name)
+
+proc createWhelpShim*(env: Env; whelp: ProcDef): ProcDef =
+  ## this is a version of whelp that returns the base continuation type
+  result = clone(whelp, newStmtList())
+  result.returnParam = env.inherits
+  result.name = genSymProc"whelp shim"
+  # whelp_234(a, b, c)
+  result.body = newCall whelp.name
+  for defs in result.callingParams:
+    result.body.add defs.name
+  # C: whelp_234(a, b, c)
+  result.body = newCall(result.returnParam, result.body)
 
 proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it

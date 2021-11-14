@@ -1137,6 +1137,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)
+  let whelpShim = env.createWhelpShim(whelp)
 
   # setup the bootstrap using the old proc name,
   # but the first leg will be the new proc name
@@ -1144,6 +1145,9 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
 
   # we store a pointer to the whelp on the bootstrap
   booty.addPragma(bindName"cpsBootstrap", whelp.name)
+
+  # we store a pointer to the whelp shim on the bootstrap
+  booty.addPragma(bindName"cpsWhelpShim", whelpShim.name)
 
   # like magics, the bootstrap must jump
   booty.addPragma "cpsMustJump"
@@ -1214,25 +1218,29 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   # copy the exported-ness from the original proc so that it can be used
   # from other modules
   let recover = env.createRecover(exported = originalProcSym.isExported)
-  # pluck out the procedure from between any .push/pop.
+  # pluck out the FIRST procedure from the list; this is the shim
   let recoverProc = recover.NimNode.findChild(it.kind == nnkProcDef)
 
   for p in [whelp, booty]:
     # storing the source environment on helpers
     p.addPragma(bindName"cpsEnvironment", env.identity)
 
-    # storing the result fetcher on helpers
+  for p in [booty]:
+    # storing the result fetcher on the booty
     p.addPragma(bindName"cpsResult", recoverProc.name)
 
-  for p in [whelp]:
-    # storing the return type on the whelp
+  for p in [whelp, whelpShim]:
+    # storing the result fetcher on the whelp and whelp shim
+    p.addPragma(bindName"cpsResult", recoverProc.name)
+    # storing the return type on the whelp and whelp shim
     p.addPragma(bindName"cpsReturnType", copyOrVoid recoverProc.params[0])
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
-  # generated proc bodies, remaining proc, whelp, bootstrap
-  result = newStmtList(types, processMainContinuation, recover, whelp, booty)
+  # generated proc bodies, remaining proc, result fetchers, whelp, bootstrap
+  result = newStmtList(types, processMainContinuation, recover.NormNode,
+                       whelp, whelpShim, booty)
 
   # this is something that happens a lot in cps-generated code, so hide it
   # here to not spam the user with hints.

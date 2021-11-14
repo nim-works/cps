@@ -3,9 +3,6 @@ import std/macros
 include preamble
 include killer
 
-macro dumper(n: typed): untyped =
-  echo getType(n).treeRepr
-
 suite "calling convention":
 
   block:
@@ -63,8 +60,8 @@ suite "calling convention":
     const cb = whelp foo
     let c = cb.call(3)
     let d = cb.call(5)
-    check c() == 3.0
-    check d() == 5.0
+    check cb.result(c) == 3.0
+    check cb.result(d) == 5.0
 
   block:
     ## run a callback from inside cps
@@ -81,11 +78,12 @@ suite "calling convention":
       step 1
       let x = c.call(4)
       step 2
-      check x() == 8
+      check c.result(x) == 8
       step 4
 
     foo cb
 
+when false:
   block:
     ## run a callback in cps with natural syntax
     var k = newKiller 3
