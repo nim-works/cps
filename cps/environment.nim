@@ -431,7 +431,7 @@ proc createRecover*(env: Env, exported = false): ProcDef =
         nnkDiscardStmt.newTree:
           newEmptyNode()       # the return value is void
 
-  # the result fetcher used in the Whelp "calling convention" shim
+  # the result fetcher used in the Callback shim
   var fetcher = nskProc.genSym"result"
   let naked = copyNimNode fetcher  # so that we can call it without `*`
   if exported:
@@ -493,7 +493,7 @@ proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   for defs in result.callingParams:
     result = desym(result, defs.name)
 
-proc createWhelpShim*(env: Env; whelp: ProcDef): ProcDef =
+proc createCallbackShim*(env: Env; whelp: ProcDef): ProcDef =
   ## this is a version of whelp that returns the base continuation type
   result = clone(whelp, newStmtList())
   result.returnParam = env.inherits

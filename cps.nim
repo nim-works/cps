@@ -113,8 +113,12 @@ template wrapWhelpIt(call: typed; logic: untyped): untyped =
       logic
 
 macro whelp*(call: typed): untyped =
-  ## Instantiate the given continuation call but do not begin
-  ## running it; instead, return the continuation as a value.
+  ## Instantiate the given continuation call but do not begin running it;
+  ## instead, return the continuation as a value.
+  ##
+  ## If you pass `whelp` a continuation procedure _symbol_ instead, the
+  ## result is a `Callback` which you can use to create many individual
+  ## continuations or recover the `result` of an extant continuation.
   result =
     case call.kind
     of nnkSym:

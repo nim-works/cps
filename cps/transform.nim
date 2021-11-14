@@ -1137,7 +1137,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)
-  let whelpShim = env.createWhelpShim(whelp)
+  let whelpShim = env.createCallbackShim(whelp)
 
   # setup the bootstrap using the old proc name,
   # but the first leg will be the new proc name
@@ -1147,7 +1147,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   booty.addPragma(bindName"cpsBootstrap", whelp.name)
 
   # we store a pointer to the whelp shim on the bootstrap
-  booty.addPragma(bindName"cpsWhelpShim", whelpShim.name)
+  booty.addPragma(bindName"cpsCallbackShim", whelpShim.name)
 
   # like magics, the bootstrap must jump
   booty.addPragma "cpsMustJump"

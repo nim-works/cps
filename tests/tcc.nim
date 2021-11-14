@@ -104,3 +104,20 @@ suite "calling convention":
 
       const cb = whelp bar
       foo cb
+
+  block:
+    ## callback illustration
+    type
+      C = ref object of Continuation
+      Callback = proc(x: int): float {.cps: C.}
+
+    proc bar(a: int): float {.cps: C.} =
+      return 2.0 * a.float
+
+    const
+      cb: Callback = whelp bar
+
+    let x: C = cb.call(2)
+    let y: C = cb.call(4)
+    check cb.result(x) == 4.0
+    check cb.result(y) == 8.0

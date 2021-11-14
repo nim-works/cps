@@ -26,7 +26,7 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation -- technically, a whelp()
-template cpsWhelpShim*(whelp: typed) {.pragma.}  ##
+template cpsCallbackShim*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation which returns a continuation base
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
@@ -60,7 +60,7 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
-  Whelp[C; R; P] = object
+  Callback[C; R; P] = object
     fn*: P                            ##
     ## the bootstrap for continuation C
     rs*: proc (c: C): R {.nimcall.}   ##
@@ -553,11 +553,11 @@ proc copyOrVoid*(n: NimNode): NimNode =
     copyNimTree n
 
 proc createCallback*(sym: NimNode): NimNode =
-  ## create a new Whelp object construction
-  let fn = sym.getImpl.ProcDef.pragmaArgument"cpsWhelpShim" # grab the whelp()
+  ## create a new Callback object construction
+  let fn = sym.getImpl.ProcDef.pragmaArgument"cpsCallbackShim"
   let impl = fn.getImpl.ProcDef                     # convenience
   let rs = impl.pragmaArgument"cpsResult"
-  let tipe = nnkBracketExpr.newTree bindSym"Whelp"
+  let tipe = nnkBracketExpr.newTree bindSym"Callback"
   tipe.add impl.returnParam # the base cps environment type
   tipe.add:                 # the return type of the result fetcher
     copyOrVoid impl.pragmaArgument"cpsReturnType"
@@ -578,15 +578,24 @@ proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
   let R = copyOrVoid params[0]
   params[0] = T
   let P = nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
-  result = nnkBracketExpr.newTree(bindSym"Whelp", T, R, P)
+  result = nnkBracketExpr.newTree(bindSym"Callback", T, R, P)
   result = workaroundRewrites result.NormNode
 
-proc result*[C, R, P](whelp: Whelp[C, R, P]; continuation: C): R =
-  ## Using its callback, recover the result of the given continuation.
-  whelp.rs(continuation)
+proc result*[C, R, P](callback: Callback[C, R, P]; continuation: C): R =
+  ## Using a `callback`, recover the result of the given `continuation`.
+  ## This is equivalent to running `()` on a continuation which was
+  ## created with `whelp` against a procedure call.
+  ##
+  ## If the continuation is in the `running` `State`, this operation will
+  ## `trampoline` the continuation until it is `finished`.  Finally, the
+  ## `result` will merely be retrieved from the continuation environment.
+  ##
+  ## It is a `Defect` to attempt to fetch the `result` of a `dismissed`
+  ## `continuation`.
+  callback.rs(continuation)
 
-macro call*[C; R; P](w: Whelp[C, R, P]; args: varargs[typed]): C =
-  ## Invoke a callback with the given arguments; returns a continuation.
-  result = newCall(w.dot ident"fn")
-  for arg in args.items:
-    result.add arg
+macro call*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): C =
+  ## Invoke a `callback` with the given `arguments`; returns a continuation.
+  result = newCall(callback.dot ident"fn")
+  for argument in arguments.items:
+    result.add argument
