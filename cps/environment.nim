@@ -433,6 +433,7 @@ proc createRecover*(env: Env, exported = false): ProcDef =
 
   # the result fetcher used in the Whelp "calling convention" shim
   var fetcher = nskProc.genSym"result"
+  let naked = copyNimNode fetcher  # so that we can call it without `*`
   if exported:
     fetcher = NormNode postfix(fetcher, "*")
 
@@ -448,7 +449,7 @@ proc createRecover*(env: Env, exported = false): ProcDef =
     genAstOpt({}, ename = ename.NimNode, cont = env.identity.NimNode,
            field = field.NimNode, c = env.first.NimNode,
            fetcher = fetcher.NimNode, contBase = env.inherits.NimNode,
-           tipe = env.rs.typ.NimNode,
+           naked = naked.NimNode, tipe = env.rs.typ.NimNode,
            dismissed=Dismissed, finished=Finished, running=Running):
 
       proc fetcher(c: contBase): tipe {.used, nimcall.} =
@@ -459,11 +460,11 @@ proc createRecover*(env: Env, exported = false): ProcDef =
         of finished:
           field
         of running:
-          fetcher(trampoline c)
+          naked(trampoline c)
 
       {.push experimental: "callOperator".}
       proc ename(c: cont): tipe {.used, nimcall.} =
-        fetcher(contBase c)
+        naked(contBase c)
       {.pop.}
 
 proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
