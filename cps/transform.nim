@@ -1263,21 +1263,54 @@ macro cpsTransform*(T, n: typed): untyped =
   result = cpsTransformProc(T, n)
   debug("cpsTransform", result, Transformed, n)
 
+proc looksLikeCallback(n: NimNode): bool =
+  ## true if the symbol appears to be of the Callback persuasion.
+  case n.kind
+  of nnkEmpty:
+    false
+  of nnkSym:
+    looksLikeCallback(getTypeImpl n)
+  of nnkObjectTy:
+    looksLikeCallback(n.last)
+  of nnkRecList:
+    looksLikeCallback(n[0])
+  of nnkIdentDefs:
+    if n[0].repr == "fn":
+      looksLikeCallback(n[1])
+    else:
+      false
+  of nnkProcTy:
+    for node in n.pragma:
+      if node.kind == nnkCall:
+        if node[0].strVal == "cpsCallback":
+          return true
+    false
+  else:
+    false
+
+macro naturalize(kind: static[NimNodeKind]; callback: typed;
+                 args: varargs[typed]): untyped =
+  ## perform a conditional typed rewrite for natural callback syntax inside cps
+  if callback.looksLikeCallback:
+    # convert it to callback.call(...)
+    result = macros.newTree(kind, newDotExpr(callback, bindSym"call"))
+    for arg in args.items:
+      result.add arg
+    # wrap that in recover(callback, ...)
+    result = newCall(bindSym"recover", callback, result)
+  else:
+    result = kind.newTree(callback)
+    for arg in args.items:
+      result.add arg
+
 proc rewriteCalls*(n: NimNode): NimNode =
   ## rewriting `callback(x)` into `recover(callback, call(callback, x))` for use
   ## inside of an untyped pass; this should be applied only to Callback symbols...
   proc recall(n: NimNode): NimNode =
     case n.kind
     of CallNodes:
-      # turn callback(x) into call(callback, x)
-      var rewrit = macros.newTree(n.kind, newDotExpr(n[0], bindSym"call"))
-      rewrit.add n[1..^1]
-      # wrap that in recover(callback, ...)
-      rewrit = newCall(bindSym"recover", n[0], rewrit)
-      # wrap that in a when to guard against rewriting nodes that aren't Callback
-      result = nnkWhenStmt.newTree()
-      result.add nnkElifExpr.newTree(infix(n[0], "is", bindSym"Callback"), rewrit)
-      result.add nnkElseExpr.newTree(n)
+      result = newCall(bindSym"naturalize", newLit(n.kind), n[0])
+      result.add n[1..^1]
     else:
       discard
   result = filter(n, recall)

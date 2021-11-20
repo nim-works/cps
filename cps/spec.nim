@@ -26,6 +26,7 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation -- technically, a whelp()
+template cpsCallback*() {.pragma.}          ## this is a callback typedef
 template cpsCallbackShim*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation which returns a continuation base
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
@@ -577,7 +578,8 @@ proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
   let params = copyNimTree n[0]
   let R = copyOrVoid params[0]
   params[0] = T
-  let P = nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
+  let P = nnkProcTy.newTree(params,
+                            nnkPragma.newTree(ident"nimcall", bindSym"cpsCallback"))
   result = nnkBracketExpr.newTree(bindSym"Callback", T, R, P)
   result = workaroundRewrites result.NormNode
 
