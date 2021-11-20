@@ -581,16 +581,16 @@ proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
   result = nnkBracketExpr.newTree(bindSym"Callback", T, R, P)
   result = workaroundRewrites result.NormNode
 
-proc result*[C, R, P](callback: Callback[C, R, P]; continuation: C): R =
-  ## Using a `callback`, recover the result of the given `continuation`.
+proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: C): R =
+  ## Using a `callback`, recover the `result` of the given `continuation`.
   ## This is equivalent to running `()` on a continuation which was
   ## created with `whelp` against a procedure call.
   ##
   ## If the continuation is in the `running` `State`, this operation will
-  ## `trampoline` the continuation until it is `finished`.  Finally, the
-  ## `result` will merely be retrieved from the continuation environment.
+  ## `trampoline` the continuation until it is `finished`. The `result`
+  ## will then be recovered from the continuation environment.
   ##
-  ## It is a `Defect` to attempt to fetch the `result` of a `dismissed`
+  ## It is a `Defect` to attempt to recover the `result` of a `dismissed`
   ## `continuation`.
   callback.rs(continuation)
 

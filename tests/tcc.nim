@@ -59,8 +59,8 @@ suite "calling convention":
     const cb = whelp foo
     let c = cb.call(3)
     let d = cb.call(5)
-    check cb.result(c) == 3.0
-    check cb.result(d) == 5.0
+    check cb.recover(c) == 3.0
+    check cb.recover(d) == 5.0
 
   block:
     ## run a callback from inside cps with callback type
@@ -78,7 +78,7 @@ suite "calling convention":
       step 1
       let x = c.call(4)
       step 2
-      check c.result(x) == 8
+      check c.recover(x) == 8
       step 4
 
     foo: whelp bar
@@ -119,5 +119,5 @@ suite "calling convention":
 
     let x: C = cb.call(2)
     let y: C = cb.call(4)
-    check cb.result(x) == 4.0
-    check cb.result(y) == 8.0
+    check cb.recover(x) == 4.0
+    check cb.recover(y) == 8.0

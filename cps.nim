@@ -3,7 +3,7 @@ import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
 export Continuation, ContinuationProc, State
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
-export cpsMagic, cpsVoodoo, trampoline, trampolineIt, call, result
+export cpsMagic, cpsVoodoo, trampoline, trampolineIt, call, recover
 export writeStackFrames, writeTraceDeque
 export renderStackFrames, renderTraceDeque
 
