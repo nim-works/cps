@@ -1289,7 +1289,7 @@ proc looksLikeCallback(n: NimNode): bool =
     false
 
 macro naturalize(kind: static[NimNodeKind]; callback: typed;
-                 args: varargs[typed]): untyped =
+                 args: varargs[untyped]): untyped =
   ## perform a conditional typed rewrite for natural callback syntax inside cps
   if callback.looksLikeCallback:
     # convert it to callback.call(...)
@@ -1299,7 +1299,7 @@ macro naturalize(kind: static[NimNodeKind]; callback: typed;
     # wrap that in recover(callback, ...)
     result = newCall(bindSym"recover", callback, result)
   else:
-    result = kind.newTree(callback)
+    result = kind.newTree(desym callback)
     for arg in args.items:
       result.add arg
 
@@ -1320,4 +1320,3 @@ proc performUntypedPass*(T: NimNode; n: NimNode): NimNode =
   if n.kind != nnkProcDef: return n
   result = n
   result.body = rewriteCalls result.body
-  echo result.repr
