@@ -1318,4 +1318,6 @@ proc rewriteCalls*(n: NimNode): NimNode =
 proc performUntypedPass*(T: NimNode; n: NimNode): NimNode =
   ## Perform any rewrites needed prior to a `.cps: T.` transformation.
   if n.kind != nnkProcDef: return n
-  result = rewriteCalls n
+  result = n
+  result.body = rewriteCalls result.body
+  echo result.repr
