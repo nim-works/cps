@@ -46,8 +46,8 @@ template dismissed*(c: Continuation): bool =
 
 {.pop.}
 
-macro cps*(T: typed, n: typed): untyped =
-  ## This is the .cps. macro performing the proc transformation
+macro cpsTyped(T: typed, n: typed): untyped =
+  ## This is the typed CPS transformation pass which follows the untyped pass below.
   when defined(nimdoc):
     n
   else:
@@ -68,6 +68,18 @@ macro cps*(T: typed, n: typed): untyped =
       result = cpsCallbackTypeDef(T, n)
     else:
       result = getAst(cpsTransform(T, n))
+
+macro cps*(T: typed, n: untyped): untyped =
+  ## When applied to a procedure, rewrites the procedure into a continuation form.
+  ## When applied to a procedure type definition, rewrites the type into a callback
+  ## form.
+  result = n
+  when not defined(nimdoc):
+    # add the application of the typed transformation pass
+    n.addPragma:
+      nnkExprColonExpr.newTree(bindSym"cpsTyped", T)
+    # let the untyped pass do what it will with this input
+    result = performUntypedPass(T, n)
 
 proc adaptArguments(sym: NormNode; args: seq[NormNode]): seq[NormNode] =
   ## convert any arguments in the list as necessary to match those of

@@ -64,46 +64,46 @@ suite "calling convention":
 
   block:
     ## run a callback from inside cps with callback type
-    var k = newKiller 4
-
-    type
-      ContCall = proc(a: int): int {.cps: Cont.}
-
-    proc bar(a: int): int {.cps: Cont.} =
-      noop()
-      step 3
-      return a * 2
-
-    proc foo(c: ContCall) {.cps: Cont.} =
-      step 1
-      let x = c.call(4)
-      step 2
-      check c.recover(x) == 8
-      step 4
-
-    foo: whelp bar
-
-  block:
-    ## run a callback in cps with natural syntax
-    skip "pending discussion":
-      var k = newKiller 3
+    skip "no longer supported":
+      var k = newKiller 4
 
       type
         ContCall = proc(a: int): int {.cps: Cont.}
 
       proc bar(a: int): int {.cps: Cont.} =
         noop()
-        step 2
+        step 3
         return a * 2
 
       proc foo(c: ContCall) {.cps: Cont.} =
         step 1
-        let x = c(4)
-        check x == 8
-        step 3
+        let x = c.call(4)
+        step 2
+        check c.recover(x) == 8
+        step 4
 
-      const cb = whelp bar
-      foo cb
+      foo: whelp bar
+
+  block:
+    ## run a callback in cps with natural syntax
+    var k = newKiller 3
+
+    type
+      ContCall = proc(a: int): int {.cps: Cont.}
+
+    proc bar(a: int): int {.cps: Cont.} =
+      noop()
+      step 2
+      return a * 2
+
+    proc foo(c: ContCall) {.cps: Cont.} =
+      step 1
+      let x = c(4)
+      check x == 8
+      step 3
+
+    const cb = whelp bar
+    foo cb
 
   block:
     ## callback illustration

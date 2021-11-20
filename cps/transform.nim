@@ -1262,3 +1262,27 @@ macro cpsTransform*(T, n: typed): untyped =
   debug("cpsTransform", n, Original)
   result = cpsTransformProc(T, n)
   debug("cpsTransform", result, Transformed, n)
+
+proc rewriteCalls*(n: NimNode): NimNode =
+  ## rewriting `callback(x)` into `recover(callback, call(callback, x))` for use
+  ## inside of an untyped pass; this should be applied only to Callback symbols...
+  proc recall(n: NimNode): NimNode =
+    case n.kind
+    of CallNodes:
+      # turn callback(x) into call(callback, x)
+      var rewrit = macros.newTree(n.kind, newDotExpr(n[0], bindSym"call"))
+      rewrit.add n[1..^1]
+      # wrap that in recover(callback, ...)
+      rewrit = newCall(bindSym"recover", n[0], rewrit)
+      # wrap that in a when to guard against rewriting nodes that aren't Callback
+      result = nnkWhenStmt.newTree()
+      result.add nnkElifExpr.newTree(infix(n[0], "is", bindSym"Callback"), rewrit)
+      result.add nnkElseExpr.newTree(n)
+    else:
+      discard
+  result = filter(n, recall)
+
+proc performUntypedPass*(T: NimNode; n: NimNode): NimNode =
+  ## Perform any rewrites needed prior to a `.cps: T.` transformation.
+  if n.kind != nnkProcDef: return n
+  result = rewriteCalls n

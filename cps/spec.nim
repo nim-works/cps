@@ -60,7 +60,7 @@ type
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
 
-  Callback[C; R; P] = object
+  Callback*[C; R; P] = object
     fn*: P                            ##
     ## the bootstrap for continuation C
     rs*: proc (c: C): R {.nimcall.}   ##
