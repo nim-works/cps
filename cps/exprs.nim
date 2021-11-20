@@ -544,32 +544,32 @@ func annotate(n: NormNode): NormNode =
             )
         else:
           let asgnCall = newCall(bindName"cpsAsgn", copy(child[0])):
-              annotate:
-                newStmtList(child[1])
+            annotate:
+              newStmtList(child[1])
 
           asgnCall.copyLineInfo(child)
           result.add asgnCall
 
       of nnkConv:
         let conv = newCall(bindName"cpsExprConv", copy(child[0])):
-            annotate:
-                newStmtList(child[1])
+          annotate:
+            newStmtList(child[1])
 
         conv.copyLineInfo(child)
         result.add conv
 
       of nnkDiscardStmt:
         let discrd = newCall(bindName"cpsExprDiscard"):
-            annotate:
-              newStmtList(child.last)
+          annotate:
+            newStmtList(child.last)
 
         discrd.copyLineInfo(child)
         result.add discrd
 
       of nnkReturnStmt:
         let ret = newCall(bindName"cpsExprReturn"):
-            annotate:
-              newStmtList(child.last)
+          annotate:
+            newStmtList(child.last)
 
         ret.copyLineInfo(child)
         result.add ret
