@@ -1268,6 +1268,8 @@ proc looksLikeCallback(n: NimNode): bool =
   case n.kind
   of nnkEmpty:
     false
+  of nnkDotExpr:
+    looksLikeCallback(n.last)
   of nnkSym:
     looksLikeCallback(getTypeImpl n)
   of nnkObjectTy:
@@ -1303,13 +1305,23 @@ macro naturalize(kind: static[NimNodeKind]; callback: typed;
     for arg in args.items:
       result.add arg
 
+proc unwrapAnyDotExpr(n: NimNode): seq[NimNode] =
+  ## turn a caller like foo.inc into @[inc, foo] so that we can flatten/reorder
+  ## arguments correctly
+  case n.kind
+  of nnkDotExpr:
+    @[n[1], n[0]]
+  else:
+    @[n]
+
 proc rewriteCalls*(n: NimNode): NimNode =
   ## rewriting `callback(x)` into `recover(callback, call(callback, x))` for use
   ## inside of an untyped pass; this should be applied only to Callback symbols...
   proc recall(n: NimNode): NimNode =
     case n.kind
     of CallNodes:
-      result = newCall(bindSym"naturalize", newLit(n.kind), n[0])
+      result = newCall(bindSym"naturalize", newLit(n.kind))
+      result.add unwrapAnyDotExpr(n[0])  # help foo.inc(...) into inc(foo, ...)
       result.add n[1..^1]
     else:
       discard
