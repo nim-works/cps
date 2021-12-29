@@ -13,6 +13,8 @@ import cps/[spec, hooks, help, rewrites, normalizedast]
 
 const
   cpsReparent = false
+  cpsResultProc {.strdefine.} = "()"  ## identifier of proc to fetch an
+                                      ## extant continuation return value
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
@@ -425,7 +427,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
   ##
   ## `exported` determines whether this procedure will be exported
   let
-    field =
+    field = NimNode:
       if env.rs.hasType:
         env.get                  # the return value is env.result
       else:
@@ -433,16 +435,19 @@ proc createResult*(env: Env, exported = false): ProcDef =
           newEmptyNode()       # the return value is void
 
   # compose the (exported?) symbol
-  var name = nnkAccQuoted.newTree ident"()"
-  if exported:
-    name = NormNode postfix(name, "*")
+  let name = NimNode nnkAccQuoted.newTree ident(cpsResultProc)
+  var ename =
+    if exported:
+      postfix(name, "*")
+    else:
+      name
 
   result = ProcDef:
-    genAst(name = name.NimNode, field = field.NimNode, c = env.first.NimNode,
+    genAst(name, ename, field, c = env.first.NimNode,
            cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
            dismissed=Dismissed, finished=Finished, running=Running):
       {.push experimental: "callOperator".}
-      proc name(c: cont): tipe {.used.} =
+      proc ename(c: cont): tipe {.used.} =
         case c.state
         of dismissed:
           raise Defect.newException:
@@ -450,7 +455,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
         of finished:
           field
         of running:
-          `()`(trampoline c)
+          name(trampoline c)
       {.pop.}
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
