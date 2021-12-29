@@ -430,10 +430,6 @@ development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label
 - Generic continuations such as the following won't work without changes to
 the compiler.
 
-- The `()` procedure can prevent compilation of `foo[T](bar)` call syntax;
-  `--define:cpsResultProc="someNameHere"` to specify an alternate identifier
-  for the `()` procedure.
-
 ```nim
 type
   MyContinuation[T] = ref object of Continuation

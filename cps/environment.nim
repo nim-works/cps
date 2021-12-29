@@ -13,8 +13,6 @@ import cps/[spec, hooks, help, rewrites, normalizedast]
 
 const
   cpsReparent = false
-  cpsResultProc {.strdefine.} = "()"  ## identifier of proc to fetch an
-                                      ## extant continuation return value
 
 type
   # the idents|symbols and the typedefs they refer to in order of discovery
@@ -422,7 +420,7 @@ proc genException*(e: var Env): NimNode =
     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
 
-proc createResult*(env: Env, exported = false): ProcDef =
+proc createRecover*(env: Env, exported = false): ProcDef =
   ## define a procedure for retrieving the result of a continuation
   ##
   ## `exported` determines whether this procedure will be exported
@@ -435,7 +433,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
           newEmptyNode()       # the return value is void
 
   # compose the (exported?) symbol
-  let name = NimNode nnkAccQuoted.newTree ident(cpsResultProc)
+  let name = NimNode ident"recover"
   var ename =
     if exported:
       postfix(name, "*")
@@ -443,10 +441,9 @@ proc createResult*(env: Env, exported = false): ProcDef =
       name
 
   result = ProcDef:
-    genAst(name, ename, field, c = env.first.NimNode,
-           cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
-           dismissed=Dismissed, finished=Finished, running=Running):
-      {.push experimental: "callOperator".}
+    genAstOpt({}, name, ename, field, c = env.first.NimNode,
+              cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
+              dismissed=Dismissed, finished=Finished, running=Running):
       proc ename(c: cont): tipe {.used.} =
         case c.state
         of dismissed:
@@ -456,7 +453,6 @@ proc createResult*(env: Env, exported = false): ProcDef =
           field
         of running:
           name(trampoline c)
-      {.pop.}
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation

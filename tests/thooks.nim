@@ -80,7 +80,7 @@ suite "hooks":
         stack 2: foo foo 👍
         boot 3: c nil 👍
         trace 4: foo continuation 👍
-        coop 5: Cont nil genasts.nim
+        coop 5: Cont nil environment.nim
         trace 6: While Loop continuation 👍
         trace 7: Post Call continuation 👍
         tail 8: Cont continuation 👍
@@ -92,9 +92,9 @@ suite "hooks":
         trace 14: Post Call continuation 👍
         pass 15: continuation.mom Cont(continuation) normalizedast.nim
         coop 16: result nil normalizedast.nim
-        dealloc 17: cps environment 😎 genasts.nim
+        dealloc 17: cps environment 😎 environment.nim
         trace 18: Post Child continuation normalizedast.nim
-        coop 19: Cont nil genasts.nim
+        coop 19: Cont nil environment.nim
         trace 20: While Loop continuation 👍
         trace 21: Post Call continuation 👍
         tail 22: Cont continuation 👍
@@ -106,9 +106,9 @@ suite "hooks":
         trace 28: Post Call continuation 👍
         pass 29: continuation.mom Cont(continuation) normalizedast.nim
         coop 30: result nil normalizedast.nim
-        dealloc 31: cps environment 😎 genasts.nim
+        dealloc 31: cps environment 😎 environment.nim
         trace 32: Post Child continuation normalizedast.nim
-        coop 33: Cont nil genasts.nim
+        coop 33: Cont nil environment.nim
         trace 34: While Loop continuation 👍
         trace 35: Post Call continuation 👍
       """.dedent(8).strip()
