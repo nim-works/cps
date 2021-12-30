@@ -45,8 +45,8 @@ suite "returns and results":
 
     var c = whelp foo(5)
     trampoline c
-    check "call operator works correctly":
-      c() == 25
+    check "recover operator works correctly":
+      recover(c) == 25
 
   block:
     ## assignments to the special result symbol work
@@ -134,8 +134,8 @@ suite "returns and results":
 
     var c = whelp foo()
     trampoline c
-    check "call operator works correctly":
-      c() == 6
+    check "recover operator works correctly":
+      6 == recover c
 
   block:
     ## discarding a continuation return value works

@@ -271,8 +271,6 @@ proc dealloc*[T: Continuation](c: sink T; E: typedesc[T]): E {.used, inline.} =
   ## its result may be assigned to another continuation reference.
   nil
 
-{.push experimental: "callOperator".}
-template `()`(c: Continuation): untyped {.used.} =
+template recover*(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
-{.pop.}

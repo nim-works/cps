@@ -420,12 +420,12 @@ proc genException*(e: var Env): NimNode =
     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
 
-proc createResult*(env: Env, exported = false): ProcDef =
+proc createRecover*(env: Env, exported = false): ProcDef =
   ## define a procedure for retrieving the result of a continuation
   ##
   ## `exported` determines whether this procedure will be exported
   let
-    field =
+    field = NimNode:
       if env.rs.hasType:
         env.get                  # the return value is env.result
       else:
@@ -433,16 +433,18 @@ proc createResult*(env: Env, exported = false): ProcDef =
           newEmptyNode()       # the return value is void
 
   # compose the (exported?) symbol
-  var name = nnkAccQuoted.newTree ident"()"
-  if exported:
-    name = NormNode postfix(name, "*")
+  let name = NimNode ident"recover"
+  var ename =
+    if exported:
+      postfix(name, "*")
+    else:
+      name
 
   result = ProcDef:
-    genAst(name = name.NimNode, field = field.NimNode, c = env.first.NimNode,
-           cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
-           dismissed=Dismissed, finished=Finished, running=Running):
-      {.push experimental: "callOperator".}
-      proc name(c: cont): tipe {.used.} =
+    genAstOpt({}, name, ename, field, c = env.first.NimNode,
+              cont = env.identity.NimNode, tipe = env.rs.typ.NimNode,
+              dismissed=Dismissed, finished=Finished, running=Running):
+      proc ename(c: cont): tipe {.used.} =
         case c.state
         of dismissed:
           raise Defect.newException:
@@ -450,8 +452,7 @@ proc createResult*(env: Env, exported = false): ProcDef =
         of finished:
           field
         of running:
-          `()`(trampoline c)
-      {.pop.}
+          name(trampoline c)
 
 proc createWhelp*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation

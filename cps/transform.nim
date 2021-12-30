@@ -624,7 +624,7 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
 
   # swap the call in the assignment statement(s)
   let (child, etype) = setupChildContinuation(env, call)
-  assign = assign.resymCall(call, newCall child)
+  assign = assign.resymCall(call, newCall("recover".asName, child))
 
   # compose the rewrite as an assignment, a lame effort to dealloc
   # the child, and then any remaining statements we were passed
@@ -1198,17 +1198,17 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   for p in [whelp, booty]:
     p.addPragma(bindName"cpsEnvironment", env.identity)
 
-  # the `()` operator recovers the result of a continuation
+  # the `recover` operator recovers the result of a continuation
   #
   # copy the exported-ness from the original proc so that it can be used
   # from other modules
-  let dots = env.createResult(originalProcSym.isExported)
+  let recover = env.createRecover(exported = originalProcSym.isExported)
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
   # generated proc bodies, remaining proc, whelp, bootstrap
-  result = newStmtList(types, processMainContinuation, dots, whelp, booty)
+  result = newStmtList(types, processMainContinuation, recover, whelp, booty)
 
   # this is something that happens a lot in cps-generated code, so hide it
   # here to not spam the user with hints.
