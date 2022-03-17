@@ -433,3 +433,73 @@ suite "try statements":
       check x == 42
 
     trampoline whelp(foo())
+
+  block:
+    ## try-finally-reraise escape via break statements.
+    var k = newKiller(1)
+
+    proc foo() {.cps: Cont.} =
+      while true:
+        try:
+          noop()
+          step 1
+          raise newException(ValueError, "")
+        finally:
+          break
+        fail "statement in while-loop after break"
+      fail "statement after unhandled exception"
+
+    expect ValueError:
+      trampoline whelp(foo())
+
+  block:
+    ## try-finally-reraise escape via continue statements.
+    var k = newKiller(1)
+
+    proc foo() {.cps: Cont.} =
+      while true:
+        try:
+          noop()
+          step 1
+          raise newException(ValueError, "")
+        finally:
+          continue
+        fail "statement in while-loop after break"
+      fail "statement after unhandled exception"
+
+    expect ValueError:
+      trampoline whelp(foo())
+
+  block:
+    ## try-finally-reraise escape via return statements.
+    var k = newKiller(1)
+
+    proc foo() {.cps: Cont.} =
+      try:
+        noop()
+        step 1
+        raise newException(ValueError, "")
+      finally:
+        return
+      fail "statement after return"
+
+    expect ValueError:
+      trampoline whelp(foo())
+
+  block:
+    ## try-finally-reraise handle after escape attempt
+    var k = newKiller(2)
+
+    proc foo() {.cps: Cont.} =
+      try:
+        while true:
+          try:
+            noop()
+            step 1
+            raise newException(ValueError, "")
+          finally:
+            break
+      except ValueError:
+        step 2
+
+    trampoline whelp(foo())

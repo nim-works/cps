@@ -550,11 +550,22 @@ macro cpsTryFinally(cont, contType, ex, n: typed): untyped =
     #
     # Generate a finally leg that serve as an exception handler and will
     # raise the captured exception on exit
-    let reraise = final.generateContinuation(nextJump):
-      newStmtList:
+    let
+      reraiseStmt = newStmtList:
         # de-sym our `ex` so that it uses the continuation of where it is
         # replaced into
         nnkRaiseStmt.newTree(ex.resym(cont, desym cont))
+
+      reraise = final.generateContinuation(nextJump):
+        reraiseStmt
+
+    # Unlike other finally handler, re-raise must always happen after the
+    # finally body and scope escape should not be possible.
+    #
+    # The easiest way to get this done is to rewrite all scope exits in the
+    # handler to the re-raise statement.
+    reraise.body = reraise.body.replace(isScopeExit):
+      reraiseStmt
 
     # Add this leg to the AST
     it.add:
