@@ -1095,8 +1095,12 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
           body
         except:
           cont.ex = getCurrentException()
-          return Continuation: unwind(contType(cont), cont.ex)
-
+        # A continuation body created with makeContProc (which is all of
+        # them) will have a terminator in the body, thus this part can
+        # only be reached iff the except branch happened to deter the jump
+        #
+        # Workaround for https://github.com/nim-lang/Nim/issues/18411
+        return Continuation: unwind(contType(cont), cont.ex)
       result = fnDef
 
   debugAnnotation cpsHandleUnhandledException, n:
@@ -1133,6 +1137,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)
+  let whelpShim = env.createCallbackShim(whelp)
 
   # setup the bootstrap using the old proc name,
   # but the first leg will be the new proc name
@@ -1140,6 +1145,9 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
 
   # we store a pointer to the whelp on the bootstrap
   booty.addPragma(bindName"cpsBootstrap", whelp.name)
+
+  # we store a pointer to the whelp shim on the bootstrap
+  booty.addPragma(bindName"cpsCallbackShim", whelpShim.name)
 
   # like magics, the bootstrap must jump
   booty.addPragma "cpsMustJump"
@@ -1185,7 +1193,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
   n.body = env.annotate n.body
 
   if n.body.firstReturn.isNil:
-    # fixes https://github.com/disruptek/cps/issues/145
+    # fixes https://github.com/nim-works/cps/issues/145
     # by ensuring that we always rewrite termination
     n.body.add newCpsPending()
 
@@ -1201,21 +1209,34 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
           newCall(bindSym"cpsHandleUnhandledException", NimNode env.root):
             NormNode n
 
-  # storing the source environment on helpers
-  for p in [whelp, booty]:
-    p.addPragma(bindName"cpsEnvironment", env.identity)
-
   # the `recover` operator recovers the result of a continuation
   #
   # copy the exported-ness from the original proc so that it can be used
   # from other modules
   let recover = env.createRecover(exported = originalProcSym.isExported)
+  # pluck out the FIRST procedure from the list; this is the shim
+  let recoverProc = recover.NimNode.findChild(it.kind == nnkProcDef)
+
+  for p in [whelp, booty]:
+    # storing the source environment on helpers
+    p.addPragma(bindName"cpsEnvironment", env.identity)
+
+  for p in [booty]:
+    # storing the result fetcher on the booty
+    p.addPragma(bindName"cpsResult", recoverProc.name)
+
+  for p in [whelp, whelpShim]:
+    # storing the result fetcher on the whelp and whelp shim
+    p.addPragma(bindName"cpsResult", recoverProc.name)
+    # storing the return type on the whelp and whelp shim
+    p.addPragma(bindName"cpsReturnType", copyOrVoid recoverProc.params[0])
 
   # "encouraging" a write of the current accumulating type
   env = env.storeType(force = off)
 
-  # generated proc bodies, remaining proc, whelp, bootstrap
-  result = newStmtList(types, processMainContinuation, recover, whelp, booty)
+  # generated proc bodies, remaining proc, result fetchers, whelp, bootstrap
+  result = newStmtList(types, processMainContinuation, recover.NormNode,
+                       whelp, whelpShim, booty)
 
   # this is something that happens a lot in cps-generated code, so hide it
   # here to not spam the user with hints.
@@ -1237,3 +1258,73 @@ macro cpsTransform*(T, n: typed): untyped =
   debug("cpsTransform", n, Original)
   result = cpsTransformProc(T, n)
   debug("cpsTransform", result, Transformed, n)
+
+proc looksLikeCallback(n: NimNode): bool =
+  ## true if the symbol appears to be of the Callback persuasion.
+  case n.kind
+  of nnkEmpty:
+    false
+  of nnkDotExpr:
+    looksLikeCallback(n.last)
+  of nnkSym:
+    looksLikeCallback(getTypeImpl n)
+  of nnkObjectTy:
+    looksLikeCallback(n.last)
+  of nnkRecList:
+    looksLikeCallback(n[0])
+  of nnkIdentDefs:
+    if n[0].repr == "fn":
+      looksLikeCallback(n[1])
+    else:
+      false
+  of nnkProcTy:
+    for node in n.pragma:
+      if node.kind == nnkCall:
+        if node[0].strVal == "cpsCallback":
+          return true
+    false
+  else:
+    false
+
+macro naturalize(kind: static[NimNodeKind]; callback: typed;
+                 args: varargs[untyped]): untyped =
+  ## perform a conditional typed rewrite for natural callback syntax inside cps
+  if callback.looksLikeCallback:
+    # convert it to callback.call(...)
+    result = macros.newTree(kind, newDotExpr(callback, bindSym"call"))
+    for arg in args.items:
+      result.add arg
+    # wrap that in recover(callback, ...)
+    result = newCall(bindSym"recover", callback, result)
+  else:
+    result = kind.newTree(desym callback)
+    for arg in args.items:
+      result.add arg
+
+proc unwrapAnyDotExpr(n: NimNode): seq[NimNode] =
+  ## turn a caller like foo.inc into @[inc, foo] so that we can flatten/reorder
+  ## arguments correctly
+  case n.kind
+  of nnkDotExpr:
+    @[n[1], n[0]]
+  else:
+    @[n]
+
+proc rewriteCalls*(n: NimNode): NimNode =
+  ## rewriting `callback(x)` into `recover(callback, call(callback, x))` for use
+  ## inside of an untyped pass; this should be applied only to Callback symbols...
+  proc recall(n: NimNode): NimNode =
+    case n.kind
+    of CallNodes:
+      result = newCall(bindSym"naturalize", newLit(n.kind))
+      result.add unwrapAnyDotExpr(n[0])  # help foo.inc(...) into inc(foo, ...)
+      result.add n[1..^1]
+    else:
+      discard
+  result = filter(n, recall)
+
+proc performUntypedPass*(T: NimNode; n: NimNode): NimNode =
+  ## Perform any rewrites needed prior to a `.cps: T.` transformation.
+  if n.kind != nnkProcDef: return n
+  result = n
+  result.body = rewriteCalls result.body

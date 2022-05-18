@@ -46,7 +46,8 @@ proc doWork(pool: Pool) {.thread.} =
 
 
 proc work(nThreads: int) =
-  var threads = newSeq[Thread[Pool]](nThreads)
+  var threads: seq[Thread[Pool]]
+  newSeq(threads, nThreads)
   for i in 0..<nThreads:
     createThread(threads[i], doWork, pool)
   joinThreads(threads)

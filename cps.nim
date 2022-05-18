@@ -3,7 +3,7 @@ import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
 export Continuation, ContinuationProc, State
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
-export cpsMagic, cpsVoodoo, trampoline, trampolineIt
+export cpsMagic, cpsVoodoo, trampoline, trampolineIt, call, recover
 export writeStackFrames, writeTraceDeque
 export renderStackFrames, renderTraceDeque
 
@@ -19,7 +19,7 @@ when not(defined(gcArc) or defined(gcOrc)):
 # we only support panics because we don't want to run finally on defect
 when not defined(nimPanics):
   {.warning: "cps supports --panics:on only; " &
-             " see https://github.com/disruptek/cps/issues/110".}
+             " see https://github.com/nim-works/cps/issues/110".}
 
 proc state*(c: Continuation): State {.inline.} =
   ## Get the current state of a continuation
@@ -46,8 +46,8 @@ template dismissed*(c: Continuation): bool =
 
 {.pop.}
 
-macro cps*(T: typed, n: typed): untyped =
-  ## This is the .cps. macro performing the proc transformation
+macro cpsTyped(T: typed, n: typed): untyped =
+  ## This is the typed CPS transformation pass which follows the untyped pass below.
   when defined(nimdoc):
     n
   else:
@@ -63,8 +63,25 @@ macro cps*(T: typed, n: typed): untyped =
           # Add the flattening phase which will be run first
           newCall(bindSym"cpsFlattenExpr"):
             n
+    of nnkProcTy:
+      # converting a cps callback
+      result = cpsCallbackTypeDef(T, n)
     else:
       result = getAst(cpsTransform(T, n))
+
+macro cps*(T: typed, n: untyped): untyped =
+  ## When applied to a procedure, rewrites the procedure into a continuation form.
+  ## When applied to a procedure type definition, rewrites the type into a callback
+  ## form.
+  result = n
+  when not defined(nimdoc):
+    # add the application of the typed transformation pass
+    n.addPragma:
+      nnkExprColonExpr.newTree(bindSym"cpsTyped", T)
+    # let the untyped pass do what it will with this input
+    # XXX: currently disabled because it's a slipperly slope of regret
+    #result = performUntypedPass(T, n)
+    result = n
 
 proc adaptArguments(sym: NormNode; args: seq[NormNode]): seq[NormNode] =
   ## convert any arguments in the list as necessary to match those of
@@ -110,13 +127,22 @@ template wrapWhelpIt(call: typed; logic: untyped): untyped =
       logic
 
 macro whelp*(call: typed): untyped =
-  ## Instantiate the given continuation call but do not begin
-  ## running it; instead, return the continuation as a value.
-  wrapWhelpIt call:
-    it =
-      sym.ensimilate:
-        Head.hook:
-          newCall(base, it)
+  ## Instantiate the given continuation call but do not begin running it;
+  ## instead, return the continuation as a value.
+  ##
+  ## If you pass `whelp` a continuation procedure _symbol_ instead, the
+  ## result is a `Callback` which you can use to create many individual
+  ## continuations or recover the `result` of an extant continuation.
+  result =
+    case call.kind
+    of nnkSym:
+      createCallback call
+    else:
+      wrapWhelpIt call:
+        it =
+          sym.ensimilate:
+            Head.hook:
+              newCall(base, it)
 
 macro whelp*(parent: Continuation; call: typed): untyped =
   ## As in `whelp(call(...))`, but also links the new continuation to the
@@ -274,3 +300,14 @@ proc dealloc*[T: Continuation](c: sink T; E: typedesc[T]): E {.used, inline.} =
 template recover*(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
+
+{.push experimental: "callOperator".}
+
+macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
+  ## Allows for natural use of call syntax to invoke a callback and
+  ## recover its result in a single statement, inside a continuation.
+  let call = bindSym"call"
+  result = newCall(call, callback)
+  for argument in arguments.items:
+    result.add argument
+  result = newCall(bindSym"recover", callback, result)

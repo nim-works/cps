@@ -25,9 +25,16 @@ template cpsContinue*() {.pragma.}      ##
 ## this is a continue statement in a cps block
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
-## the symbol for creating a continuation
+## the symbol for creating a continuation -- technically, a whelp()
+template cpsCallback*() {.pragma.}          ## this is a callback typedef
+template cpsCallbackShim*(whelp: typed) {.pragma.}  ##
+## the symbol for creating a continuation which returns a continuation base
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
+template cpsResult*(result: typed) {.pragma.}  ##
+## the procedure that returns the result of the continuation
+template cpsReturnType*(tipe: typed) {.pragma.}  ##
+## the return type of the continuation
 template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## the continuation has an exception stored in `ex`, with `cont` being the
@@ -53,6 +60,12 @@ type
       stack*: TraceFrame            ## Stack-like semantic record
 
   ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+
+  Callback*[C; R; P] = object
+    fn*: P                            ##
+    ## the bootstrap for continuation C
+    rs*: proc (c: C): R {.nimcall.}   ##
+    ## the result fetcher for continuation C
 
   TraceFrame* = object ## a record of where the continuation has been
     hook*: Hook        ## the hook that provoked the trace entry
@@ -532,3 +545,59 @@ macro etype*(e: enum): string =
     if sym.intVal == e.intVal:
       return newLit sym.strVal
   error "unexpected"
+
+proc copyOrVoid*(n: NimNode): NimNode =
+  ## if the node is empty, `ident"void"`; else, a copy of the node
+  if n.isEmpty:
+    ident"void"
+  else:
+    copyNimTree n
+
+proc createCallback*(sym: NimNode): NimNode =
+  ## create a new Callback object construction
+  let fn = sym.getImpl.ProcDef.pragmaArgument"cpsCallbackShim"
+  let impl = fn.getImpl.ProcDef                     # convenience
+  let rs = impl.pragmaArgument"cpsResult"
+  let tipe = nnkBracketExpr.newTree bindSym"Callback"
+  tipe.add impl.returnParam # the base cps environment type
+  tipe.add:                 # the return type of the result fetcher
+    copyOrVoid impl.pragmaArgument"cpsReturnType"
+  var params = copyNimTree impl.formalParams # prepare params list
+  # consider desym'ing foo(a: int; b = a) before deleting this loop
+  for defs in impl.callingParams:
+    params = desym(params, defs.name)
+  tipe.add:      # the proc() type of the bootstrap
+    nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
+  result =
+    NimNode:
+      nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
+
+proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
+  ## looks like cpsTransformProc but applies to proc typedefs;
+  ## this is where we create our calling convention concept
+  let params = copyNimTree n[0]
+  let R = copyOrVoid params[0]
+  params[0] = T
+  let P = nnkProcTy.newTree(params,
+                            nnkPragma.newTree(ident"nimcall", bindSym"cpsCallback"))
+  result = nnkBracketExpr.newTree(bindSym"Callback", T, R, P)
+  result = workaroundRewrites result.NormNode
+
+proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: C): R =
+  ## Using a `callback`, recover the `result` of the given `continuation`.
+  ## This is equivalent to running `()` on a continuation which was
+  ## created with `whelp` against a procedure call.
+  ##
+  ## If the continuation is in the `running` `State`, this operation will
+  ## `trampoline` the continuation until it is `finished`. The `result`
+  ## will then be recovered from the continuation environment.
+  ##
+  ## It is a `Defect` to attempt to recover the `result` of a `dismissed`
+  ## `continuation`.
+  callback.rs(continuation)
+
+macro call*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): C =
+  ## Invoke a `callback` with the given `arguments`; returns a continuation.
+  result = newCall(callback.dot ident"fn")
+  for argument in arguments.items:
+    result.add argument
