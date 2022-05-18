@@ -79,7 +79,9 @@ macro cps*(T: typed, n: untyped): untyped =
     n.addPragma:
       nnkExprColonExpr.newTree(bindSym"cpsTyped", T)
     # let the untyped pass do what it will with this input
-    result = performUntypedPass(T, n)
+    # XXX: currently disabled because it's a slipperly slope of regret
+    #result = performUntypedPass(T, n)
+    result = n
 
 proc adaptArguments(sym: NormNode; args: seq[NormNode]): seq[NormNode] =
   ## convert any arguments in the list as necessary to match those of
