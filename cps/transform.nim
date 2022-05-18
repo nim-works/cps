@@ -1209,10 +1209,6 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
           newCall(bindSym"cpsHandleUnhandledException", NimNode env.root):
             NormNode n
 
-  # storing the source environment on helpers
-  for p in [whelp, booty]:
-    p.addPragma(bindName"cpsEnvironment", env.identity)
-
   # the `recover` operator recovers the result of a continuation
   #
   # copy the exported-ness from the original proc so that it can be used
