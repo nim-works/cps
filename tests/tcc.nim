@@ -64,25 +64,24 @@ suite "calling convention":
 
   block:
     ## run a callback from inside cps with callback type
-    skip "no longer supported":
-      var k = newKiller 4
+    var k = newKiller 4
 
-      type
-        ContCall = proc(a: int): int {.cps: Cont.}
+    type
+      ContCall = proc(a: int): int {.cps: Cont.}
 
-      proc bar(a: int): int {.cps: Cont.} =
-        noop()
-        step 3
-        return a * 2
+    proc bar(a: int): int {.cps: Cont.} =
+      noop()
+      step 3
+      return a * 2
 
-      proc foo(c: ContCall) {.cps: Cont.} =
-        step 1
-        let x = c.call(4)
-        step 2
-        check c.recover(x) == 8
-        step 4
+    proc foo(c: ContCall) {.cps: Cont.} =
+      step 1
+      let x = c.call(4)
+      step 2
+      check c.recover(x) == 8
+      step 4
 
-      foo: whelp bar
+    foo: whelp bar
 
   block:
     ## run a callback in cps with natural syntax
