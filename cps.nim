@@ -1,5 +1,5 @@
 import std/[genasts, deques]
-import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
+import cps/[analyze, spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
 
 export Continuation, ContinuationProc, State, cpsCallOperatorSupported
@@ -67,9 +67,10 @@ macro cpsTyped(tipe: typed, n: typed): untyped =
       result =
         # Add the main transform phase
         newCall(bindSym"cpsTransform", tipe):
-          # Add the flattening phase which will be run first
-          newCall(bindSym"cpsFlattenExpr"):
-            n
+          newCall(bindSym"cpsAnalyze"):
+            # Add the flattening phase which will be run first
+            newCall(bindSym"cpsFlattenExpr"):
+              n
     of nnkProcTy:
       # converting a cps callback
       result = cpsCallbackTypeDef(tipe, n)
