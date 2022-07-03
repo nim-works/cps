@@ -93,7 +93,7 @@ func unwrapCpsLoopNextFilter(n: NormNode): NormNode =
 
 proc simplifyWhile(n: WhileStmt): NormNode =
   ## Convert a while statement into a while-true statement.
-  if n.cond == bindSym"true":
+  if n.cond == bindSym"true" or (n.cond.kind == nnkIntLit and n.cond.intVal != 0):
     result = n
   else:
     result = copyNimNode(n)
