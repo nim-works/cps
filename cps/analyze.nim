@@ -33,6 +33,11 @@ template cpsLoopNeedProcessing() {.pragma.}
   ## Temporary node to signify that this cpsLoop has not have its control-flow
   ## rewritten.
 
+template cpsJumpAfterBlock() {.pragma.}
+  ## Jump to the next split after the parent cps loop or block.
+  ##
+  ## The annotated block is the original statement.
+
 func newCpsSplit(n: NormNode): NormNode =
   ## Create a new cpsSplit annotation.
   newPragmaBlock(bindName"cpsSplit", n)
@@ -80,6 +85,14 @@ func newCpsLoopNeedProcessing(n: WhileStmt): NormNode =
 func isCpsLoopNeedProcessing*(n: NormNode): bool =
   ## Returns whether `n` is a cpsLoopNeedProcessing annotation.
   n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsLoopNeedProcessing"
+
+func newCpsJumpAfterBlock(n: NormNode): NormNode =
+  ## Create a new cpsJumpAfterBlock annotation.
+  newPragmaBlock(bindName"cpsJumpAfterBlock", n)
+
+func isCpsJumpAfterBlock*(n: NormNode): bool =
+  ## Returns whether `n` is a cpsJumpAfterBlock annotation.
+  n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsJumpAfterBlock"
 
 func unwrapCpsLoopNextFilter(n: NormNode): NormNode =
   ## Restore a cpsLoopNext annotation back into a standalone continue
@@ -191,7 +204,7 @@ proc processCpsLoop(n: NormNode): NormNode =
         # Rewrite unlabeled break statements
         if child[0].kind == nnkEmpty:
           result.add:
-            newCpsJumpNext:
+            newCpsJumpAfterBlock:
               child
 
         else:
