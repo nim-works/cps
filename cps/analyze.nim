@@ -29,10 +29,6 @@ template cpsLoopNext() {.pragma.}
   ##
   ## The annotated block is the original statement.
 
-template cpsLoopNeedProcessing() {.pragma.}
-  ## Temporary node to signify that this cpsLoop has not have its control-flow
-  ## rewritten.
-
 template cpsJumpAfterBlock() {.pragma.}
   ## Jump to the next split after the parent cps loop or block.
   ##
@@ -78,14 +74,6 @@ func isCpsLoopNext*(n: NormNode): bool =
   ## Returns whether `n` is a cpsLoopNext annotation.
   n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsLoopNext"
 
-func newCpsLoopNeedProcessing(n: WhileStmt): NormNode =
-  ## Create a new cpsLoopNeedProcessing annotation.
-  newPragmaBlock(bindName"cpsLoopNeedProcessing", n)
-
-func isCpsLoopNeedProcessing*(n: NormNode): bool =
-  ## Returns whether `n` is a cpsLoopNeedProcessing annotation.
-  n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsLoopNeedProcessing"
-
 func newCpsJumpAfterBlock(n: NormNode): NormNode =
   ## Create a new cpsJumpAfterBlock annotation.
   newPragmaBlock(bindName"cpsJumpAfterBlock", n)
@@ -93,6 +81,13 @@ func newCpsJumpAfterBlock(n: NormNode): NormNode =
 func isCpsJumpAfterBlock*(n: NormNode): bool =
   ## Returns whether `n` is a cpsJumpAfterBlock annotation.
   n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsJumpAfterBlock"
+
+func isCpsStatement*(n: NormNode): bool =
+  ## Returns whether `n` is a cps statement annotation.
+  ##
+  ## Statements are usually pragma blocks annotating the originating statement.
+  ## Unless the origin is to be inspected, don't recurse into their tree.
+  n.isCpsJumpNext or n.isCpsLoopNext or n.isCpsJumpAfterBlock
 
 func unwrapCpsLoopNextFilter(n: NormNode): NormNode =
   ## Restore a cpsLoopNext annotation back into a standalone continue
@@ -163,7 +158,7 @@ proc annotate(n: NormNode): NormNode =
       of nnkWhileStmt:
         result.add:
           # Label the loop as the jump point
-          newCpsLoopNeedProcessing:
+          newCpsLoop:
             # Simplify the loop then annotate the contents
             asWhileStmt:
               annotate:
@@ -223,12 +218,16 @@ proc processCpsLoop(n: NormNode): NormNode =
           # Add as-is otherwise
           result.add child
 
+      elif child.isCpsStatement:
+        # Don't recurse into statements.
+        result.add child
+
       else:
         # Rewrite inner nodes
         result.add rewriteLoopReachableFlow(child)
 
   proc annotator(n: NormNode): NormNode =
-    if n.isCpsLoopNeedProcessing:
+    if n.isCpsLoop:
       n.asPragmaBlock.body.asWhileStmt()
                           .rewriteLoopReachableFlow()
                           .processCpsLoop()
