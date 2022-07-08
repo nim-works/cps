@@ -180,23 +180,14 @@ proc annotate(n: NormNode): NormNode =
 
 proc processCpsLoop(n: NormNode): NormNode =
   ## Analyze all cpsLoop in n and annotate their control flow
-  proc rewriteLoopReachableFlow(n: NormNode): NormNode =
+  proc annotateLoopBreak(n: NormNode): NormNode =
+    ## Annotate break statements in the loop
     result = copyNimNode(n)
 
     for idx, child in n.pairs:
       case child.kind
-      of nnkWhileStmt, nnkForStmt:
-        # Children of this node are in a different loop context, don't touch
-        # them.
-        result.add child
-
-      of nnkContinueStmt:
-        result.add:
-          newCpsLoopNext:
-            child
-
       of nnkBreakStmt:
-        # Rewrite unlabeled break statements
+        # Annotate unlabeled break statements
         if child[0].kind == nnkEmpty:
           result.add:
             newCpsJumpAfterBlock:
@@ -205,36 +196,90 @@ proc processCpsLoop(n: NormNode): NormNode =
         else:
           result.add child
 
-      elif child.isCpsJumpNext or child.isCpsJumpNextVia:
-        # If there are no splits in the scope
-        if n[idx + 1 .. ^1].allIt(it.findChildRecursive(isCpsSplit).isNil):
-          # Then this is the original end of the loop, switch it into a loopNext
-          # statement.
-          result.add:
-            newCpsLoopNext:
-              child
-
-        else:
-          # Add as-is otherwise
-          result.add child
+      of nnkBlockExpr, nnkBlockStmt, nnkForStmt, nnkWhileStmt:
+        # Children of this node are in a different break context, don't touch
+        # them.
+        result.add child
 
       elif child.isCpsStatement:
         # Don't recurse into statements.
         result.add child
 
       else:
-        # Rewrite inner nodes
-        result.add rewriteLoopReachableFlow(child)
+        # Annotate inner nodes
+        result.add annotateLoopBreak(child)
+
+  proc annotateLoopContinue(n: NormNode): NormNode =
+    ## Annotate continue statements in the loop
+    result = copyNimNode(n)
+
+    for idx, child in n.pairs:
+      case child.kind
+      of nnkContinueStmt:
+        # Annotate unlabeled break statements
+        result.add:
+          newCpsLoopNext:
+            child
+
+      of nnkWhileStmt, nnkForStmt:
+        # Children of this node are in a different continue context, don't
+        # touch them.
+        result.add child
+
+      elif child.isCpsStatement:
+        # Don't recurse into statements.
+        result.add child
+
+      else:
+        # Annotate inner nodes
+        result.add annotateLoopContinue(child)
+
+  proc rewriteLoopTrailingJump(n: NormNode): NormNode =
+    ## Rewrite all unpaired cpsJumpNext to advance to next loop iteration
+    result = copyNimNode(n)
+
+    for idx, child in n.pairs:
+      # If there is a cpsJumpNext in this node
+      if child.findChildRecursive(
+        proc(n: NormNode): bool = n.isCpsJumpNext or n.isCpsJumpNextVia
+      ) != nil:
+        # And its the last node or there are no split in any of its successors
+        if (
+          idx == n.len - 1 or
+          n[idx + 1 .. ^1].anyIt(
+            it.findChildRecursive(proc(n: NormNode): bool = n.isCpsSplit).isNil
+          )
+        ):
+          # If this node is the jump node, then it's an orphan and should be
+          # rewritten into a loop next
+          if child.isCpsJumpNext or child.isCpsJumpNextVia:
+            result.add: newCpsLoopNext(child)
+
+          # If this node is not a jump node, then it might contain one without
+          # a split so recurse into it.
+          else:
+            result.add: rewriteLoopTrailingJump(child)
+
+        # There is a pairing split, ignore this node
+        else:
+          result.add child
+
+      # There are no jumps in this node, ignore
+      else:
+        result.add child
 
   proc annotator(n: NormNode): NormNode =
     if n.isCpsLoop:
-      n.asPragmaBlock.body.asWhileStmt()
-                          .rewriteLoopReachableFlow()
-                          .processCpsLoop()
-                          .asWhileStmt()
-                          .newCpsLoop()
-    else:
-      nil
+      var whileLoop = n.asPragmaBlock.body
+      # Perform control-flow annotation/rewrites
+      whileLoop = whileLoop.annotateLoopBreak()
+                           .annotateLoopContinue()
+                           .rewriteLoopTrailingJump()
+      # Process any inner loops
+      whileLoop = whileLoop.processCpsLoop()
+
+      # Return the processed loop
+      result = newCpsLoop: asWhileStmt(whileLoop)
 
   result = filter(n, annotator)
 
