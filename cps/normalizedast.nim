@@ -1031,12 +1031,18 @@ proc newPragmaStmtWithInfo*(inf: NormNode, es: varargs[PragmaAtom]): PragmaStmt 
 # fn-PragmaBlock
 
 createAsTypeFunc(PragmaBlock, {nnkPragmaBlock}, "not a pragmaBlock")
-proc newPragmaBlock*(n: Name, body: NormNode): PragmaBlock =
+proc newPragmaBlock*(n: PragmaStmt, body: NormNode): PragmaBlock =
   result = PragmaBlock:
     nnkPragmaBlock.newTree(
-      newPragmaStmt(n),
+      n,
       body
     )
+
+proc newPragmaBlock*(n: Name, body: NormNode): PragmaBlock =
+  result = newPragmaBlock(newPragmaStmt(n), body)
+
+proc pragma*(n: PragmaBlock): PragmaStmt =
+  n[0].asPragmaStmt
 
 proc body*(n: PragmaBlock): NormNode =
   n[1]

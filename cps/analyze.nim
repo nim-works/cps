@@ -29,8 +29,23 @@ template cpsLoopNext() {.pragma.}
   ##
   ## The annotated block is the original statement.
 
+template cpsBlock() {.pragma.}
+  ## The annotated block is an unlabeled nim block.
+  ##
+  ## This block contains one or more splits.
+
+template cpsBlockLabeled(label: typed) {.pragma.}
+  ## The annotated block is a labeled nim block.
+  ##
+  ## This block contains one or more splits.
+
 template cpsJumpAfterBlock() {.pragma.}
   ## Jump to the next split after the parent cps loop or block.
+  ##
+  ## The annotated block is the original statement.
+
+template cpsJumpAfterBlockLabeled(label: typed) {.pragma.}
+  ## Jump to the next split after the cps block with the given label.
   ##
   ## The annotated block is the original statement.
 
@@ -40,7 +55,7 @@ func newCpsSplit(n: NormNode): NormNode =
 
 func isCpsSplit*(n: NormNode): bool =
   ## Return whether `n` is a cpsSplit annotation.
-  n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsSplit"
+  result = n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsSplit"
 
 func newCpsJumpNextVia(call: Call): NormNode =
   ## Create a new cpsJumpNextVia annotation.
@@ -82,22 +97,71 @@ func isCpsJumpAfterBlock*(n: NormNode): bool =
   ## Returns whether `n` is a cpsJumpAfterBlock annotation.
   n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsJumpAfterBlock"
 
+func newCpsBlock(n: NormNode): NormNode =
+  ## Create a new cpsBlock annotation.
+  newPragmaBlock(bindName"cpsBlock", n)
+
+func isCpsBlock*(n: NormNode): bool =
+  ## Returns whether `n` is a cpsBlock annotation.
+  n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsBlock"
+
+func newCpsBlockLabeled(label, n: NormNode): NormNode =
+  ## Create a new cpsBlockLabeled annotation.
+  newPragmaBlock(
+    newPragmaStmt(
+      newPragmaColonExpr("cpsBlockLabeled", label)
+    ),
+    n
+  )
+
+func isCpsBlockLabeled*(n: NormNode): bool =
+  ## Returns whether `n` is a cpsBlockLabeled annotation.
+  n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsBlockLabeled"
+
+func newCpsJumpAfterBlockLabeled(label, n: NormNode): NormNode =
+  ## Create a new cpsJumpAfterBlockLabeled annotation.
+  newPragmaBlock(
+    newPragmaStmt(
+      newPragmaColonExpr("cpsJumpAfterBlockLabeled", label)
+    ),
+    n
+  )
+
+func isCpsJumpAfterBlockLabeled*(n: NormNode): bool =
+  ## Returns whether `n` is a cpsJumpAfterBlockLabeled annotation.
+  n.kind == nnkPragmaBlock and n.asPragmaBlock.hasPragma"cpsJumpAfterBlockLabeled"
+
 func isCpsStatement*(n: NormNode): bool =
   ## Returns whether `n` is a cps statement annotation.
   ##
   ## Statements are usually pragma blocks annotating the originating statement.
   ## Unless the origin is to be inspected, don't recurse into their tree.
-  n.isCpsJumpNext or n.isCpsLoopNext or n.isCpsJumpAfterBlock
+  n.isCpsJumpNext or n.isCpsLoopNext or n.isCpsJumpAfterBlock or n.isCpsJumpAfterBlockLabeled
 
-func unwrapCpsLoopNextFilter(n: NormNode): NormNode =
-  ## Restore a cpsLoopNext annotation back into a standalone continue
-  ## statement.
-  ##
-  ## To be used with filter().
-  if n.isCpsLoopNext:
-    n.asPragmaBlock.body
+func isCpsScopeExit(n: NormNode): bool =
+  ## Return whether the given node signify a CPS scope exit
+  n.isCpsJumpNext or n.isCpsJumpNextVia or n.isCpsJumpAfterBlock or n.isCpsJumpAfterBlockLabeled or n.isCpsLoopNext
+
+proc firstReturn(p: NormNode): NormNode =
+  ## Find the first control-flow return statement or cps
+  ## control-flow within statement lists; else, nil.
+  case p.kind
+  of nnkReturnStmt, nnkRaiseStmt:
+    result = p
+  of nnkTryStmt, nnkStmtList, nnkStmtListExpr:
+    for child in p.items:
+      result = child.firstReturn
+      if not result.isNil:
+        break
+  of nnkBlockStmt, nnkBlockExpr, nnkFinally, nnkPragmaBlock:
+    if p.isCpsScopeExit:
+      result = p
+    elif p.isCpsStatement:
+      result = nil
+    else:
+      result = p.last.firstReturn
   else:
-    nil
+    result = nil
 
 proc simplifyWhile(n: WhileStmt): NormNode =
   ## Convert a while statement into a while-true statement.
@@ -163,6 +227,16 @@ proc annotate(n: NormNode): NormNode =
             asWhileStmt:
               annotate:
                 simplifyWhile(child.asWhileStmt)
+      of nnkBlockStmt, nnkBlockExpr:
+        case child[0].kind
+        of nnkEmpty:
+          result.add:
+            newCpsBlock:
+              annotate(child)
+        else:
+          result.add:
+            newCpsBlockLabeled(child[0]):
+              annotate(child)
       else:
         result.add annotate(child)
 
@@ -178,87 +252,175 @@ proc annotate(n: NormNode): NormNode =
       # Add as-is
       result.add child
 
-proc processCpsLoop(n: NormNode): NormNode =
-  ## Analyze all cpsLoop in n and annotate their control flow
-  proc annotateLoopBreak(n: NormNode): NormNode =
-    ## Annotate break statements in the loop
-    result = copyNimNode(n)
+proc processUnlabeledBreak(n: NormNode): NormNode =
+  ## Process unlabeled break nodes in cps blocks with break context
+  proc annotator(n: NormNode): NormNode =
+    if n.isCpsLoop or n.isCpsBlock or n.isCpsBlockLabeled:
+      # Copy the node headers
+      result = copyNimNode(n)
+      result.add copy(n[0])
 
-    for idx, child in n.pairs:
-      case child.kind
+      # Rewrite the body children
+      #
+      # This is done because we have to ignore loop/block nodes to avoid
+      # dealing with scopes we weren't supposed to work with.
+      let body = copyNimNode(n.asPragmaBlock.body)
+      for child in n.asPragmaBlock.body.items:
+        body.add child.filter(annotator)
+
+      result.add body
+
+    # Don't touch statements
+    elif n.isCpsStatement:
+      result = n
+
+    else:
+      case n.kind
       of nnkBreakStmt:
-        # Annotate unlabeled break statements
-        if child[0].kind == nnkEmpty:
-          result.add:
-            newCpsJumpAfterBlock:
-              child
+        # Annotate unlabeled breaks
+        if n[0].kind == nnkEmpty:
+          result = newCpsJumpAfterBlock: n
 
         else:
-          result.add child
+          result = n
 
-      of nnkBlockExpr, nnkBlockStmt, nnkForStmt, nnkWhileStmt:
-        # Children of this node are in a different break context, don't touch
-        # them.
-        result.add child
-
-      elif child.isCpsStatement:
-        # Don't recurse into statements.
-        result.add child
+      of nnkBlockExpr, nnkBlockStmt, nnkWhileStmt, nnkForStmt:
+        # Don't process trees with new break context but without splits
+        result = n
 
       else:
-        # Annotate inner nodes
-        result.add annotateLoopBreak(child)
+        result = nil
 
-  proc annotateLoopContinue(n: NormNode): NormNode =
-    ## Annotate continue statements in the loop
-    result = copyNimNode(n)
+  proc initiator(n: NormNode): NormNode =
+    if n.isCpsLoop or n.isCpsBlock or n.isCpsBlockLabeled:
+      n.filter(annotator)
 
-    for idx, child in n.pairs:
-      case child.kind
+    # Don't touch statements
+    elif n.isCpsStatement:
+      n
+
+    else:
+      nil
+
+  result = n.filter(initiator)
+
+proc processLabeledBreak(n: NormNode): NormNode =
+  ## Process labeled break nodes in cps blocks with break context
+  proc annotateLabeledBreaks(label, n: NormNode): NormNode =
+    n.filter(
+      proc (n: NormNode): NormNode =
+        if n.isCpsStatement:
+          n
+        elif n.kind == nnkBreakStmt and n[0] == label:
+          newCpsJumpAfterBlockLabeled(n[0]):
+            n
+        else:
+          nil
+    )
+
+  proc annotator(n: NormNode): NormNode =
+    if n.isCpsBlockLabeled:
+      result = copyNimNode(n)
+      result.add n.asPragmaBlock.pragma
+
+      let label = n.asPragmaBlock.pragma.findPragma("cpsBlockLabeled")[1]
+      result.add:
+        processLabeledBreak:
+          annotateLabeledBreaks(label):
+            n.asPragmaBlock.body
+
+    # Don't touch statements
+    elif n.isCpsStatement:
+      result = n
+
+    else:
+      result = nil
+
+  result = n.filter(annotator)
+
+proc processLoopContinue(n: NormNode): NormNode =
+  ## Process continue nodes in cps loops
+  proc annotator(n: NormNode): NormNode =
+    if n.isCpsLoop:
+      # Copy the node headers
+      result = copyNimNode(n)
+      result.add copy(n[0])
+
+      # Rewrite the body children
+      #
+      # This is done because we have to ignore loop nodes to avoid
+      # dealing with scopes we weren't supposed to work with.
+      let body = copyNimNode(n.asPragmaBlock.body)
+      for child in n.asPragmaBlock.body.items:
+        body.add child.filter(annotator)
+
+      result.add body
+
+    # Don't touch statements
+    elif n.isCpsStatement:
+      result = n
+
+    else:
+      case n.kind
       of nnkContinueStmt:
-        # Annotate unlabeled break statements
-        result.add:
-          newCpsLoopNext:
-            child
+        # Annotate continue
+        result = newCpsLoopNext: n
 
       of nnkWhileStmt, nnkForStmt:
-        # Children of this node are in a different continue context, don't
-        # touch them.
-        result.add child
-
-      elif child.isCpsStatement:
-        # Don't recurse into statements.
-        result.add child
+        # Don't process trees with new continue context but without splits
+        result = n
 
       else:
-        # Annotate inner nodes
-        result.add annotateLoopContinue(child)
+        result = nil
 
-  proc rewriteLoopTrailingJump(n: NormNode): NormNode =
+  proc initiator(n: NormNode): NormNode =
+    if n.isCpsLoop:
+      n.filter(annotator)
+
+    # Don't touch statements
+    elif n.isCpsStatement:
+      n
+
+    else:
+      nil
+
+  result = n.filter(initiator)
+
+proc processLoopTrailingJump(n: NormNode): NormNode =
+  ## Analyze all cpsLoop in n and rewrite trailing jumps so that they loop
+  proc findChildRecursiveNoCpsStatement(n: NormNode, cmp: proc(n: NormNode): bool): NormNode =
+    ## same as findChildRecursive but cps statements are not searched further.
+    if cmp(n):
+      result = n
+    elif not n.isCpsStatement:
+      for child in n.items:
+        result = findChildRecursive(NormNode(child), cmp)
+        if not result.isNil:
+          return
+
+  proc rewriter(n: NormNode): NormNode =
     ## Rewrite all unpaired cpsJumpNext to advance to next loop iteration
     result = copyNimNode(n)
 
     for idx, child in n.pairs:
       # If there is a cpsJumpNext in this node
-      if child.findChildRecursive(
-        proc(n: NormNode): bool = n.isCpsJumpNext or n.isCpsJumpNextVia
-      ) != nil:
+      if child.findChildRecursiveNoCpsStatement(isCpsJumpNext) != nil:
         # And its the last node or there are no split in any of its successors
         if (
           idx == n.len - 1 or
-          n[idx + 1 .. ^1].anyIt(
-            it.findChildRecursive(proc(n: NormNode): bool = n.isCpsSplit).isNil
+          n[idx + 1 .. ^1].allIt(
+            it.findChildRecursiveNoCpsStatement(isCpsSplit).isNil
           )
         ):
           # If this node is the jump node, then it's an orphan and should be
           # rewritten into a loop next
-          if child.isCpsJumpNext or child.isCpsJumpNextVia:
+          if child.isCpsJumpNext:
             result.add: newCpsLoopNext(child)
 
           # If this node is not a jump node, then it might contain one without
           # a split so recurse into it.
           else:
-            result.add: rewriteLoopTrailingJump(child)
+            result.add: rewriter(child)
 
         # There is a pairing split, ignore this node
         else:
@@ -270,16 +432,20 @@ proc processCpsLoop(n: NormNode): NormNode =
 
   proc annotator(n: NormNode): NormNode =
     if n.isCpsLoop:
-      var whileLoop = n.asPragmaBlock.body
-      # Perform control-flow annotation/rewrites
-      whileLoop = whileLoop.annotateLoopBreak()
-                           .annotateLoopContinue()
-                           .rewriteLoopTrailingJump()
-      # Process any inner loops
-      whileLoop = whileLoop.processCpsLoop()
+      # Copy the node headers
+      result = copyNimNode(n)
+      result.add copy(n[0])
+      result.add:
+        # Handle inner loops too
+        processLoopTrailingJump:
+          rewriter(n.asPragmaBlock.body)
 
-      # Return the processed loop
-      result = newCpsLoop: asWhileStmt(whileLoop)
+    # Don't touch statements
+    elif n.isCpsStatement:
+      result = n
+
+    else:
+      result = nil
 
   result = filter(n, annotator)
 
@@ -287,7 +453,10 @@ macro cpsAnalyze*(n: typed): untyped =
   ## Analyze and annotate the given block
   debugAnnotation cpsAnalyze, n:
     it = annotate(it)
-    it = processCpsLoop(it)
+    it = processUnlabeledBreak(it)
+    it = processLabeledBreak(it)
+    it = processLoopContinue(it)
+    it = processLoopTrailingJump(it)
 
     # A StmtList is used to contain the result node, so unwrap it at the end.
     it = it[0]
