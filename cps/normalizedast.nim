@@ -667,6 +667,10 @@ proc asPragmaAtom*(n: Name): PragmaAtom =
   ## convert a Name to a PragmaAtom
   PragmaAtom n
 
+proc asPragmaAtom*(n: Call): PragmaAtom =
+  ## convert a Call to a PragmaAtom
+  PragmaAtom n
+
 proc newPragmaColonExpr*(n: static[string], r: NormNode): PragmaAtom =
   ## create a new `PragmaAtom` that's a colon expression
   PragmaAtom newColonExpr(bindName(n), r)
