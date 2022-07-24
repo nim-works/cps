@@ -9,7 +9,7 @@ export Continuation, ContinuationProc, cpsCall, cpsMustJump
 when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
   {.error: "i'm afraid of what you may have become".}
 
-proc annotate(parent: var Env; n: NormNode): NormNode
+proc annotate(env: var Env; n: NormNode): NormNode
 
 proc makeContProc(name, cont, contType: Name; source: NimNode): ProcDef =
   ## creates a continuation proc with `name` using continuation
@@ -656,21 +656,9 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   shim.add env.annotate(body)
   result = shim
 
-proc annotate(parent: var Env; n: NormNode): NormNode =
+proc annotate(env: var Env; n: NormNode): NormNode =
   ## annotate `input` or otherwise prepare it for conversion into a
-  ## mutually-recursive cps convertible form; the `parent` environment
-  ## may be mutated as a side-effect, otherwise a new environment will be
-  ## created which points to this parent.
-
-  # the accumulated environment
-  var env =
-    if n.kind == nnkStmtList:
-      newEnv(parent)
-    else:
-      parent
-
-  # first, rewrite any symbols that have been moved to the env
-  var n = rewriteSymbolsIntoEnvDotField(parent, n)
+  ## mutually-recursive cps convertible form
 
   # the result is a copy of the current node
   result = copyNimNode n
@@ -1180,17 +1168,17 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
     Trace.hook env.first, n    # hooking against the proc (minus cloned body)
   body.add n.body              # add in the cloned body of the original proc
 
-  # perform sym substitutions (or whatever)
-  n.body = env.rewriteSymbolsIntoEnvDotField body
-
   # transform defers
-  n.body = rewriteDefer n.body
+  n.body = rewriteDefer body
 
   # rewrite non-yielding cps calls
   n.body = env.rewriteVoodoo n.body
 
   # annotate the proc's body
   n.body = env.annotate n.body
+
+  # perform sym substitutions (or whatever)
+  n.body = env.rewriteSymbolsIntoEnvDotField n.body
 
   if n.body.firstReturn.isNil:
     # fixes https://github.com/nim-works/cps/issues/145
