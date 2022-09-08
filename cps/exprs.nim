@@ -259,7 +259,7 @@ func getMagic(n: NormNode): string =
           else:
             discard
 
-macro cpsExprToTmp(T, n: typed): untyped =
+macro cpsExprToTmp(tipe, n: typed): untyped =
   ## Create a temporary variable with type `T` and rewrite `n` so that the
   ## result is assigned to the temporary, then emit the temporary as the
   ## expression.
@@ -283,7 +283,7 @@ macro cpsExprToTmp(T, n: typed): untyped =
           # Create a new statement list
           newStmtList(
             # Declare the temporary
-            newVarSection(tmp, T.TypeExpr),
+            newVarSection(tmp, tipe.TypeExpr),
             # Add the rewritten expression
             body
           )
@@ -317,14 +317,14 @@ macro cpsAsgn(dst, src: typed): untyped =
           # out
           it[0]
 
-macro cpsExprConv(T, n: typed): untyped =
+macro cpsExprConv(tipe, n: typed): untyped =
   ## Apply the conversion to `T` directly into `n`'s trailing expressions.
   # If we don't shadow this parameter, it will be nnkNilLit.
   {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18352".}
-  let T = normalizingRewrites T
+  let tipe = normalizingRewrites tipe
   debugAnnotation cpsExprConv, n:
     proc addConv(n: NormNode): NormNode =
-      newCall(T, copy n)
+      newCall(tipe, copy n)
 
     it = filterExpr(it[0], addConv)
 

@@ -2,7 +2,9 @@
 
 [![Test Matrix](https://github.com/nim-works/cps/workflows/CI/badge.svg)](https://github.com/nim-works/cps/actions?query=workflow%3ACI)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/nim-works/cps?style=flat)](https://github.com/nim-works/cps/releases/latest)
-![Maximum supported Nim version](https://img.shields.io/badge/nim-1.6.7-informational?style=flat&logo=nim)
+![Minimum supported Nim version](https://img.shields.io/badge/nim-1.5.1-informational?style=flat&logo=nim)
+![Recommended Nim version](https://img.shields.io/badge/nim-1.6.7-informational?style=flat&logo=nim)
+![Maximum supported Nim version](https://img.shields.io/badge/nim-1.7.1-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/nim-works/cps?style=flat)](#license)
 [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
 [![IRC](https://img.shields.io/badge/chat-%23cps%20on%20libera.chat-brightgreen?style=flat)](https://web.libera.chat/#cps)

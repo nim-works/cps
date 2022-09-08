@@ -6,6 +6,10 @@ from std/typetraits import distinctBase
 from cps/rewrites import NormNode, normalizingRewrites, replace,
                          desym, resym, resymCall
 
+const
+  NilNormNode* = nil.NormNode
+  NilNimNode* = nil.NimNode
+
 export NormNode
 
 # # Structure of the Module
@@ -490,22 +494,22 @@ template withLineInfoPlease(body: typed): untyped =
     copyLineInfo(sym, info)
   sym
 
-proc genSymType*(n: string; info: NormNode = nil): Name =
+proc genSymType*(n: string; info: NormNode = NilNormNode): Name =
   ## `genSym` an `nskType`
   withLineInfoPlease: genSym(nskType, n).Name
-proc genSymVar*(n: string = ""; info: NormNode = nil): Name =
+proc genSymVar*(n: string = ""; info: NormNode = NilNormNode): Name =
   ## `genSym` an `nskVar`
   withLineInfoPlease: genSym(nskVar, n).Name
-proc genSymLet*(n: string = ""; info: NormNode = nil): Name =
+proc genSymLet*(n: string = ""; info: NormNode = NilNormNode): Name =
   ## `genSym` an `nskLet`
   withLineInfoPlease: genSym(nskLet, n).Name
-proc genSymProc*(n: string; info: NormNode = nil): Name =
+proc genSymProc*(n: string; info: NormNode = NilNormNode): Name =
   ## `genSym` an `nskProc`
   withLineInfoPlease: genSym(nskProc, n).Name
-proc genSymField*(n: string; info: NormNode = nil): Name =
+proc genSymField*(n: string; info: NormNode = NilNormNode): Name =
   ## `genSym` an `nskField`
   withLineInfoPlease: genSym(nskField, n).Name
-proc genSymUnknown*(n: string; info: NormNode = nil): Name =
+proc genSymUnknown*(n: string; info: NormNode = NilNormNode): Name =
   ## `genSym` an `nskUnknown`
   withLineInfoPlease: genSym(nskUnknown, n).Name
 
@@ -825,7 +829,7 @@ proc asVarLetIdentDef*(n: VarLet): VarLetIdentDef =
   ## return a VarLetIdentDef if the def is an IdentDef, otherwise error out
   validateAndCoerce(n.NimNode, VarLetIdentDef)
 
-func clone*(n: VarLet, value: NimNode = nil): VarLet =
+func clone*(n: VarLet, value: NimNode = NilNimNode): VarLet =
   ## clone a `VarLet` but with `value` changed
   let def = copyNimNode(n.def)
   # copy all nodes in the original definition excluding the last node, which
@@ -1160,7 +1164,7 @@ iterator callingParams*(n: ProcDef): RoutineParam =
   for a in n.formalParams[1..^1].items:
     yield a.RoutineParam
 
-proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
+proc clone*(n: ProcDef, body: NimNode = NilNimNode): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
   result = nnkProcDef.newTree(
     ident(repr n.name),         # repr to handle gensymbols
@@ -1169,7 +1173,7 @@ proc clone*(n: ProcDef, body: NimNode = nil): ProcDef =
     copy n.NimNode.params,      # parameter normalization will mutate these
     newEmptyNode(),
     newEmptyNode(),
-    if body == nil: macros.copy(n.body) else: body
+    if body.isNil: macros.copy(n.body) else: body
   ).ProcDef
   result.copyLineInfo n
 

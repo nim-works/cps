@@ -46,7 +46,7 @@ template dismissed*(c: Continuation): bool =
 
 {.pop.}
 
-macro cpsTyped(T: typed, n: typed): untyped =
+macro cpsTyped(tipe: typed, n: typed): untyped =
   ## This is the typed CPS transformation pass which follows the untyped pass below.
   when defined(nimdoc):
     n
@@ -59,17 +59,17 @@ macro cpsTyped(T: typed, n: typed): untyped =
       {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
       result =
         # Add the main transform phase
-        newCall(bindSym"cpsTransform", T):
+        newCall(bindSym"cpsTransform", tipe):
           # Add the flattening phase which will be run first
           newCall(bindSym"cpsFlattenExpr"):
             n
     of nnkProcTy:
       # converting a cps callback
-      result = cpsCallbackTypeDef(T, n)
+      result = cpsCallbackTypeDef(tipe, n)
     else:
-      result = getAst(cpsTransform(T, n))
+      result = getAst(cpsTransform(tipe, n))
 
-macro cps*(T: typed, n: untyped): untyped =
+macro cps*(tipe: typed, n: untyped): untyped =
   ## When applied to a procedure, rewrites the procedure into a continuation form.
   ## When applied to a procedure type definition, rewrites the type into a callback
   ## form.
@@ -77,7 +77,7 @@ macro cps*(T: typed, n: untyped): untyped =
   when not defined(nimdoc):
     # add the application of the typed transformation pass
     n.addPragma:
-      nnkExprColonExpr.newTree(bindSym"cpsTyped", T)
+      nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
     # let the untyped pass do what it will with this input
     # XXX: currently disabled because it's a slipperly slope of regret
     #result = performUntypedPass(T, n)

@@ -130,7 +130,7 @@ proc restoreBreak(n: NormNode, label = newEmptyNormNode()): NormNode =
                 n.breakLabel
       m
     else:
-      nil
+      NilNormNode
 
   filter(n, restorer)
 
@@ -141,7 +141,7 @@ proc restoreContinue(n: NormNode): NormNode =
       newNimNode(nnkContinueStmt, n).add:
         newEmptyNormNode()
     else:
-      nil.NormNode
+      NilNormNode
 
   filter(n, restorer)
 
@@ -911,7 +911,7 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
       result.add env.annotate(nc)
   endAndReturn()
 
-macro cpsResolver(T: typed; contType: typed; n: typed): untyped =
+macro cpsResolver(tipe: typed; contType: typed; n: typed): untyped =
   ## resolve any left over cps control-flow annotations
   ##
   ## this is not needed, but it's here so we can change this to
@@ -934,7 +934,7 @@ macro cpsResolver(T: typed; contType: typed; n: typed): untyped =
     # replace all `pending` and `terminate` with the end of continuation
     it = replace(it, proc(x: NormNode): bool = x.isCpsPending or x.isCpsTerminate):
       if n.firstReturn.isNil:
-        terminator(cont, contType.asName, T.NormNode)
+        terminator(cont, contType.asName, tipe.NormNode)
       else:
         doc"omitted a return in the resolver".NormNode
 
@@ -1106,7 +1106,7 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   debugAnnotation cpsHandleUnhandledException, n:
     it = it.filter(handle)
 
-proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
+proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   ## rewrite the target procedure in Continuation-Passing Style
 
   # keep the original symbol of the proc
@@ -1119,7 +1119,7 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(types, T.asName, n.returnParam)
+  var env = newEnv(types, tipe.asName, n.returnParam)
 
   # add parameters into the environment
   for defs in n.callingParams:
@@ -1253,10 +1253,10 @@ proc cpsTransformProc(T: NimNode, n: NimNode): NormNode =
 
   result = workaroundRewrites result
 
-macro cpsTransform*(T, n: typed): untyped =
+macro cpsTransform*(tipe, n: typed): untyped =
   ## This is the macro performing the main cps transformation
   debug("cpsTransform", n, Original)
-  result = cpsTransformProc(T, n)
+  result = cpsTransformProc(tipe, n)
   debug("cpsTransform", result, Transformed, n)
 
 proc looksLikeCallback(n: NimNode): bool =
@@ -1323,7 +1323,7 @@ proc rewriteCalls*(n: NimNode): NimNode =
       discard
   result = filter(n, recall)
 
-proc performUntypedPass*(T: NimNode; n: NimNode): NimNode =
+proc performUntypedPass*(tipe: NimNode; n: NimNode): NimNode =
   ## Perform any rewrites needed prior to a `.cps: T.` transformation.
   if n.kind != nnkProcDef: return n
   result = n

@@ -572,15 +572,15 @@ proc createCallback*(sym: NimNode): NimNode =
     NimNode:
       nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
 
-proc cpsCallbackTypeDef*(T: NimNode, n: NimNode): NimNode =
+proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NimNode =
   ## looks like cpsTransformProc but applies to proc typedefs;
   ## this is where we create our calling convention concept
   let params = copyNimTree n[0]
-  let R = copyOrVoid params[0]
-  params[0] = T
-  let P = nnkProcTy.newTree(params,
+  let r = copyOrVoid params[0]
+  params[0] = tipe
+  let p = nnkProcTy.newTree(params,
                             nnkPragma.newTree(ident"nimcall", bindSym"cpsCallback"))
-  result = nnkBracketExpr.newTree(bindSym"Callback", T, R, P)
+  result = nnkBracketExpr.newTree(bindSym"Callback", tipe, r, p)
   result = workaroundRewrites result.NormNode
 
 proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: C): R =

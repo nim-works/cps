@@ -18,7 +18,7 @@ proc firstReturn*(p: NormNode): NormNode =
   elif p.isScopeExit:
     result = p
   else:
-    result = nil
+    result = NilNormNode
 
 proc makeReturn*(contType: Name; n: NormNode): NormNode =
   ## generate a `return` of the node if it doesn't already contain a return
@@ -54,13 +54,13 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
-proc terminator*(c: Name; contType: Name; T: NormNode): NormNode =
+proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.
   let coop = NimNode hook(Coop, asName"result")
   let pass = NimNode hook(Pass, newCall(contType, c), c.dot "mom")
-  let dealloc = NimNode hook(Dealloc, newCall(contType, c), T)
+  let dealloc = NimNode hook(Dealloc, newCall(contType, c), tipe)
   let c = NimNode c
   NormNode:
     quote:
@@ -81,7 +81,7 @@ proc terminator*(c: Name; contType: Name; T: NormNode): NormNode =
       # critically, terminate control-flow here!
       return
 
-proc tailCall*(cont, contType, to: Name; jump: NormNode = nil): NormNode =
+proc tailCall*(cont, contType, to: Name; jump: NormNode = NilNormNode): NormNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
   ## is supplied, return that call instead of the continuation itself
   result = newStmtList:

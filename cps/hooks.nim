@@ -97,7 +97,7 @@ proc hook*(hook: static[Hook]; n: NormNode): NormNode =
   case hook
   of Boot, Coop, Head:
     # hook(continuation)
-    hook.entrace nil.NormNode, n:
+    hook.entrace NilNormNode, n:
       newCall(hook.sym, n)
   else:
     # cast to `Call` avoids type mismatch as converters can't figure this out
