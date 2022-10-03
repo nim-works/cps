@@ -301,13 +301,14 @@ template recover*(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
 
-{.push experimental: "callOperator".}
+when not defined cpsNoCallOperator:
+  {.push experimental: "callOperator".}
 
-macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
-  ## Allows for natural use of call syntax to invoke a callback and
-  ## recover its result in a single statement, inside a continuation.
-  let call = bindSym"call"
-  result = newCall(call, callback)
-  for argument in arguments.items:
-    result.add argument
-  result = newCall(bindSym"recover", callback, result)
+  macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
+    ## Allows for natural use of call syntax to invoke a callback and
+    ## recover its result in a single statement, inside a continuation.
+    let call = bindSym"call"
+    result = newCall(call, callback)
+    for argument in arguments.items:
+      result.add argument
+    result = newCall(bindSym"recover", callback, result)
