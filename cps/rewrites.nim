@@ -435,7 +435,7 @@ proc workaroundRewrites(n: NimNode): NimNode =
 proc workaroundRewrites*(n: NormNode): NormNode =
   workaroundRewrites(n.NimNode).NormNode
 
-func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
+proc replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
   ## `replacement`
   proc replacer(n: NimNode): NimNode =
@@ -445,15 +445,8 @@ func replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
       nil
 
   filter(n, replacer)
-func replace*(n: NimNode, match: NormMatcher, replacement: NormNode): NormNode =
-  ## Replace any node in `n` that is matched by `match` with a copy of
-  ## `replacement`
-  replace(
-    n,
-    proc (n: NimNode): bool = match(n.NormNode),
-    replacement
-  ).NormNode
-func replace*(n: NormNode, match: NormMatcher, replacement: NormNode): NormNode =
+
+proc replace*(n: NimNode | NormNode, match: NormMatcher, replacement: NormNode): NormNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
   ## `replacement`
   replace(
