@@ -15,3 +15,6 @@ task test, "run tests for ci":
 task demo, "generate the demos":
   exec """demo docs/tzevv.svg "nim c --out=\$1 tests/tzevv.nim""""
   exec """demo docs/taste.svg "nim c --out=\$1 tests/taste.nim""""
+
+task matrix, "generate the matrix":
+  exec """demo docs/test-matrix.svg "balls" 34"""
