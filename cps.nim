@@ -21,6 +21,11 @@ when not defined(nimPanics):
   {.warning: "cps supports --panics:on only; " &
              " see https://github.com/nim-works/cps/issues/110".}
 
+# we recommend against threads:on without define:useMalloc
+when not defined(useMalloc) and compileOption"threads":
+  {.warning:
+    "cps recommends against --threads:on without --define:useMalloc".}
+
 proc state*(c: Continuation): State {.inline.} =
   ## Get the current state of a continuation
   if c == nil:
