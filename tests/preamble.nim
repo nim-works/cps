@@ -15,7 +15,11 @@ proc trampoline[T: Continuation](c: T) =
   while c.running:
     # capture the exception in the environment
     let exception = getCurrentException()
-    c = c.fn(c)
+    try:
+      c = c.fn(c)
+    except:
+      writeStackFrames c
+      raise
     # the current exception should not change
     check getCurrentException() == exception
     inc jumps
