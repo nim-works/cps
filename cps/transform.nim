@@ -303,7 +303,7 @@ proc mergeExceptBranches(n, ex: NormNode): NormNode =
         newStmtList:
           ifStmt.NormNode
 
-func wrapContinuationWith(n: NormNode, cont, replace: Name, templ: NormNode): NormNode =
+proc wrapContinuationWith(n: NormNode, cont, replace: Name, templ: NormNode): NormNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
   ## replaced with the `n`.
   ##
@@ -597,7 +597,7 @@ macro cpsTryFinally(cont, contType, ex, n: typed): untyped =
     # Wrap the body with this template and we are done
     it.add body.wrapContinuationWith(cont, placeholder, tryTemplate)
 
-func newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
+proc newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
   result = newCall bindName(a)
   result.copyLineInfo n
   result.add(NormNode env.first, NormNode env.root)
@@ -1080,7 +1080,7 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   {.warning: "https://github.com/nim-lang/Nim/issues/18352".}
   let contType = contType
 
-  func handle(n: NormNode): NormNode =
+  proc handle(n: NormNode): NormNode =
     if n.isCpsCont:
       let
         cont = n.getContSym

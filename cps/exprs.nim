@@ -45,7 +45,7 @@ func hasCpsExpr(n: NormNode): bool =
     # Otherwise check if its a cps block
     result = n.isCpsBlock
 
-func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
+proc filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
   ## Given the expression `n`, run `transformer` on every expression tail.
   ##
   ## Returns the filtered tree.
@@ -74,7 +74,7 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
           it.add copy(branch[idx])
         # Add the rewritten body
         it.add:
-            filterExpr(branch.last, transformer)
+          filterExpr(branch.last, transformer)
     else:
       result = n.errorAst "unexpected node kind in case/if expression"
 
@@ -166,7 +166,7 @@ func filterExpr[T: NormNode](n: T, transformer: proc(n: T): T): T =
   else:
     result = n.errorAst "cps doesn't know how to rewrite this into assignment"
 
-func assignTo*(location, n: NormNode): NormNode =
+proc assignTo*(location, n: NormNode): NormNode =
   ## Rewrite the expression `n` into a statement assigning to `location`.
   ##
   ## Returns a copy of `n` if `n` is not an expression.
