@@ -259,7 +259,7 @@ suite "locals":
   block:
     ## naive callback semantics unsupported due to compiler bug;
     ## see also https://github.com/nim-works/cps/issues/223
-    when false:
+    when true:
       skip "compiler crashes"
     else:
       type
