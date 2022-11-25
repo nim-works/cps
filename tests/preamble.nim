@@ -1,6 +1,6 @@
-import balls
+import pkg/balls
 
-import cps except trampoline
+import pkg/cps except trampoline
 
 type
   EmptyLoop = CatchableError
@@ -34,29 +34,6 @@ proc dismiss*(c: Cont): Cont {.cpsMagic.} = nil
 
 # We have a lot of these for the purpose of control-flow validation
 {.warning[UnreachableCode]: off.}
-
-suite "basic testing assumptions":
-
-  block:
-    ## the trampoline runs continuations, uh, continuously
-    var r = 0
-    proc foo() {.cps: Cont.} =
-      while true:
-        noop()
-        inc r
-    expect InfiniteLoop:
-      trampoline whelp(foo())
-    check r > 1
-
-  block:
-    ## the noop magic smoke test demonstrates shedding scope
-    var r = 0
-    proc foo() {.cps: Cont.} =
-      inc r
-      noop()
-      inc r
-    trampoline whelp(foo())
-    check r == 2, "who let the smoke out?"
 
 template shouldRun(wanted: int; body: untyped) {.used.} =
   var measured {.inject.} = 0
