@@ -121,9 +121,9 @@ proc normalizingRewrites*(n: NimNode): NormNode =
       if n.kind == nnkIdentDefs:
         if n.len == 2:
           n.add newEmptyNode()
-        elif n[^2].isEmpty:          # add explicit type symbol
-          n[^2] = getTypeInst n[^1]
-        n[^1] = normalizingRewrites n[^1]
+        elif n[1].isEmpty:          # add explicit type symbol
+          n[1] = getTypeInst n[2]
+          n[2] = normalizingRewrites n[2]
         result = n
 
     proc rewriteVarLet(n: NimNode): NimNode =
@@ -509,3 +509,17 @@ proc multiReplace*(n: NormNode;
         break
 
   filter(n, replacer).NormNode
+
+proc addInitializationToDefault*(n: NimNode): NimNode =
+  ## turn `var x: Foo` into `var x: Foo = default Foo`;
+  ## this ensures a reset of the field in the environment
+  ## occurs when the scope is re-entrant for any reason
+  proc installDefault(n: NimNode): NimNode =
+    if n.kind == nnkIdentDefs:
+      if n[2].isEmpty:
+        n[2] =
+          newCall bindSym"default":
+            newCall bindSym"typeOf":
+              n[1]
+        result = n
+  filter(n, installDefault)

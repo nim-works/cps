@@ -340,7 +340,8 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
     maybeAdd newAssignment(tups, defs.val)
   else:
     # an iterator handles `var a, b, c = 3` appropriately
-    maybeAdd e.addAssignment(asVarLetIdentDef(n))
+    let n = VarLet addInitializationToDefault(n.NimNode)
+    maybeAdd e.addAssignment(n.asVarLetIdentDef)
 
 proc localSection*(e: var Env; n: IdentDef; into: NimNode = nil) =
   ## consume nnkIdentDefs and populate `into` with assignments, even if `into`
