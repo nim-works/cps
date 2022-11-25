@@ -1,7 +1,4 @@
 import std/macros
-import std/strutils
-import balls
-import cps
 import foreign
 
 include preamble
