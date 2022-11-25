@@ -1,5 +1,4 @@
 import std/macros
-import std/strutils
 import balls
 import cps
 

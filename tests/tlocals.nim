@@ -219,3 +219,31 @@ suite "locals":
 
     a(1)
     check r == 15
+
+  block:
+    ## re-entrant scopes reset locals
+    proc foo() {.cps: Continuation.} =
+      var i = 0
+      while i < 2:
+        var j: int
+        check j == 0, "failed to reset j"
+        j = 3
+        inc i
+      check i == 2
+
+    foo()
+
+  block:
+    ## re-entrant scopes reset locals to initialization values
+    proc foo() {.cps: Continuation.} =
+      var i = 0
+      while i < 2:
+        var j, k = 3
+        check j == 3, "failed to reset j"
+        check k == 3, "failed to reset k"
+        j = 4
+        k = 4
+        inc i
+      check i == 2
+
+    foo()
