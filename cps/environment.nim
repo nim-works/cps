@@ -24,6 +24,7 @@ type
     parent: Env                     # the parent environment (scope)
     locals: LocalCache              # locals and their typedefs|generics
     store: NimNode                  # where to put typedefs, a stmtlist
+    procedure: string               # name of procedure we are transforming
     when cpsReparent:
       seen: HashSet[string]         # count/measure idents/syms by string
 
@@ -36,6 +37,10 @@ type
   CachePair* = tuple
     key: Name
     val: VarLetIdentDef
+
+proc procedure*(e: Env): string =
+  ## the name of the procedure undergoing transformation to cps
+  e.procedure & "()"
 
 proc `$`(p: CachePair): string {.used.} =
   p.val.repr & ": " & p.key.repr
@@ -93,7 +98,7 @@ proc init(e: var Env) =
     e.fn = asName"fn"
   if e.mom.isNil:
     e.mom = asName"mom"
-  e.id = genSymType("cps environment", info = e.via)
+  e.id = genSymType("cps environment for " & procedure(e), info = e.via)
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarIdentDef(e.rs))
 
@@ -188,6 +193,7 @@ proc newEnv*(parent: Env; copy = off): Env =
   ## or on-demand in the back-end (with copy = on)
   if copy:
     result = Env(store: parent.store,
+                 procedure: parent.procedure,
                  via: parent.identity,
                  locals: initOrderedTable[Name, VarLetIdentDef](),
                  c: parent.c,
@@ -247,7 +253,8 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
   e = e.set(field, value)
   result = (key: field, val: value)
 
-proc newEnv*(c: Name; store: var NormNode; via: Name, rs: NormNode): Env =
+proc newEnv*(c: Name; store: var NormNode; via: Name; rs: NormNode;
+             procedure: string): Env =
   ## the initial version of the environment;
   ## `c` names the first parameter of continuations,
   ## `store` is where we add types and procedures,
@@ -255,14 +262,15 @@ proc newEnv*(c: Name; store: var NormNode; via: Name, rs: NormNode): Env =
   ## `rs` is the return type (if not nnkEmpty) of the continuation.
   let via = if via.isNil: errorAst"need a type".Name else: via
 
-  result = Env(c: c, store: store, via: via, id: via)
+  result = Env(c: c, store: store, via: via, id: via, procedure: procedure)
   result.rs = newIdentDef("result", asTypeExprAllowEmpty(rs))
   when cpsReparent:
     result.seen = initHashSet[string]()
   init result
 
-proc newEnv*(store: var NormNode; via: Name, rs: NormNode): Env=
-  newEnv(asName("continuation"), store, via, rs)
+proc newEnv*(store: var NormNode; via: Name; rs: NormNode;
+             procedure: string): Env =
+  newEnv(asName("continuation"), store, via, rs, procedure)
 
 proc identity*(e: var Env): Name =
   ## identifier of our continuation type
@@ -476,7 +484,7 @@ proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   result.addPragma "used"  # avoid gratuitous warnings
   result.addPragma "nimcall"
   result.returnParam = env.identity
-  result.name = genSymProc"whelp"
+  result.name = genSymProc: "whelp for " & env.procedure
   result.introduce {Alloc, Boot, Stack}
 
   # create the continuation as the result and point it at the proc
@@ -498,7 +506,7 @@ proc createCallbackShim*(env: Env; whelp: ProcDef): ProcDef =
   ## this is a version of whelp that returns the base continuation type
   result = clone(whelp, newStmtList())
   result.returnParam = env.inherits
-  result.name = genSymProc"whelp shim"
+  result.name = genSymProc: "whelp shim for " & env.procedure
   # whelp_234(a, b, c)
   result.body = newCall whelp.name
   for defs in result.callingParams:

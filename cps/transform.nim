@@ -54,7 +54,8 @@ proc makeContProc(name, cont, contType: Name; source: NimNode): ProcDef =
   # let other macros know this is a continuation
   result.addPragma bindName"cpsCont"
 
-macro cpsJump(cont, contType, call, n: typed): untyped =
+macro cpsJump(cont, contType: typed; name: static[string];
+              call, n: typed): untyped =
   ## Rewrite `n` into a tail call via `call` where `cont` is the symbol of
   ## the continuation and `fn` is the identifier/symbol of the function
   ## field.
@@ -62,7 +63,7 @@ macro cpsJump(cont, contType, call, n: typed): untyped =
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let
     call = normalizeCall call
-    name = genSymProc("Post Call")
+    name = genSymProc("Post Call in " & name)
     cont = cont.asName
     contType = contType.asName
   debugAnnotation cpsJump, n:
@@ -71,16 +72,19 @@ macro cpsJump(cont, contType, call, n: typed): untyped =
     it.add:
       jumperCall(cont, contType, name, call)
 
-macro cpsJump(cont, contType, call: typed): untyped =
+macro cpsJump(cont, contType: typed; name: static[string];
+              call: typed): untyped =
   ## a version of cpsJump that doesn't take a continuing body.
-  result = getAst(cpsJump(cont, contType, call, macros.newStmtList()))
+  result = getAst(cpsJump(cont, contType, name, call, macros.newStmtList()))
 
-macro cpsContinuationJump(cont, contType, call, c, n: typed): untyped =
+macro cpsContinuationJump(cont, contType: typed; name: static[string];
+                          call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
     c = c.NormNode                                      # store child here
     call = asCall(NormNode call)                        # child bootstrap call
-    name = genSymProc("Post Child", info = n.NormNode)  # return to this proc
+    name = genSymProc("Post Child in " & name,          # return to this proc
+                      info = n.NormNode)
     cont = cont.asName                                  # current continuation
     contType = contType.asName                          # so-called user type
   debugAnnotation cpsContinuationJump, n:
@@ -104,14 +108,14 @@ macro cpsContinuationJump(cont, contType, call, c, n: typed): untyped =
         Pass.hook newCall(NormNode contType, cont):
           c    # we're basically painting the future
 
-macro cpsMayJump(cont, contType, n, after: typed): untyped =
+macro cpsMayJump(cont, contType: typed; name: static[string]; n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump
   ## to enter `after`.
   ##
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` in `n`
   ## with tail calls to `after`.
   let
-    name = genSymProc("Finish")
+    name = genSymProc("Finish in " & name)
     cont = cont.asName
     contType = contType.asName
     tail = tailCall(desym cont, contType, name)
@@ -145,7 +149,7 @@ proc restoreContinue(n: NormNode): NormNode =
 
   filter(n, restorer)
 
-macro cpsBlock(cont, contType, label, n: typed): untyped =
+macro cpsBlock(cont, contType: typed; name: static[string]; label, n: typed): untyped =
   ## The block with `label` is tainted by a `cpsJump` and may require a
   ## jump to break out of the block.
   ##
@@ -154,14 +158,15 @@ macro cpsBlock(cont, contType, label, n: typed): untyped =
   debugAnnotation cpsBlock, n:
     it = it.replace(matchCpsBreak(label.NormNode), newCpsPending())
 
-macro cpsBlock(cont, contType, n: typed): untyped =
+macro cpsBlock(cont, contType: typed; name: static[string]; n: typed): untyped =
   ## A block statement tainted by a `cpsJump` and may require a jump to
   ## enter `after`.
   ##
   ## This is just an alias to cpsBlock with an empty label.
-  result = getAst(cpsBlock(cont, contType, newEmptyNode(), n))
+  result = getAst(cpsBlock(cont, contType, name, newEmptyNode(), n))
 
-macro cpsWhile(cont, contType, cond, n: typed): untyped =
+macro cpsWhile(cont, contType: typed; name: static[string];
+               cond, n: typed): untyped =
   ## A while statement tainted by a `cpsJump` and may require a jump to
   ## exit the loop.
   ##
@@ -170,7 +175,7 @@ macro cpsWhile(cont, contType, cond, n: typed): untyped =
   ## to the next control-flow.
   let
     n = NormNode n
-    name = genSymProc("While Loop")
+    name = genSymProc("While Loop in " & name)
     cont = cont.asName
     contType = contType.asName
     tail = tailCall(desym cont, contType, name)
@@ -398,7 +403,8 @@ macro cpsWithException(cont, ex, n: typed): untyped =
   debugAnnotation cpsWithException, n:
     it = it[0].withException(cont, ex)
 
-macro cpsTryExcept(cont, contType, ex, n: typed): untyped =
+macro cpsTryExcept(cont, contType: typed; name: static[string];
+                   ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
   ## may require a jump to enter any handler.
   ##
@@ -445,7 +451,8 @@ macro cpsTryExcept(cont, contType, ex, n: typed): untyped =
       # then swap the temporary placeholder with the original try body
       wrapContinuationWith(it[0], cont, temp, newTry)
 
-macro cpsTryFinally(cont, contType, ex, n: typed): untyped =
+macro cpsTryFinally(cont, contType: typed; name: static[string];
+                    ex, n: typed): untyped =
   ## A try statement tainted by a `cpsJump` and
   ## may require a jump to enter finally.
   ##
@@ -601,6 +608,7 @@ proc newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
   result = newCall bindName(a)
   result.copyLineInfo n
   result.add(NormNode env.first, NormNode env.root)
+  result.add newLit(env.procedure)
 
 proc setupChildContinuation(env: var Env; call: Call): (Name, NormNode) =
   ## create a new child continuation variable and add it to the
@@ -1119,7 +1127,7 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
 
   # creating the env with the continuation type,
   # and adding proc parameters to the env
-  var env = newEnv(types, tipe.asName, n.returnParam)
+  var env = newEnv(types, tipe.asName, n.returnParam, $n.name)
 
   # add parameters into the environment
   for defs in n.callingParams:
