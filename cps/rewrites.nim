@@ -511,15 +511,13 @@ proc multiReplace*(n: NormNode;
   filter(n, replacer).NormNode
 
 proc addInitializationToDefault*(n: NimNode): NimNode =
-  ## turn `var x: Foo` into `var x: Foo = default Foo`;
-  ## this ensures a reset of the field in the environment
-  ## occurs when the scope is re-entrant for any reason
-  proc installDefault(n: NimNode): NimNode =
-    if n.kind == nnkIdentDefs:
-      if n[2].isEmpty:
-        n[2] =
-          newCall bindSym"default":
-            newCall bindSym"typeOf":
-              n[1]
-        result = n
-  filter(n, installDefault)
+  ## Turn an IdentDefs as in `var x: Foo` into `var x: Foo = default Foo`;
+  ## this ensures a reset of the field in the environment occurs when the
+  ## scope is re-entrant for any reason.
+  result = n
+  if n.kind == nnkIdentDefs:
+    if n[2].isEmpty:
+      n[2] =
+        newCall bindSym"default":
+          newCall bindSym"typeOf":
+            n[1]

@@ -347,8 +347,9 @@ proc localSection*(e: var Env; n: VarLet, into: NimNode = nil) =
       tups.add newDotExpr(child, field)
     maybeAdd newAssignment(tups, defs.val)
   else:
-    # an iterator handles `var a, b, c = 3` appropriately
-    let n = VarLet addInitializationToDefault(n.NimNode)
+    # an iterator handles `var a, b, c = 3` appropriately,
+    # so we can assume that only a single identdefs exists
+    (NimNode n)[0] = addInitializationToDefault(n[0].NimNode)
     maybeAdd e.addAssignment(n.asVarLetIdentDef)
 
 proc localSection*(e: var Env; n: IdentDef; into: NimNode = nil) =
