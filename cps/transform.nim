@@ -615,7 +615,7 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   ## this rewrite supports `x = contProc()`, `let x = contProc()`,
   ## `x = Type(contProc())` and `let x = Type(contProc())`
   if not expr.isCpsConvCall:
-    return expr.errorAst("cps don't know how to shim this")
+    return expr.errorAst("cps doesn't know how to shim this")
 
   let call = asCall:
     expr.findChildRecursive(isCpsCall)
