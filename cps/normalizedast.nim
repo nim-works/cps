@@ -1046,7 +1046,7 @@ func name*(n: Call): Name =
   ## callee name
   Name n[0]
 
-proc `name=`(n: Call, newName: Name) =
+proc `name=`*(n: Call, newName: Name) =
   ## set the callee's `n`'s name to `newName
   n[0] = newName
 
