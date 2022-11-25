@@ -563,5 +563,5 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
       # https://github.com/nim-lang/Nim/issues/18365
       it.prependArg newCall(env.root, env.first)
       desym it
-      result = it
+      result = env.rewriteVoodoo it
   result = filter(n, voodoo)
