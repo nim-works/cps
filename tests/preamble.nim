@@ -9,7 +9,7 @@ type
 
 var jumps: int
 
-proc trampoline[T: Continuation](c: T) =
+proc trampoline[T: Continuation](c: T) {.used.} =
   jumps = 0
   var c = Continuation c
   while c.running:
