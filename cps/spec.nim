@@ -15,7 +15,7 @@ export errorAst, desym, isEmpty, genField
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
 template cpsCall*() {.pragma.}          ## a cps call
-template cpsMagicCall*() {.pragma.}     ## a cps call
+template cpsMagicCall*() {.pragma.}     ## a magic call
 template cpsVoodooCall*() {.pragma.}    ## a voodoo call
 template cpsMustJump*() {.pragma.}      ## cps calls and magic calls jump
 template cpsPending*() {.pragma.}       ## this is the last continuation
@@ -399,7 +399,7 @@ macro cpsMagic*(n: untyped): untyped =
   ## to which control-flow should return; this is _usually_ the same value
   ## passed into the procedure, but this is not required nor is it checked!
   expectKind(n, nnkProcDef)
-  result = newStmtList NormNode n # preserve the original proc
+  result = newStmtList n.NormNode       # preserve the original proc
   var shim = makeErrorShim n            # create the shim
   shim.params[0] = newEmptyNode()       # wipe out the return value
 
@@ -414,7 +414,7 @@ macro cpsVoodoo*(n: untyped): untyped =
   ## Similar to a `cpsMagic` where the first argument is concerned, but
   ## may specify a return value which is usable inside the CPS procedure.
   expectKind(n, nnkProcDef)
-  result = newStmtList n            # preserve the original proc
+  result = newStmtList n.NormNode   # preserve the original proc
   var shim = makeErrorShim n        # create the shim
 
   # we use this pragma to identify the primitive and rewrite it inside
