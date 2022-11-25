@@ -1,6 +1,3 @@
-import balls
-import cps
-
 include preamble
 
 suite "locals":
@@ -247,3 +244,38 @@ suite "locals":
       check i == 2
 
     foo()
+
+  block:
+    ## local type inference for procedure symbols
+    proc bar(x: int) =
+      discard
+
+    proc foo() {.cps: Continuation.} =
+      var f = bar
+      f(10)
+
+    foo()
+
+  block:
+    ## naive callback semantics unsupported due to compiler bug;
+    ## see also https://github.com/nim-works/cps/issues/223
+    when false:
+      skip "compiler crashes"
+    else:
+      type
+        CallBack = proc(): Continuation
+
+      proc bar(cb: CallBack) {.cps: Continuation.} =
+        discard
+
+      proc thing() {.cps: Continuation.} =
+        discard
+
+      proc foo() {.cps: Continuation.} =
+        proc gen(): CallBack =
+          result =
+            proc(): Continuation =
+              whelp thing()
+        bar gen()
+
+      foo()
