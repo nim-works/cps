@@ -1046,9 +1046,9 @@ func name*(n: Call): Name =
   ## callee name
   Name n[0]
 
-proc `name=`*(n: Call, newName: Name) =
-  ## set the callee's `n`'s name to `newName
-  n[0] = newName
+proc `name=`*(callee: Call, newName: Name) =
+  ## set the `callee`'s name to `newName`
+  callee[0] = newName
 
 proc prependArg*(n: Call, arg: NormNode) =
   ## add an argument to the call in the first position of the call
