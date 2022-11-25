@@ -123,6 +123,10 @@ proc normalizingRewrites*(n: NimNode): NormNode =
           n.add newEmptyNode()
         elif n[1].isEmpty:          # add explicit type symbol
           n[1] = getTypeInst n[2]
+          if n[1].kind == nnkProcTy:
+            # swap due to https://github.com/nim-works/cps/issues/185
+            # essentially, incorrect rewrite for locals with proc types
+            n[1] = newCall(bindSym"typeOf", n[2])
           n[2] = normalizingRewrites n[2]
         result = n
 
