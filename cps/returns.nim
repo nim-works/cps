@@ -73,6 +73,7 @@ proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
         else:
           # pass(continuation, c.mom)
           result = (typeof `c`) `pass`
+          `c`.mom = nil
           if result != `c`:
             # perform a cooperative yield if pass() chose mom
             result = `coop`
