@@ -1077,7 +1077,7 @@ proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
       else:
         raise e
     else:
-      result = c.mom
+      result = move c.mom
       result.ex = e
       #result = handler(result, result.fn)
 
