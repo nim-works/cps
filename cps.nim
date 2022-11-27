@@ -288,6 +288,11 @@ macro trace*(hook: static[Hook]; source, target: typed;
     # the final result of the statement list is the input
     body.nilAsEmpty
 
+proc disarm*[T: Continuation](c: T) {.used, inline.} =
+  ## Reimplement this symbol to customize preparation of a continuation
+  ## for deallocation.
+  c.mom = nil
+
 proc alloc*[T: Continuation](U: typedesc[T]; E: typedesc): E {.used, inline.} =
   ## Reimplement this symbol to customize continuation allocation; `U`
   ## is the type supplied by the user as the `cps` macro argument,
@@ -300,7 +305,7 @@ proc dealloc*[T: Continuation](c: sink T; E: typedesc[T]): E {.used, inline.} =
   ## `c` is the continuation to be deallocated, while `E` is the type of
   ## its environment.  This procedure should generally return `nil`, as
   ## its result may be assigned to another continuation reference.
-  nil
+  disarm c
 
 template recover*(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
