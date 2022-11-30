@@ -185,7 +185,7 @@ proc rewriteResult*(e: Env; n: NormNode): NormNode =
     of nnkSym:
       if n.symKind == nskResult:
         result = e.getResult
-    of nnkProcDef:
+    of nnkProcDef, nnkLambda:
       result = n  # don't rewrite `result` in nested procedures
     else: discard
   result = filter(n, rewriter)
