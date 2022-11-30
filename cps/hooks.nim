@@ -85,10 +85,7 @@ proc nameForNode*(n: NimNode): string =
 
 when defined(cpsNoTrace):
   template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
-    if body.NimNode.isNil or body.kind == nnkNilLit:
-      newEmptyNode().NormNode
-    else:
-      body
+    NormNode body.nilAsEmpty
 else:
   template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
     let event = bindSym(etype hook)
@@ -147,7 +144,7 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
     # trace(Pass, continuation, "whileLoop_2323",
     # LineInfo(filename: "...", line: 23, column: 44)): nil
     Trace.entrace a, b:
-      NormNode newEmptyNode()
+      NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"
 
