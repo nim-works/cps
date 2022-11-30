@@ -172,11 +172,11 @@ proc firstDef*(e: Env): IdentDef =
   # https://github.com/nim-lang/Nim/issues/18365
   newIdentDef(e.first, asTypeExpr bindName"Continuation", newEmptyNode())
 
-proc get*(e: Env): NormNode =
+proc getResult*(e: Env): NormNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
-proc rewriteResult(e: Env; n: NormNode): NormNode =
+proc rewriteResult*(e: Env; n: NormNode): NormNode =
   ## replaces result symbols with the env's result; this should be
   ## safe to run on sem'd ast (for obvious reasons)
   proc rewriter(n: NormNode): NormNode =
@@ -184,7 +184,9 @@ proc rewriteResult(e: Env; n: NormNode): NormNode =
     case n.kind
     of nnkSym:
       if n.symKind == nskResult:
-        result = e.get
+        result = e.getResult
+    of nnkProcDef:
+      result = n  # don't rewrite `result` in nested procedures
     else: discard
   result = filter(n, rewriter)
 
@@ -373,7 +375,7 @@ proc rewriteReturn*(e: var Env; n: NormNode): NormNode =
       # okay, it's a return: result = ...
       result = newStmtList()
       # ignore the result symbol and create a new assignment
-      result.add newAssignment(e.get, n.last.last)
+      result.add newAssignment(e.getResult, n.last.last)
       # and add the termination annotation
       result.add newCpsTerminate()
     of nnkEmpty:
@@ -383,7 +385,7 @@ proc rewriteReturn*(e: var Env; n: NormNode): NormNode =
       # okay, it's a return of some rando expr
       result = newStmtList()
       # ignore the result symbol and create a new assignment
-      result.add newAssignment(e.get, n.last)
+      result.add newAssignment(e.getResult, n.last)
       # and add the termination annotation
       result.add newCpsTerminate()
 
@@ -399,8 +401,6 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormNode): NormNode =
       result = result.resym(sym, newDotExpr(child, field))
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
-  # make a special rewrite pass to replace the result symbols
-  result = e.rewriteResult result
 
 proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
@@ -436,7 +436,7 @@ proc createRecover*(env: Env, exported = false): ProcDef =
   let
     field = NimNode:
       if env.rs.hasType:
-        env.get                  # the return value is env.result
+        env.getResult          # the return value is env.result
       else:
         nnkDiscardStmt.newTree:
           newEmptyNode()       # the return value is void

@@ -1142,6 +1142,9 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   n = clone n
   n.addPragma "used"  # avoid gratuitous warnings
 
+  # make a special rewrite pass to replace the result symbols
+  n = ProcDef: env.rewriteResult n
+
   # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)

@@ -279,3 +279,16 @@ suite "locals":
         bar gen()
 
       foo()
+
+  block:
+    ## nested procedures may be defined and passed as arguments
+    proc two(fn: proc(): bool) {.cps: Cont.} =
+      check true == fn()
+
+    proc one() {.cps: Cont.} =
+      noop()
+      proc fn(): bool = true
+      noop()
+      two(fn)
+
+    one()
