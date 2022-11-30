@@ -39,15 +39,15 @@ proc state*(c: Continuation): State {.inline.} =
 
 template running*(c: Continuation): bool =
   ## `true` if the continuation is running.
-  (Continuation c).state == State.Running
+  (when c is Continuation: c else: Continuation c).state == State.Running
 
 template finished*(c: Continuation): bool =
   ## `true` if the continuation is finished.
-  (Continuation c).state == State.Finished
+  (when c is Continuation: c else: Continuation c).state == State.Finished
 
 template dismissed*(c: Continuation): bool =
   ## `true` if the continuation was dimissed.
-  (Continuation c).state == State.Dismissed
+  (when c is Continuation: c else: Continuation c).state == State.Dismissed
 
 {.pop.}
 
