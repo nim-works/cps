@@ -291,7 +291,10 @@ macro trace*(hook: static[Hook]; source, target: typed;
 proc disarm*[T: Continuation](c: T) {.used, inline.} =
   ## Reimplement this symbol to customize preparation of a continuation
   ## for deallocation.
-  c.mom = nil
+  if c.dismissed:
+    raise Defect.newException "disarm called upon dismissed continuation"
+  else:
+    c.mom = nil
 
 proc alloc*[T: Continuation](U: typedesc[T]; E: typedesc): E {.used, inline.} =
   ## Reimplement this symbol to customize continuation allocation; `U`
