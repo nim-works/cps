@@ -292,3 +292,17 @@ suite "locals":
       two(fn)
 
     one()
+
+  block:
+    ## lambdas may be defined and passed as arguments, with some caveats
+    proc two(fn: proc(): bool) {.cps: Cont.} =
+      check true == fn()
+
+    proc one() {.cps: Cont.} =
+      noop()
+      var fn: proc(): bool
+      fn = proc(): bool = true
+      noop()
+      two(fn)
+
+    one()
