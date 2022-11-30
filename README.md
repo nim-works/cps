@@ -498,5 +498,7 @@ Note that only one `--define:cpsDebug=...` can be enabled at a time - multiple d
 
 Implement `trace` and it will be called at each continuation leg; [see the documentation for details](https://nim-works.github.io/cps/cps.html#trace.m%2Cstatic%5BHook%5D%2Ctyped%2Ctyped%2Cstring%2CLineInfo%2Ctyped).
 
+Use `--define:cpsNoTrace` to disable the `trace` code generation.
+
 ## License
 MIT

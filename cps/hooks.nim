@@ -83,14 +83,21 @@ proc nameForNode*(n: NimNode): string =
   else:
     repr n
 
-template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
-  let event = bindSym(etype hook)
-  let info = makeLineInfo n.lineInfoObj
-  let fun = newLit(nameForNode n.NimNode)
-  let call = newCall(Trace.sym, event, c.NimNode, abbreviation n.NimNode,
-                     "fun".eq fun, "info".eq info, body.NimNode).NormNode
-  copyLineInfo(call, n)
-  call
+when defined(cpsNoTrace):
+  template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
+    if body.NimNode.isNil or body.kind == nnkNilLit:
+      newEmptyNode().NormNode
+    else:
+      body
+else:
+  template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
+    let event = bindSym(etype hook)
+    let info = makeLineInfo n.lineInfoObj
+    let fun = newLit(nameForNode n.NimNode)
+    let call = newCall(Trace.sym, event, c.NimNode, abbreviation n.NimNode,
+                       "fun".eq fun, "info".eq info, body.NimNode).NormNode
+    copyLineInfo(call, n)
+    call
 
 proc hook*(hook: static[Hook]; n: NormNode): NormNode =
   ## execute the given hook on the given node
@@ -131,13 +138,16 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
     # dealloc(continuation, env_234234), or
     # alloc(Cont, env_234234), or
     # stack(symbol, continuation)
-    Stack.entrace a, b:
-      newCall(hook.sym, a, b)
+    when cpsStackFrames:
+      Stack.entrace a, b:
+        newCall(hook.sym, a, b)
+    else:
+      b
   of Trace:
     # trace(Pass, continuation, "whileLoop_2323",
     # LineInfo(filename: "...", line: 23, column: 44)): nil
     Trace.entrace a, b:
-      NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
+      NormNode newEmptyNode()
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"
 
