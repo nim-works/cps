@@ -75,42 +75,42 @@ suite "hooks":
     let s = found.join("\10")
     const
       expected = """
-        alloc 0: cps environment for foo() Cont 👍
+        alloc 0: cps:foo() env Cont 👍
         head 1: trace nil 👍
         stack 2: foo foo 👍
         boot 3: c nil 👍
         trace 4: foo continuation 👍
         coop 5: Cont nil environment.nim
-        trace 6: While Loop in foo() continuation 👍
-        trace 7: Post Call in foo() continuation 👍
+        trace 6: cps:foo() loop continuation 👍
+        trace 7: cps:foo() jump noop() continuation 👍
         tail 8: Cont continuation 👍
-        alloc 9: cps environment for bar() Cont 👍
+        alloc 9: cps:bar() env Cont 👍
         stack 10: bar bar 👍
         boot 11: Cont nil 👍
-        pass 12: cps environment for foo() Cont(continuation) 👍
+        pass 12: cps:foo() env Cont(continuation) 👍
         trace 13: bar continuation 👍
-        trace 14: Post Call in bar() continuation 👍
+        trace 14: cps:bar() jump noop() continuation 👍
         pass 15: continuation.mom Cont(continuation) normalizedast.nim
         coop 16: result nil normalizedast.nim
-        dealloc 17: cps environment for bar() 😎 environment.nim
-        trace 18: Post Child in foo() continuation normalizedast.nim
+        dealloc 17: cps:bar() env 😎 environment.nim
+        trace 18: cps:foo() child bar() continuation normalizedast.nim
         coop 19: Cont nil environment.nim
-        trace 20: While Loop in foo() continuation 👍
-        trace 21: Post Call in foo() continuation 👍
+        trace 20: cps:foo() loop continuation 👍
+        trace 21: cps:foo() jump noop() continuation 👍
         tail 22: Cont continuation 👍
-        alloc 23: cps environment for bar() Cont 👍
+        alloc 23: cps:bar() env Cont 👍
         stack 24: bar bar 👍
         boot 25: Cont nil 👍
-        pass 26: cps environment for foo() Cont(continuation) 👍
+        pass 26: cps:foo() env Cont(continuation) 👍
         trace 27: bar continuation 👍
-        trace 28: Post Call in bar() continuation 👍
+        trace 28: cps:bar() jump noop() continuation 👍
         pass 29: continuation.mom Cont(continuation) normalizedast.nim
         coop 30: result nil normalizedast.nim
-        dealloc 31: cps environment for bar() 😎 environment.nim
-        trace 32: Post Child in foo() continuation normalizedast.nim
+        dealloc 31: cps:bar() env 😎 environment.nim
+        trace 32: cps:foo() child bar() continuation normalizedast.nim
         coop 33: Cont nil environment.nim
-        trace 34: While Loop in foo() continuation 👍
-        trace 35: Post Call in foo() continuation 👍
+        trace 34: cps:foo() loop continuation 👍
+        trace 35: cps:foo() jump noop() continuation 👍
       """.dedent(8).strip()
     if s != expected:
       fail "trace output doesn't match; received:\n" & s
