@@ -21,10 +21,11 @@ when not defined(nimPanics):
   {.warning: "cps supports --panics:on only; " &
              " see https://github.com/nim-works/cps/issues/110".}
 
-# we recommend against threads:on without define:useMalloc
-when not defined(useMalloc) and compileOption"threads":
-  {.warning:
-    "cps recommends against --threads:on without --define:useMalloc".}
+when (NimMajor, NimMinor, NimPatch) < (1, 7, 3):
+  # we recommend against threads:on without define:useMalloc
+  when not defined(useMalloc) and compileOption"threads":
+    {.warning:
+      "cps recommends against --threads:on without --define:useMalloc".}
 
 proc state*(c: Continuation): State {.inline.} =
   ## Get the current state of a continuation
@@ -75,9 +76,9 @@ macro cpsTyped(tipe: typed, n: typed): untyped =
       result = getAst(cpsTransform(tipe, n))
 
 macro cps*(tipe: typed, n: untyped): untyped =
-  ## When applied to a procedure, rewrites the procedure into a continuation form.
-  ## When applied to a procedure type definition, rewrites the type into a callback
-  ## form.
+  ## When applied to a procedure, rewrites the procedure into a
+  ## continuation form. When applied to a procedure type definition,
+  ## rewrites the type into a callback form.
   result = n
   when not defined(nimdoc):
     # add the application of the typed transformation pass
@@ -315,13 +316,14 @@ template recover*(c: Continuation): untyped {.used.} =
   discard
 
 when not defined cpsNoCallOperator:
-  {.push experimental: "callOperator".}
-
-  macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
-    ## Allows for natural use of call syntax to invoke a callback and
-    ## recover its result in a single statement, inside a continuation.
-    let call = bindSym"call"
-    result = newCall(call, callback)
-    for argument in arguments.items:
-      result.add argument
-    result = newCall(bindSym"recover", callback, result)
+  when (NimMajor, NimMinor, NimPatch) >= (1, 7, 3):
+    {.push experimental: "callOperator".}
+    macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
+      ## Allows for natural use of call syntax to invoke a callback and
+      ## recover its result in a single statement, inside a continuation.
+      let call = bindSym"call"
+      result = newCall(call, callback)
+      for argument in arguments.items:
+        result.add argument
+      result = newCall(bindSym"recover", callback, result)
+    {.pop.}

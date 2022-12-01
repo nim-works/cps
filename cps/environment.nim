@@ -428,11 +428,10 @@ proc genException*(e: var Env): NimNode =
   e = e.set ex:
     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
-
-proc createRecover*(env: Env, exported = false): ProcDef =
-  ## define a procedure for retrieving the result of a continuation
+proc createRecover*(env: Env, exported = false): NimNode =
+  ## define procedures for retrieving the result of a continuation
   ##
-  ## `exported` determines whether this procedure will be exported
+  ## `exported` determines whether these procedures will be exported
   let
     field = NimNode:
       if env.rs.hasType:
@@ -455,7 +454,7 @@ proc createRecover*(env: Env, exported = false): ProcDef =
     else:
       name
 
-  result = ProcDef:
+  result =
     genAstOpt({}, ename = ename.NimNode, cont = env.identity.NimNode,
            field = field.NimNode, c = env.first.NimNode,
            fetcher = fetcher.NimNode, contBase = env.inherits.NimNode,
@@ -472,10 +471,25 @@ proc createRecover*(env: Env, exported = false): ProcDef =
         of running:
           naked(trampoline c)
 
-      {.push experimental: "callOperator".}
       proc ename(c: cont): tipe {.used, nimcall.} =
         naked(contBase c)
-      {.pop.}
+
+  when not defined cpsNoCallOperator:
+    var ecall = Name: nnkAccQuoted.newTree: ident"()"
+    ecall =
+      if exported:
+        postfix(ecall, "*")
+      else:
+        ecall
+    result.add:
+      genAstOpt({}, cont = env.identity.NimNode, naked = naked.NimNode,
+                contBase = env.inherits.NimNode, tipe = env.rs.typ.NimNode,
+                ecall = ecall.NimNode):
+        when (NimMajor, NimMinor, NimPatch) >= (1, 7, 3):
+          {.push experimental: "callOperator".}
+          proc ecall(c: cont): tipe {.used, nimcall.} =
+            naked(contBase c)
+          {.pop.}
 
 proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
