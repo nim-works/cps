@@ -1204,3 +1204,6 @@ proc genProcName*(a, b: string; info = NilNormNode): Name =
 
 proc genTypeName*(a, b: string; info = NilNormNode): Name =
   genSymType(fmt"cps:{a} {b}", info=info)
+
+proc postfix*(n: Name; op: string): Name =
+  postfix(n.NimNode, op).Name
