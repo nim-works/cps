@@ -63,7 +63,8 @@ macro cpsJump(cont, contType: typed; name: static[string];
   ## All AST rewritten by cpsJump should end in a control-flow statement.
   let
     call = normalizeCall call
-    name = genSymProc("Post Call in " & name)
+    name = genProcName(name, "jump " & $call.name & "()",
+                       info=n.NormNode)
     cont = cont.asName
     contType = contType.asName
   debugAnnotation cpsJump, n:
@@ -83,13 +84,13 @@ macro cpsContinuationJump(cont, contType: typed; name: static[string];
   let
     c = c.NormNode                                      # store child here
     call = asCall(NormNode call)                        # child bootstrap call
-    name = genSymProc("Post Child in " & name,          # return to this proc
-                      info = n.NormNode)
+    name = genProcName(name, "child " & $call.name & "()",
+                       info = n.NormNode)
     cont = cont.asName                                  # current continuation
     contType = contType.asName                          # so-called user type
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
-      makeContProc(name, cont, contType, n)
+      makeContProc(name, cont, contType, n)             # return to this proc
     it.add:
       # update the parent's stack frame with the call site of the child
       updateLineInfoForContinuationStackFrame(cont.NimNode, call.NimNode)
@@ -115,7 +116,7 @@ macro cpsMayJump(cont, contType: typed; name: static[string]; n, after: typed): 
   ## This macro evaluates `n` and replaces all `{.cpsPending.}` in `n`
   ## with tail calls to `after`.
   let
-    name = genSymProc("Finish in " & name)
+    name = genProcName(name, "tail", info=n.NormNode)
     cont = cont.asName
     contType = contType.asName
     tail = tailCall(desym cont, contType, name)
@@ -175,7 +176,7 @@ macro cpsWhile(cont, contType: typed; name: static[string];
   ## to the next control-flow.
   let
     n = NormNode n
-    name = genSymProc("While Loop in " & name)
+    name = genProcName(name, "loop", info=n.NormNode)
     cont = cont.asName
     contType = contType.asName
     tail = tailCall(desym cont, contType, name)
@@ -415,7 +416,7 @@ macro cpsTryExcept(cont, contType: typed; name: static[string];
     contType = contType.asName
     ex = normalizingRewrites ex
     temp = genSymUnknown"placeholder"
-    handler = genSymProc"Except"
+    handler = genProcName(name, "except", info=n.NormNode)
 
   debugAnnotation cpsTryExcept, n:
     # unwrap stmtlist and merge all except branches into one
@@ -469,11 +470,13 @@ macro cpsTryFinally(cont, contType: typed; name: static[string];
     let finallyBody = tryFinally.last.last
 
     # make cont a Name for that typed feeling
-    let cont = cont.asName
-    let contType = contType.asName
+    let
+      cont = cont.asName
+      contType = contType.asName
+      name = genProcName(name, "finally", info=n.NormNode)
 
     # Turn the finally into a continuation leg.
-    let final = makeContProc(genSymProc"Finally", cont, contType, finallyBody)
+    let final = makeContProc(name, cont, contType, finallyBody)
 
     # A property of `finally` is that it inserts itself in the middle
     # of any scope exit attempt before performing the scope exit.
@@ -964,7 +967,7 @@ macro cpsFloater(n: typed): untyped =
   result = floater:
     copyNimTree n
 
-macro cpsManageException(n: typed): untyped =
+macro cpsManageException(name: static[string]; n: typed): untyped =
   ## rewrites all continuations in `n` containing an exception so that exception
   ## become the "current" exception of that continuation while preserving the
   ## environment outside cps
@@ -987,7 +990,7 @@ macro cpsManageException(n: typed): untyped =
         let
           n = asProcDef(n)
           inner = clone(n, n.body)
-        inner.name = genSymProc("Managed_" & inner.name.strVal)
+        inner.name = genProcName(name, "managed-" & $inner.name, info=n)
         # Copy the continuation pragmas, but remove the "has exception" tag
         inner.pragma = n.pragma.stripPragma("cpsHasException")
         # Rewrite the continuations contained in `inner` as well
@@ -1216,7 +1219,7 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   let processMainContinuation =
     newCall(bindSym"cpsFloater"):
       newCall(bindSym"cpsResolver", NimNode env.identity, NimNode env.root):
-        newCall(bindSym"cpsManageException"):
+        newCall(bindSym"cpsManageException", newLit env.procedure):
           newCall(bindSym"cpsHandleUnhandledException", NimNode env.root):
             NormNode n
 
