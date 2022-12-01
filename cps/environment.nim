@@ -98,7 +98,7 @@ proc init(e: var Env) =
     e.fn = asName"fn"
   if e.mom.isNil:
     e.mom = asName"mom"
-  e.id = genSymType("cps environment for " & procedure(e), info = e.via)
+  e.id = genTypeName(procedure(e), "env", info = e.via)
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarIdentDef(e.rs))
 
@@ -442,10 +442,10 @@ proc createRecover*(env: Env, exported = false): ProcDef =
           newEmptyNode()       # the return value is void
 
   # the result fetcher used in the Callback shim
-  var fetcher = nskProc.genSym"result"
+  var fetcher = genProcName(procedure env, "recover", info=env.store.NormNode)
   let naked = copyNimNode fetcher  # so that we can call it without `*`
   if exported:
-    fetcher = NormNode postfix(fetcher, "*")
+    fetcher = postfix(fetcher, "*")
 
   # compose the (exported?) symbol
   let name = NimNode ident"recover"
@@ -485,7 +485,7 @@ proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   result.addPragma "used"  # avoid gratuitous warnings
   result.addPragma "nimcall"
   result.returnParam = env.identity
-  result.name = genSymProc: "whelp for " & env.procedure
+  result.name = genProcName(procedure env, "whelp", info=n)
   result.introduce {Alloc, Boot, Stack}
 
   # create the continuation as the result and point it at the proc
@@ -507,7 +507,7 @@ proc createCallbackShim*(env: Env; whelp: ProcDef): ProcDef =
   ## this is a version of whelp that returns the base continuation type
   result = clone(whelp, newStmtList())
   result.returnParam = env.inherits
-  result.name = genSymProc: "whelp shim for " & env.procedure
+  result.name = genProcName(procedure env, "callback", info=whelp)
   # whelp_234(a, b, c)
   result.body = newCall whelp.name
   for defs in result.callingParams:

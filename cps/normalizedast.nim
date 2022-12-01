@@ -1,4 +1,5 @@
 import std/macros
+import std/strformat
 from std/hashes import Hash, hash
 from std/sequtils import anyIt, toSeq
 from std/typetraits import distinctBase
@@ -1194,3 +1195,15 @@ proc hasPragma*(n: NormNode; s: static[string]): bool =
     result = anyIt(toSeq items(n), hasPragma(it, s))
   else:
     result = false
+
+proc genProcName*(a: string; info = NilNormNode): Name {.deprecated.} =
+  genSymProc(fmt"cps:{a}", info=info)
+
+proc genProcName*(a, b: string; info = NilNormNode): Name =
+  genSymProc(fmt"cps:{a} {b}", info=info)
+
+proc genTypeName*(a, b: string; info = NilNormNode): Name =
+  genSymType(fmt"cps:{a} {b}", info=info)
+
+proc postfix*(n: Name; op: string): Name =
+  postfix(n.NimNode, op).Name
