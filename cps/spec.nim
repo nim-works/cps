@@ -10,6 +10,17 @@ import std/macros except newStmtList, newTree
 when (NimMajor, NimMinor) < (1, 5):
   {.fatal: "requires nim-1.5".}
 
+const
+  cpsCallOperatorSupported* =
+    when (NimMajor, NimMinor) < (1, 6):
+      false
+    elif (NimMajor, NimMinor) == (1, 6) and NimPatch < 11:
+      false
+    elif (NimMajor, NimMinor) == (1, 7) and NimPatch < 3:
+      false
+    else:
+      true
+
 import cps/[rewrites, help, normalizedast]
 export errorAst, desym, isEmpty, genField
 
