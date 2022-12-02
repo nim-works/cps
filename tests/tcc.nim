@@ -85,24 +85,27 @@ suite "calling convention":
 
   block:
     ## run a callback in cps with natural syntax
-    var k = newKiller 3
+    when (NimMajor, NimMinor, NimPatch) < (1, 7, 3):
+      skip"buggy prior to nim-1.7.3"
+    else:
+      var k = newKiller 3
 
-    type
-      ContCall = proc(a: int): int {.cps: Cont.}
+      type
+        ContCall = proc(a: int): int {.cps: Cont.}
 
-    proc bar(a: int): int {.cps: Cont.} =
-      noop()
-      step 2
-      return a * 2
+      proc bar(a: int): int {.cps: Cont.} =
+        noop()
+        step 2
+        return a * 2
 
-    proc foo(c: ContCall) {.cps: Cont.} =
-      step 1
-      let x = c(4)
-      check x == 8
-      step 3
+      proc foo(c: ContCall) {.cps: Cont.} =
+        step 1
+        let x = c(4)
+        check x == 8
+        step 3
 
-    const cb = whelp bar
-    foo cb
+      const cb = whelp bar
+      foo cb
 
   block:
     ## callback illustration

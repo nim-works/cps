@@ -1229,7 +1229,7 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # from other modules
   let recover = env.createRecover(exported = originalProcSym.isExported)
   # pluck out the FIRST procedure from the list; this is the shim
-  let recoverProc = recover.NimNode.findChild(it.kind == nnkProcDef)
+  let recoverProc = recover.findChild(it.kind == nnkProcDef)
 
   for p in [whelp, booty]:
     # storing the source environment on helpers
