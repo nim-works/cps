@@ -4,13 +4,13 @@ description = "continuation-passing style"
 license = "MIT"
 
 when not defined(release):
-  requires "https://github.com/disruptek/balls >= 3.0.0 & < 4.0.0"
+  requires "https://github.com/disruptek/balls >= 3.8.1 & < 4.0.0"
 
 task test, "run tests for ci":
   when defined(windows):
-    exec "balls.cmd"
+    exec "balls.cmd --gc:arc --gc:orc"
   else:
-    exec findExe"balls"
+    exec "balls --gc:arc --gc:orc"
 
 task demo, "generate the demos":
   exec """demo docs/tzevv.svg "nim c --out=\$1 tests/zevv.nim""""
