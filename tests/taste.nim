@@ -481,16 +481,15 @@ suite "tasteful tests":
 
   block:
     ## calling a local proc variable
-    skip "pending #185":
-      r = 0
-      proc bar() =
-        inc r
+    r = 0
+    proc bar() =
+      inc r
 
-      proc foo() {.cps: Cont.} =
-        let fn = bar
-        noop()
-        inc r
-        fn()
+    proc foo() {.cps: Cont.} =
+      let fn = bar
+      noop()
+      inc r
+      fn()
 
-      foo()
-      check r == 2
+    foo()
+    check r == 2

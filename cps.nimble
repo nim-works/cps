@@ -13,7 +13,7 @@ task test, "run tests for ci":
     exec findExe"balls"
 
 task demo, "generate the demos":
-  exec """demo docs/tzevv.svg "nim c --out=\$1 tests/tzevv.nim""""
+  exec """demo docs/tzevv.svg "nim c --out=\$1 tests/zevv.nim""""
   exec """demo docs/taste.svg "nim c --out=\$1 tests/taste.nim""""
 
 task matrix, "generate the matrix":
