@@ -81,7 +81,7 @@ jobs:
         run: |
           cd cps
           nimble --accept develop
-          nimble test
+          env GITHUB_ACTIONS=false balls --gc:arc --gc:orc
 
       - name: Build docs
         if: ${{ matrix.docs }} == 'true'
