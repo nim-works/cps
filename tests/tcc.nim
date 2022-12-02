@@ -85,8 +85,8 @@ suite "calling convention":
 
   block:
     ## run a callback in cps with natural syntax
-    when (NimMajor, NimMinor, NimPatch) < (1, 7, 3):
-      skip"buggy prior to nim-1.7.3"
+    when not cpsCallOperatorSupported:
+      skip "unsupported on nim " & NimVersion
     else:
       var k = newKiller 3
 

@@ -1,7 +1,8 @@
 import std/[genasts, deques]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
-export Continuation, ContinuationProc, State
+
+export Continuation, ContinuationProc, State, cpsCallOperatorSupported
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 export cpsMagic, cpsVoodoo, trampoline, trampolineIt, call, recover
 export writeStackFrames, writeTraceDeque
@@ -315,15 +316,14 @@ template recover*(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
 
-when not defined cpsNoCallOperator:
-  when (NimMajor, NimMinor, NimPatch) >= (1, 7, 3):
-    {.push experimental: "callOperator".}
-    macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
-      ## Allows for natural use of call syntax to invoke a callback and
-      ## recover its result in a single statement, inside a continuation.
-      let call = bindSym"call"
-      result = newCall(call, callback)
-      for argument in arguments.items:
-        result.add argument
-      result = newCall(bindSym"recover", callback, result)
-    {.pop.}
+when cpsCallOperatorSupported and not defined cpsNoCallOperator:
+  {.push experimental: "callOperator".}
+  macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
+    ## Allows for natural use of call syntax to invoke a callback and
+    ## recover its result in a single statement, inside a continuation.
+    let call = bindSym"call"
+    result = newCall(call, callback)
+    for argument in arguments.items:
+      result.add argument
+    result = newCall(bindSym"recover", callback, result)
+  {.pop.}

@@ -474,7 +474,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
       proc ename(c: cont): tipe {.used, nimcall.} =
         naked(contBase c)
 
-  when not defined cpsNoCallOperator:
+  when cpsCallOperatorSupported and not defined cpsNoCallOperator:
     var ecall = Name: nnkAccQuoted.newTree: ident"()"
     ecall =
       if exported:
