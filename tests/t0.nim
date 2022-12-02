@@ -1,4 +1,5 @@
 import std/[macros, genasts]
+import pkg/cps/normalizedast
 
 include preamble
 
