@@ -516,19 +516,19 @@ proc ensimilate*(source, destination: NormNode): Call =
   ## perform a call to convert the destination to the source's type;
   ## the source can be any of a few usual suspects...
   let typ = TypeExpr getTypeImpl source
-  block:
+  block unfound:
     if typ.isNil:
-      break
+      break unfound
     else:
       case typ.kind
       of nnkEmpty:
-        break
+        break unfound
       of nnkProcTy:
         result = newCall(typ[0][0], destination)
       of nnkRefTy:
         result = newCall(typ[0], destination)
       elif typ.kind == nnkSym and $typ == "void":
-        break
+        break unfound
       else:
         result = newCall(typ, destination)
       return
