@@ -1088,7 +1088,7 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
   ## be first copied into the `ex` variable, then raise
 
-  {.warning: "https://github.com/nim-lang/Nim/issues/18352".}
+  {.warning: "compiler workaround here, see: https://github.com/nim-lang/Nim/issues/18352".}
   let contType = contType
 
   proc handle(n: NormNode): NormNode =
