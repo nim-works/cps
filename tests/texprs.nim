@@ -292,8 +292,8 @@ suite "expression flattening":
     foo()
 
   test "flatten upcasting assignments":
-    when not defined(release) and defined(gcArc):
-      skip "not sure why but the compiler dies"
+    when not defined(release):
+      skip"compiler crashes on debug"
     else:
       type
         O = ref object of RootObj
@@ -312,7 +312,7 @@ suite "expression flattening":
             I(x: 42, y: 10)
           else:
             fail "this branch should not be run"
-            return
+            I(x: 42, y: 20)
 
         step 3
 
