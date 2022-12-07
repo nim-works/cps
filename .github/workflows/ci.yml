@@ -74,7 +74,7 @@ jobs:
           cd cps
           nimble --accept develop
           cd examples
-          env GITHUB_ACTIONS=false balls --path=".."
+          balls --path=".." --define:release --define:danger --gc:arc --backend:c --threads:on
 
       - name: Run tests
         shell: bash
