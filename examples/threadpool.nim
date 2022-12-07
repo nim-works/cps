@@ -76,7 +76,7 @@ proc slow(id: int, n: float) {.cps:Cont.} =
 
   echo id, ": ", b
 
-when defined(gcArc) or defined(gcOrc):
+when defined(gcArc):
   for i in 1..32:
     pool.work.addLast:
       whelp slow(i, 4)
@@ -84,4 +84,4 @@ when defined(gcArc) or defined(gcOrc):
 
   work(countProcessors())
 else:
-  echo "this example doesn't work outside --gc:[ao]rc"
+  echo "this example doesn't work outside --gc:arc"
