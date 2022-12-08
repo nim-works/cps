@@ -1057,7 +1057,7 @@ macro cpsManageException(name: static[string]; n: typed): untyped =
 proc unwind*(c: Continuation; e: ref Exception): Continuation
 
 proc handler(c: Continuation;
-              fn: Continuation.fn): Continuation {.used, cpsMagic.} =
+              fn: ContinuationObj.fn): Continuation {.used, cpsMagic.} =
   ## Reimplement this symbol to customize exception handling.
   if not c.isNil:
     if fn.isNil:

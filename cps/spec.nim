@@ -57,7 +57,7 @@ const
   traceDequeSize* {.intdefine, used.} = 4_096
 
 type
-  Continuation* = ref object of RootObj
+  ContinuationObj* = ref object of RootObj
     fn*: proc(c: sink Continuation): Continuation {.nimcall.} ##
     ## The `fn` points to the next continuation leg.
     mom*: Continuation  ##
@@ -69,6 +69,7 @@ type
       frames*: Deque[TraceFrame]    ## Tracing for all prior hooks
     when cpsStackFrames:
       stack*: TraceFrame            ## Stack-like semantic record
+  Continuation* = ref object of ContinuationObj
 
   ContinuationProc*[T] = proc(c: sink T): T {.nimcall.}
 
@@ -96,6 +97,16 @@ type
     Head    = "head"      ## invoked when a new continuation has no parent
     Tail    = "tail"      ## invoked when a new continuation has a parent
     Stack   = "stack"     ## invoked to annotate stack semantics
+
+when false:
+  proc `=copy`[T: ContinuationObj](dest: var T; src: T) {.error.} =
+    discard
+
+  proc `=destroy`[T: ContinuationObj](dest: var T) =
+    reset dest.mom
+    reset dest.ex
+    for key, value in dest.fieldPairs:
+      reset value
 
 template dot*(a, b: NimNode): NimNode =
   ## for constructing foo.bar
