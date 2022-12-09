@@ -3,6 +3,8 @@ import std/strutils
 include preamble
 import killer
 
+from cps/spec import cpsStackFrames
+
 suite "try statements":
 
   var r = 0
@@ -505,24 +507,27 @@ suite "try statements":
 
   block:
     ## the stack trace probably still works
-    r = 0
-    proc foo() {.cps: Cont.} =
-      noop()
-      inc r
-      try:
-        raise newException(CatchableError, "test")
-      except:
-        let frames = renderStackFrames()
-        check frames.len > 0, "expected at least one stack trace record"
-        check "ttry.nim" in frames[0], "couldn't find ttry.nim in the trace"
-        raise
+    when not cpsStackFrames:
+      skip"--stacktrace:off specified"
+    else:
+      r = 0
+      proc foo() {.cps: Cont.} =
+        noop()
+        inc r
+        try:
+          raise newException(CatchableError, "test")
+        except:
+          let frames = renderStackFrames()
+          check frames.len > 0, "expected at least one stack trace record"
+          check "ttry.nim" in frames[0], "couldn't find ttry.nim in the trace"
+          raise
 
-    try:
-      trampoline whelp(foo())
-      inc r
-    except CatchableError as e:
-      check e.msg == "test", "unable to pass exception message from cps"
-    check r == 1
+      try:
+        trampoline whelp(foo())
+        inc r
+      except CatchableError as e:
+        check e.msg == "test", "unable to pass exception message from cps"
+      check r == 1
 
 suite "defer statements":
 

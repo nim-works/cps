@@ -1,9 +1,10 @@
-import std/os
 import std/genasts
 import std/macros
+import std/os
+import std/sequtils
 import std/strutils
 
-from cps/spec import Hook
+from cps/spec import Hook, cpsStackFrames
 from cps/hooks import findColonLit
 
 include preamble
@@ -73,45 +74,93 @@ suite "hooks":
 
     foo()
     let s = found.join("\10")
-    const
-      expected = """
-        alloc 0: cps:foo() env Cont 👍
-        head 1: trace nil 👍
-        stack 2: foo foo 👍
-        boot 3: c nil 👍
-        trace 4: foo continuation 👍
-        coop 5: Cont nil environment.nim
-        trace 6: cps:foo() loop continuation 👍
-        trace 7: cps:foo() jump noop() continuation 👍
-        tail 8: Cont continuation 👍
-        alloc 9: cps:bar() env Cont 👍
-        stack 10: bar bar 👍
-        boot 11: Cont nil 👍
-        pass 12: cps:foo() env Cont(continuation) 👍
-        trace 13: bar continuation 👍
-        trace 14: cps:bar() jump noop() continuation 👍
-        pass 15: continuation.mom Cont(continuation) normalizedast.nim
-        dealloc 16: cps:bar() env 😎 environment.nim
-        trace 17: cps:foo() child bar() continuation normalizedast.nim
-        coop 18: Cont nil environment.nim
-        trace 19: cps:foo() loop continuation 👍
-        trace 20: cps:foo() jump noop() continuation 👍
-        tail 21: Cont continuation 👍
-        alloc 22: cps:bar() env Cont 👍
-        stack 23: bar bar 👍
-        boot 24: Cont nil 👍
-        pass 25: cps:foo() env Cont(continuation) 👍
-        trace 26: bar continuation 👍
-        trace 27: cps:bar() jump noop() continuation 👍
-        pass 28: continuation.mom Cont(continuation) normalizedast.nim
-        dealloc 29: cps:bar() env 😎 environment.nim
-        trace 30: cps:foo() child bar() continuation normalizedast.nim
-        coop 31: Cont nil environment.nim
-        trace 32: cps:foo() loop continuation 👍
-        trace 33: cps:foo() jump noop() continuation 👍
-      """.dedent(8).strip()
-    if s != expected:
-      fail "trace output doesn't match; received:\n" & s
+
+    proc normalize(s: string): seq[string] =
+      var s = strip s
+      result = splitLines s
+      result = map(result, proc(x: string): string = strip(x))
+
+    when cpsStackFrames:
+      const
+        expected = """
+          alloc 0: cps:foo() env Cont 👍
+          head 1: trace nil 👍
+          stack 2: foo foo 👍
+          boot 3: c nil 👍
+          trace 4: foo continuation 👍
+          coop 5: Cont nil environment.nim
+          trace 6: cps:foo() loop continuation 👍
+          trace 7: cps:foo() jump noop() continuation 👍
+          tail 8: Cont continuation 👍
+          alloc 9: cps:bar() env Cont 👍
+          stack 10: bar bar 👍
+          boot 11: Cont nil 👍
+          pass 12: cps:foo() env Cont(continuation) 👍
+          trace 13: bar continuation 👍
+          trace 14: cps:bar() jump noop() continuation 👍
+          pass 15: continuation.mom Cont(continuation) environment.nim
+          dealloc 16: cps:bar() env 😎 environment.nim
+          trace 17: cps:foo() child bar() continuation normalizedast.nim
+          coop 18: Cont nil environment.nim
+          trace 19: cps:foo() loop continuation 👍
+          trace 20: cps:foo() jump noop() continuation 👍
+          tail 21: Cont continuation 👍
+          alloc 22: cps:bar() env Cont 👍
+          stack 23: bar bar 👍
+          boot 24: Cont nil 👍
+          pass 25: cps:foo() env Cont(continuation) 👍
+          trace 26: bar continuation 👍
+          trace 27: cps:bar() jump noop() continuation 👍
+          pass 28: continuation.mom Cont(continuation) environment.nim
+          dealloc 29: cps:bar() env 😎 environment.nim
+          trace 30: cps:foo() child bar() continuation normalizedast.nim
+          coop 31: Cont nil environment.nim
+          trace 32: cps:foo() loop continuation 👍
+          trace 33: cps:foo() jump noop() continuation 👍
+        """
+    else:
+      const
+        expected = """
+          alloc 0: cps:foo() env Cont 👍
+          head 1: trace nil 👍
+          boot 2: c nil 👍
+          trace 3: foo continuation 👍
+          coop 4: Cont nil environment.nim
+          trace 5: cps:foo() loop continuation 👍
+          trace 6: cps:foo() jump noop() continuation 👍
+          tail 7: Cont continuation 👍
+          alloc 8: cps:bar() env Cont 👍
+          boot 9: Cont nil 👍
+          pass 10: cps:foo() env Cont(continuation) 👍
+          trace 11: bar continuation 👍
+          trace 12: cps:bar() jump noop() continuation 👍
+          pass 13: continuation.mom Cont(continuation) environment.nim
+          dealloc 14: cps:bar() env 😎 environment.nim
+          trace 15: cps:foo() child bar() continuation normalizedast.nim
+          coop 16: Cont nil environment.nim
+          trace 17: cps:foo() loop continuation 👍
+          trace 18: cps:foo() jump noop() continuation 👍
+          tail 19: Cont continuation 👍
+          alloc 20: cps:bar() env Cont 👍
+          boot 21: Cont nil 👍
+          pass 22: cps:foo() env Cont(continuation) 👍
+          trace 23: bar continuation 👍
+          trace 24: cps:bar() jump noop() continuation 👍
+          pass 25: continuation.mom Cont(continuation) environment.nim
+          dealloc 26: cps:bar() env 😎 environment.nim
+          trace 27: cps:foo() child bar() continuation normalizedast.nim
+          coop 28: Cont nil environment.nim
+          trace 29: cps:foo() loop continuation 👍
+          trace 30: cps:foo() jump noop() continuation 👍
+        """
+    let x = expected.normalize
+    let y = s.normalize
+    if x != y:
+      for (a, b) in zip(x, y).items:
+        if a != b:
+          checkpoint "< ", a
+          checkpoint "> ", b
+      fail "trace output doesn't match"
 
   block:
     ## custom continuation allocators are used automatically
