@@ -75,6 +75,7 @@ proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
           #result = (typeof `c`) `pass` Error: expected type, but got: Continuation(continuation.mom)
           result = `pass`
           if result != `c`:
+            `c`.mom = nil
             # dealloc(env_234234, continuation)
             discard `dealloc`
       # critically, terminate control-flow here!
