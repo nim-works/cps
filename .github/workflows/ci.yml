@@ -74,7 +74,7 @@ jobs:
           cd cps
           nimble --accept develop
           cd examples
-          balls --path=".." --define:release --define:danger --gc:arc --backend:c --threads:on
+          balls --path=".." --define:release --define:danger --gc:arc --gc:orc --backend:c --threads:on
 
       - name: Run tests
         shell: bash
