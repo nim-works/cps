@@ -91,26 +91,24 @@ suite "hooks":
         trace 13: bar continuation 👍
         trace 14: cps:bar() jump noop() continuation 👍
         pass 15: continuation.mom Cont(continuation) normalizedast.nim
-        coop 16: result nil normalizedast.nim
-        dealloc 17: cps:bar() env 😎 environment.nim
-        trace 18: cps:foo() child bar() continuation normalizedast.nim
-        coop 19: Cont nil environment.nim
-        trace 20: cps:foo() loop continuation 👍
-        trace 21: cps:foo() jump noop() continuation 👍
-        tail 22: Cont continuation 👍
-        alloc 23: cps:bar() env Cont 👍
-        stack 24: bar bar 👍
-        boot 25: Cont nil 👍
-        pass 26: cps:foo() env Cont(continuation) 👍
-        trace 27: bar continuation 👍
-        trace 28: cps:bar() jump noop() continuation 👍
-        pass 29: continuation.mom Cont(continuation) normalizedast.nim
-        coop 30: result nil normalizedast.nim
-        dealloc 31: cps:bar() env 😎 environment.nim
-        trace 32: cps:foo() child bar() continuation normalizedast.nim
-        coop 33: Cont nil environment.nim
-        trace 34: cps:foo() loop continuation 👍
-        trace 35: cps:foo() jump noop() continuation 👍
+        dealloc 16: cps:bar() env 😎 environment.nim
+        trace 17: cps:foo() child bar() continuation normalizedast.nim
+        coop 18: Cont nil environment.nim
+        trace 19: cps:foo() loop continuation 👍
+        trace 20: cps:foo() jump noop() continuation 👍
+        tail 21: Cont continuation 👍
+        alloc 22: cps:bar() env Cont 👍
+        stack 23: bar bar 👍
+        boot 24: Cont nil 👍
+        pass 25: cps:foo() env Cont(continuation) 👍
+        trace 26: bar continuation 👍
+        trace 27: cps:bar() jump noop() continuation 👍
+        pass 28: continuation.mom Cont(continuation) normalizedast.nim
+        dealloc 29: cps:bar() env 😎 environment.nim
+        trace 30: cps:foo() child bar() continuation normalizedast.nim
+        coop 31: Cont nil environment.nim
+        trace 32: cps:foo() loop continuation 👍
+        trace 33: cps:foo() jump noop() continuation 👍
       """.dedent(8).strip()
     if s != expected:
       fail "trace output doesn't match; received:\n" & s
