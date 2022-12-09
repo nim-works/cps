@@ -1,7 +1,7 @@
 
 #
 # Simple test of a naive threadpool for scheduling CPS threads. This demo
-# creates 1 million 'threads' scheduled on all available CPUs in the system
+# creates many 'threads' scheduled on all available CPUs in the system
 #
 # nim r --gc:arc --threads:on --threadanalysis:off stash/threadpool.nim
 #
@@ -69,7 +69,7 @@ proc slow(id: int, n: float) {.cps:Cont.} =
   while i < n:
     i += 1
     j = 0
-    while j < 10_000:
+    while j < 1_000:
       j += 0.01
       b += sin(i) + cos(j)
     jield()
