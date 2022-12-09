@@ -58,7 +58,6 @@ proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
   ## or simply set the fn to nil and return the continuation.
-  let coop = NimNode hook(Coop, asName"result")
   let pass = NimNode hook(Pass, newCall(contType, c), c.dot "mom")
   let dealloc = NimNode hook(Dealloc, newCall(contType, c), tipe)
   let c = NimNode c
