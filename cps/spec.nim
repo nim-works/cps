@@ -493,7 +493,7 @@ proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
 proc trampoline*[T: Continuation](c: sink T): T =
   ## This is the basic trampoline: it will run the continuation
   ## until the continuation is no longer in the `Running` state.
-  var c: Continuation = c
+  var c: Continuation = move c
   while not c.isNil and not c.fn.isNil:
     try:
       var y = c.fn
