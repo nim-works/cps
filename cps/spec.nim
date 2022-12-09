@@ -98,15 +98,12 @@ type
     Tail    = "tail"      ## invoked when a new continuation has a parent
     Stack   = "stack"     ## invoked to annotate stack semantics
 
-when false:
-  proc `=copy`[T: ContinuationObj](dest: var T; src: T) {.error.} =
-    discard
+proc `=copy`(dest: var ContinuationObj; src: ContinuationObj) {.error.} =
+  discard
 
-  proc `=destroy`[T: ContinuationObj](dest: var T) =
-    reset dest.mom
-    reset dest.ex
-    for key, value in dest.fieldPairs:
-      reset value
+proc `=destroy`(dest: var ContinuationObj) =
+  for key, value in dest.fieldPairs:
+    reset value
 
 template dot*(a, b: NimNode): NimNode =
   ## for constructing foo.bar
