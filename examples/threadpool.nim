@@ -63,6 +63,9 @@ proc jield(c: Cont): Cont {.cpsMagic.} =
 # Main code
 ###########################################################################
 
+var L: Lock
+initLock L
+
 proc slow(id: int, n: float) {.cps:Cont.} =
   var i, j, b: float
 
@@ -74,7 +77,8 @@ proc slow(id: int, n: float) {.cps:Cont.} =
       b += sin(i) + cos(j)
     jield()
 
-  echo id, ": ", b
+  withLock L:
+    echo id, ": ", b
 
 when defined(gcArc):
   for i in 1..32:
