@@ -641,6 +641,10 @@ proc newRefType*(n: Name): TypeExprRef =
   ## create a new ref type from `n`
   nnkRefTy.newTree(n.NimNode).TypeExprRef
 
+proc sinkAnnotated*(n: NormNode): TypeExpr =
+  ## create a sink annotated type expression from `n`
+  nnkCommand.newTree(ident("sink"), n.NimNode).TypeExpr
+
 # fn-PragmaAtom
 
 proc asPragmaAtom*(n: Name): PragmaAtom =

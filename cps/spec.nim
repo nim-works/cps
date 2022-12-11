@@ -58,7 +58,7 @@ const
 
 type
   Continuation* = ref object of RootObj
-    fn*: proc(c: Continuation): Continuation {.nimcall.} ##
+    fn*: proc(c: sink Continuation): Continuation {.nimcall.} ##
     ## The `fn` points to the next continuation leg.
     mom*: Continuation  ##
     ## If this Continuation was invoked by another Continuation,
@@ -70,12 +70,12 @@ type
     when cpsStackFrames:
       stack*: TraceFrame            ## Stack-like semantic record
 
-  ContinuationProc*[T] = proc(c: T): T {.nimcall.}
+  ContinuationProc*[T] = proc(c: sink T): T {.nimcall.}
 
   Callback*[C; R; P] = object
     fn*: P                            ##
     ## the bootstrap for continuation C
-    rs*: proc (c: C): R {.nimcall.}   ##
+    rs*: proc (c: sink C): R {.nimcall.}   ##
     ## the result fetcher for continuation C
 
   TraceFrame* = object ## a record of where the continuation has been
@@ -488,7 +488,8 @@ proc trampoline*[T: Continuation](c: sink T): T =
   var c: Continuation = c
   while not c.isNil and not c.fn.isNil:
     try:
-      c = c.fn(c)
+      var x = c.fn(c)
+      c = x
     except Exception:
       writeStackFramesImpl c
       raise
