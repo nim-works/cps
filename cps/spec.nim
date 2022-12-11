@@ -509,7 +509,9 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
       var it {.used, inject.}: `T` = c
       `body`
       try:
-        c = c.fn(c)
+        var y = c.fn
+        var x = y(c)
+        c = x
       except Exception:
         writeStackFramesImpl c
         raise
