@@ -488,7 +488,8 @@ proc trampoline*[T: Continuation](c: sink T): T =
   var c: Continuation = c
   while not c.isNil and not c.fn.isNil:
     try:
-      var x = c.fn(c)
+      var y = c
+      var x = y.fn(c)
       c = x
     except Exception:
       writeStackFramesImpl c
