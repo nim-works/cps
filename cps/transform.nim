@@ -19,7 +19,7 @@ proc makeContProc(name, cont, contType: Name; source: NimNode): ProcDef =
     # https://github.com/nim-lang/Nim/issues/18365
     contType = TypeExpr: bindName"Continuation"
 
-  result = newProcDef(name, contType, newIdentDef(contParam, contType))
+  result = newProcDef(name, contType, newIdentDef(contParam, sinkAnnotated contType))
   result.copyLineInfo source        # grab lineinfo from the source body
   result.body = newStmtList()       # start with an empty body
   result.introduce {Coop, Pass, Head, Tail, Trace, Alloc, Dealloc, Unwind}

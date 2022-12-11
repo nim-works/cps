@@ -72,7 +72,8 @@ proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
           result = `c`
         else:
           # pass(continuation, c.mom)
-          result = (typeof `c`) `pass`
+          #result = (typeof `c`) `pass` Error: expected type, but got: Continuation(continuation.mom)
+          result = `pass`
           `c`.mom = nil
           if result != `c`:
             # perform a cooperative yield if pass() chose mom

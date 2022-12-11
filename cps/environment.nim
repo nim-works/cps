@@ -170,7 +170,7 @@ proc first*(e: Env): Name = e.c
 
 proc firstDef*(e: Env): IdentDef =
   # https://github.com/nim-lang/Nim/issues/18365
-  newIdentDef(e.first, asTypeExpr bindName"Continuation", newEmptyNode())
+  newIdentDef(e.first, sinkAnnotated asTypeExpr bindName"Continuation", newEmptyNode())
 
 proc getResult*(e: Env): NormNode =
   ## retrieve a continuation's result value from the env
@@ -461,7 +461,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
            naked = naked.NimNode, tipe = env.rs.typ.NimNode,
            dismissed=Dismissed, finished=Finished, running=Running):
 
-      proc fetcher(c: contBase): tipe {.used, nimcall.} =
+      proc fetcher(c: sink contBase): tipe {.used, nimcall.} =
         case c.state
         of dismissed:
           raise Defect.newException:
