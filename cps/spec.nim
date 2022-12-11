@@ -57,7 +57,7 @@ const
   traceDequeSize* {.intdefine, used.} = 4_096
 
 type
-  ContinuationObj* = ref object of RootObj
+  ContinuationObj* = object of RootObj
     fn*: proc(c: sink Continuation): Continuation {.nimcall.} ##
     ## The `fn` points to the next continuation leg.
     mom*: Continuation  ##
