@@ -85,7 +85,9 @@ proc nameForNode*(n: NimNode): string =
 
 when defined(cpsNoTrace):
   template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
-    NormNode body.nilAsEmpty
+    let call = NormNode body.nilAsEmpty
+    copyLineInfo(call, n)
+    call
 else:
   template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
     let event = bindSym(etype hook)
