@@ -9,14 +9,16 @@ type
 
 var jumps: int
 
-proc trampoline[T: Continuation](c: T) {.used.} =
+proc trampoline[T: Continuation](c: sink T) {.used.} =
   jumps = 0
-  var c = Continuation c
+  var c: Continuation = move c
   while c.running:
     # capture the exception in the environment
     let exception = getCurrentException()
     try:
-      c = c.fn(c)
+      var y = c.fn
+      var x = y(c)
+      c = x
     except:
       writeStackFrames c
       raise
