@@ -582,7 +582,9 @@ binaryExprOrStmt newDotExpr:
 
 template dot*(a, b: NormNode): NormNode =
   ## for constructing foo.bar
-  newDotExpr(a, b)
+  let expression = newDotExpr(a, b)
+  copyLineInfo(expression, a)
+  expression
 
 template dot*(a: NormNode; b: string): NormNode =
   ## for constructing `.`(foo, "bar")
