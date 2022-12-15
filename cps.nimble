@@ -4,7 +4,7 @@ description = "continuation-passing style"
 license = "MIT"
 
 when not defined(release):
-  requires "https://github.com/disruptek/balls >= 4.0.0 & < 5.0.0"
+  requires "https://github.com/disruptek/balls >= 3.9.5 & < 4.0.0"
 
 task test, "run tests for ci":
   when defined(windows):
