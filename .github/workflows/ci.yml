@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['macos-latest'] #, 'ubuntu-latest']
+        os: ['ubuntu-latest']
         nim: ['devel', 'version-1-6']
     name: '${{ matrix.os }} (${{ matrix.nim }})'
     runs-on: ${{ matrix.os }}
@@ -101,7 +101,7 @@ jobs:
       - name: Publish docs
         if: >
           github.event_name == 'push' && github.ref == 'refs/heads/master' &&
-          matrix.os == 'macos-latest' && matrix.nim == 'devel'
+          matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
         uses: crazy-max/ghaction-github-pages@v3.1.0
         with:
           build_dir: cps/docs
