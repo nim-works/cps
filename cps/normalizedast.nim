@@ -1061,10 +1061,6 @@ proc prependArg*(n: Call, arg: NormNode) =
   ## add an argument to the call in the first position of the call
   n.NimNode.insert(1, arg)
 
-func canGetImpl*(n: Call): bool =
-  ## the callee's name is a symbol and so an impl can be retrieves
-  n.name.isSymbol
-
 func hasImpl*(n: Call): bool =
   ## the callee's name is a symbol and a routine impl is present
   n.name.isSymbol and n.name.NimNode.getImpl.kind in RoutineNodes
