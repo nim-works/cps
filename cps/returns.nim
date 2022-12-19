@@ -54,6 +54,10 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
+proc dismiss*(continuaton: Continuation): Continuation {.cpsMagic, used.} =
+  ## A convenience which simply discards the continuation.
+  discard
+
 proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,

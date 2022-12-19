@@ -9,8 +9,8 @@ export writeStackFrames, writeTraceDeque
 export renderStackFrames, renderTraceDeque
 
 # exporting some symbols that we had to bury for bindSym reasons
-from cps/returns import pass
-export pass, unwind
+from cps/returns import pass, dismiss
+export pass, unwind, dismiss
 
 # we only support arc/orc due to its eager expr evaluation qualities
 when not(defined(gcArc) or defined(gcOrc)):
