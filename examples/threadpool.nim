@@ -41,8 +41,7 @@ proc doWork(pool: Pool) {.thread.} =
     if c.dismissed:
       break
     else:
-      while c.running:
-        c = c.fn(c)
+      c = trampoline c
 
 
 proc work(nThreads: int) =
