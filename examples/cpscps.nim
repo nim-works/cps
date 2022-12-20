@@ -26,10 +26,7 @@ proc jield(c: Work): Work {.cpsMagic.} =
 proc run(pool: Pool) =
   while pool.workQueue.len > 0:
     var c = Continuation: pool.workQueue.popFirst
-    # During trampolining we need to make sure the continuation always has
-    # a proper pointer to the pool, due to momification
-    while c.running:
-      c = c.fn(c)
+    c = trampoline c
     pool.push c.Work
 
 proc tail(mom: Continuation; c: Work): Work =
