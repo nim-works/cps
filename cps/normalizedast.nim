@@ -582,7 +582,9 @@ binaryExprOrStmt newDotExpr:
 
 template dot*(a, b: NormNode): NormNode =
   ## for constructing foo.bar
-  newDotExpr(a, b)
+  let expression = newDotExpr(a, b)
+  copyLineInfo(expression, a)
+  expression
 
 template dot*(a: NormNode; b: string): NormNode =
   ## for constructing `.`(foo, "bar")
@@ -1058,10 +1060,6 @@ proc `name=`*(callee: Call, newName: Name) =
 proc prependArg*(n: Call, arg: NormNode) =
   ## add an argument to the call in the first position of the call
   n.NimNode.insert(1, arg)
-
-func canGetImpl*(n: Call): bool =
-  ## the callee's name is a symbol and so an impl can be retrieves
-  n.name.isSymbol
 
 func hasImpl*(n: Call): bool =
   ## the callee's name is a symbol and a routine impl is present

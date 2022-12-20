@@ -248,7 +248,7 @@ func isSingleStatement(n: NormNode): bool =
 func getMagic(n: NormNode): string =
   ## Obtain the magic name of the call `n`
   ifCallThenIt(n):
-    if it.canGetImpl:
+    if it.hasImpl:
       let impl = it.impl
       if impl.hasPragma("magic"):
         for pragma in impl.pragma.items:

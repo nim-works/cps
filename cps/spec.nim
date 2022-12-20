@@ -57,7 +57,7 @@ const
   traceDequeSize* {.intdefine, used.} = 4_096
 
 type
-  Continuation* = ref object of RootObj
+  ContinuationObj* = object of RootObj
     fn*: proc(c: sink Continuation): Continuation {.nimcall.} ##
     ## The `fn` points to the next continuation leg.
     mom*: Continuation  ##
@@ -69,6 +69,7 @@ type
       frames*: Deque[TraceFrame]    ## Tracing for all prior hooks
     when cpsStackFrames:
       stack*: TraceFrame            ## Stack-like semantic record
+  Continuation* = ref object of ContinuationObj
 
   ContinuationProc*[T] = proc(c: sink T): T {.nimcall.}
 
@@ -96,6 +97,13 @@ type
     Head    = "head"      ## invoked when a new continuation has no parent
     Tail    = "tail"      ## invoked when a new continuation has a parent
     Stack   = "stack"     ## invoked to annotate stack semantics
+
+proc `=copy`(dest: var ContinuationObj; src: ContinuationObj) {.error.} =
+  discard
+
+proc `=destroy`(dest: var ContinuationObj) =
+  for key, value in dest.fieldPairs:
+    reset value
 
 template dot*(a, b: NimNode): NimNode =
   ## for constructing foo.bar
@@ -485,7 +493,7 @@ proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
 proc trampoline*[T: Continuation](c: sink T): T =
   ## This is the basic trampoline: it will run the continuation
   ## until the continuation is no longer in the `Running` state.
-  var c: Continuation = c
+  var c: Continuation = move c
   while not c.isNil and not c.fn.isNil:
     try:
       var y = c.fn

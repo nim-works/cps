@@ -54,6 +54,10 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
+proc dismiss*(continuaton: Continuation): Continuation {.cpsMagic, used.} =
+  ## A convenience which simply discards the continuation.
+  discard
+
 proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
   ## produce the terminating return statement of the continuation;
   ## this should return control to the mom and dealloc the continuation,
@@ -65,7 +69,7 @@ proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
   NormNode:
     quote:
       if `c`.isNil:
-        result = `c`
+        result = nil
       else:
         `c`.fn = nil
         if `c`.mom.isNil:
@@ -74,8 +78,8 @@ proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
           # pass(continuation, c.mom)
           #result = (typeof `c`) `pass` Error: expected type, but got: Continuation(continuation.mom)
           result = `pass`
-          `c`.mom = nil
           if result != `c`:
+            `c`.mom = nil
             # perform a cooperative yield if pass() chose mom
             result = `coop`
             # dealloc(env_234234, continuation)
