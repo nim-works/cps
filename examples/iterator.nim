@@ -15,10 +15,9 @@ type Iterator = ref object of Continuation
 # continuation until a value is available in `val`.
 
 proc produce(c: Iterator): Option[int] =
-  block:
-    var c: Continuation = c
-    while c.running and (Iterator c).val.isNone:
-      c = c.fn(c)
+  trampolineIt c:
+    if (Iterator it).val.isSome:
+      break
   if not c.dismissed:
     if c.val.isSome:
       result = c.val
