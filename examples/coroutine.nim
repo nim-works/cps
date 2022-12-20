@@ -7,11 +7,8 @@ type
     next: Coroutine
 
 # Used to both launch and continue the execution of coroutines
-proc resume(c: Coroutine): Coroutine =
-  var c = Continuation c
-  while c.running:
-    c = c.fn(c)
-  result = Coroutine c
+template resume(c: Coroutine): Coroutine =
+  trampoline c
 
 proc recv(c: Coroutine): int {.cpsVoodoo.} =
   c.data
