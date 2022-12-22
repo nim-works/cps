@@ -1065,35 +1065,19 @@ macro cpsManageException(name: static[string]; n: typed): untyped =
   debugAnnotation cpsManageException, n:
     it = it.filter(manage)
 
-proc unwind*(c: Continuation; e: ref Exception): Continuation
-
-proc handler(c: Continuation;
-              fn: ContinuationObj.fn): Continuation {.used, cpsMagic.} =
-  ## Reimplement this symbol to customize exception handling.
-  if not c.isNil:
-    if fn.isNil:
-      result = unwind(c, c.ex)
-    else:
-      try:
-        result = fn(c)
-        if not c.ex.isNil:
-          result = unwind(result, c.ex)
-      except CatchableError as e:
-        result = unwind(result, e)
-
-proc unwind*(c: Continuation; e: ref Exception): Continuation {.used,
-                                                                cpsMagic.} =
+proc unwind*(c: sink Continuation; e: ref Exception): Continuation {.used,
+                                                                     cpsMagic.} =
   ## Reimplement this symbol to customize stack unwind.
   if not c.isNil:
     if c.mom.isNil:
       if e.isNil:
         result = c
       else:
+        c.ex = e
         raise e
     else:
       result = move c.mom
       result.ex = e
-      #result = handler(result, result.fn)
 
 macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
   ## rewrites all continuations in `n` so that any unhandled exception will
@@ -1113,16 +1097,14 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
       fnDef.body = genAstOpt({}, contType, cont = NimNode cont,
                              body = NimNode fnDef.body):
         bind getCurrentException
+        var ex: ref Exception
         try:
           body
+          # ensure the body includes a terminator
+          ex = Defect.newException "unterminated unhandled exception"
         except:
-          cont.ex = getCurrentException()
-        # A continuation body created with makeContProc (which is all of
-        # them) will have a terminator in the body, thus this part can
-        # only be reached iff the except branch happened to deter the jump
-        #
-        # Workaround for https://github.com/nim-lang/Nim/issues/18411
-        return Continuation: unwind(contType(cont), cont.ex)
+          ex = getCurrentException()
+        return Continuation: unwind(contType(cont), ex)
       result = fnDef
 
   debugAnnotation cpsHandleUnhandledException, n:
