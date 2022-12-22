@@ -54,7 +54,7 @@ template pass*(source: Continuation; destination: Continuation): Continuation {.
   ## The return value specifies the destination continuation.
   Continuation destination
 
-proc dismiss*(continuaton: Continuation): Continuation {.cpsMagic, used.} =
+proc dismiss*(continuation: Continuation): Continuation {.cpsMagic, used.} =
   ## A convenience which simply discards the continuation.
   discard
 
