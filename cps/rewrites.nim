@@ -66,7 +66,7 @@ proc desym*(n: NimNode): NimNode =
     result = ident(repr n)
     result.copyLineInfo n
 
-proc resymCall*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
+proc childCallToRecoverResult*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## this is used to rewrite continuation calls into their results
   if sym.kind notin nnkCallKinds:
     raise Defect.newException: "resymCall is for calls, not " & $sym.kind
@@ -79,7 +79,7 @@ proc resymCall*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
       discard
   result = filter(n, resymify)
 
-proc resymCall*(n, sym, field: NormNode): NormNode {.borrow.}
+proc childCallToRecoverResult*(n, sym, field: NormNode): NormNode {.borrow.}
   ## this is used to rewrite continuation calls into their results
 
 proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =

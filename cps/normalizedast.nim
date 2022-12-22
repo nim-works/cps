@@ -5,7 +5,7 @@ from std/sequtils import anyIt, toSeq
 from std/typetraits import distinctBase
 
 from cps/rewrites import NormNode, normalizingRewrites, replace,
-                         desym, resym, resymCall
+                         desym, resym, childCallToRecoverResult
 
 const
   NilNormNode* = nil.NormNode
@@ -1072,10 +1072,10 @@ func impl*(n: Call): RoutineDef =
   else:
     error("call does not have an implementation", n.name.NimNode)
 
-proc resymCall*(n: Call; sym, field: NormNode): Call =
+proc childCallToRecoverResult*(n: Call; sym, field: NormNode): Call =
   ## this is used to rewrite continuation calls into their results
   Call:
-    rewrites.resymCall(n, sym, field)
+    rewrites.childCallToRecoverResult(n, sym, field)
 
 proc desym*(n: Call) =
   ## desyms the callee name

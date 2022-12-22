@@ -647,7 +647,7 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   # swap the call in the assignment statement(s)
   let (child, etype) = setupChildContinuation(env, call)
   let recovery = newCall("recover".asName, child)
-  assign = assign.resymCall(call, recovery)
+  assign = assign.childCallToRecoverResult(call, recovery)
 
   # compose the rewrite as an assignment and any remaining tail
   var body =
