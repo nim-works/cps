@@ -12,18 +12,20 @@ type
 var
   err: bool
   msg: string
-  where: Tc
+  where: ContinuationProc[Continuation]
 
 # CPS magic functions
 
 proc start(c: Tc): Tc {.cpsMagic.} =
-  where = c
+  where = c.fn
   return c
 
 proc throw(c: Tc, m: string): Tc {.cpsMagic.} =
   err = true
   msg = m
-  return where
+  c.fn = where
+  reset c.mom
+  return c
 
 
 # This is a cps func that will throw an error
@@ -54,9 +56,4 @@ proc foo() {.cps:Tc.} =
   echo "bye"
 
 
-
-# Trampoline
-
-var c: Continuation = whelp foo()
-while c.running:
-  c = c.fn(c)
+foo()
