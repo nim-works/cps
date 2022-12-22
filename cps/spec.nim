@@ -500,7 +500,8 @@ proc trampoline*[T: Continuation](c: sink T): T =
       var x = y(c)
       c = x
     except Exception:
-      writeStackFramesImpl c
+      if not c.dismissed:
+        writeStackFramesImpl c
       raise
   result = T c
 
@@ -521,7 +522,8 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
         var x = y(c)
         c = x
       except Exception:
-        writeStackFramesImpl c
+        if not c.dismissed:
+          writeStackFramesImpl c
         raise
 
 proc ensimilate*(source, destination: NormNode): Call =
