@@ -1,6 +1,7 @@
 import std/sugar
 
 include preamble
+include killer
 
 suite "locals":
 
@@ -398,3 +399,46 @@ suite "tuples":
 
     check 12 == foo(x => x * 3)
     check r == 3
+
+  block:
+    ## child continuation lifetimes canary
+    type
+      K = object
+      C = ref object of Cont
+        n: K
+      D = ref object of C
+        m: K
+
+    var k = initKiller 11
+
+    proc `=destroy`(v: var K) =
+      inc k
+
+    proc setup(c: C): C {.cpsMagic.} =
+      c.n = K()
+      inc k
+      c
+
+    proc create(d: D): D {.cpsMagic.} =
+      d.m = K()
+      inc k
+      d
+
+    proc bar() {.cps: D.} =
+      step 4
+      create()
+      check k.step == 6, "expected two create/destroy"
+      step 7
+
+    proc foo() {.cps: C.} =
+      step 1
+      setup()
+      check k.step == 3, "expected two create/destroy"
+      bar()
+      check k.step == 7, "expected child to exist"
+      step 8
+      # destroy foo.n; eg. step == 9
+      # destroy bar.n; eg. step == 10
+      # destroy bar.m; eg. step == 11
+
+    foo()
