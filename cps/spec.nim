@@ -521,7 +521,7 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
         var y = c.fn
         var x = y(c)
         c = x
-      except Exception:
+      except CatchableError:
         if not c.dismissed:
           writeStackFramesImpl c
         raise
