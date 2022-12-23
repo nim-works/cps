@@ -1050,7 +1050,7 @@ macro cpsManageException(name: static[string]; n: typed): untyped =
                 result = innerFn(cont)
                 # Restore the old exception
                 setCurrentException(oldException)
-              except:
+              except CatchableError:
                 # If the continuation raise an unhandled exception,
                 # capture it.
                 let e = getCurrentException()
@@ -1102,7 +1102,7 @@ macro cpsHandleUnhandledException(contType: typed; n: typed): untyped =
           body
           # ensure the body includes a terminator
           ex = Defect.newException "unterminated unhandled exception"
-        except:
+        except CatchableError:
           ex = getCurrentException()
         return Continuation: unwind(contType(cont), ex)
       result = fnDef

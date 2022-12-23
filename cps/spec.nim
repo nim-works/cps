@@ -499,7 +499,7 @@ proc trampoline*[T: Continuation](c: sink T): T =
       var y = c.fn
       var x = y(c)
       c = x
-    except Exception:
+    except CatchableError:
       if not c.dismissed:
         writeStackFramesImpl c
       raise
