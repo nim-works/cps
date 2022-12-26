@@ -1,4 +1,5 @@
-import balls
+when not compiles(fail "bogus"):
+  import pkg/balls
 
 type
   Killer* = object
@@ -7,11 +8,14 @@ type
 
 proc `=destroy`*(k: var Killer) =
   if k.final != k.n:
-    fail:
-      case k.n
-      of 0: "uninitialized"
-      of 1: "unused"
-      else: "misused; " & $(k.n - 1) & " uses, expected " & $(k.final - 1)
+    let e = getCurrentException()
+    # don't obliterate current exception
+    if e.isNil or e isnot FailError or e isnot ExpectedError:
+      fail:
+        case k.n
+        of 0: "uninitialized"
+        of 1: "unused"
+        else: "misused; " & $(k.n - 1) & " uses, expected " & $(k.final - 1)
 
 proc initKiller*(final = 1): Killer =
   Killer(n: 1, final: final + 1)

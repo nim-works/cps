@@ -73,7 +73,7 @@ jobs:
         run: |
           cd cps
           nimble --accept develop
-          nimble --accept install "https://github.com/disruptek/balls@#3.9.6"
+          nimble --accept install "https://github.com/disruptek/balls@#3.9.8"
           cd examples
           balls --path=".." --panics:on --define:release --define:danger --gc:arc --gc:orc --backend:c --threads:on
 
