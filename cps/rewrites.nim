@@ -100,8 +100,21 @@ proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
     else:
       discard
   result = filter(n, resymify)
+
 proc resym*(n, sym, field: NormNode): NormNode =
   resym(n.NimNode, sym.NimNode, field.NimNode).NormNode
+
+proc swapCallOf*(n: NimNode; symbol: NimNode; value: NimNode): NimNode =
+  ## swap all calls of `symbol` with the node `value`
+  expectKind(symbol, nnkSym)
+  proc resymify(n: NimNode): NimNode =
+    case n.kind
+    of CallNodes:
+      if n[0] == symbol:
+        result = value
+    else:
+      discard
+  result = filter(n, resymify)
 
 proc replacedSymsWithIdents*(n: NimNode): NimNode =
   proc desymifier(n: NimNode): NimNode =

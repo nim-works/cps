@@ -5,6 +5,7 @@ boring utilities likely useful to multiple pieces of cps machinery
 ]##
 
 import std/[hashes, sequtils, deques]
+import std/genasts
 import std/macros except newStmtList, newTree
 
 when (NimMajor, NimMinor) < (1, 5):
@@ -104,6 +105,16 @@ proc `=copy`(dest: var ContinuationObj; src: ContinuationObj) {.error.} =
 proc `=destroy`(dest: var ContinuationObj) =
   for key, value in dest.fieldPairs:
     reset value
+
+proc cpsInjection(T: typedesc): T =
+  ## inspector injector
+  default T
+
+proc isCpsInjection*(symbol: NimNode): bool =
+  let bound = bindSym"cpsInjection"
+  result = not symbol.isNil and symbol.kind == nnkSym
+  result = result and symbol.symKind == nskProc
+  result = result and symbol.isInstantiationOf(bound)
 
 template dot*(a, b: NimNode): NimNode =
   ## for constructing foo.bar
@@ -596,6 +607,30 @@ proc createCallback*(sym: NimNode): NimNode =
   result =
     NimNode:
       nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
+
+proc continuation*(): Continuation {.used.} =
+  ## Recover the current Continuation inside a continuation;
+  ## raises a Defect outside a continuation.
+  raise Defect.newException:
+    "this is nonsensical outside a continuation"
+
+proc cpsInspector*(tipe: NimNode; n: NimNode): NimNode =
+  ## rewrite types and plant an injection symbol for later passes;
+  ## this is where we create our inspector concept
+  result = normalizingRewrites n     # best practices
+  while result.kind == nnkStmtList:
+    result = result[0]               # strip containers
+  let tipe =
+    if (unlikely) tipe.isNil or tipe.kind in {nnkEmpty, nnkNilLit}:
+      getType bindSym"Continuation"
+    else:
+      tipe[0]
+  result =
+    result.swapCallOf bindSym"continuation":
+      newCall(bindSym"cpsInjection", tipe)
+  result[0][0] = desym result[0][0]  # type change
+  result[0][1] = tipe                # change type
+  result = workaroundRewrites result.NormNode
 
 proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NimNode =
   ## looks like cpsTransformProc but applies to proc typedefs;

@@ -2,10 +2,13 @@ import std/[genasts, deques]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
 
-export Continuation, ContinuationProc, State, cpsCallOperatorSupported
+when compiles(ContinuationObj):
+  export ContinuationObj
+
+export Continuation, ContinuationProc, State, continuation
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
 export cpsMagic, cpsVoodoo, trampoline, trampolineIt, call, recover
-export writeStackFrames, writeTraceDeque
+export writeStackFrames, writeTraceDeque, cpsCallOperatorSupported
 export renderStackFrames, renderTraceDeque
 
 # exporting some symbols that we had to bury for bindSym reasons
@@ -64,17 +67,28 @@ macro cpsTyped(tipe: typed, n: typed): untyped =
       # that the compiler will run through macros in proc pragmas
       # one-by-one without re-seming the body in between...
       {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
-      result =
-        # Add the main transform phase
-        newCall(bindSym"cpsTransform", tipe):
-          # Add the flattening phase which will be run first
-          newCall(bindSym"cpsFlattenExpr"):
-            n
+      # Add the main transform phase
+      newCall(bindSym"cpsTransform", tipe):
+        # Add the flattening phase which will be run first
+        newCall(bindSym"cpsFlattenExpr"):
+          n
     of nnkProcTy:
       # converting a cps callback
-      result = cpsCallbackTypeDef(tipe, n)
+      cpsCallbackTypeDef(tipe, n)
+    of nnkVarSection, nnkLetSection:
+      cpsInspector(tipe, n)
     else:
-      result = getAst(cpsTransform(tipe, n))
+      getAst(cpsTransform(tipe, n))
+
+macro cps*(n: typed): untyped =
+  when defined(nimdoc):
+    n
+  else:
+    case n.kind
+    of nnkVarSection, nnkLetSection:
+      cpsInspector(newEmptyNode(), n)
+    else:
+      n
 
 macro cps*(tipe: typed, n: untyped): untyped =
   ## When applied to a procedure, rewrites the procedure into a
@@ -83,12 +97,17 @@ macro cps*(tipe: typed, n: untyped): untyped =
   result = n
   when not defined(nimdoc):
     # add the application of the typed transformation pass
-    n.addPragma:
-      nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
-    # let the untyped pass do what it will with this input
-    # XXX: currently disabled because it's a slipperly slope of regret
-    #result = performUntypedPass(T, n)
-    result = n
+    case n.kind
+    of nnkVarSection, nnkLetSection:
+      # pass these for inspector injection
+      result = newCall(bindSym"cpsTyped", tipe, n)
+    else:
+      n.addPragma:
+        nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
+      # let the untyped pass do what it will with this input
+      # XXX: currently disabled because it's a slipperly slope of regret
+      #result = performUntypedPass(T, n)
+      result = n
 
 proc adaptArguments(sym: NormNode; args: seq[NormNode]): seq[NormNode] =
   ## convert any arguments in the list as necessary to match those of

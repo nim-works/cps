@@ -589,3 +589,24 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
       desym it
       result = env.rewriteVoodoo it
   result = filter(n, voodoo)
+
+proc rewriteInspector*(env: Env; n: NormNode): NormNode =
+  ## Rewrite continuation() calls which have been swapped
+  ## to cpsInspector()
+  var swaps: seq[(NormNode, NormNode)]
+  proc inspected(n: NormNode): NormNode =
+    if n.kind in {nnkVarSection, nnkLetSection}:
+      if n[0][2].kind in CallNodes:
+        if n[0][2][0].isCpsInjection:
+          swaps.add (n[0][0], NormNode newCall(n[0][1], env.first))
+          result = nnkCommentStmt.newTree newLit"removed by inspector"
+    elif n.isCpsInjection:
+      swaps.add (n, NormNode env.first)
+  result = filter(n, inspected)
+
+  while swaps.len > 0:
+    let (sym, target) = pop swaps
+    proc replaced(n: NormNode): NormNode =
+      if n == sym:
+        result = copyNimTree target
+    result = filter(result, replaced)

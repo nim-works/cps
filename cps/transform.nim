@@ -1161,6 +1161,7 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # this is a workaround for nim bugs:
   # https://github.com/nim-lang/Nim/issues/18203 (used hints)
   # https://github.com/nim-lang/Nim/issues/18235 (export leaks)
+  # NOTE: the above issues are now closed
   booty.name = originalProcSym
 
   # now we'll reset the name of the new proc
@@ -1186,6 +1187,9 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
 
   # replace the result symbols with the environment's result field
   body = env.rewriteResult body
+
+  # rewrite inspector calls
+  body = env.rewriteInspector body
 
   # perform sym substitutions (or whatever)
   n.body = env.rewriteSymbolsIntoEnvDotField body
