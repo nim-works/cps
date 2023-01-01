@@ -608,7 +608,7 @@ proc createCallback*(sym: NimNode): NimNode =
     NimNode:
       nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
 
-proc continuation*(): Continuation {.used.} =
+proc continuation*(): var Continuation {.used.} =
   ## Recover the current Continuation inside a continuation;
   ## raises a Defect outside a continuation.
   raise Defect.newException:
