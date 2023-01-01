@@ -428,6 +428,7 @@ proc genException*(e: var Env): NimNode =
   e = e.set ex:
     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
+
 proc createRecover*(env: Env, exported = false): NimNode =
   ## define procedures for retrieving the result of a continuation
   ##
@@ -599,7 +600,7 @@ proc rewriteInspector*(env: Env; n: NormNode): NormNode =
       if n[0][2].kind in CallNodes:
         if n[0][2][0].isCpsInjection:
           swaps.add (n[0][0], NormNode newCall(n[0][1], env.first))
-          result = nnkCommentStmt.newTree newLit"removed by inspector"
+          result = NormNode newCommentStmtNode "removed by inspector"
     elif n.isCpsInjection:
       swaps.add (n, NormNode env.first)
   result = filter(n, inspected)
