@@ -666,14 +666,53 @@ proc getPragmaName*(n: PragmaAtom): Name =
     else:
       n
 
+# fn-PragmaLike
+
+type
+  PragmaLike* = PragmaBlock | PragmaExpr | PragmaStmt
+    ## abstract over any pragma like thing and provide common operations
+
+proc add(p: PragmaLike, e: PragmaAtom) =
+  ## add a pragma atom of some variety to this PragmaLIke
+  p.NimNode.add e
+  copyLineInfo(p, e) # ensure the lineinfo is correct
+
+iterator items*(n: PragmaLike): PragmaAtom =
+  ## fetch the individual atoms
+  let ps =
+    when n is PragmaBlock:
+      n.NimNode[0]
+    else:
+      n.NimNode
+
+  for p in ps.items:
+    yield p.PragmaAtom
+
+func hasPragma*(n: PragmaLike, s: static[string]): bool =
+  ## `true` if the `n` holds the pragma `s`
+  for p in n.items:
+    # just skip ColonExprs, etc.
+    result = p.getPragmaName.eqIdent s
+    if result:
+      break
+
 # fn-IdentDefLike
 type
   IdentDefLike* = IdentDef | RoutineParam | IdentDefVarLet | IdentDefLet | IdentDefVar
     ## abstract over a single var or let sections IdentDef, or a routine param
     ## definition
 
-func name*(n: IdentDefLike): Name = n[0].Name
+func name*(n: PragmaExpr): Name =
+  for ps in n.items:
+    return getPragmaName ps
+
+func name*(n: IdentDefLike): Name =
   ## retrieve the name of this `IdentDefLike`
+  case n[0].kind
+  of nnkPragmaExpr:
+    name n[0].PragmaExpr
+  else:
+    n[0].Name
 
 # fn-DefLike
 
@@ -707,10 +746,11 @@ proc validateIdentDefs(n: NimNode) =
   ## validators only, afterwards it's safe to cast, allows re-use
   if n.kind != nnkIdentDefs:
     errorGot "not an IdentDef", n, $n.kind
-  elif n[0].kind notin {nnkIdent, nnkSym}:
-    errorGot "bad rewrite presented", n
   elif n.len != 3:
     errorGot "bad rewrite, failed to set init", n
+  elif n[0].kind notin {nnkIdent, nnkSym, nnkPragmaExpr}:
+    errorGot "bad rewrite presented", n
+
 proc asIdentDefs*(n: NimNode): IdentDef =
   ## return an IdentDef or error out
   validateIdentDefs(n)
@@ -780,7 +820,7 @@ type
     ## abstract over let or var sections with identdefs within
 
 func identdef*(n: VarLetIdentDefLike): IdentDef = n.def.IdentDef
-  ## retrieve the innner IdentDef
+  ## retrieve the inner IdentDef
 func name*(n: VarLetIdentDefLike): Name = n.identdef.name
   ## Name (ident|sym) of the identifer, as we only have a single identdefs it
   ## will have the name
@@ -916,36 +956,6 @@ proc newIdentDefVar*(i: IdentDef): IdentDefVar =
 proc newIdentDefVar*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDefVar =
   ## create a var section with an identdef, eg: `n`: `t` = `val`
   newIdentDefVar(newIdentDef(n, t, val))
-
-# fn-PragmaLike
-
-type
-  PragmaLike* = PragmaBlock | PragmaExpr | PragmaStmt
-    ## abstract over any pragma like thing and provide common operations
-
-proc add(p: PragmaLike, e: PragmaAtom) =
-  ## add a pragma atom of some variety to this PragmaLIke
-  p.NimNode.add e
-  copyLineInfo(p, e) # ensure the lineinfo is correct
-
-iterator items*(n: PragmaLike): PragmaAtom =
-  ## fetch the individual atoms
-  let ps =
-    when n is PragmaBlock:
-      n.NimNode[0]
-    else:
-      n.NimNode
-
-  for p in ps.items:
-    yield p.PragmaAtom
-
-func hasPragma*(n: PragmaLike, s: static[string]): bool =
-  ## `true` if the `n` holds the pragma `s`
-  for p in n.items:
-    # just skip ColonExprs, etc.
-    result = p.getPragmaName.eqIdent s
-    if result:
-      break
 
 # fn-PragmaStmt
 
