@@ -306,6 +306,26 @@ suite "locals":
 
     one()
 
+  block:
+    ## pragmas in identdefs are accepted for rewrite
+    template checkIt(list: untyped; logic: untyped): untyped =
+      for it {.inject.} in list.items:
+        logic
+
+    proc bar() {.cps: Cont.} =
+      checkIt [true]:
+        check it
+
+      checkIt [2]:
+        check it == 2
+
+    proc foo() {.cps: Cont.} =
+      while true:
+        bar()
+        break
+
+    foo()
+
 suite "tuples":
 
   var r = 0
