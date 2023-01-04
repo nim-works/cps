@@ -305,9 +305,8 @@ proc mergeExceptBranches(n, ex: NormNode): NormNode =
 
     # Add the merged except branch to our try statement
     result.add:
-      nnkExceptBranch.newTree:
-        newStmtList:
-          ifStmt.NormNode
+      nnkExceptBranch.newTree bindSym"CatchableError":
+        newStmtList ifStmt
 
 proc wrapContinuationWith(n: NormNode, cont, replace: Name, templ: NormNode): NormNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
