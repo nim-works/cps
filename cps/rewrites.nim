@@ -234,7 +234,9 @@ proc normalizingRewrites*(n: NimNode): NormNode =
               newStmtList:
                 # let ex: ref T = (ref T)(getCurrentException())
                 nnkLetSection.newTree:
-                  newIdentDefs(ex, refTyp, newCall(refTyp, newCall(bindSym"getCurrentException")))
+                  newIdentDefs ex, refTyp:
+                    newCall refTyp:
+                      newCall bindSym"getCurrentException"
 
             # add the rewritten body
             result.last.add:
