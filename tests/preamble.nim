@@ -19,8 +19,9 @@ proc trampoline[T: Continuation](c: sink T) {.used.} =
       var y = c.fn
       var x = y(c)
       c = x
-    except:
-      writeStackFrames c
+    except CatchableError:
+      if not c.dismissed:
+        writeStackFrames c
       raise
     # the current exception should not change
     check getCurrentException() == exception
@@ -32,7 +33,6 @@ proc trampoline[T: Continuation](c: sink T) {.used.} =
       "continuations test best when they, uh, bounce"
 
 proc noop*(c: Cont): Cont {.cpsMagic.} = c
-proc dismiss*(c: Cont): Cont {.cpsMagic.} = nil
 
 # We have a lot of these for the purpose of control-flow validation
 {.warning[UnreachableCode]: off.}

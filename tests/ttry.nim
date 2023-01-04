@@ -17,7 +17,7 @@ suite "try statements":
       try:
         noop()
         inc r
-      except:
+      except CatchableError:
         fail "this branch should not run"
       inc r
 
@@ -34,7 +34,7 @@ suite "try statements":
         inc r
         raise newException(CatchableError, "test")
         fail "statement run after raise"
-      except:
+      except CatchableError:
         check getCurrentExceptionMsg() == "test"
         inc r
       inc r
@@ -52,7 +52,7 @@ suite "try statements":
         inc r
         raise newException(CatchableError, "test")
         fail "statement run after raise"
-      except:
+      except CatchableError:
         inc r
         noop()
         check getCurrentExceptionMsg() == "test"
@@ -71,7 +71,7 @@ suite "try statements":
         inc r
         raise newException(CatchableError, "test")
         fail "statement run after raise"
-      except:
+      except CatchableError:
         inc r
         noop()
         check getCurrentExceptionMsg() == "test"
@@ -161,7 +161,7 @@ suite "try statements":
         inc r
         raise newException(CatchableError, "")
         fail "statement run after raise"
-      except:
+      except CatchableError:
         inc r
       finally:
         inc r
@@ -219,7 +219,7 @@ suite "try statements":
         inc r
         raise newException(CatchableError, "test")
         fail "statement run after raise"
-      except:
+      except CatchableError:
         check getCurrentExceptionMsg() == "test"
         inc r
 
@@ -228,7 +228,7 @@ suite "try statements":
           inc r
           raise newException(CatchableError, "test 2")
           fail "statement run after raise"
-        except:
+        except CatchableError:
           check getCurrentExceptionMsg() == "test 2"
           inc r
 
@@ -379,7 +379,7 @@ suite "try statements":
     proc foo() {.cps: Cont.} =
       try:
         noop()
-      except:
+      except CatchableError:
         fail"this except branch should not run"
 
       inc r
@@ -427,7 +427,7 @@ suite "try statements":
       var x = 0
       try:
         x = bar()
-      except:
+      except CatchableError:
         fail "This branch should not be executed"
 
       step 2
@@ -516,7 +516,7 @@ suite "try statements":
         inc r
         try:
           raise newException(CatchableError, "test")
-        except:
+        except CatchableError:
           let frames = renderStackFrames()
           check frames.len > 0, "expected at least one stack trace record"
           check "ttry.nim" in frames[0], "couldn't find ttry.nim in the trace"
@@ -624,7 +624,7 @@ when defined(gcArc) or defined(gcOrc):
         try:
           noop()
           step 2
-        except:
+        except CatchableError:
           fail "this branch should not run"
         step 3
 
@@ -640,7 +640,7 @@ when defined(gcArc) or defined(gcOrc):
           step 2
           raise newException(CatchableError, "")
           fail "statement run after raise"
-        except:
+        except CatchableError:
           step 3
         step 4
 
@@ -670,7 +670,7 @@ when defined(gcArc) or defined(gcOrc):
           step 2
           raise newException(CatchableError, "")
           fail "statement run after raise"
-        except:
+        except CatchableError:
           step 3
         finally:
           step 4

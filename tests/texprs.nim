@@ -115,7 +115,7 @@ suite "expression flattening":
           check e.msg == "something"
           step 2
           42
-        except:
+        except CatchableError:
           fail "this branch should not run"
           -1
         finally:
