@@ -593,16 +593,14 @@ macro cpsTryFinally(cont, contType: typed; name: static[string];
     tryTemplate.add placeholder
 
     # Add an except branch to jump to our finally
-    tryTemplate.add(
-      nnkExceptBranch.newTree(
+    tryTemplate.add:
+      nnkExceptBranch.newTree bindSym"CatchableError":
         newStmtList(
           # Stash the exception
           newAssignment(ex, newCall(bindName"getCurrentException")),
           # Then jump to reraise
           cont.tailCall(contType, reraise.name)
         )
-      )
-    )
 
     # Wrap the body with this template and we are done
     it.add body.wrapContinuationWith(cont, placeholder, tryTemplate)
