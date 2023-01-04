@@ -390,6 +390,7 @@ macro cpsWithException(cont, ex, n: typed): untyped =
             result.body.NormNode.withException(nextCont, ex),
             # On an exception not handled by the body.
             nnkExceptBranch.newTree(
+              bindSym"CatchableError",
               newStmtList(
                 # Set `ex` to nil.
                 newAssignment(ex, newNilLit()),
@@ -432,7 +433,7 @@ macro cpsTryExcept(cont, contType: typed; name: static[string];
 
     # add an except branch to invoke the handler
     newTry.add:
-      nnkExceptBranch.newTree:
+      nnkExceptBranch.newTree bindSym"CatchableError":
         newStmtList [
           # capture the exception to ex
           newAssignment(ex, newCall(bindName"getCurrentException")),
