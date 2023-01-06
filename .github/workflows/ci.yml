@@ -82,7 +82,7 @@ jobs:
         run: |
           cd project
           nimble --accept develop
-          balls --path=".." --panics:on --exceptions:goto --backend:c --threads:on
+          balls --path=".." --panics:on --exceptions:goto --backend:c --mm:arc --mm:orc --threads:on
 
       - name: Build docs
         if: ${{ matrix.docs }} == 'true'
