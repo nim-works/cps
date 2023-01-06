@@ -75,7 +75,7 @@ jobs:
           nimble --accept develop
           nimble --accept install "https://github.com/disruptek/balls"
           cd examples
-          balls --path=".." --panics:on --exceptions:goto --backend:c --threads:on
+          balls --path=".." --panics:on --exceptions:goto --backend:c --mm:arc --mm:orc --threads:on
 
       - name: Run tests
         shell: bash
