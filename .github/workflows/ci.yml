@@ -52,15 +52,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-latest']
-        nim: ['devel', 'version-2-0', 'version-1-6']
+        os: [ubuntu-latest]
+        nim: [version-2-0, version-1-6]
     name: '${{ matrix.os }} (${{ matrix.nim }})'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          path: cps
+          path: project
 
       - name: Setup Nim
         uses: alaviss/setup-nim@0.1.1
@@ -71,24 +71,24 @@ jobs:
       - name: Run examples
         shell: bash
         run: |
-          cd cps
+          cd project
           nimble --accept develop
-          nimble --accept install "https://github.com/disruptek/balls@#3.9.8"
+          nimble --accept install "https://github.com/disruptek/balls"
           cd examples
-          balls --path=".." --panics:on --define:release --define:danger --gc:arc --gc:orc --backend:c --threads:on
+          balls --path=".." --panics:on --exceptions:goto --backend:c --threads:on
 
       - name: Run tests
         shell: bash
         run: |
-          cd cps
+          cd project
           nimble --accept develop
-          nimble test
+          balls --path=".." --panics:on --exceptions:goto --backend:c --threads:on
 
       - name: Build docs
         if: ${{ matrix.docs }} == 'true'
         shell: bash
         run: |
-          cd cps
+          cd project
           branch=${{ github.ref }}
           branch=${branch##*/}
           nimble doc --project --outdir:docs --path="." \
@@ -105,7 +105,7 @@ jobs:
           matrix.os == 'ubuntu-latest' && matrix.nim == 'version-1-6'
         uses: crazy-max/ghaction-github-pages@v3.1.0
         with:
-          build_dir: cps/docs
+          build_dir: project/docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
