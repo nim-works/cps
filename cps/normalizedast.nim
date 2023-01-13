@@ -483,17 +483,20 @@ func asNameAllowEmpty*(n: NimNode): Name =
   ## coerce to `Name`, allow `nnkEmpty`, error out otherwise
   asNameAllowEmpty(n)
 
-# fn-Name - construct various Name in various ways (ident/sym)
-
-proc asName*(n: string): Name =
-  ## `nnkIdent` as `Name`
-  (ident n).Name
-
-template withLineInfoPlease(body: typed): untyped =
+template withLineInfoPlease(body: typed): untyped {.dirty.} =
   let sym = body
-  if not info.isNil:
+  if info.isNil:
+    when false:
+      raise Defect.newException "missing line info"
+  else:
     copyLineInfo(sym, info)
   sym
+
+# fn-Name - construct various Name in various ways (ident/sym)
+
+proc asName*(n: string; info: NormNode = NilNormNode): Name =
+  ## `nnkIdent` as `Name`
+  withLineInfoPlease: (ident n).Name
 
 proc genSymType*(n: string; info: NormNode = NilNormNode): Name =
   ## `genSym` an `nskType`
@@ -522,8 +525,7 @@ proc resym*(fragment: NormNode, sym, replacement: Name): NormNode {.borrow.}
 proc genField*(ident = ""): Name
   {.deprecated: "pending https://github.com/nim-lang/Nim/issues/17851".} =
   ## generate a unique field to put inside an object definition
-  asName:
-    desym genSymField(ident)
+  desym genSym(nskField, ident).Name
 
 proc bindName*(n: static string): Name =
   ## `bindSym` the string as a `Name`
@@ -1027,7 +1029,8 @@ proc addPragma*(n: RoutineDefLike, prag: Name) =
 
 proc addPragma*(n: RoutineDefLike, prag: string) =
   ## add the pragma (`prag`) as an ident to this definition
-  n.addPragma asName(prag)
+  let name = prag.asName(n)
+  n.addPragma name
 
 proc addPragma*(n: RoutineDefLike, prag: Name, pragArg: NimNode) =
   ## adds a pragma as follows {.`prag`: `pragArg`.} in a colon expression

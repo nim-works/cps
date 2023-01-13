@@ -95,9 +95,9 @@ proc set(e: var Env; key: Name; val: VarLetIdentDef): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
-    e.fn = asName"fn"
+    e.fn = "fn".asName(info = e.store.NormNode)
   if e.mom.isNil:
-    e.mom = asName"mom"
+    e.mom = "mom".asName(info = e.store.NormNode)
   e.id = genTypeName(procedure(e), "env", info = e.via)
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarIdentDef(e.rs))
@@ -272,7 +272,7 @@ proc newEnv*(c: Name; store: var NormNode; via: Name; rs: NormNode;
 
 proc newEnv*(store: var NormNode; via: Name; rs: NormNode;
              procedure: string): Env =
-  newEnv(asName("continuation"), store, via, rs, procedure)
+  newEnv("continuation".asName(info = store), store, via, rs, procedure)
 
 proc identity*(e: var Env): Name =
   ## identifier of our continuation type
@@ -493,7 +493,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
 
 proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
-  let resultName = "result".asName
+  let resultName = "result".asName(n)
 
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings

@@ -60,7 +60,7 @@ proc sym*(hook: Hook): Name =
     bindSym($hook, brForceOpen)
   else:
     # rely on a `mixin $hook` in (high) scope
-    asName($hook)
+    ident($hook).asName
 
 proc abbreviation(n: NimNode): NimNode =
   ## "abbreviate" a node so it can be passed succinctly
