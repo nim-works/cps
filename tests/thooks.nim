@@ -46,13 +46,12 @@ suite "hooks":
         if hook == Stack: c.findColonLit("fun", string)
                     else: fun.strVal
       genAst(c, hook, fun, info, body):
+        let sub = fun.split("_", maxsplit=1)[0]
         var last =
           case hook
           of Dealloc: "😎"
-          of Stack: fun
+          of Stack: sub
           else: astToStr c
-        let sub = fun.split("_", maxsplit=1)[0]
-        last = if hook == Stack: last.split("_", maxsplit=1)[0] else: last
         var path = info.filename.lastPathPart
         path = if path == "thooks.nim": "👍" else: path
         found.add "$#: $# $# $#" % [ $hook, $sub, last, path ]
