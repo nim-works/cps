@@ -137,7 +137,7 @@ macro whelp*(call: typed): untyped =
   ## Instantiate the given continuation call but do not begin running it;
   ## instead, return the continuation as a value.
   ##
-  ## If you pass `whelp` a continuation procedure _symbol_ instead, the
+  ## If you pass `whelp` a continuation procedure *symbol* instead, the
   ## result is a `Callback` which you can use to create many individual
   ## continuations or recover the `result` of an extant continuation.
   result =
