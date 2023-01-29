@@ -477,9 +477,20 @@ proc renderTraceDeque*(c: Continuation): seq[string] {.cpsVoodoo.} =
       result.add:
         &"{frame.info.filename}({frame.info.line}) {frame.fun} <{frame.hook}>"
 
+when defined(js):
+  import std/jsconsole
+
+  template cpsWriteLine(s: string): untyped =
+    ## javascript emission of traceback
+    console.error s
+else:
+  template cpsWriteLine(s: string): untyped =
+    ## non-javascript emission of traceback
+    stdmsg().writeLine line
+
 proc writeStackFramesImpl(c: Continuation) =
   for line in c.renderStackFramesImpl.items:
-    stdmsg().writeLine line
+    cpsWriteLine line
 
 proc writeStackFrames*(c: Continuation) {.cpsVoodoo.} =
   ## Write a "stack" trace for the continuation.
@@ -488,7 +499,7 @@ proc writeStackFrames*(c: Continuation) {.cpsVoodoo.} =
 proc writeTraceDeque*(c: Continuation) {.cpsVoodoo.} =
   ## Write a traceback for the continuation.
   for line in c.renderTraceDeque.items:
-    stdmsg().writeLine line
+    cpsWriteLine line
 
 proc trampoline*[T: Continuation](c: sink T): T =
   ## This is the basic trampoline: it will run the continuation
