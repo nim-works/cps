@@ -268,7 +268,7 @@ macro cpsExprToTmp(tipe, n: typed): untyped =
   debugAnnotation cpsExprToTmp, n:
     let
       # The symbol for our temporary
-      tmp = genSymVar()
+      tmp = genSymVar("(expr)")
 
       # The rewritten expression
       body = assignTo(tmp):
@@ -288,8 +288,8 @@ macro cpsExprToTmp(tipe, n: typed): untyped =
             body
           )
         ),
-        # Then emit our temporary as the new expression
-        tmp
+        # Then move our temporary to form the new expression
+        newCall(bindName"move", tmp)
       )
 
 macro cpsAsgn(dst, src: typed): untyped =
