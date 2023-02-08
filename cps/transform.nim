@@ -390,6 +390,7 @@ macro cpsWithException(cont, ex, n: typed): untyped =
             result.body.NormNode.withException(nextCont, ex),
             # On an exception not handled by the body.
             nnkExceptBranch.newTree(
+              bindSym"CatchableError",
               newStmtList(
                 # Set `ex` to nil.
                 newAssignment(ex, newNilLit()),
@@ -432,7 +433,7 @@ macro cpsTryExcept(cont, contType: typed; name: static[string];
 
     # add an except branch to invoke the handler
     newTry.add:
-      nnkExceptBranch.newTree:
+      nnkExceptBranch.newTree bindSym"CatchableError":
         newStmtList [
           # capture the exception to ex
           newAssignment(ex, newCall(bindName"getCurrentException")),
@@ -593,16 +594,14 @@ macro cpsTryFinally(cont, contType: typed; name: static[string];
     tryTemplate.add placeholder
 
     # Add an except branch to jump to our finally
-    tryTemplate.add(
-      nnkExceptBranch.newTree(
+    tryTemplate.add:
+      nnkExceptBranch.newTree bindSym"CatchableError":
         newStmtList(
           # Stash the exception
           newAssignment(ex, newCall(bindName"getCurrentException")),
           # Then jump to reraise
           cont.tailCall(contType, reraise.name)
         )
-      )
-    )
 
     # Wrap the body with this template and we are done
     it.add body.wrapContinuationWith(cont, placeholder, tryTemplate)
