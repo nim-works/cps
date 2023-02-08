@@ -57,8 +57,8 @@ suite "calling convention":
       result = x.float
 
     const cb = whelp foo
-    let c = cb.call(3)
-    let d = cb.call(5)
+    var c = cb.call(3)
+    var d = cb.call(5)
     check cb.recover(c) == 3.0
     check cb.recover(d) == 5.0
 
@@ -76,7 +76,7 @@ suite "calling convention":
 
     proc foo(c: ContCall) {.cps: Cont.} =
       step 1
-      let x = c.call(4)
+      var x = c.call(4)
       step 2
       check c.recover(x) == 8
       step 4
@@ -88,10 +88,11 @@ suite "calling convention":
     when not cpsCallOperatorSupported:
       skip "unsupported on nim " & NimVersion
     else:
-      var k = newKiller 3
 
       type
         ContCall = proc(a: int): int {.cps: Cont.}
+
+      var k = newKiller 3
 
       proc bar(a: int): int {.cps: Cont.} =
         noop()
@@ -119,7 +120,7 @@ suite "calling convention":
     const
       cb: Callback = whelp bar
 
-    let x: C = cb.call(2)
-    let y: C = cb.call(4)
+    var x: C = cb.call(2)
+    var y: C = cb.call(4)
     check cb.recover(x) == 4.0
     check cb.recover(y) == 8.0

@@ -321,9 +321,14 @@ when cpsCallOperatorSupported and not defined cpsNoCallOperator:
   macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
     ## Allows for natural use of call syntax to invoke a callback and
     ## recover its result in a single statement, inside a continuation.
-    let call = bindSym"call"
-    result = newCall(call, callback)
+    let call = macros.newCall(macros.bindSym"call", callback)
     for argument in arguments.items:
-      result.add argument
-    result = newCall(bindSym"recover", callback, result)
+      call.add argument
+    let mutable = genSymVar("continuation", callback.NormNode).NimNode
+    result = macros.newStmtList()
+    result.add:
+      macros.newTree nnkVarSection:
+        macros.newTree(nnkIdentDefs, mutable, newEmptyNode(), call)
+    result.add:
+      macros.newCall(macros.bindSym"recover", callback, mutable)
   {.pop.}

@@ -428,68 +428,75 @@ proc genException*(e: var Env): NimNode =
   e = e.set ex:
     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
+
 proc createRecover*(env: Env, exported = false): NimNode =
   ## define procedures for retrieving the result of a continuation
   ##
   ## `exported` determines whether these procedures will be exported
-  let
-    field = NimNode:
+
+  # a body of a case clause which has the return type of the continuation
+  let recoveredResult =
+    NimNode:                   # for passing into genast()
       if env.rs.hasType:
-        env.getResult          # the return value is env.result
+        env.getResult          # get the result field from the environment
       else:
         nnkDiscardStmt.newTree:
-          newEmptyNode()       # the return value is void
+          newEmptyNode()       # the return value is void; simply discard
 
-  # the result fetcher used in the Callback shim
-  var fetcher = genProcName(procedure env, "recover", info=env.store.NormNode)
-  let naked = copyNimNode fetcher  # so that we can call it without `*`
-  if exported:
-    fetcher = postfix(fetcher, "*")
+  # the result fetcher used in the Callback shim has a gensym'd proc name
+  let fetch =
+    genProcName(procedure env, "recover", info=env.store.NormNode).NimNode
 
-  # compose the (exported?) symbol
-  let name = NimNode ident"recover"
-  var ename =
-    if exported:
-      postfix(name, "*")
+  # the recover procedure name
+  let recover = NimNode: ident"recover"
+
+  let tipe =
+    case env.rs.typ.typeKind
+    of ntyNone, ntyEmpty, ntyVoid:
+      newEmptyNode()           # downcast to void return type
     else:
-      name
+      NimNode:                 # for passing into genast()
+        env.rs.typ             # user supplied a return type
+
+  proc star(name: NimNode): NimNode =
+    ## add the "*" postfix operator to the input ident/symbol if appropriate
+    result = copyNimTree name
+    if exported:
+      result = postfix(result, "*")
 
   result =
-    genAstOpt({}, ename = ename.NimNode, cont = env.identity.NimNode,
-           field = field.NimNode, c = env.first.NimNode,
-           fetcher = fetcher.NimNode, contBase = env.inherits.NimNode,
-           naked = naked.NimNode, tipe = env.rs.typ.NimNode,
-           dismissed=Dismissed, finished=Finished, running=Running):
+    genAstOpt({}, tipe, recoveredResult, fetch, fetchStar = fetch.star,
+              recoverStar = recover.star, c = env.first.NimNode,
+              cont = env.identity.NimNode, contBase = env.inherits.NimNode,
+              dismissed=Dismissed, finished=Finished, running=Running):
 
-      proc fetcher(c: sink contBase): tipe {.used, nimcall.} =
+      proc fetchStar(c: var contBase): tipe {.used, nimcall.} =
         case c.state
         of dismissed:
           raise Defect.newException:
             "dismissed continuations have no result"
         of finished:
-          field
+          recoveredResult
         of running:
-          naked(trampoline c)
+          var base: contBase = move c  # mutable object conversion
+          defer: c = cont(move base)   # due to void return types
+          base = trampoline(base)
+          fetch(base)
 
-      proc ename(c: cont): tipe {.used, nimcall.} =
-        naked(contBase c)
+      proc recoverStar(c: var cont): tipe {.used, nimcall.} =
+        var base: contBase = move c    # mutable object conversion
+        defer: c = cont(move base)     # due to void return types
+        fetch(base)
 
   when cpsCallOperatorSupported and not defined cpsNoCallOperator:
-    var ecall = Name: nnkAccQuoted.newTree: ident"()"
-    ecall =
-      if exported:
-        postfix(ecall, "*")
-      else:
-        ecall
+    let callOperator = nnkAccQuoted.newTree ident"()"
     result.add:
-      genAstOpt({}, cont = env.identity.NimNode, naked = naked.NimNode,
-                contBase = env.inherits.NimNode, tipe = env.rs.typ.NimNode,
-                ecall = ecall.NimNode):
-        when (NimMajor, NimMinor, NimPatch) >= (1, 7, 3):
-          {.push experimental: "callOperator".}
-          proc ecall(c: cont): tipe {.used, nimcall.} =
-            naked(contBase c)
-          {.pop.}
+      genAstOpt({}, tipe, recover, callOperator = callOperator.star,
+                cont = env.identity.NimNode):
+        {.push experimental: "callOperator".}
+        proc callOperatorStar(c: var cont): tipe {.used, nimcall.} =
+          recover(c)
+        {.pop.}
 
 proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
