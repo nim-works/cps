@@ -76,7 +76,7 @@ type
   Callback*[C; R; P] = object
     fn*: P                            ##
     ## the bootstrap for continuation C
-    rs*: proc (c: sink C): R {.nimcall.}   ##
+    rs*: proc (c: var C): R {.nimcall.}   ##
     ## the result fetcher for continuation C
 
   TraceFrame* = object ## a record of where the continuation has been
@@ -619,7 +619,7 @@ proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NimNode =
   result = nnkBracketExpr.newTree(bindSym"Callback", tipe, r, p)
   result = workaroundRewrites result.NormNode
 
-proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: C): R =
+proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: var C): R =
   ## Using a `callback`, recover the `result` of the given `continuation`.
   ## This is equivalent to running `()` on a continuation which was
   ## created with `whelp` against a procedure call.
