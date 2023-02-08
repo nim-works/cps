@@ -71,6 +71,7 @@ jobs:
       - name: Run examples
         shell: bash
         run: |
+          sudo apt install valgrind
           cd project
           nimble --accept develop
           nimble --accept install "https://github.com/disruptek/balls"
@@ -82,7 +83,7 @@ jobs:
         run: |
           cd project
           nimble --accept develop
-          balls --path=".." --panics:on --exceptions:goto --backend:c --mm:arc --mm:orc --threads:on
+          balls --path="." --panics:on --exceptions:goto --backend:c --mm:arc --mm:orc --threads:on
 
       - name: Build docs
         if: ${{ matrix.docs }} == 'true'
