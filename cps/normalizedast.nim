@@ -758,18 +758,19 @@ proc asIdentDefs*(n: NimNode): IdentDef =
   validateIdentDefs(n)
   return n.IdentDef
 
-proc newIdentDef*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDef =
-  ## create a single assignment nnkIdentDefs, we drop the plural to indicate
-  ## the singleton nature
-  newIdentDefs(ident(n), t.NimNode, val).IdentDef
 proc newIdentDef*(n: Name, t: TypeExprLike, val = newEmptyNode()): IdentDef =
   ## create a single assignment nnkIdentDefs, we drop the plural to indicate
   ## the singleton nature
-  newIdentDefs(n.NimNode, t.NimNode, val).IdentDef
+  result = newIdentDefs(n.NimNode, t.NimNode, val).IdentDef
+  copyLineInfo(result, n)
+proc newIdentDef*(n: string, t: TypeExprLike, val = newEmptyNode()): IdentDef =
+  ## create a single assignment nnkIdentDefs, we drop the plural to indicate
+  ## the singleton nature
+  newIdentDef(ident(n).Name, t, val)
 proc newIdentDef*(n: Name, val: NormNode): IdentDef =
   ## create a single assignment nnkIdentDefs, we drop the plural to indicate
   ## the singleton nature
-  newIdentDefs(n.NimNode, newEmptyNode(), val).IdentDef
+  newIdentDef(n, newEmptyNormNode().TypeExpr, val)
 
 #----------------------------------------
 # Start All the Let and Var Section Stuff
