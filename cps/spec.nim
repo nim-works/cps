@@ -526,8 +526,9 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
   result = quote:
     var c: Continuation = `supplied`
     while c.running:
-      var it {.used, inject.}: `T` = c
+      var it {.used, inject.}: `T` = move c
       `body`
+      c = it
       try:
         var y = c.fn
         var x = y(c)
@@ -536,6 +537,9 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
         if not c.dismissed:
           writeStackFramesImpl c
         raise
+    if not c.dismissed:
+      reset c.mom
+      reset c
 
 proc ensimilate*(source, destination: NormNode): Call =
   ## perform a call to convert the destination to the source's type;
