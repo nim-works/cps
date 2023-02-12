@@ -14,7 +14,7 @@ type Iterator = ref object of Continuation
 # The `produce` proc is called to pump the iterator. It will trampoline the
 # continuation until a value is available in `val`.
 
-proc produce(c: Iterator): Option[int] =
+proc produce(c: sink Iterator): Option[int] =
   trampolineIt c:
     if (Iterator it).val.isSome:
       break
