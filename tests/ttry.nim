@@ -465,11 +465,32 @@ suite "try statements":
           raise newException(ValueError, "")
         finally:
           continue
-        fail "statement in while-loop after break"
+        fail "statement in while-loop after finally"
       fail "statement after unhandled exception"
 
     expect ValueError:
       trampoline whelp(foo())
+
+  block:
+    ## try: raise() except: continue
+    var k = newKiller(2)
+
+    proc foo() {.cps: Cont.} =
+      try:
+        while true:
+          noop()
+          inc k
+          if k.step == 2:
+            break
+          try:
+            raise newException(ValueError, "oops")
+          except ValueError:
+            continue
+          fail "statement in while-loop after continue"
+      except ValueError:
+        fail "uncaught exception"
+
+    trampoline whelp(foo())
 
   block:
     ## try-finally-reraise escape via return statements.
