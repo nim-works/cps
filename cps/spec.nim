@@ -244,7 +244,7 @@ template rewriteIt*(n: typed; body: untyped): NormNode =
   body
   workaroundRewrites it
 
-template debugAnnotation*(s: typed; n: NimNode; body: untyped) {.dirty.} =
+template debugAnnotation*(s: untyped; n: NimNode; body: untyped) {.dirty.} =
   debug(astToStr s, n, Original)
   result = rewriteIt n:
     body
