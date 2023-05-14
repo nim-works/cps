@@ -6,9 +6,6 @@ export Continuation, ContinuationProc, cpsCall, cpsMustJump
 
 #{.experimental: "strictNotNil".}
 
-when CallNodes - {nnkHiddenCallConv} != nnkCallKinds:
-  {.error: "i'm afraid of what you may have become".}
-
 proc annotate(parent: var Env; n: NormNode): NormNode
 
 proc makeContProc(name, cont, contType: Name; source: NimNode): ProcDef =
