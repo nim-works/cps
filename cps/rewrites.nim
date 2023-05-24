@@ -68,11 +68,11 @@ proc desym*(n: NimNode): NimNode =
 
 proc childCallToRecoverResult*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## this is used to rewrite continuation calls into their results
-  if sym.kind notin nnkCallKinds:
+  if sym.kind notin (CallNodes - {nnkHiddenCallConv}):
     raise Defect.newException: "resymCall is for calls, not " & $sym.kind
   proc resymify(n: NimNode): NimNode =
     case n.kind
-    of nnkCallKinds:
+    of (CallNodes - {nnkHiddenCallConv}):
       if n == sym:
         result = field
     else:
@@ -358,7 +358,7 @@ proc workaroundRewrites(n: NimNode): NimNode =
   proc workaroundSigmatchSkip(n: NimNode): NimNode =
     ## `sigmatch` skips any call nodes whose parameters have a type attached.
     ## We rewrites all call nodes to remove this data.
-    if n.kind in nnkCallKinds:
+    if n.kind in (CallNodes - {nnkHiddenCallConv}):
       # We recreate the nodes here, to set their .typ to nil
       # so that sigmatch doesn't decide to skip it
       result = newNimNode(n.kind, n)

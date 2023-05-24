@@ -70,7 +70,7 @@ proc abbreviation(n: NimNode): NimNode =
     n.name
   of nnkSym, nnkIdent, nnkDotExpr:
     n
-  of nnkCallKinds:
+  of (CallNodes - {nnkHiddenCallConv}):
     n[0]
   else:
     n.errorAst "dunno how to abbreviate " & $n.kind
