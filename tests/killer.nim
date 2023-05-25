@@ -6,7 +6,7 @@ type
     final: int
     n: int
 
-proc `=destroy`*(k: var Killer) =
+proc `=destroy`*(k: var Killer) {.raises: [FailError].} =
   if k.final != k.n:
     let e = getCurrentException()
     # don't obliterate current exception
