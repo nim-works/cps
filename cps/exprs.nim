@@ -408,7 +408,7 @@ func annotate(n: NormNode): NormNode =
           newCall(bindName"cpsExprLifter"):
             newStmtList:
               # Clone the VarLet and replace its value.
-              child.clone:
+              child.clone "(flat)":
                 # In the case where the value is a cps call, we don't have to
                 # move it outside as later CPS pass can rewrite this.
                 if child.val.isCpsCall:
@@ -419,16 +419,7 @@ func annotate(n: NormNode): NormNode =
                       child.val
                 else:
                   # Otherwise we transform the expression into a symbol.
-                  # TODO: normalizedast should know to run infer
-                  #       automatically on nnkVarTuple because that type
-                  #       doesn't have a type specifier
-                  let typ =
-                    # perform some type-fu for tuple type sniffing
-                    if child.def.typ.kind == nnkTupleClassTy:
-                      getTypeInst child.val
-                    else:
-                      inferTypFromImpl child.def
-                  newCall(bindName"cpsExprToTmp", copy typ):
+                  newCall(bindName"cpsExprToTmp", copy smartSniffer(child)):
                     annotate:
                       # Put the value into a StmtList so analysis starts
                       # from the value as annotate() works on child

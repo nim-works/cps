@@ -508,6 +508,7 @@ macro cpsTryFinally(cont, contType: typed; name: static[string];
           # Generate a new name for this continuation, then add it to our
           # replacement table
           replacements[name] = genSym(name.symKind, name.strVal).NormNode
+          replacements[name].copyLineInfo(name)
           result.name = replacements[name]
           # Rewrite the body to update the references within it
           result.body = result.body.NormNode.filter(generator)
@@ -588,7 +589,7 @@ macro cpsTryFinally(cont, contType: typed; name: static[string];
     # might occur in the body, then jump to reraise.
     let
       tryTemplate = copyNimNode(tryFinally)
-      placeholder = genSymLet()
+      placeholder = genSymLet("(try)", tryTemplate)
 
     # Use the placeholder for the actual body
     tryTemplate.add placeholder
@@ -695,7 +696,7 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
 
   # the result is a copy of the current node
   result = copyNimNode n
-  result.doc "start annotate at " & n.lineAndFile
+  #result.doc "start annotate at " & n.lineAndFile
 
   template endAndReturn() {.dirty.} =
     ## this "wraps" the returned AST in an end comment for easier debugging
@@ -920,7 +921,7 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
         result.add:
           env.annotate:
             newStmtList:
-              newLetIdentDef(genSymLet(info = nc), conv.typ):
+              newLetIdentDef(genSymLet("(conv)", info = nc), conv.typ):
                 # XXX: Not sure why I have to convert here, the type is already
                 # specified in allowAutoDowngradeNormalizedNode
                 NormNode conv
