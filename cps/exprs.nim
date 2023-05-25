@@ -422,7 +422,13 @@ func annotate(n: NormNode): NormNode =
                   # TODO: normalizedast should know to run infer
                   #       automatically on nnkVarTuple because that type
                   #       doesn't have a type specifier
-                  newCall(bindName"cpsExprToTmp", copy(child.def.inferTypFromImpl)):
+                  let typ =
+                    # perform some type-fu for tuple type sniffing
+                    if child.def.typ.kind == nnkTupleClassTy:
+                      getTypeInst child.val
+                    else:
+                      inferTypFromImpl child.def
+                  newCall(bindName"cpsExprToTmp", copy typ):
                     annotate:
                       # Put the value into a StmtList so analysis starts
                       # from the value as annotate() works on child
