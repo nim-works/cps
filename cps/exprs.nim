@@ -268,7 +268,7 @@ macro cpsExprToTmp(tipe, n: typed): untyped =
   debugAnnotation cpsExprToTmp, n:
     let
       # The symbol for our temporary
-      tmp = genSymVar("(expr)")
+      tmp = genSymVar("(expr)", n.NormNode)
 
       # The rewritten expression
       body = assignTo(tmp):
