@@ -268,7 +268,7 @@ macro cpsExprToTmp(tipe, n: typed): untyped =
   debugAnnotation cpsExprToTmp, n:
     let
       # The symbol for our temporary
-      tmp = genSymVar("(expr)")
+      tmp = genSymVar("(expr)", n.NormNode)
 
       # The rewritten expression
       body = assignTo(tmp):
@@ -419,10 +419,7 @@ func annotate(n: NormNode): NormNode =
                       child.val
                 else:
                   # Otherwise we transform the expression into a symbol.
-                  # TODO: normalizedast should know to run infer
-                  #       automatically on nnkVarTuple because that type
-                  #       doesn't have a type specifier
-                  newCall(bindName"cpsExprToTmp", copy(child.def.inferTypFromImpl)):
+                  newCall(bindName"cpsExprToTmp", copy smartSniffer(child)):
                     annotate:
                       # Put the value into a StmtList so analysis starts
                       # from the value as annotate() works on child
