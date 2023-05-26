@@ -880,20 +880,32 @@ proc asVarLetIdentDef*(n: VarLet): VarLetIdentDef =
   ## return a VarLetIdentDef if the def is an IdentDef, otherwise error out
   validateAndCoerce(n.NimNode, VarLetIdentDef)
 
-func clone*(n: VarLet, value: NimNode = NilNimNode): VarLet =
+func smartSniffer*(n: VarLetLike): TypeExpr =
+  ## perform some type-fu for tuple type sniffing
+  TypeExpr:
+    if n.def.typ.kind in {nnkVarTuple, nnkTupleClassTy}:
+      getTypeInst n.val
+    else:
+      inferTypFromImpl n.def
+
+func clone*(n: VarLet; value: NimNode = NilNimNode): VarLet =
   ## clone a `VarLet` but with `value` changed
   let def = copyNimNode(n.def)
-  # copy all nodes in the original definition excluding the last node, which
-  # is the value.
-  for idx in 0 ..< n.def.len - 1:
-    def.add copy(n.def[idx])
-
-  # add the value replacement
-  # if one is not given we copy the value too
-  if value.isNil:
-    def.add copy(n.def.val)
-  else:
-    def.add copy(NormNode value)
+  # re-use the name
+  def.add:
+    copy:
+      n.def[0]
+  # add our best guess as to the type
+  def.add:
+    copy:
+      smartSniffer n
+  # add the value
+  def.add:
+    copy:
+      if value.isNil:
+        n.def.val
+      else:
+        NormNode value
 
   # copy the varlet and add the new def
   result = asVarLet:
