@@ -5,13 +5,14 @@ from std/sequtils import anyIt, toSeq
 from std/typetraits import distinctBase
 
 from cps/rewrites import NormNode, normalizingRewrites, replace,
-                         desym, resym, childCallToRecoverResult
+                         desym, resym, childCallToRecoverResult,
+                         NormalCallNodes
 
 const
   NilNormNode* = nil.NormNode
   NilNimNode* = nil.NimNode
 
-export NormNode
+export NormNode, NormalCallNodes
 
 # # Structure of the Module
 # * distinct types representing normalized/transformed variants of distinct AST

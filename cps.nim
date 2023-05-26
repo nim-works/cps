@@ -111,7 +111,7 @@ proc doWhelp(n: NormNode; args: seq[NormNode]): Call =
 template whelpIt*(input: typed; body: untyped): untyped =
   ## Instantiate the given continuation call and inject `it` in the body.
   var n = normalizeCall input
-  if n.kind in (CallNodes - {nnkHiddenCallConv}):
+  if n.kind in NormalCallNodes:
     var it {.inject.} = doWhelp(n[0], n[1..^1])
     body
     NimNode it

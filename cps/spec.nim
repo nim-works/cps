@@ -346,7 +346,7 @@ proc pragmaArgument*(n: NormNode; s: string): NormNode =
         discard
     if result.isNil:
       result = n.errorAst "failed to find expected " & s & " form"
-  of (CallNodes - {nnkHiddenCallConv}):
+  of NormalCallNodes:
     result = pragmaArgument(asCall(n).impl, s)
   else:
     result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
@@ -355,7 +355,7 @@ proc bootstrapSymbol*(n: NimNode): NormNode =
   ## find the return type of the bootstrap
   let n = NormNode n
   case n.kind
-  of (CallNodes - {nnkHiddenCallConv}):
+  of NormalCallNodes:
     bootstrapSymbol n[0]
   of nnkSym:
     bootstrapSymbol n.getImpl
