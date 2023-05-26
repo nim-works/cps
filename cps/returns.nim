@@ -24,7 +24,7 @@ proc makeReturn*(contType: Name; n: NormNode): NormNode =
   ## generate a `return` of the node if it doesn't already contain a return
   if n.firstReturn.isNil:
     let toAdd =
-      if n.kind in nnkCallKinds:
+      if n.kind in NormalCallNodes:
         n             # what we're saying here is, don't hook Coop on magics
       else:
         Coop.hook:

@@ -14,6 +14,8 @@ type
     ## a normalized node, but this should not be useed directly, use a
     ## specialized type instead, see the `normalizedast` module.
 
+const NormalCallNodes* = CallNodes - {nnkHiddenCallConv}
+
 converter normNodeToNimNode(n: NormNode): NimNode =
   ## scope a converter to this module so it doesn't leak but we keep our sanity
   ## in `filter`, `normalizingRewrites`, etc  below.
@@ -68,11 +70,11 @@ proc desym*(n: NimNode): NimNode =
 
 proc childCallToRecoverResult*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## this is used to rewrite continuation calls into their results
-  if sym.kind notin nnkCallKinds:
+  if sym.kind notin NormalCallNodes:
     raise Defect.newException: "resymCall is for calls, not " & $sym.kind
   proc resymify(n: NimNode): NimNode =
     case n.kind
-    of nnkCallKinds:
+    of NormalCallNodes:
       if n == sym:
         result = field
     else:
@@ -358,7 +360,7 @@ proc workaroundRewrites(n: NimNode): NimNode =
   proc workaroundSigmatchSkip(n: NimNode): NimNode =
     ## `sigmatch` skips any call nodes whose parameters have a type attached.
     ## We rewrites all call nodes to remove this data.
-    if n.kind in nnkCallKinds:
+    if n.kind in NormalCallNodes:
       # We recreate the nodes here, to set their .typ to nil
       # so that sigmatch doesn't decide to skip it
       result = newNimNode(n.kind, n)
