@@ -1048,7 +1048,7 @@ proc addPragma*(n: RoutineDefLike, prag: Name, pragArgs: openArray[Name]) =
 
 # fn-Call
 
-createAsTypeFunc(CallKind, (CallNodes - {nnkHiddenCallConv}), "node is not a call kind")
+createAsTypeFunc(CallKind, nnkCallKinds, "node is not a call kind")
 createAsTypeFunc(Call, CallNodes, "node is not a call node")
 
 template ifCallThenIt*(n: NormNode, body: untyped) =
@@ -1059,7 +1059,7 @@ template ifCallThenIt*(n: NormNode, body: untyped) =
 
 template ifCallKindThenIt*(n: NormNode, body: untyped) =
   ## if `n` is a `nnCallKinds` then run the `body` with `it` as `Call`
-  if not n.isNil and n.kind in (CallNodes - {nnkHiddenCallConv}):
+  if not n.isNil and n.kind in nnkCallKinds:
     let it {.inject.} = asCallKind(n)
     body
 
