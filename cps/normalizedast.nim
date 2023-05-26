@@ -887,12 +887,13 @@ func smartSniffer*(n: VarLetLike): TypeExpr =
     else:
       inferTypFromImpl n.def
 
-func clone*(n: VarLet; name: string; value: NimNode = NilNimNode): VarLet =
-  ## clone a `VarLet` but with `name` and `value` changed
+func clone*(n: VarLet; value: NimNode = NilNimNode): VarLet =
+  ## clone a `VarLet` but with `value` changed
   let def = copyNimNode(n.def)
-  # generate a symbol of the appropriate kind
+  # re-use the name
   def.add:
-    genSym(n.def[0].NimNode.symKind, name)
+    copy:
+      n.def[0]
   # add our best guess as to the type
   def.add:
     copy:

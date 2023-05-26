@@ -408,7 +408,7 @@ func annotate(n: NormNode): NormNode =
           newCall(bindName"cpsExprLifter"):
             newStmtList:
               # Clone the VarLet and replace its value.
-              child.clone "(flat)":
+              child.clone:
                 # In the case where the value is a cps call, we don't have to
                 # move it outside as later CPS pass can rewrite this.
                 if child.val.isCpsCall:
