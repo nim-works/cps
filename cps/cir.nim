@@ -1,6 +1,7 @@
 import std/macros except newStmtList, newTree
 import std/[genasts, setutils]
 
+import help
 import normalizedast
 
 ## Continuation IR for CPS.
@@ -152,9 +153,18 @@ proc newCirNode*(k: CirNodeKind, params: varargs[NormNode]): NormNode =
     pragmaCall.add params[idx]
   let body =
     if params.len > 0:
-      params[^1]
+      if k in CirStatements:
+        newStmtList(
+          doc("Below is the genesis for this node"),
+          params[^1]
+        )
+      else:
+        params[^1]
     else:
-      nnkDiscardStmt.newTree(newEmptyNode())
+      newStmtList(
+        doc("This node has no genesis"),
+        nnkDiscardStmt.newTree(newEmptyNode())
+      )
 
   nnkPragmaBlock.newTree(
     newPragmaStmt(pragmaCall.asPragmaAtom),
