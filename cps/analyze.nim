@@ -26,7 +26,7 @@ proc firstReturn(p: NormNode): NormNode =
     of nnkBlockStmt, nnkBlockExpr, nnkFinally, nnkPragmaBlock:
       result = p.last.firstReturn
     else:
-      result = nil
+      result = NormNode nil
 
 proc simplifyWhile(n: WhileStmt): NormNode =
   ## Convert a while statement into a while-true statement.
@@ -158,7 +158,7 @@ proc processUnlabeledBreak(n: NormNode): NormNode =
         result = n
 
       else:
-        result = nil
+        result = NormNode nil
 
   proc initiator(n: NormNode): NormNode =
     ## Small helper to make sure that annotator always start at a loop/block
@@ -171,7 +171,7 @@ proc processUnlabeledBreak(n: NormNode): NormNode =
       n
 
     else:
-      nil
+      NormNode nil
 
   result = n.filter(initiator)
 
@@ -186,7 +186,7 @@ proc processLabeledBreak(n: NormNode): NormNode =
         newCirNode(ExitBlockWithLabel, n[0]):
           n
       else:
-        nil
+        NormNode nil
 
   proc annotator(n: NormNode): NormNode =
     case n.cirNodeKind
@@ -204,7 +204,7 @@ proc processLabeledBreak(n: NormNode): NormNode =
       result = n
 
     else:
-      result = nil
+      result = NormNode nil
 
   result = n.filter(annotator)
 
@@ -240,7 +240,7 @@ proc processLoopContinue(n: NormNode): NormNode =
         result = n
 
       else:
-        result = nil
+        result = NormNode nil
 
   proc initiator(n: NormNode): NormNode =
     ## Small helper to make sure annotator always start with a loop node
@@ -253,7 +253,7 @@ proc processLoopContinue(n: NormNode): NormNode =
       n
 
     else:
-      nil
+      NormNode nil
 
   result = n.filter(initiator)
 
@@ -321,7 +321,7 @@ proc processLoopTrailingJump(n: NormNode): NormNode =
       result = n
 
     else:
-      result = nil
+      result = NormNode nil
 
   result = filter(n, annotator)
 
