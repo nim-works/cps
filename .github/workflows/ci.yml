@@ -71,7 +71,8 @@ jobs:
       - name: Run examples
         shell: bash
         run: |
-          sudo apt install valgrind
+          sudo apt-get update
+          sudo apt install --fix-missing valgrind
           cd project
           nimble --accept develop
           nimble --accept install "https://github.com/disruptek/balls"
