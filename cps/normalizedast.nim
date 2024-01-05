@@ -344,12 +344,17 @@ func len*(n: NormNode): int {.borrow.}
 func kind*(n: NormNode): NimNodeKind {.borrow.}
   ## the kind (`NimNodeKind`) of the underlying `NimNode`
 
-proc add*(f: NimNode|NormNode, c: NormNode): NormNode {.discardable.} =
+proc add*(f: NormNode, c: NormNode): NormNode {.discardable.} =
   ## add a child node, and return the parent for further chaining.
   ## created in order to fix ambiguous call issues
   {.push hint[ConvFromXtoItselfNotNeeded]: off.}
   result = NormNode f.NimNode.add(c.NimNode)
   {.pop.}
+
+proc add*(f: NimNode, c: NormNode): NormNode {.discardable.} =
+  ## add a child node, and return the parent for further chaining.
+  ## created in order to fix ambiguous call issues ... again.
+  f.NormNode.add(c.NormNode)
 
 template findChild*(n: NormNode; cond: untyped): NormNode =
   ## finds the first child node matching the condition or nil
