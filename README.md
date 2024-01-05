@@ -4,7 +4,7 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/nim-works/cps?style=flat)](https://github.com/nim-works/cps/releases/latest)
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.9.3-informational?style=flat&logo=nim)
 ![Recommended Nim version](https://img.shields.io/badge/nim-1.9.3-informational?style=flat&logo=nim)
-![Maximum supported Nim version](https://img.shields.io/badge/nim-1.9.3-informational?style=flat&logo=nim)
+![Maximum supported Nim version](https://img.shields.io/badge/nim-2.1.1-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/nim-works/cps?style=flat)](#license)
 [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
 [![IRC](https://img.shields.io/badge/chat-%23cps%20on%20libera.chat-brightgreen?style=flat)](https://web.libera.chat/#cps)
