@@ -62,31 +62,40 @@ jobs:
         with:
           path: project
 
-      - name: Setup Nim
+      - name: Compiler
         uses: alaviss/setup-nim@0.1.1
         with:
           path: nim
           version: ${{ matrix.nim }}
 
-      - name: Run examples
+      - name: Valgrind
         shell: bash
         run: |
           sudo apt-get update
           sudo apt install --fix-missing valgrind
-          cd project
-          nimble --accept develop
-          nimble --accept install "https://github.com/disruptek/balls"
-          cd examples
-          balls --path=".." --panics:on --exceptions:goto --backend:c --mm:arc --mm:orc --threads:on
 
-      - name: Run tests
+      - name: Dependencies
         shell: bash
         run: |
           cd project
           nimble --accept develop
-          balls --path="." --panics:on --exceptions:goto --backend:c --mm:arc --mm:orc --threads:on
+          nimble --accept install "https://github.com/disruptek/balls"
 
-      - name: Build docs
+      - name: Examples
+        shell: bash
+        run: |
+          cd project
+          cd examples
+          balls '***' --path=".." --backend:c --mm:arc --mm:orc
+
+      - name: Tests
+        shell: bash
+        run: |
+          cd project
+          nimble --accept develop
+          balls --path="." --backend:c --mm:arc --mm:orc
+
+      - name: Docs
         if: ${{ matrix.docs }} == 'true'
         shell: bash
         run: |
@@ -101,7 +110,7 @@ jobs:
           # Ignore failures for older Nim
           cp docs/{the,}index.html || true
 
-      - name: Publish docs
+      - name: Pages
         if: >
           github.event_name == 'push' && github.ref == 'refs/heads/master' &&
           matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
