@@ -1,0 +1,14 @@
+nimTitle	hooks	cps/hooks.html	module cps/hooks		0
+nim	introduce	cps/hooks.html#introduce,Hook,NormNode	proc introduce(hook: Hook; n: NormNode)		15
+nim	introduce	cps/hooks.html#introduce,NormNode,set[Hook]	proc introduce(n: NormNode; hooks: set[Hook])		26
+nim	findColonLit	cps/hooks.html#findColonLit,NimNode,string,typedesc	proc findColonLit(n: NimNode; s: string; T: typedesc): T:type		31
+nim	makeLineInfo	cps/hooks.html#makeLineInfo,NimNode	proc makeLineInfo(n: NimNode): LineInfo		47
+nim	makeLineInfo	cps/hooks.html#makeLineInfo.t,LineInfo	template makeLineInfo(n: LineInfo): NimNode		53
+nim	sym	cps/hooks.html#sym,Hook	proc sym(hook: Hook): Name		57
+nim	nameForNode	cps/hooks.html#nameForNode,NimNode	proc nameForNode(n: NimNode): string		78
+nim	hook	cps/hooks.html#hook,static[Hook],NormNode	proc hook(hook: static[Hook]; n: NormNode): NormNode		102
+nim	hook	cps/hooks.html#hook,static[Hook],NormNode,NormNode	proc hook(hook: static[Hook]; a, b: NormNode): NormNode		113
+nim	initFrame	cps/hooks.html#initFrame,Hook,string,LineInfo	proc initFrame(hook: Hook; fun: string; info: LineInfo): NimNode		154
+nim	updateLineInfoForContinuationStackFrame	cps/hooks.html#updateLineInfoForContinuationStackFrame,NimNode,NimNode	proc updateLineInfoForContinuationStackFrame(c, n: NimNode): NimNode		161
+nimgrp	introduce	cps/hooks.html#introduce-procs-all	proc		15
+nimgrp	hook	cps/hooks.html#hook-procs-all	proc		102

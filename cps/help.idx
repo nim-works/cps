@@ -1,0 +1,8 @@
+nimTitle	help	cps/help.html	module cps/help		0
+nim	cpsDebug	cps/help.html#cpsDebug	const cpsDebug		4
+nim	comments	cps/help.html#comments	const comments		5
+nim	doc	cps/help.html#doc,string	proc doc(s: string): NimNode		7
+nim	doc	cps/help.html#doc,NimNode,string	proc doc(n: NimNode; s: string)		14
+nim	debug	cps/help.html#debug.t,varargs[untyped]	template debug(ignore: varargs[untyped])		21
+nim	lineAndFile	cps/help.html#lineAndFile.t,NimNode	template lineAndFile(n: NimNode): string		22
+nimgrp	doc	cps/help.html#doc-procs-all	proc		7

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="terminal" baseProfile="full" viewBox="0 0 687 710" width="687" version="1.1">
+    <defs>
+        <termtosvg:template_settings xmlns:termtosvg="https://github.com/nbedos/termtosvg">
+            <termtosvg:screen_geometry columns="80" rows="37"/>
+            <termtosvg:animation type="css"/>
+        </termtosvg:template_settings>
+        <style type="text/css" id="generated-style"><![CDATA[#screen {
+                font-family: 'DejaVu Sans Mono', monospace;
+                font-style: normal;
+                font-size: 14px;
+            }
+
+        text {
+            dominant-baseline: text-before-edge;
+            white-space: pre;
+        }
+    ]]></style>
+        <style type="text/css" id="user-style">
+            /* The colors defined below are the default 16 colors used for rendering text of the terminal. Adjust
+               them as needed.
+               PowerShell colors based on https://en.wikipedia.org/wiki/ANSI_escape_code#Colors */
+            .foreground {fill: #cccccc;}
+            .background {fill: #0c0c0c;}
+            .color0 {fill: #0c0c0c;}
+            .color1 {fill: #c50f1f;}
+            .color2 {fill: #13a10e;}
+            .color3 {fill: #c19c00;}
+            .color4 {fill: #0037da;}
+            .color5 {fill: #881798;}
+            .color6 {fill: #3a96dd;}
+            .color7 {fill: #cccccc;}
+            .color8 {fill: #767676;}
+            .color9 {fill: #e74856;}
+            .color10 {fill: #16c60c;}
+            .color11 {fill: #f9f1a5;}
+            .color12 {fill: #3b78ff;}
+            .color13 {fill: #b4009e;}
+            .color14 {fill: #61d6d6;}
+            .color15 {fill: #f2f2f2;}
+        </style>
+    </defs>
+    <rect id="terminalui" class="background" width="100%" height="100%" ry="4.5826941"/>
+    <circle cx="24" cy="23" r="7" class="color1"/>
+    <circle cx="44" cy="23" r="7" class="color3"/>
+    <circle cx="64" cy="23" r="7" class="color2"/>
+    <svg id="screen" width="640" height="629" x="23" y="50" viewBox="0 0 640 629" preserveAspectRatio="xMidYMin slice"><rect class="background" height="100%" width="100%" x="0" y="0"/><defs><g id="g1"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="48" class="color2">nocall</text></g><g id="g2"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="56" class="color2">onecall</text></g><g id="g3"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="56" class="color2">twocall</text></g><g id="g4"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="56" class="color2">if true</text></g><g id="g5"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="64" class="color2">if false</text></g><g id="g6"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="128" class="color2">if true if false</text></g><g id="g7"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="88" class="color2">nested if 1</text></g><g id="g8"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="88" class="color2">nested if 2</text></g><g id="g9"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="88" class="color2">nested if 3</text></g><g id="g10"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="48" class="color2">block1</text></g><g id="g11"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="48" class="color2">while1</text></g><g id="g12"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="48" class="color2">break1</text></g><g id="g13"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="48" class="color2">break2</text></g><g id="g14"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="32" class="color2">for1</text></g><g id="g15"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="32" class="color2">for2</text></g><g id="g16"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="232" class="color2">multiple variables in one var</text></g><g id="g17"><text x="0" textLength="40" class="foreground">one 0</text></g><g id="g18"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="88" class="color2">wrongreturn</text></g><g id="g19"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="64" class="color2">continue</text></g><g id="g20"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="32" class="color2">for3</text></g><g id="g21"><text x="0" textLength="24" class="foreground">&#10068; </text><text x="24" textLength="40" text-decoration=" line-through" class="color5">defer</text><text x="64" textLength="16" class="foreground">: </text><text x="80" textLength="216" font-weight="bold" font-style="italic" class="color15">pending try-finally rewrite</text></g><g id="g22"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="96" class="color2">nested while</text></g><g id="g23"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="120" class="color2">paper example 1</text></g><g id="g24"><text x="0" textLength="368" class="foreground">   proc foo(c: C; fd: int16): C {.cpsMagic.} =</text></g><g id="g25"><text x="0" textLength="96" class="foreground">     discard</text></g><g id="g26"><text x="0" textLength="24" class="foreground">   </text></g><g id="g27"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="24" class="color2">int</text></g><g id="g28"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="32" class="color2">'i16</text></g><g id="g29"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="56" class="color2">int16()</text></g><g id="g30"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="48" class="color2">.int16</text></g><g id="g31"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="96" class="color2">type problem</text></g><g id="g32"><text x="0" textLength="8" class="foreground">0</text></g><g id="g33"><text x="0" textLength="8" class="foreground">1</text></g><g id="g34"><text x="0" textLength="24" class="foreground">&#128994; </text><text x="24" textLength="216" class="color2">Running -&gt; Lampable -&gt; Done</text></g><g id="g35"><text x="0" textLength="24" font-weight="bold" font-style="italic" class="color8">## </text><text x="24" textLength="80" font-weight="bold" font-style="italic" class="color15">28 tests  </text><text x="104" textLength="184" class="foreground">      &#128994;27  &#10068;1        </text></g><g id="g36"><text x="0" textLength="8" class="background"> </text></g></defs><g><use xlink:href="#g1" y="0"/><use xlink:href="#g2" y="17"/><use xlink:href="#g3" y="34"/><use xlink:href="#g4" y="51"/><use xlink:href="#g5" y="68"/><use xlink:href="#g6" y="85"/><use xlink:href="#g7" y="102"/><use xlink:href="#g8" y="119"/><use xlink:href="#g9" y="136"/><use xlink:href="#g10" y="153"/><use xlink:href="#g11" y="170"/><use xlink:href="#g12" y="187"/><use xlink:href="#g13" y="204"/><use xlink:href="#g14" y="221"/><use xlink:href="#g15" y="238"/><use xlink:href="#g16" y="255"/><use xlink:href="#g17" y="272"/><use xlink:href="#g18" y="289"/><use xlink:href="#g19" y="306"/><use xlink:href="#g20" y="323"/><use xlink:href="#g21" y="340"/><use xlink:href="#g22" y="357"/><use xlink:href="#g23" y="374"/><use xlink:href="#g24" y="391"/><use xlink:href="#g25" y="408"/><use xlink:href="#g26" y="425"/><use xlink:href="#g27" y="442"/><use xlink:href="#g28" y="459"/><use xlink:href="#g29" y="476"/><use xlink:href="#g30" y="493"/><use xlink:href="#g31" y="510"/><use xlink:href="#g32" y="527"/><use xlink:href="#g33" y="544"/><use xlink:href="#g34" y="561"/><use xlink:href="#g35" y="578"/><rect x="0" y="595" width="8" height="17" class="foreground"/><use xlink:href="#g36" y="595"/></g></svg>
+</svg>

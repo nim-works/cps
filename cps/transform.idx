@@ -1,0 +1,7 @@
+nimTitle	transform	cps/transform.html	module cps/transform		0
+nim	unwind	cps/transform.html#unwind,sinkContinuation,ref.Exception	proc unwind(c: sink Continuation; e: ref Exception): Continuation		1065
+nim	unwind	cps/transform.html#unwind,ref.Exception	proc unwind(e: ref Exception)		1066
+nim	cpsTransform	cps/transform.html#cpsTransform.m,typed,typed	macro cpsTransform(tipe, n: typed): untyped		1260
+nim	rewriteCalls	cps/transform.html#rewriteCalls,NimNode	proc rewriteCalls(n: NimNode): NimNode		1317
+nim	performUntypedPass	cps/transform.html#performUntypedPass,NimNode,NimNode	proc performUntypedPass(tipe: NimNode; n: NimNode): NimNode		1330
+nimgrp	unwind	cps/transform.html#unwind-procs-all	proc		1065

@@ -1,0 +1,37 @@
+nimTitle	rewrites	cps/rewrites.html	module cps/rewrites		0
+nim	NodeFilter	cps/rewrites.html#NodeFilter	type NodeFilter		4
+nim	NormalizingFilter	cps/rewrites.html#NormalizingFilter	type NormalizingFilter		5
+nim	NormFilter	cps/rewrites.html#NormFilter	type NormFilter		7
+nim	Matcher	cps/rewrites.html#Matcher	type Matcher		9
+nim	NormMatcher	cps/rewrites.html#NormMatcher	type NormMatcher		11
+nim	NormNode	cps/rewrites.html#NormNode	type NormNode		13
+nim	NormalCallNodes	cps/rewrites.html#NormalCallNodes	const NormalCallNodes		17
+nim	filter	cps/rewrites.html#filter,NimNode,NodeFilter	proc filter(n: NimNode; f: NodeFilter): NimNode		24
+nim	filter	cps/rewrites.html#filter,NimNode,NormalizingFilter	proc filter(n: NimNode; f: NormalizingFilter): NormNode		34
+nim	filter	cps/rewrites.html#filter,NormNode,NormFilter	proc filter(n: NormNode; f: NormFilter): NormNode		40
+nim	isEmpty	cps/rewrites.html#isEmpty,NimNode	proc isEmpty(n: NimNode): bool		46
+nim	errorAst	cps/rewrites.html#errorAst,string,NimNode	proc errorAst(s: string; info: NimNode = nil): NormNode		50
+nim	errorAst	cps/rewrites.html#errorAst,,string	proc errorAst(n: NimNode | NormNode; s = "creepy ast"): NormNode		60
+nim	desym	cps/rewrites.html#desym,NimNode	proc desym(n: NimNode): NimNode		65
+nim	childCallToRecoverResult	cps/rewrites.html#childCallToRecoverResult,NimNode,NimNode,NimNode	proc childCallToRecoverResult(n: NimNode; sym: NimNode; field: NimNode): NimNode		71
+nim	childCallToRecoverResult	cps/rewrites.html#childCallToRecoverResult,NormNode,NormNode,NormNode	proc childCallToRecoverResult(n, sym, field: NormNode): NormNode		84
+nim	resym	cps/rewrites.html#resym,NimNode,NimNode,NimNode	proc resym(n: NimNode; sym: NimNode; field: NimNode): NimNode		87
+nim	resym	cps/rewrites.html#resym,NormNode,NormNode,NormNode	proc resym(n, sym, field: NormNode): NormNode		105
+nim	replacedSymsWithIdents	cps/rewrites.html#replacedSymsWithIdents,NimNode	proc replacedSymsWithIdents(n: NimNode): NimNode		108
+nim	normalizingRewrites	cps/rewrites.html#normalizingRewrites,NimNode	proc normalizingRewrites(n: NimNode): NormNode		117
+nim	workaroundRewrites	cps/rewrites.html#workaroundRewrites,NormNode	proc workaroundRewrites(n: NormNode): NormNode		443
+nim	replace	cps/rewrites.html#replace,NimNode,Matcher,NimNode	proc replace(n: NimNode; match: Matcher; replacement: NimNode): NimNode		446
+nim	replace	cps/rewrites.html#replace,,NormMatcher,NormNode	proc replace(n: NimNode | NormNode; match: NormMatcher; replacement: NormNode): NormNode		457
+nim	replace	cps/rewrites.html#replace.t,NimNode,NimNode,untyped	template replace(n, noob: NimNode; body: untyped): NimNode		466
+nim	replace	cps/rewrites.html#replace.t,NormNode,NormNode,untyped	template replace(n, noob: NormNode; body: untyped): NormNode		471
+nim	multiReplace	cps/rewrites.html#multiReplace,NimNode,varargs[]	proc multiReplace(n: NimNode; replacements: varargs[(Matcher, NimNode)]): NimNode		476
+nim	multiReplace	cps/rewrites.html#multiReplace,NormNode,varargs[]	proc multiReplace(n: NormNode; replacements: varargs[(Matcher, NormNode)]): NormNode		491
+nim	multiReplace	cps/rewrites.html#multiReplace,NormNode,varargs[]_2	proc multiReplace(n: NormNode; replacements: varargs[(NormMatcher, NormNode)]): NormNode		506
+nim	addInitializationToDefault	cps/rewrites.html#addInitializationToDefault,NimNode	proc addInitializationToDefault(n: NimNode): NimNode		521
+nimgrp	replace	cps/rewrites.html#replace-procs-all	proc		446
+nimgrp	filter	cps/rewrites.html#filter-procs-all	proc		24
+nimgrp	childcalltorecoverresult	cps/rewrites.html#childCallToRecoverResult-procs-all	proc		71
+nimgrp	errorast	cps/rewrites.html#errorAst-procs-all	proc		50
+nimgrp	multireplace	cps/rewrites.html#multiReplace-procs-all	proc		476
+nimgrp	resym	cps/rewrites.html#resym-procs-all	proc		87
+nimgrp	replace	cps/rewrites.html#replace-templates-all	template		466

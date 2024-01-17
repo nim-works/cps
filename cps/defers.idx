@@ -1,0 +1,3 @@
+nimTitle	defers	cps/defers.html	module cps/defers		0
+nim	isNotNil	cps/defers.html#isNotNil.t,untyped	template isNotNil(x: untyped): bool		4
+nim	rewriteDefer	cps/defers.html#rewriteDefer,NormNode	proc rewriteDefer(n: NormNode): NormNode		64

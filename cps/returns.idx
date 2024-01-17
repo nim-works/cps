@@ -1,0 +1,12 @@
+nimTitle	returns	cps/returns.html	module cps/returns		0
+nim	firstReturn	cps/returns.html#firstReturn,NormNode	proc firstReturn(p: NormNode): NormNode		5
+nim	makeReturn	cps/returns.html#makeReturn,Name,NormNode	proc makeReturn(contType: Name; n: NormNode): NormNode		23
+nim	makeReturn	cps/returns.html#makeReturn,Name,NormNode,NormNode	proc makeReturn(contType: Name; pre, n: NormNode): NormNode		37
+nim	pass	cps/returns.html#pass.t,Continuation,Continuation	template pass(source: Continuation; destination: Continuation): Continuation		51
+nim	dismiss	cps/returns.html#dismiss,sinkContinuation	proc dismiss(continuation: sink Continuation): Continuation		57
+nim	dismiss	cps/returns.html#dismiss	proc dismiss()		57
+nim	terminator	cps/returns.html#terminator,Name,Name,NormNode	proc terminator(c: Name; contType: Name; tipe: NormNode): NormNode		61
+nim	tailCall	cps/returns.html#tailCall,Name,Name,Name,NormNode	proc tailCall(cont, contType, to: Name; jump: NormNode = NilNormNode): NormNode		90
+nim	jumperCall	cps/returns.html#jumperCall,Name,Name,Name,NormNode	proc jumperCall(cont, contType, to: Name; via: NormNode): NormNode		103
+nimgrp	dismiss	cps/returns.html#dismiss-procs-all	proc		57
+nimgrp	makereturn	cps/returns.html#makeReturn-procs-all	proc		23

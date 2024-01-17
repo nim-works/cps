@@ -1,0 +1,3 @@
+nimTitle	exprs	cps/exprs.html	module cps/exprs		0
+nim	assignTo	cps/exprs.html#assignTo,NormNode,NormNode	proc assignTo(location, n: NormNode): NormNode		169
+nim	cpsFlattenExpr	cps/exprs.html#cpsFlattenExpr.m,typed	macro cpsFlattenExpr(n: typed): untyped		780

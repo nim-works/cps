@@ -1,0 +1,22 @@
+nimTitle	cps	cps.html	module cps		0
+nim	state	cps.html#state,Continuation	proc state(c: Continuation): State		31
+nim	running	cps.html#running.t,Continuation	template running(c: Continuation): bool		42
+nim	finished	cps.html#finished.t,Continuation	template finished(c: Continuation): bool		46
+nim	dismissed	cps.html#dismissed.t,Continuation	template dismissed(c: Continuation): bool		50
+nim	cps	cps.html#cps.m,typed,untyped	macro cps(tipe: typed; n: untyped): untyped		79
+nim	whelpIt	cps.html#whelpIt.t,typed,untyped	template whelpIt(input: typed; body: untyped): untyped		111
+nim	whelp	cps.html#whelp.m,typed	macro whelp(call: typed): untyped		136
+nim	whelp	cps.html#whelp.m,Continuation,typed	macro whelp(parent: Continuation; call: typed): untyped		154
+nim	head	cps.html#head.t,T	template head[T: Continuation](first: T): T		162
+nim	tail	cps.html#tail,Continuation,T	proc tail[T: Continuation](parent: Continuation; child: T): T		168
+nim	coop	cps.html#coop.t,T	template coop[T: Continuation](c: T): T		180
+nim	boot	cps.html#boot.t,T	template boot[T: Continuation](c: T): T		186
+nim	traceDeque	cps.html#traceDeque,Hook,NimNode,NimNode,string,LineInfo,NimNode	proc traceDeque(hook: Hook; c, n: NimNode; fun: string; info: LineInfo; body: NimNode): NimNode		207
+nim	stack	cps.html#stack.m,TraceFrame,T	macro stack[T: Continuation](frame: TraceFrame; target: T): T		244
+nim	trace	cps.html#trace.m,static[Hook],typed,typed,string,LineInfo,typed	macro trace(hook: static[Hook]; source, target: typed; fun: string; info: LineInfo;\n      body: typed): untyped		257
+nim	disarm	cps.html#disarm,T	proc disarm[T: Continuation](c: T)		293
+nim	alloc	cps.html#alloc,typedesc[T],typedesc	proc alloc[T: Continuation](U: typedesc[T]; E: typedesc): E:type		301
+nim	dealloc	cps.html#dealloc,sinkT,typedesc[T]	proc dealloc[T: Continuation](c: sink T; E: typedesc[T]): E:type		308
+nim	recover	cps.html#recover.t,Continuation	template recover(c: Continuation): untyped		315
+nim	`()`	cps.html#().m,Callback[C,R,P],varargs[typed]	macro `()`[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R		321
+nimgrp	whelp	cps.html#whelp-macros-all	macro		136

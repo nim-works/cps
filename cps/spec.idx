@@ -1,0 +1,105 @@
+nimTitle	spec	cps/spec.html	module cps/spec		0
+nim	cpsCallOperatorSupported	cps/spec.html#cpsCallOperatorSupported	const cpsCallOperatorSupported		14
+nim	cpsLift	cps/spec.html#cpsLift.t	template cpsLift()		27
+nim	cpsCall	cps/spec.html#cpsCall.t	template cpsCall()		28
+nim	cpsMagicCall	cps/spec.html#cpsMagicCall.t	template cpsMagicCall()		29
+nim	cpsVoodooCall	cps/spec.html#cpsVoodooCall.t	template cpsVoodooCall()		30
+nim	cpsMustJump	cps/spec.html#cpsMustJump.t	template cpsMustJump()		31
+nim	cpsPending	cps/spec.html#cpsPending.t	template cpsPending()		32
+nim	cpsBreak	cps/spec.html#cpsBreak.t,typed	template cpsBreak(label: typed = nil)		33
+nim	cpsContinue	cps/spec.html#cpsContinue.t	template cpsContinue()		35
+nim	cpsCont	cps/spec.html#cpsCont.t	template cpsCont()		37
+nim	cpsBootstrap	cps/spec.html#cpsBootstrap.t,typed	template cpsBootstrap(whelp: typed)		38
+nim	cpsCallback	cps/spec.html#cpsCallback.t	template cpsCallback()		40
+nim	cpsCallbackShim	cps/spec.html#cpsCallbackShim.t,typed	template cpsCallbackShim(whelp: typed)		41
+nim	cpsEnvironment	cps/spec.html#cpsEnvironment.t,typed	template cpsEnvironment(tipe: typed)		43
+nim	cpsResult	cps/spec.html#cpsResult.t,typed	template cpsResult(result: typed)		45
+nim	cpsReturnType	cps/spec.html#cpsReturnType.t,typed	template cpsReturnType(tipe: typed)		47
+nim	cpsTerminate	cps/spec.html#cpsTerminate.t	template cpsTerminate()		49
+nim	cpsHasException	cps/spec.html#cpsHasException.t,typed,typed	template cpsHasException(cont, ex: typed)		50
+nim	cpsStackFrames	cps/spec.html#cpsStackFrames	const cpsStackFrames		55
+nim	cpsTraceDeque	cps/spec.html#cpsTraceDeque	const cpsTraceDeque		56
+nim	traceDequeSize	cps/spec.html#traceDequeSize	const traceDequeSize		57
+nim	ContinuationObj	cps/spec.html#ContinuationObj	object ContinuationObj		60
+nim	Continuation	cps/spec.html#Continuation	type Continuation		72
+nim	ContinuationProc	cps/spec.html#ContinuationProc	type ContinuationProc		74
+nim	Callback	cps/spec.html#Callback	object Callback		76
+nim	TraceFrame	cps/spec.html#TraceFrame	object TraceFrame		82
+nim	Coop	cps/spec.html#Coop	Hook.Coop		87
+nim	Trace	cps/spec.html#Trace	Hook.Trace		87
+nim	Alloc	cps/spec.html#Alloc	Hook.Alloc		87
+nim	Dealloc	cps/spec.html#Dealloc	Hook.Dealloc		87
+nim	Pass	cps/spec.html#Pass	Hook.Pass		87
+nim	Boot	cps/spec.html#Boot	Hook.Boot		87
+nim	Unwind	cps/spec.html#Unwind	Hook.Unwind		87
+nim	Head	cps/spec.html#Head	Hook.Head		87
+nim	Tail	cps/spec.html#Tail	Hook.Tail		87
+nim	Stack	cps/spec.html#Stack	Hook.Stack		87
+nim	Hook	cps/spec.html#Hook	enum Hook		87
+nim	dot	cps/spec.html#dot.t,NimNode,NimNode	template dot(a, b: NimNode): NimNode		108
+nim	dot	cps/spec.html#dot.t,NimNode,string	template dot(a: NimNode; b: string): NimNode		112
+nim	eq	cps/spec.html#eq.t,NimNode,NimNode	template eq(a, b: NimNode): NimNode		116
+nim	eq	cps/spec.html#eq.t,string,NimNode	template eq(a: string; b: NimNode): NimNode		120
+nim	colon	cps/spec.html#colon.t,NimNode,NimNode	template colon(a, b: NimNode): NimNode		124
+nim	colon	cps/spec.html#colon.t,string,NimNode	template colon(a: string; b: NimNode): NimNode		128
+nim	colon	cps/spec.html#colon.t,,	template colon(a: string | NimNode; b: string | int): NimNode		132
+nim	filterPragma	cps/spec.html#filterPragma,seq[PragmaAtom],Name	proc filterPragma(ns: seq[PragmaAtom]; liftee: Name): NormNode		136
+nim	stripPragma	cps/spec.html#stripPragma,PragmaStmt,static[string]	proc stripPragma(n: PragmaStmt; s: static[string]): PragmaStmt		140
+nim	stripPragma	cps/spec.html#stripPragma,NormNode,static[string]	proc stripPragma(n: NormNode; s: static[string]): NormNode		144
+nim	hash	cps/spec.html#hash,NimNode	proc hash(n: NimNode): Hash		169
+nim	newCpsPending	cps/spec.html#newCpsPending	proc newCpsPending(): PragmaStmt		175
+nim	isCpsPending	cps/spec.html#isCpsPending,NormNode	proc isCpsPending(n: NormNode): bool		179
+nim	newCpsBreak	cps/spec.html#newCpsBreak,NormNode	proc newCpsBreak(n: NormNode; label = newNilLit().NormNode): NormNode		183
+nim	isCpsBreak	cps/spec.html#isCpsBreak,NormNode	proc isCpsBreak(n: NormNode): bool		193
+nim	newCpsContinue	cps/spec.html#newCpsContinue,NormNode	proc newCpsContinue(n: NormNode): NormNode		197
+nim	isCpsContinue	cps/spec.html#isCpsContinue,NormNode	proc isCpsContinue(n: NormNode): bool		201
+nim	breakLabel	cps/spec.html#breakLabel,NormNode	proc breakLabel(n: NormNode): NormNode		205
+nim	isCpsCont	cps/spec.html#isCpsCont,NormNode	proc isCpsCont(n: NormNode): bool		217
+nim	getContSym	cps/spec.html#getContSym,NormNode	proc getContSym(n: NormNode): Name		221
+nim	newCpsTerminate	cps/spec.html#newCpsTerminate	proc newCpsTerminate(): NormNode		229
+nim	isCpsTerminate	cps/spec.html#isCpsTerminate,NormNode	proc isCpsTerminate(n: NormNode): bool		233
+nim	isScopeExit	cps/spec.html#isScopeExit,NormNode	proc isScopeExit(n: NormNode): bool		237
+nim	rewriteIt	cps/spec.html#rewriteIt.t,typed,untyped	template rewriteIt(n: typed; body: untyped): NormNode		241
+nim	debugAnnotation	cps/spec.html#debugAnnotation.t,typed,NimNode,untyped	template debugAnnotation(s: typed; n: NimNode; body: untyped)		247
+nim	matchCpsBreak	cps/spec.html#matchCpsBreak,NormNode	proc matchCpsBreak(label: NormNode): NormMatcher		253
+nim	matchCpsBreak	cps/spec.html#matchCpsBreak	proc matchCpsBreak(): NormMatcher		264
+nim	wrappedFinally	cps/spec.html#wrappedFinally,NormNode,NormNode	proc wrappedFinally(n, final: NormNode): NormNode		268
+nim	isVoodooCall	cps/spec.html#isVoodooCall,NormNode	proc isVoodooCall(n: NormNode): bool		277
+nim	isCpsCall	cps/spec.html#isCpsCall,NormNode	proc isCpsCall(n: NormNode): bool		283
+nim	isCpsConvCall	cps/spec.html#isCpsConvCall,NormNode	proc isCpsConvCall(n: NormNode): bool		298
+nim	isCpsBlock	cps/spec.html#isCpsBlock,NormNode	proc isCpsBlock(n: NormNode): bool		307
+nim	pragmaArgument	cps/spec.html#pragmaArgument,NormNode,string	proc pragmaArgument(n: NormNode; s: string): NormNode		332
+nim	bootstrapSymbol	cps/spec.html#bootstrapSymbol,NimNode	proc bootstrapSymbol(n: NimNode): NormNode		354
+nim	enbasen	cps/spec.html#enbasen,NimNode	proc enbasen(n: NimNode): TypeExpr		371
+nim	State	cps/spec.html#State	enum State		388
+nim	makeErrorShim	cps/spec.html#makeErrorShim,NimNode	proc makeErrorShim(n: NimNode): NimNode		394
+nim	cpsMagic	cps/spec.html#cpsMagic.m,untyped	macro cpsMagic(n: untyped): untyped		410
+nim	cpsVoodoo	cps/spec.html#cpsVoodoo.m,untyped	macro cpsVoodoo(n: untyped): untyped		432
+nim	renderStackFrames	cps/spec.html#renderStackFrames,Continuation	proc renderStackFrames(c: Continuation): seq[string]		464
+nim	renderStackFrames	cps/spec.html#renderStackFrames	proc renderStackFrames(): seq[string]		464
+nim	renderTraceDeque	cps/spec.html#renderTraceDeque,Continuation	proc renderTraceDeque(c: Continuation): seq[string]		468
+nim	renderTraceDeque	cps/spec.html#renderTraceDeque	proc renderTraceDeque(): seq[string]		468
+nim	writeStackFrames	cps/spec.html#writeStackFrames,Continuation	proc writeStackFrames(c: Continuation)		495
+nim	writeStackFrames	cps/spec.html#writeStackFrames	proc writeStackFrames()		495
+nim	writeTraceDeque	cps/spec.html#writeTraceDeque,Continuation	proc writeTraceDeque(c: Continuation)		499
+nim	writeTraceDeque	cps/spec.html#writeTraceDeque	proc writeTraceDeque()		499
+nim	trampoline	cps/spec.html#trampoline,sinkT	proc trampoline[T: Continuation](c: sink T): T		504
+nim	trampolineIt	cps/spec.html#trampolineIt.m,T,untyped	macro trampolineIt[T: Continuation](supplied: T; body: untyped)		519
+nim	ensimilate	cps/spec.html#ensimilate,NormNode,NormNode	proc ensimilate(source, destination: NormNode): Call		544
+nim	nilAsEmpty	cps/spec.html#nilAsEmpty,NimNode	proc nilAsEmpty(n: NimNode): NimNode		568
+nim	emptyAsNil	cps/spec.html#emptyAsNil,NimNode	proc emptyAsNil(n: NimNode): NimNode		575
+nim	etype	cps/spec.html#etype.m	macro etype(e: enum): string		582
+nim	copyOrVoid	cps/spec.html#copyOrVoid,NimNode	proc copyOrVoid(n: NimNode): NimNode		589
+nim	createCallback	cps/spec.html#createCallback,NimNode	proc createCallback(sym: NimNode): NimNode		596
+nim	cpsCallbackTypeDef	cps/spec.html#cpsCallbackTypeDef,NimNode,NimNode	proc cpsCallbackTypeDef(tipe: NimNode; n: NimNode): NimNode		615
+nim	recover	cps/spec.html#recover,Callback[C,R,P],C	proc recover[C, R, P](callback: Callback[C, R, P]; continuation: var C): R		626
+nim	call	cps/spec.html#call.m,Callback[C,R,P],varargs[typed]	macro call[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): C		639
+nimgrp	renderstackframes	cps/spec.html#renderStackFrames-procs-all	proc		464
+nimgrp	writetracedeque	cps/spec.html#writeTraceDeque-procs-all	proc		499
+nimgrp	rendertracedeque	cps/spec.html#renderTraceDeque-procs-all	proc		468
+nimgrp	matchcpsbreak	cps/spec.html#matchCpsBreak-procs-all	proc		253
+nimgrp	strippragma	cps/spec.html#stripPragma-procs-all	proc		140
+nimgrp	writestackframes	cps/spec.html#writeStackFrames-procs-all	proc		495
+nimgrp	colon	cps/spec.html#colon-templates-all	template		124
+nimgrp	eq	cps/spec.html#eq-templates-all	template		116
+nimgrp	dot	cps/spec.html#dot-templates-all	template		108

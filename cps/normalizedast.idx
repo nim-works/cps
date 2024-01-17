@@ -1,0 +1,300 @@
+nimTitle	normalizedast	cps/normalizedast.html	module cps/normalizedast		0
+nim	NilNormNode	cps/normalizedast.html#NilNormNode	const NilNormNode		12
+nim	NilNimNode	cps/normalizedast.html#NilNimNode	const NilNimNode		13
+nim	Name	cps/normalizedast.html#Name	type Name		71
+nim	Ident	cps/normalizedast.html#Ident	type Ident		76
+nim	Sym	cps/normalizedast.html#Sym	type Sym		78
+nim	DotExpr	cps/normalizedast.html#DotExpr	type DotExpr		81
+nim	TypeExpr	cps/normalizedast.html#TypeExpr	type TypeExpr		84
+nim	TypeExprObj	cps/normalizedast.html#TypeExprObj	type TypeExprObj		88
+nim	TypeExprRef	cps/normalizedast.html#TypeExprRef	type TypeExprRef		90
+nim	IdentDef	cps/normalizedast.html#IdentDef	type IdentDef		93
+nim	RoutineDef	cps/normalizedast.html#RoutineDef	type RoutineDef		98
+nim	ProcDef	cps/normalizedast.html#ProcDef	type ProcDef		100
+nim	FormalParams	cps/normalizedast.html#FormalParams	type FormalParams		103
+nim	RoutineParam	cps/normalizedast.html#RoutineParam	type RoutineParam		105
+nim	Call	cps/normalizedast.html#Call	type Call		108
+nim	CallKind	cps/normalizedast.html#CallKind	type CallKind		111
+nim	Conv	cps/normalizedast.html#Conv	type Conv		115
+nim	Pragma	cps/normalizedast.html#Pragma	type Pragma		118
+nim	PragmaStmt	cps/normalizedast.html#PragmaStmt	type PragmaStmt		120
+nim	PragmaBlock	cps/normalizedast.html#PragmaBlock	type PragmaBlock		122
+nim	PragmaExpr	cps/normalizedast.html#PragmaExpr	type PragmaExpr		124
+nim	PragmaAtom	cps/normalizedast.html#PragmaAtom	type PragmaAtom		127
+nim	TypeSection	cps/normalizedast.html#TypeSection	type TypeSection		130
+nim	TypeDef	cps/normalizedast.html#TypeDef	type TypeDef		132
+nim	VarLet	cps/normalizedast.html#VarLet	type VarLet		148
+nim	VarLetTuple	cps/normalizedast.html#VarLetTuple	type VarLetTuple		151
+nim	VarLetIdentDef	cps/normalizedast.html#VarLetIdentDef	type VarLetIdentDef		153
+nim	LetSection	cps/normalizedast.html#LetSection	type LetSection		156
+nim	VarSection	cps/normalizedast.html#VarSection	type VarSection		158
+nim	VarIdentDef	cps/normalizedast.html#VarIdentDef	type VarIdentDef		161
+nim	LetIdentDef	cps/normalizedast.html#LetIdentDef	type LetIdentDef		163
+nim	IdentDefVarLet	cps/normalizedast.html#IdentDefVarLet	type IdentDefVarLet		168
+nim	TupleDefVarLet	cps/normalizedast.html#TupleDefVarLet	type TupleDefVarLet		170
+nim	IdentDefLet	cps/normalizedast.html#IdentDefLet	type IdentDefLet		172
+nim	IdentDefVar	cps/normalizedast.html#IdentDefVar	type IdentDefVar		174
+nim	TypeExprLike	cps/normalizedast.html#TypeExprLike	type TypeExprLike		178
+nim	errorGot	cps/normalizedast.html#errorGot,string,NormNode	proc errorGot(msg: string; n: NormNode; got = treeRepr(NimNode(n)))		199
+nim	normalizeProcDef	cps/normalizedast.html#normalizeProcDef,NimNode	proc normalizeProcDef(n: NimNode): ProcDef		203
+nim	normalizeCall	cps/normalizedast.html#normalizeCall,NimNode	proc normalizeCall(n: NimNode): Call		208
+nim	copy	cps/normalizedast.html#copy,NormNode	proc copy(n: NormNode): NormNode		215
+nim	copyNimNode	cps/normalizedast.html#copyNimNode,NormNode	proc copyNimNode(n: NormNode): NormNode		216
+nim	copyNimTree	cps/normalizedast.html#copyNimTree,NormNode	proc copyNimTree(n: NormNode): NormNode		217
+nim	ConvNodes	cps/normalizedast.html#ConvNodes	const ConvNodes		220
+nim	AccessNodes	cps/normalizedast.html#AccessNodes	const AccessNodes		223
+nim	ConstructNodes	cps/normalizedast.html#ConstructNodes	const ConstructNodes		227
+nim	HiddenNodes	cps/normalizedast.html#HiddenNodes	const HiddenNodes		230
+nim	cNormNodeToNimNode	cps/normalizedast.html#cNormNodeToNimNode.c,NormNode	converter cNormNodeToNimNode(n`gensym0: NormNode): NimNode		242
+nim	cIdentDefToNimNode	cps/normalizedast.html#cIdentDefToNimNode.c,IdentDef	converter cIdentDefToNimNode(n`gensym1: IdentDef): NimNode		242
+nim	cIdentToNimNode	cps/normalizedast.html#cIdentToNimNode.c,Ident	converter cIdentToNimNode(n`gensym2: Ident): NimNode		242
+nim	cVarSectionToNimNode	cps/normalizedast.html#cVarSectionToNimNode.c,VarSection	converter cVarSectionToNimNode(n`gensym3: VarSection): NimNode		242
+nim	cRoutineDefToNimNode	cps/normalizedast.html#cRoutineDefToNimNode.c,RoutineDef	converter cRoutineDefToNimNode(n`gensym4: RoutineDef): NimNode		262
+nim	cNameToNormNode	cps/normalizedast.html#cNameToNormNode.c,Name	converter cNameToNormNode(n`gensym24: Name): NormNode		256
+nim	cTypeExprToNormNode	cps/normalizedast.html#cTypeExprToNormNode.c,TypeExpr	converter cTypeExprToNormNode(n`gensym25: TypeExpr): NormNode		256
+nim	cCallToNormNode	cps/normalizedast.html#cCallToNormNode.c,Call	converter cCallToNormNode(n`gensym26: Call): NormNode		256
+nim	cConvToNormNode	cps/normalizedast.html#cConvToNormNode.c,Conv	converter cConvToNormNode(n`gensym27: Conv): NormNode		256
+nim	cPragmaStmtToNormNode	cps/normalizedast.html#cPragmaStmtToNormNode.c,PragmaStmt	converter cPragmaStmtToNormNode(n`gensym28: PragmaStmt): NormNode		256
+nim	cPragmaAtomToNormNode	cps/normalizedast.html#cPragmaAtomToNormNode.c,PragmaAtom	converter cPragmaAtomToNormNode(n`gensym29: PragmaAtom): NormNode		256
+nim	cIdentDefToNormNode	cps/normalizedast.html#cIdentDefToNormNode.c,IdentDef	converter cIdentDefToNormNode(n`gensym30: IdentDef): NormNode		256
+nim	cRoutineDefToNormNode	cps/normalizedast.html#cRoutineDefToNormNode.c,RoutineDef	converter cRoutineDefToNormNode(n`gensym31: RoutineDef): NormNode		256
+nim	cProcDefToNormNode	cps/normalizedast.html#cProcDefToNormNode.c,ProcDef	converter cProcDefToNormNode(n`gensym32: ProcDef): NormNode		256
+nim	cFormalParamsToNormNode	cps/normalizedast.html#cFormalParamsToNormNode.c,FormalParams	converter cFormalParamsToNormNode(n`gensym33: FormalParams): NormNode		256
+nim	cRoutineParamToNormNode	cps/normalizedast.html#cRoutineParamToNormNode.c,RoutineParam	converter cRoutineParamToNormNode(n`gensym34: RoutineParam): NormNode		256
+nim	cVarSectionToNormNode	cps/normalizedast.html#cVarSectionToNormNode.c,VarSection	converter cVarSectionToNormNode(n`gensym35: VarSection): NormNode		256
+nim	cLetSectionToNormNode	cps/normalizedast.html#cLetSectionToNormNode.c,LetSection	converter cLetSectionToNormNode(n`gensym36: LetSection): NormNode		256
+nim	cVarLetToNormNode	cps/normalizedast.html#cVarLetToNormNode.c,VarLet	converter cVarLetToNormNode(n`gensym37: VarLet): NormNode		256
+nim	cVarLetIdentDefToNormNode	cps/normalizedast.html#cVarLetIdentDefToNormNode.c,VarLetIdentDef	converter cVarLetIdentDefToNormNode(n`gensym38: VarLetIdentDef): NormNode		256
+nim	cVarLetTupleToNormNode	cps/normalizedast.html#cVarLetTupleToNormNode.c,VarLetTuple	converter cVarLetTupleToNormNode(n`gensym39: VarLetTuple): NormNode		256
+nim	cDefVarLetToNormNode	cps/normalizedast.html#cDefVarLetToNormNode.c,DefVarLet	converter cDefVarLetToNormNode(n`gensym40: DefVarLet): NormNode		256
+nim	cIdentDefLetToNormNode	cps/normalizedast.html#cIdentDefLetToNormNode.c,IdentDefLet	converter cIdentDefLetToNormNode(n`gensym41: IdentDefLet): NormNode		256
+nim	cSymToNormNode	cps/normalizedast.html#cSymToNormNode.c,Sym	converter cSymToNormNode(n`gensym42: Sym): NormNode		256
+nim	cIdentDefLetToIdentDef	cps/normalizedast.html#cIdentDefLetToIdentDef.c,IdentDefLet	converter cIdentDefLetToIdentDef(n`gensym43: IdentDefLet): IdentDef		274
+nim	cIdentDefVarToIdentDef	cps/normalizedast.html#cIdentDefVarToIdentDef.c,IdentDefVar	converter cIdentDefVarToIdentDef(n`gensym44: IdentDefVar): IdentDef		275
+nim	cRoutineParamToIdentDef	cps/normalizedast.html#cRoutineParamToIdentDef.c,RoutineParam	converter cRoutineParamToIdentDef(n`gensym45: RoutineParam): IdentDef		276
+nim	cLetIdentDefToVarLetIdentDef	cps/normalizedast.html#cLetIdentDefToVarLetIdentDef.c,LetIdentDef	converter cLetIdentDefToVarLetIdentDef(n`gensym46: LetIdentDef): VarLetIdentDef		277
+nim	cVarIdentDefToVarLetIdentDef	cps/normalizedast.html#cVarIdentDefToVarLetIdentDef.c,VarIdentDef	converter cVarIdentDefToVarLetIdentDef(n`gensym47: VarIdentDef): VarLetIdentDef		278
+nim	cProcDefToRoutineDef	cps/normalizedast.html#cProcDefToRoutineDef.c,ProcDef	converter cProcDefToRoutineDef(n`gensym48: ProcDef): RoutineDef		279
+nim	cTypeExprRefToTypeExpr	cps/normalizedast.html#cTypeExprRefToTypeExpr.c,TypeExprRef	converter cTypeExprRefToTypeExpr(n`gensym49: TypeExprRef): TypeExpr		280
+nim	newEmptyNormNode	cps/normalizedast.html#newEmptyNormNode	proc newEmptyNormNode(): NormNode		302
+nim	onlyNormalizedNode	cps/normalizedast.html#onlyNormalizedNode,T	proc onlyNormalizedNode[T: distinct](n: T): NormNode		306
+nim	upgradeToNormalizedNode	cps/normalizedast.html#upgradeToNormalizedNode,T	proc upgradeToNormalizedNode[T](n: T): NormNode		313
+nim	desym	cps/normalizedast.html#desym,T,	proc desym[T: Desymable](n: T; sym: NimNode | Name): T		327
+nim	hash	cps/normalizedast.html#hash.t,NormNode	template hash(n: NormNode): Hash		333
+nim	`$`	cps/normalizedast.html#$,NormNode	proc `$`(n: NormNode): string		337
+nim	len	cps/normalizedast.html#len,NormNode	proc len(n: NormNode): int		341
+nim	kind	cps/normalizedast.html#kind,NormNode	proc kind(n: NormNode): NimNodeKind		344
+nim	add	cps/normalizedast.html#add,NormNode,NormNode	proc add(f: NormNode; c: NormNode): NormNode		347
+nim	add	cps/normalizedast.html#add,NimNode,NormNode	proc add(f: NimNode; c: NormNode): NormNode		354
+nim	findChild	cps/normalizedast.html#findChild.t,NormNode,untyped	template findChild(n: NormNode; cond: untyped): NormNode		359
+nim	findChildRecursive	cps/normalizedast.html#findChildRecursive,NormNode,proc(NormNode)	proc findChildRecursive(n: NormNode; cmp: proc (n: NormNode): bool): NormNode		363
+nim	getImpl	cps/normalizedast.html#getImpl,NormNode	proc getImpl(n: NormNode): NormNode		375
+nim	getTypeInst	cps/normalizedast.html#getTypeInst,NormNode	proc getTypeInst(n: NormNode): TypeExpr		378
+nim	RecursiveNode	cps/normalizedast.html#RecursiveNode	type RecursiveNode		382
+nim	add	cps/normalizedast.html#add,T,NormalizedVarargs	proc add[T: RecursiveNode](f: T; cs: NormalizedVarargs): T		384
+nim	`[]`	cps/normalizedast.html#[],T,int	proc `[]`[T: RecursiveNode](n: T; i: int): T		390
+nim	`[]`	cps/normalizedast.html#[],T,BackwardsIndex	proc `[]`[T: RecursiveNode](n: T; i: BackwardsIndex): T		393
+nim	`[]`	cps/normalizedast.html#[],R,HSlice[T,U]	proc `[]`[R: RecursiveNode; T, U](n: R; x: HSlice[T, U]): seq[R]		396
+nim	`[]=`	cps/normalizedast.html#[]=,NormNode,int,NormNode	proc `[]=`(n: NormNode; i: int; child: NormNode)		399
+nim	`[]=`	cps/normalizedast.html#[]=,NormNode,BackwardsIndex,NormNode	proc `[]=`(n: NormNode; i: BackwardsIndex; child: NormNode)		401
+nim	last	cps/normalizedast.html#last,T	proc last[T: RecursiveNode](n: T): T		404
+nim	getPragmaName	cps/normalizedast.html#getPragmaName,NimNode	proc getPragmaName(n: NimNode): NimNode		408
+nim	copyLineInfo	cps/normalizedast.html#copyLineInfo,NormNode,NormNode	proc copyLineInfo(arg, info: NormNode)		416
+nim	copyLineInfo	cps/normalizedast.html#copyLineInfo,NormNode,NimNode	proc copyLineInfo(arg: NormNode; info: NimNode)		417
+nim	items	cps/normalizedast.html#items.i,NormNode	iterator items(n: NormNode): NormNode		419
+nim	pairs	cps/normalizedast.html#pairs.i,NormNode	iterator pairs(n: NormNode): (int, NormNode)		423
+nim	newStmtList	cps/normalizedast.html#newStmtList,AnyNodeVarargs	proc newStmtList(stmts: AnyNodeVarargs): NormNode		428
+nim	newTree	cps/normalizedast.html#newTree,NimNodeKind,AnyNodeVarargs	proc newTree(kind: NimNodeKind; n: AnyNodeVarargs): NormNode		434
+nim	newNodeAndTransformIt	cps/normalizedast.html#newNodeAndTransformIt.t,NimNode,untyped	template newNodeAndTransformIt(n: NimNode; body: untyped): untyped		438
+nim	copyNodeAndTransformIt	cps/normalizedast.html#copyNodeAndTransformIt.t,NimNode,untyped	template copyNodeAndTransformIt(n: NimNode; body: untyped): untyped		448
+nim	wrap	cps/normalizedast.html#wrap,NimNodeKind,NormNode	proc wrap(kind: NimNodeKind; n: NormNode): NormNode		456
+nim	seqNormalizedToSeqNimNode	cps/normalizedast.html#seqNormalizedToSeqNimNode.c,seq[NormNode]	converter seqNormalizedToSeqNimNode(n: seq[NormNode]): seq[NimNode]		460
+nim	hash	cps/normalizedast.html#hash.t,Name	template hash(n: Name): Hash		467
+nim	isNil	cps/normalizedast.html#isNil,Name	proc isNil(n: Name): bool		470
+nim	`==`	cps/normalizedast.html#==,Name,Name	proc `==`(a, b: Name): bool		471
+nim	`==`	cps/normalizedast.html#==,NimNode,Name	proc `==`(a: NimNode; b: Name): bool		472
+nim	`$`	cps/normalizedast.html#$,Name	proc `$`(a: Name): string		473
+nim	strVal	cps/normalizedast.html#strVal,Name	proc strVal(n: Name): string		474
+nim	isSymbol	cps/normalizedast.html#isSymbol,Name	proc isSymbol(n: Name): bool		476
+nim	asName	cps/normalizedast.html#asName,NormNode	proc asName(n`gensym51: NormNode): Name		482
+nim	asNameAllowEmpty	cps/normalizedast.html#asNameAllowEmpty,NormNode	proc asNameAllowEmpty(n`gensym53: NormNode): Name		483
+nim	asName	cps/normalizedast.html#asName,NimNode	proc asName(n: NimNode): Name		485
+nim	asNameAllowEmpty	cps/normalizedast.html#asNameAllowEmpty,NimNode	proc asNameAllowEmpty(n: NimNode): Name		488
+nim	asName	cps/normalizedast.html#asName,string,NormNode	proc asName(n: string; info: NormNode = NilNormNode): Name		503
+nim	genSymType	cps/normalizedast.html#genSymType,string,NormNode	proc genSymType(n: string; info: NormNode = NilNormNode): Name		507
+nim	genSymVar	cps/normalizedast.html#genSymVar,string,NormNode	proc genSymVar(n: string = ""; info: NormNode = NilNormNode): Name		510
+nim	genSymLet	cps/normalizedast.html#genSymLet,string,NormNode	proc genSymLet(n: string = ""; info: NormNode = NilNormNode): Name		513
+nim	genSymProc	cps/normalizedast.html#genSymProc,string,NormNode	proc genSymProc(n: string; info: NormNode = NilNormNode): Name		516
+nim	genSymField	cps/normalizedast.html#genSymField,string,NormNode	proc genSymField(n: string; info: NormNode = NilNormNode): Name		519
+nim	genSymUnknown	cps/normalizedast.html#genSymUnknown,string,NormNode	proc genSymUnknown(n: string; info: NormNode = NilNormNode): Name		522
+nim	desym	cps/normalizedast.html#desym,Name	proc desym(n: Name): Name		526
+nim	resym	cps/normalizedast.html#resym,NormNode,Name,Name	proc resym(fragment: NormNode; sym, replacement: Name): NormNode		528
+nim	genField	cps/normalizedast.html#genField,string	proc genField(ident = ""): Name		531
+nim	bindName	cps/normalizedast.html#bindName,staticstring	proc bindName(n: static string): Name		536
+nim	bindName	cps/normalizedast.html#bindName,staticstring,staticBindSymRule	proc bindName(n: static string; rule: static BindSymRule): Name		540
+nim	typeInst	cps/normalizedast.html#typeInst,Name	proc typeInst(n: Name): TypeExpr		545
+nim	isExported	cps/normalizedast.html#isExported,Name	proc isExported(n: Name): bool		550
+nim	eqIdent	cps/normalizedast.html#eqIdent,,string	proc eqIdent(a: Name | NimNode; b: string): bool		554
+nim	eqIdent	cps/normalizedast.html#eqIdent,,	proc eqIdent(a: Name | NimNode; b: distinct Name | NimNode): bool		557
+nim	eqIdent	cps/normalizedast.html#eqIdent,NormNode,Name	proc eqIdent(a: NormNode; b: Name): bool		560
+nim	asName	cps/normalizedast.html#asName,TypeExpr	proc asName(n: TypeExpr): Name		562
+nim	asSym	cps/normalizedast.html#asSym,NormNode	proc asSym(n`gensym62: NormNode): Sym		568
+nim	cSymToName	cps/normalizedast.html#cSymToName.c,Sym	converter cSymToName(n`gensym64: Sym): Name		569
+nim	typeInst	cps/normalizedast.html#typeInst,Sym	proc typeInst(n: Sym): TypeExpr		571
+nim	ExprLike	cps/normalizedast.html#ExprLike	type ExprLike		577
+nim	newDotExpr	cps/normalizedast.html#newDotExpr,ExprLike,	proc newDotExpr(l`gensym65: ExprLike; r`gensym65: distinct ExprLike): NormNode		587
+nim	dot	cps/normalizedast.html#dot.t,NormNode,NormNode	template dot(a, b: NormNode): NormNode		591
+nim	dot	cps/normalizedast.html#dot.t,NormNode,string	template dot(a: NormNode; b: string): NormNode		597
+nim	newColonExpr	cps/normalizedast.html#newColonExpr,ExprLike,	proc newColonExpr(l`gensym66: ExprLike; r`gensym66: distinct ExprLike): NormNode		601
+nim	newAssignment	cps/normalizedast.html#newAssignment,ExprLike,	proc newAssignment(l`gensym67: ExprLike; r`gensym67: distinct ExprLike): NormNode		605
+nim	newCall	cps/normalizedast.html#newCall,NormNode,AnyNodeVarargs	proc newCall(n: NormNode; args: AnyNodeVarargs): Call		608
+nim	newCall	cps/normalizedast.html#newCall,Name,AnyNodeVarargs	proc newCall(n: Name; args: AnyNodeVarargs): Call		611
+nim	newCall	cps/normalizedast.html#newCall,string,AnyNodeVarargs	proc newCall(n: string; args: AnyNodeVarargs): Call		614
+nim	asTypeSection	cps/normalizedast.html#asTypeSection,NormNode	proc asTypeSection(n`gensym68: NormNode): TypeSection		619
+nim	asTypeDef	cps/normalizedast.html#asTypeDef,NormNode	proc asTypeDef(n`gensym70: NormNode): TypeDef		622
+nim	asTypeExpr	cps/normalizedast.html#asTypeExpr,NormNode	proc asTypeExpr(n`gensym72: NormNode): TypeExpr		626
+nim	asTypeExprAllowEmpty	cps/normalizedast.html#asTypeExprAllowEmpty,NormNode	proc asTypeExprAllowEmpty(n`gensym74: NormNode): TypeExpr		627
+nim	isNil	cps/normalizedast.html#isNil,TypeExpr	proc isNil(n: TypeExpr): bool		630
+nim	`==`	cps/normalizedast.html#==,TypeExpr,TypeExpr	proc `==`(a, b: TypeExpr): bool		633
+nim	typeKind	cps/normalizedast.html#typeKind,TypeExpr	proc typeKind(n: TypeExpr): NimTypeKind		636
+nim	sameType	cps/normalizedast.html#sameType,TypeExpr,TypeExpr	proc sameType(a, b: TypeExpr): bool		639
+nim	asTypeExprObj	cps/normalizedast.html#asTypeExprObj,NormNode	proc asTypeExprObj(n`gensym76: NormNode): TypeExprObj		644
+nim	asTypeExprRef	cps/normalizedast.html#asTypeExprRef,NormNode	proc asTypeExprRef(n`gensym78: NormNode): TypeExprRef		648
+nim	newRefType	cps/normalizedast.html#newRefType,Name	proc newRefType(n: Name): TypeExprRef		650
+nim	sinkAnnotated	cps/normalizedast.html#sinkAnnotated,NormNode	proc sinkAnnotated(n: NormNode): TypeExpr		654
+nim	asPragmaAtom	cps/normalizedast.html#asPragmaAtom,Name	proc asPragmaAtom(n: Name): PragmaAtom		660
+nim	newPragmaColonExpr	cps/normalizedast.html#newPragmaColonExpr,static[string],NormNode	proc newPragmaColonExpr(n: static[string]; r: NormNode): PragmaAtom		664
+nim	getPragmaName	cps/normalizedast.html#getPragmaName,PragmaAtom	proc getPragmaName(n: PragmaAtom): Name		668
+nim	PragmaLike	cps/normalizedast.html#PragmaLike	type PragmaLike		680
+nim	items	cps/normalizedast.html#items.i,PragmaLike	iterator items(n: PragmaLike): PragmaAtom		688
+nim	hasPragma	cps/normalizedast.html#hasPragma,PragmaLike,static[string]	proc hasPragma(n: PragmaLike; s: static[string]): bool		699
+nim	IdentDefLike	cps/normalizedast.html#IdentDefLike	type IdentDefLike		709
+nim	name	cps/normalizedast.html#name,PragmaExpr	proc name(n: PragmaExpr): Name		713
+nim	name	cps/normalizedast.html#name,IdentDefLike	proc name(n: IdentDefLike): Name		717
+nim	DefLike	cps/normalizedast.html#DefLike	type DefLike		728
+nim	typ	cps/normalizedast.html#typ,DefLike	proc typ(n: DefLike): TypeExpr		731
+nim	val	cps/normalizedast.html#val,DefLike	proc val(n: DefLike): NormNode		735
+nim	hasValue	cps/normalizedast.html#hasValue,DefLike	proc hasValue(n: DefLike): bool		738
+nim	hasType	cps/normalizedast.html#hasType,DefLike	proc hasType(n: DefLike): bool		743
+nim	inferTypFromImpl	cps/normalizedast.html#inferTypFromImpl,DefLike	proc inferTypFromImpl(n: DefLike): TypeExpr		747
+nim	asIdentDefs	cps/normalizedast.html#asIdentDefs,NimNode	proc asIdentDefs(n: NimNode): IdentDef		762
+nim	newIdentDef	cps/normalizedast.html#newIdentDef,Name,TypeExprLike	proc newIdentDef(n: Name; t: TypeExprLike; val = newEmptyNode()): IdentDef		767
+nim	newIdentDef	cps/normalizedast.html#newIdentDef,string,TypeExprLike	proc newIdentDef(n: string; t: TypeExprLike; val = newEmptyNode()): IdentDef		772
+nim	newIdentDef	cps/normalizedast.html#newIdentDef,Name,NormNode	proc newIdentDef(n: Name; val: NormNode): IdentDef		776
+nim	LetSectionLike	cps/normalizedast.html#LetSectionLike	type LetSectionLike		786
+nim	VarSectionLike	cps/normalizedast.html#VarSectionLike	type VarSectionLike		789
+nim	VarLetLike	cps/normalizedast.html#VarLetLike	type VarLetLike		795
+nim	def	cps/normalizedast.html#def,VarLetLike	proc def(n: VarLetLike): DefVarLet | TupleDefVarLet		799
+nim	val	cps/normalizedast.html#val,VarLetLike	proc val(n: VarLetLike): NormNode		807
+nim	typ	cps/normalizedast.html#typ,VarLetLike	proc typ(n: VarLetLike): TypeExpr		811
+nim	kind	cps/normalizedast.html#kind,VarLetLike	proc kind(n: VarLetLike): NimNodeKind		818
+nim	hasValue	cps/normalizedast.html#hasValue,VarLetLike	proc hasValue(n: VarLetLike): bool		819
+nim	isTuple	cps/normalizedast.html#isTuple,VarLetLike	proc isTuple(n: VarLetLike): bool		823
+nim	VarLetIdentDefLike	cps/normalizedast.html#VarLetIdentDefLike	type VarLetIdentDefLike		828
+nim	identdef	cps/normalizedast.html#identdef,VarLetIdentDef	proc identdef(n: VarLetIdentDefLike): IdentDef		831
+nim	name	cps/normalizedast.html#name,VarLetIdentDef	proc name(n: VarLetIdentDefLike): Name		833
+nim	inferTypFromImpl	cps/normalizedast.html#inferTypFromImpl,VarLetIdentDef	proc inferTypFromImpl(n: VarLetIdentDefLike): TypeExpr		836
+nim	asVarLet	cps/normalizedast.html#asVarLet,NimNode	proc asVarLet(n: NimNode): VarLet		874
+nim	asVarLetTuple	cps/normalizedast.html#asVarLetTuple,VarLet	proc asVarLetTuple(n: VarLet): VarLetTuple		881
+nim	asVarLetIdentDef	cps/normalizedast.html#asVarLetIdentDef,VarLet	proc asVarLetIdentDef(n: VarLet): VarLetIdentDef		884
+nim	smartSniffer	cps/normalizedast.html#smartSniffer,VarLetLike	proc smartSniffer(n: VarLetLike): TypeExpr		888
+nim	clone	cps/normalizedast.html#clone,VarLet,NimNode	proc clone(n: VarLet; value: NimNode = NilNimNode): VarLet		896
+nim	indexNamePairs	cps/normalizedast.html#indexNamePairs.i,VarLetTuple	iterator indexNamePairs(n: VarLetTuple): (int, Name)		921
+nim	newVarLetIdentDef	cps/normalizedast.html#newVarLetIdentDef,NimNodeKind,IdentDef	proc newVarLetIdentDef(kind: NimNodeKind; i: IdentDef): VarLetIdentDef		932
+nim	newVarLetIdentDef	cps/normalizedast.html#newVarLetIdentDef,NimNodeKind,Name,TypeExprLike,NimNode	proc newVarLetIdentDef(kind: NimNodeKind; name: Name; typ: TypeExprLike; val: NimNode): VarLetIdentDef		937
+nim	newVarIdentDef	cps/normalizedast.html#newVarIdentDef,IdentDef	proc newVarIdentDef(i: IdentDef): VarIdentDef		944
+nim	newVarSection	cps/normalizedast.html#newVarSection,IdentDef	proc newVarSection(i: IdentDef): VarSection		951
+nim	newVarSection	cps/normalizedast.html#newVarSection,Name,TypeExprLike	proc newVarSection(n: Name; t: TypeExprLike; val = newEmptyNode()): VarSection		955
+nim	newLetIdentDef	cps/normalizedast.html#newLetIdentDef,IdentDef	proc newLetIdentDef(i: IdentDef): LetIdentDef		961
+nim	newLetIdentDef	cps/normalizedast.html#newLetIdentDef,Name,NormNode	proc newLetIdentDef(n: Name; val: NormNode): LetIdentDef		965
+nim	newLetIdentDef	cps/normalizedast.html#newLetIdentDef,Name,TypeExprLike	proc newLetIdentDef(n: Name; t: TypeExprLike; val = newEmptyNode()): LetIdentDef		967
+nim	newIdentDefVar	cps/normalizedast.html#newIdentDefVar,IdentDef	proc newIdentDefVar(i: IdentDef): IdentDefVar		973
+nim	newIdentDefVar	cps/normalizedast.html#newIdentDefVar,Name,TypeExprLike	proc newIdentDefVar(n: Name; t: TypeExprLike; val = newEmptyNode()): IdentDefVar		977
+nim	asPragmaStmt	cps/normalizedast.html#asPragmaStmt,NormNode	proc asPragmaStmt(n`gensym101: NormNode): PragmaStmt		983
+nim	asPragmaStmt	cps/normalizedast.html#asPragmaStmt,Name	proc asPragmaStmt(n: Name): PragmaStmt		984
+nim	newPragmaStmt	cps/normalizedast.html#newPragmaStmt,varargs[PragmaAtom]	proc newPragmaStmt(es: varargs[PragmaAtom]): PragmaStmt		988
+nim	newPragmaStmt	cps/normalizedast.html#newPragmaStmt,Name	proc newPragmaStmt(n: Name): PragmaStmt		998
+nim	newPragmaStmtWithInfo	cps/normalizedast.html#newPragmaStmtWithInfo,NormNode,varargs[PragmaAtom]	proc newPragmaStmtWithInfo(inf: NormNode; es: varargs[PragmaAtom]): PragmaStmt		1003
+nim	asPragmaBlock	cps/normalizedast.html#asPragmaBlock,NormNode	proc asPragmaBlock(n`gensym103: NormNode): PragmaBlock		1011
+nim	PragmaHaver	cps/normalizedast.html#PragmaHaver	type PragmaHaver		1016
+nim	pragma	cps/normalizedast.html#pragma,PragmaHaver	proc pragma(n: PragmaHaver): PragmaLike		1020
+nim	hasPragma	cps/normalizedast.html#hasPragma,PragmaHaver,static[string]	proc hasPragma(n: PragmaHaver; s: static[string]): bool		1036
+nim	RoutineDefLike	cps/normalizedast.html#RoutineDefLike	type RoutineDefLike		1043
+nim	addPragma	cps/normalizedast.html#addPragma,RoutineDefLike,Name	proc addPragma(n: RoutineDefLike; prag: Name)		1045
+nim	addPragma	cps/normalizedast.html#addPragma,RoutineDefLike,string	proc addPragma(n: RoutineDefLike; prag: string)		1049
+nim	addPragma	cps/normalizedast.html#addPragma,RoutineDefLike,Name,NimNode	proc addPragma(n: RoutineDefLike; prag: Name; pragArg: NimNode)		1054
+nim	addPragma	cps/normalizedast.html#addPragma,RoutineDefLike,Name,Name	proc addPragma(n: RoutineDefLike; prag: Name; pragArg: Name)		1059
+nim	addPragma	cps/normalizedast.html#addPragma,RoutineDefLike,Name,openArray[Name]	proc addPragma(n: RoutineDefLike; prag: Name; pragArgs: openArray[Name])		1063
+nim	asCallKind	cps/normalizedast.html#asCallKind,NormNode	proc asCallKind(n`gensym105: NormNode): CallKind		1069
+nim	asCall	cps/normalizedast.html#asCall,NormNode	proc asCall(n`gensym107: NormNode): Call		1070
+nim	ifCallThenIt	cps/normalizedast.html#ifCallThenIt.t,NormNode,untyped	template ifCallThenIt(n: NormNode; body: untyped)		1072
+nim	ifCallKindThenIt	cps/normalizedast.html#ifCallKindThenIt.t,NormNode,untyped	template ifCallKindThenIt(n: NormNode; body: untyped)		1078
+nim	name	cps/normalizedast.html#name,Call	proc name(n: Call): Name		1084
+nim	name=	cps/normalizedast.html#name=,Call,Name	proc name=(callee: Call; newName: Name)		1088
+nim	prependArg	cps/normalizedast.html#prependArg,Call,NormNode	proc prependArg(n: Call; arg: NormNode)		1092
+nim	hasImpl	cps/normalizedast.html#hasImpl,Call	proc hasImpl(n: Call): bool		1096
+nim	impl	cps/normalizedast.html#impl,Call	proc impl(n: Call): RoutineDef		1100
+nim	childCallToRecoverResult	cps/normalizedast.html#childCallToRecoverResult,Call,NormNode,NormNode	proc childCallToRecoverResult(n: Call; sym, field: NormNode): Call		1107
+nim	desym	cps/normalizedast.html#desym,Call	proc desym(n: Call)		1112
+nim	asConv	cps/normalizedast.html#asConv,NormNode	proc asConv(n`gensym110: NormNode): Conv		1118
+nim	typ	cps/normalizedast.html#typ,Conv	proc typ(n: Conv): TypeExpr		1120
+nim	expr	cps/normalizedast.html#expr,Conv	proc expr(n: Conv): NormNode		1124
+nim	newFormalParams	cps/normalizedast.html#newFormalParams,TypeExpr,varargs[IdentDef]	proc newFormalParams(ret: TypeExpr; ps: varargs[IdentDef]): FormalParams		1130
+nim	asRoutineDef	cps/normalizedast.html#asRoutineDef,NormNode	proc asRoutineDef(n`gensym112: NormNode): RoutineDef		1138
+nim	name	cps/normalizedast.html#name,RoutineDef	proc name(n: RoutineDef): Name		1141
+nim	name=	cps/normalizedast.html#name=,RoutineDef,Name	proc name=(n: RoutineDef; name: Name)		1144
+nim	body	cps/normalizedast.html#body,RoutineDef	proc body(n: RoutineDef): NormNode		1148
+nim	body=	cps/normalizedast.html#body=,RoutineDef,NormNode	proc body=(n: RoutineDef; b: NormNode)		1150
+nim	formalParams	cps/normalizedast.html#formalParams,RoutineDef	proc formalParams(n: RoutineDef): FormalParams		1153
+nim	formalParams=	cps/normalizedast.html#formalParams=,RoutineDef,FormalParams	proc formalParams=(n: RoutineDef; f: FormalParams)		1157
+nim	firstCallParam	cps/normalizedast.html#firstCallParam,RoutineDef	proc firstCallParam(n: RoutineDef): RoutineParam		1161
+nim	pragma=	cps/normalizedast.html#pragma=,RoutineDef,PragmaStmt	proc pragma=(n: RoutineDef; p: PragmaStmt)		1168
+nim	newProcDef	cps/normalizedast.html#newProcDef,Name,TypeExpr,varargs[IdentDef]	proc newProcDef(name: Name; retType: TypeExpr; callParams: varargs[IdentDef]): ProcDef		1174
+nim	asProcDef	cps/normalizedast.html#asProcDef,NormNode	proc asProcDef(n`gensym114: NormNode): ProcDef		1182
+nim	pragma=	cps/normalizedast.html#pragma=,ProcDef,PragmaStmt	proc pragma=(n: ProcDef; p: PragmaStmt)		1184
+nim	returnParam	cps/normalizedast.html#returnParam,ProcDef	proc returnParam(n: ProcDef): TypeExpr		1188
+nim	returnParam=	cps/normalizedast.html#returnParam=,ProcDef,Name	proc returnParam=(n: ProcDef; ret: Name)		1192
+nim	callingParams	cps/normalizedast.html#callingParams.i,ProcDef	iterator callingParams(n: ProcDef): RoutineParam		1196
+nim	clone	cps/normalizedast.html#clone,ProcDef,NimNode	proc clone(n: ProcDef; body: NimNode = NilNimNode): ProcDef		1202
+nim	hasPragma	cps/normalizedast.html#hasPragma,NormNode,static[string]	proc hasPragma(n: NormNode; s: static[string]): bool		1215
+nim	genProcName	cps/normalizedast.html#genProcName,string	proc genProcName(a: string; info = NilNormNode): Name		1233
+nim	genProcName	cps/normalizedast.html#genProcName,string,string	proc genProcName(a, b: string; info = NilNormNode): Name		1236
+nim	genTypeName	cps/normalizedast.html#genTypeName,string,string	proc genTypeName(a, b: string; info = NilNormNode): Name		1239
+nim	postfix	cps/normalizedast.html#postfix,Name,string	proc postfix(n: Name; op: string): Name		1242
+nimgrp	genprocname	cps/normalizedast.html#genProcName-procs-all	proc		1233
+nimgrp	asname	cps/normalizedast.html#asName-procs-all	proc		284
+nimgrp	addpragma	cps/normalizedast.html#addPragma-procs-all	proc		1045
+nimgrp	newcall	cps/normalizedast.html#newCall-procs-all	proc		608
+nimgrp	typ	cps/normalizedast.html#typ-procs-all	proc		731
+nimgrp	add	cps/normalizedast.html#add-procs-all	proc		347
+nimgrp	haspragma	cps/normalizedast.html#hasPragma-procs-all	proc		699
+nimgrp	newpragmastmt	cps/normalizedast.html#newPragmaStmt-procs-all	proc		988
+nimgrp	eqident	cps/normalizedast.html#eqIdent-procs-all	proc		554
+nimgrp	asnameallowempty	cps/normalizedast.html#asNameAllowEmpty-procs-all	proc		294
+nimgrp	[]=	cps/normalizedast.html#[]=-procs-all	proc		399
+nimgrp	desym	cps/normalizedast.html#desym-procs-all	proc		327
+nimgrp	newidentdef	cps/normalizedast.html#newIdentDef-procs-all	proc		767
+nimgrp	kind	cps/normalizedast.html#kind-procs-all	proc		344
+nimgrp	[]	cps/normalizedast.html#[]-procs-all	proc		390
+nimgrp	$	cps/normalizedast.html#$-procs-all	proc		337
+nimgrp	newletidentdef	cps/normalizedast.html#newLetIdentDef-procs-all	proc		961
+nimgrp	newidentdefvar	cps/normalizedast.html#newIdentDefVar-procs-all	proc		973
+nimgrp	newvarletidentdef	cps/normalizedast.html#newVarLetIdentDef-procs-all	proc		932
+nimgrp	copylineinfo	cps/normalizedast.html#copyLineInfo-procs-all	proc		416
+nimgrp	typeinst	cps/normalizedast.html#typeInst-procs-all	proc		545
+nimgrp	clone	cps/normalizedast.html#clone-procs-all	proc		896
+nimgrp	infertypfromimpl	cps/normalizedast.html#inferTypFromImpl-procs-all	proc		747
+nimgrp	isnil	cps/normalizedast.html#isNil-procs-all	proc		470
+nimgrp	hasvalue	cps/normalizedast.html#hasValue-procs-all	proc		738
+nimgrp	val	cps/normalizedast.html#val-procs-all	proc		735
+nimgrp	aspragmastmt	cps/normalizedast.html#asPragmaStmt-procs-all	proc		284
+nimgrp	pragma=	cps/normalizedast.html#pragma=-procs-all	proc		1168
+nimgrp	name=	cps/normalizedast.html#name=-procs-all	proc		1088
+nimgrp	bindname	cps/normalizedast.html#bindName-procs-all	proc		536
+nimgrp	name	cps/normalizedast.html#name-procs-all	proc		713
+nimgrp	getpragmaname	cps/normalizedast.html#getPragmaName-procs-all	proc		408
+nimgrp	newvarsection	cps/normalizedast.html#newVarSection-procs-all	proc		951
+nimgrp	==	cps/normalizedast.html#==-procs-all	proc		471
+nimgrp	items	cps/normalizedast.html#items-iterators-all	iterator		419
+nimgrp	dot	cps/normalizedast.html#dot-templates-all	template		591
+nimgrp	hash	cps/normalizedast.html#hash-templates-all	template		333

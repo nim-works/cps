@@ -1,0 +1,36 @@
+nimTitle	environment	cps/environment.html	module cps/environment		0
+nim	Env	cps/environment.html#Env	type Env		21
+nim	CachePair	cps/environment.html#CachePair	tuple CachePair		37
+nim	procedure	cps/environment.html#procedure,Env	proc procedure(e: Env): string		41
+nim	len	cps/environment.html#len,Env	proc len(e: Env): int		48
+nim	isEmpty	cps/environment.html#isEmpty,Env	proc isEmpty(e: Env): bool		50
+nim	inherits	cps/environment.html#inherits,Env	proc inherits(e: Env): Name		52
+nim	identity	cps/environment.html#identity,Env	proc identity(e: Env): Name		58
+nim	isDirty	cps/environment.html#isDirty,Env	proc isDirty(e: Env): bool		70
+nim	root	cps/environment.html#root,Env	proc root(e: Env): Name		74
+nim	maybeConvertToRoot	cps/environment.html#maybeConvertToRoot,Env,NormNode	proc maybeConvertToRoot(e: Env; locals: NormNode): NormNode		86
+nim	makeType	cps/environment.html#makeType,Env	proc makeType(e: Env): NimNode		165
+nim	first	cps/environment.html#first,Env	proc first(e: Env): Name		169
+nim	firstDef	cps/environment.html#firstDef,Env	proc firstDef(e: Env): IdentDef		171
+nim	getResult	cps/environment.html#getResult,Env	proc getResult(e: Env): NormNode		175
+nim	rewriteResult	cps/environment.html#rewriteResult,Env,NormNode	proc rewriteResult(e: Env; n: NormNode): NormNode		179
+nim	newEnv	cps/environment.html#newEnv,Env	proc newEnv(parent: Env; copy = off): Env		193
+nim	storeType	cps/environment.html#storeType,Env	proc storeType(e: Env; force = off): Env		211
+nim	newEnv	cps/environment.html#newEnv,Name,NormNode,Name,NormNode,string	proc newEnv(c: Name; store: var NormNode; via: Name; rs: NormNode; procedure: string): Env		258
+nim	newEnv	cps/environment.html#newEnv,NormNode,Name,NormNode,string	proc newEnv(store: var NormNode; via: Name; rs: NormNode; procedure: string): Env		273
+nim	identity	cps/environment.html#identity,Env_2	proc identity(e: var Env): Name		277
+nim	localSection	cps/environment.html#localSection,Env,VarLet,NimNode	proc localSection(e: var Env; n: VarLet; into: NimNode = nil)		329
+nim	localSection	cps/environment.html#localSection,Env,IdentDef,NimNode	proc localSection(e: var Env; n: IdentDef; into: NimNode = nil)		357
+nim	localSection	cps/environment.html#localSection,Env,RoutineParam,NimNode	proc localSection(e: var Env; n: RoutineParam; into: NimNode = nil)		364
+nim	rewriteReturn	cps/environment.html#rewriteReturn,Env,NormNode	proc rewriteReturn(e: var Env; n: NormNode): NormNode		368
+nim	rewriteSymbolsIntoEnvDotField	cps/environment.html#rewriteSymbolsIntoEnvDotField,Env,NormNode	proc rewriteSymbolsIntoEnvDotField(e: var Env; n: NormNode): NormNode		392
+nim	createContinuation	cps/environment.html#createContinuation,Env,Name,NimNode	proc createContinuation(e: Env; name: Name; goto: NimNode): NimNode		405
+nim	genException	cps/environment.html#genException,Env	proc genException(e: var Env): NimNode		423
+nim	createRecover	cps/environment.html#createRecover,Env	proc createRecover(env: Env; exported = false): NimNode		432
+nim	createWhelp	cps/environment.html#createWhelp,Env,ProcDef,NormNode	proc createWhelp(env: Env; n: ProcDef; goto: NormNode): ProcDef		501
+nim	createCallbackShim	cps/environment.html#createCallbackShim,Env,ProcDef	proc createCallbackShim(env: Env; whelp: ProcDef): ProcDef		527
+nim	createBootstrap	cps/environment.html#createBootstrap,Env,ProcDef,NormNode	proc createBootstrap(env: Env; n: ProcDef; goto: NormNode): ProcDef		539
+nim	rewriteVoodoo	cps/environment.html#rewriteVoodoo,Env,NormNode	proc rewriteVoodoo(env: Env; n: NormNode): NormNode		588
+nimgrp	identity	cps/environment.html#identity-procs-all	proc		58
+nimgrp	localsection	cps/environment.html#localSection-procs-all	proc		329
+nimgrp	newenv	cps/environment.html#newEnv-procs-all	proc		193
