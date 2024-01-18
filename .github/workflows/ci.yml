@@ -127,7 +127,7 @@ jobs:
         run: |
           cd project
           cd examples
-          balls '***' --path=".." --backend:c --mm:arc --mm:orc
+          balls --path=".." --backend:c --mm:arc --mm:orc
 
       - name: Tests
         shell: bash
