@@ -122,6 +122,13 @@ jobs:
         env:
           NIM: ${{ matrix.compiler.name }}
 
+      - name: Tests
+        shell: bash
+        run: |
+          cd project
+          nimble --accept develop
+          balls --path="." --backend:c --mm:arc --mm:orc
+
       - name: Examples
         shell: bash
         run: |
@@ -135,13 +142,6 @@ jobs:
           fi
         env:
           NIM: ${{ matrix.compiler.name }}
-
-      - name: Tests
-        shell: bash
-        run: |
-          cd project
-          nimble --accept develop
-          balls --path="." --backend:c --mm:arc --mm:orc
 
       - name: Docs
         if: ${{ matrix.docs }} == 'true'
