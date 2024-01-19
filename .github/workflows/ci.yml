@@ -126,7 +126,6 @@ jobs:
         shell: bash
         run: |
           cd project
-          nimble --accept develop
           balls --path="." --backend:c --mm:arc --mm:orc --errorMax:3
 
       - name: Examples
