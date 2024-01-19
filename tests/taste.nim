@@ -9,30 +9,27 @@ suite "tasteful tests":
 
   block:
     ## whelp operates multi-var proc parameters correctly
-    when true:
-      skip"pending https://github.com/nim-lang/Nim/issues/18076"
-    else:
-      r = 0
-      proc foo(a, b, c: int = 3) {.cps: Cont.} =
-        inc r
-        ## a=1, b=2, c=3
-        var a = 5
-        ## a=5, b=2, c=3
-        noop()
-        inc r
-        ## a=5, b=2, c=3
-        var b = b + a
-        ## a=5, b=7, c=3
-        noop()
-        inc r
-        ## a=5, b=7, c=3
-        check "proc parameters":
-          a == 5
-          b == 7
-          c == 3
-      let c = whelp foo(1, 2)
-      trampoline c
-      check r == 3
+    r = 0
+    proc foo(a, b, c: int = 3) {.cps: Cont.} =
+      inc r
+      ## a=1, b=2, c=3
+      var a = 5
+      ## a=5, b=2, c=3
+      noop()
+      inc r
+      ## a=5, b=2, c=3
+      var b = b + a
+      ## a=5, b=7, c=3
+      noop()
+      inc r
+      ## a=5, b=7, c=3
+      check "proc parameters":
+        a == 5
+        b == 7
+        c == 3
+    let c = whelp foo(1, 2)
+    trampoline c
+    check r == 3
 
   block:
     ## reassignment of mutable var proc params
