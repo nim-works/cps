@@ -83,8 +83,8 @@ macro cps*(tipe: typed, n: untyped): untyped =
   result = n
   when not defined(nimdoc):
     # add the application of the typed transformation pass
-    var n = newCall(bindSym"cpsTyped", tipe):
-      n
+    n.addPragma:
+      nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
     # let the untyped pass do what it will with this input
     # XXX: currently disabled because it's a slipperly slope of regret
     #result = performUntypedPass(T, n)
