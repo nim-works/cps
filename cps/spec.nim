@@ -14,9 +14,7 @@ const
   cpsCallOperatorSupported* =
     when defined(isNimSkull):
       true
-    elif (NimMajor, NimMinor) < (1, 6):
-      false
-    elif (NimMajor, NimMinor) == (1, 6) and NimPatch < 11:
+    elif (NimMajor, NimMinor, NimPatch) < (1, 6, 11):
       false
     elif (NimMajor, NimMinor) == (1, 7) and NimPatch < 3:
       false
