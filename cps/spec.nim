@@ -526,7 +526,10 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
   result = quote:
     var c: Continuation = `supplied`
     while c.running:
-      var it {.used, inject.}: `T` = move c
+      when defined(isNimSkull):
+        var it {.used, inject.} = `T`(move c)
+      else:
+        var it {.used, inject.}: `T` = move c
       `body`
       c = it
       try:
