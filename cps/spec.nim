@@ -242,7 +242,10 @@ proc isScopeExit*(n: NormNode): bool =
 
 template rewriteIt*(n: typed; body: untyped): NormNode =
   var it {.inject.} = normalizingRewrites:
-    macros.newStmtList n
+    if n.kind notin {nnkStmtList, nnkStmtListExpr}:
+      macros.newStmtList n
+    else:
+      n
   body
   workaroundRewrites it
 
