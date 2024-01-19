@@ -127,7 +127,14 @@ jobs:
         run: |
           cd project
           cd examples
-          balls --path=".." --backend:c --mm:arc --mm:orc
+          if [[ $NIM == nimskull ]]; then
+            # Old balls don't have glob
+            balls --path=".." --backend:c --mm:arc --mm:orc
+          else
+            balls '***' --path=".." --backend:c --mm:arc --mm:orc
+          fi
+        env:
+          NIM: ${{ matrix.compiler.name }}
 
       - name: Tests
         shell: bash
