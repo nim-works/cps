@@ -115,7 +115,7 @@ jobs:
           nimble --accept develop
           if [[ $NIM == nimskull ]]; then
             # Use older balls for nimskull
-            nimble --accept install "https://github.com/disruptek/balls@3.9.10"
+            nimble --accept install "https://github.com/disruptek/balls@3.9.11"
           else
             nimble --accept install "https://github.com/disruptek/balls"
           fi
