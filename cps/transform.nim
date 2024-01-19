@@ -459,7 +459,7 @@ macro cpsTryFinally(cont, contType: typed; name: static[string];
   let ex = normalizingRewrites ex
   debugAnnotation cpsTryFinally, n:
     # rewriteIt will wrap our try-finally in a StmtList, so we take it out
-    let tryFinally = it[0]
+    let tryFinally = it.flattenStmtList
     # use a fresh StmtList as our result
     it = newStmtList()
 
