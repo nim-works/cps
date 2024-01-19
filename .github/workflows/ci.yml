@@ -127,7 +127,7 @@ jobs:
         run: |
           cd project
           nimble --accept develop
-          balls --path="." --backend:c --mm:arc --mm:orc
+          balls --path="." --backend:c --mm:arc --mm:orc --errorMax:3
 
       - name: Examples
         shell: bash
@@ -136,7 +136,7 @@ jobs:
           cd examples
           if [[ $NIM == nimskull ]]; then
             # Old balls don't have glob
-            balls --path=".." --backend:c --mm:arc --mm:orc
+            balls --path=".." --backend:c --mm:arc --mm:orc --errorMax:3
           else
             balls '***' --path=".." --backend:c --mm:arc --mm:orc
           fi
