@@ -252,6 +252,12 @@ template debugAnnotation*(s: typed; n: NimNode; body: untyped) {.dirty.} =
     body
   debug(astToStr s, result, Transformed, n)
 
+func flattenStmtList*(n: NormNode): NormNode =
+  ## Unwrap 1-element StmtList
+  result = n
+  while result.kind in {nnkStmtList, nnkStmtListExpr} and result.len == 1:
+    result = result[0]
+
 func matchCpsBreak*(label: NormNode): NormMatcher =
   ## create a matcher matching cpsBreak with the given label
   ## and cpsBreak without any label

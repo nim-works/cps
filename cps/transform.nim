@@ -418,7 +418,7 @@ macro cpsTryExcept(cont, contType: typed; name: static[string];
 
   debugAnnotation cpsTryExcept, n:
     # unwrap stmtlist and merge all except branches into one
-    it = it[0].mergeExceptBranches ex
+    it = it.flattenStmtList.mergeExceptBranches ex
 
     # write a try-except clause to wrap all child continuations so that
     # they jump to the handler upon an exception
