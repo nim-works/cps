@@ -418,7 +418,7 @@ macro cpsTryExcept(cont, contType: typed; name: static[string];
 
   debugAnnotation cpsTryExcept, n:
     # unwrap stmtlist and merge all except branches into one
-    it = it[0].mergeExceptBranches ex
+    it = it.flattenStmtList.mergeExceptBranches ex
 
     # write a try-except clause to wrap all child continuations so that
     # they jump to the handler upon an exception
@@ -459,7 +459,7 @@ macro cpsTryFinally(cont, contType: typed; name: static[string];
   let ex = normalizingRewrites ex
   debugAnnotation cpsTryFinally, n:
     # rewriteIt will wrap our try-finally in a StmtList, so we take it out
-    let tryFinally = it[0]
+    let tryFinally = it.flattenStmtList
     # use a fresh StmtList as our result
     it = newStmtList()
 

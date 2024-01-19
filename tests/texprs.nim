@@ -292,7 +292,7 @@ suite "expression flattening":
     foo()
 
   test "flatten upcasting assignments":
-    when not defined(release):
+    when not defined(release) and not defined(isNimSkull):
       skip"compiler crashes on debug"
     else:
       type

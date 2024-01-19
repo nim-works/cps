@@ -896,10 +896,11 @@ func smartSniffer*(n: VarLetLike): TypeExpr =
 func clone*(n: VarLet; value: NimNode = NilNimNode): VarLet =
   ## clone a `VarLet` but with `value` changed
   let def = copyNimNode(n.def)
-  # re-use the name
-  def.add:
-    copy:
-      n.def[0]
+  # re-use the name(s)
+  for i in 0 ..< n.def.len - 2:
+    def.add:
+      copy:
+        n.def[i]
   # add our best guess as to the type
   def.add:
     copy:

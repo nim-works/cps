@@ -438,7 +438,7 @@ proc `=destroy`(v: var K) =
 suite "lifetimes":
   block:
     ## child continuation lifetimes canary
-    when not defined(release):
+    when not defined(release) and not defined(isNimSkull):
       skip"triggers compiler error outside release"
     else:
       type

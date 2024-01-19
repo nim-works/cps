@@ -1,4 +1,4 @@
-import std/[enumerate, sequtils]
+import std/sequtils
 import std/macros except newStmtList, items, pairs, newTree
 import cps/[spec, normalizedast, help, rewrites]
 
@@ -730,7 +730,8 @@ func annotate(n: NormNode): NormNode =
                   # The last position with a cps expression
                   let lastExpr = child.lastCpsExprAt
 
-                  for idx, operand in enumerate(child.operands):
+                  var idx = 0
+                  for operand in child.operands:
                     if child.kind == nnkObjConstr and idx == 0:
                       # The first operand of an object constructor needs to be copied
                       # verbatim since it has to be a type symbol and wrapping it in any
@@ -766,6 +767,8 @@ func annotate(n: NormNode): NormNode =
                         rewriteOperand(operand):
                           annotate:
                             newStmtList(it)
+
+                    inc idx
 
       else:
         # Not the type of nodes that needs flattening, rewrites its child

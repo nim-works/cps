@@ -212,7 +212,8 @@ suite "cps api":
       check foo() == 3
 
   block:
-    ## https://github.com/disruptek/cps/issues/145
+    ## parent-child voodoo works correctly
+    # https://github.com/nim-works/cps/issues/145
     type
       C = ref object of Continuation
         val: int

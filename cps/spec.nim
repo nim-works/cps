@@ -12,9 +12,9 @@ when (NimMajor, NimMinor) < (1, 5):
 
 const
   cpsCallOperatorSupported* =
-    when (NimMajor, NimMinor) < (1, 6):
-      false
-    elif (NimMajor, NimMinor) == (1, 6) and NimPatch < 11:
+    when defined(isNimSkull):
+      true
+    elif (NimMajor, NimMinor, NimPatch) < (1, 6, 11):
       false
     elif (NimMajor, NimMinor) == (1, 7) and NimPatch < 3:
       false
@@ -249,6 +249,12 @@ template debugAnnotation*(s: typed; n: NimNode; body: untyped) {.dirty.} =
   result = rewriteIt n:
     body
   debug(astToStr s, result, Transformed, n)
+
+func flattenStmtList*(n: NormNode): NormNode =
+  ## Unwrap 1-element StmtList
+  result = n
+  while result.kind in {nnkStmtList, nnkStmtListExpr} and result.len == 1:
+    result = result[0]
 
 func matchCpsBreak*(label: NormNode): NormMatcher =
   ## create a matcher matching cpsBreak with the given label
@@ -526,7 +532,10 @@ macro trampolineIt*[T: Continuation](supplied: T; body: untyped) =
   result = quote:
     var c: Continuation = `supplied`
     while c.running:
-      var it {.used, inject.}: `T` = move c
+      when defined(isNimSkull):
+        var it {.used, inject.} = `T`(move c)
+      else:
+        var it {.used, inject.}: `T` = move c
       `body`
       c = it
       try:
