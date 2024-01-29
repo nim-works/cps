@@ -26,7 +26,7 @@ when (NimMajor, NimMinor, NimPatch) < (1, 7, 3):
   # we recommend against threads:on without define:useMalloc
   when not defined(useMalloc) and compileOption"threads":
     {.warning:
-      "cps recommends against --threads:on without --define:useMalloc".}
+      "cps recommends --define:useMalloc when used with threads".}
 
 proc state*(c: Continuation): State {.inline.} =
   ## Get the current state of a continuation
