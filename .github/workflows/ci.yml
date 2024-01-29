@@ -114,7 +114,6 @@ jobs:
           cd project
           nimble --accept develop
           nimble --accept install "https://github.com/disruptek/balls"
-          fi
         env:
           NIM: ${{ matrix.compiler.name }}
 
