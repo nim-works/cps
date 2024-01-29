@@ -1,7 +1,6 @@
 import std/sugar
 
 include preamble
-include killer
 
 suite "locals":
 

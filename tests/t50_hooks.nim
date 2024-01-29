@@ -1,3 +1,5 @@
+include preamble
+
 import std/genasts
 import std/macros
 import std/os
@@ -6,9 +8,6 @@ import std/strutils
 
 from cps/spec import Hook, cpsStackFrames
 from cps/hooks import findColonLit
-
-include preamble
-import killer
 
 suite "hooks":
 
@@ -53,7 +52,7 @@ suite "hooks":
           of Stack: sub
           else: astToStr c
         var path = info.filename.lastPathPart
-        path = if path == "thooks.nim": "👍" else: path
+        path = if path == "t50_hooks.nim": "👍" else: path
         found.add "$#: $# $# $#" % [ $hook, $sub, last, path ]
         body
 

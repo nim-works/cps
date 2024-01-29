@@ -1,7 +1,4 @@
-import std/macros
-
 include preamble
-include killer
 
 suite "calling convention":
 

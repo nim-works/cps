@@ -1,9 +1,6 @@
 import std/macros
-import balls
-import cps
 
 include preamble
-import killer
 
 suite "returns and results":
 

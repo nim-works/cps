@@ -1,7 +1,6 @@
-import std/macros
-import foreign
-
 include preamble
+
+import foreign
 
 suite "tasteful tests":
 
@@ -403,6 +402,10 @@ suite "tasteful tests":
     proc foo() {.cps: Continuation.} =
       inc r
       let o: RootRef = new O
+      #{.push warning[CondTrue]: off.}
+      check r == 1 and o is RootRef
+      #{.pop.}
+      check o of RootObj
 
     foo()
 
@@ -420,6 +423,7 @@ suite "tasteful tests":
       # implicit conversion in assignment
       var j: int
       j = n
+      check i == n
 
     foo()
 
