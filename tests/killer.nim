@@ -10,7 +10,11 @@ proc `=destroy`*(k: var Killer) {.raises: [FailError].} =
   if k.final != k.n:
     let e = getCurrentException()
     # don't obliterate current exception
-    if e.isNil or e isnot FailError or e isnot ExpectedError:
+    when defined(ExpectedError):
+      let shouldFail = e.isNil or e isnot FailError or e isnot ExpectedError
+    else:
+      let shouldFail = e.isNil or e isnot FailError
+    if shouldFail:
       fail:
         case k.n
         of 0: "uninitialized"
