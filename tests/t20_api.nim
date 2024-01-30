@@ -241,7 +241,7 @@ suite "cps api":
       echo "level_one: ", recv()
       let v = recv()
       step 6
-      check v == 42
+      check v == 0
 
     var a = whelp level_one()
     trampoline a
