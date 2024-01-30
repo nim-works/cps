@@ -539,7 +539,7 @@ suite "try statements":
         except CatchableError:
           let frames = renderStackFrames()
           check frames.len > 0, "expected at least one stack trace record"
-          check "t80_try.nim" in frames[0], "couldn't find t80_try.nim in the trace"
+          check "t80_try1.nim" in frames[0], "couldn't find t80_try1.nim in the trace"
           raise
 
       try:
