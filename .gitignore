@@ -1,3 +1,4 @@
 nim.cfg
 bin
 deps
+.tool-versions

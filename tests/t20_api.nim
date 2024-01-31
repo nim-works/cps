@@ -1,5 +1,4 @@
 include preamble
-import killer
 
 import tests/exports
 
@@ -230,16 +229,19 @@ suite "cps api":
       step 2
       send(42)
       step 3
-      echo recv()
+      echo "level_two: ", recv()
+      let x = recv()
+      echo "level_two: ", x
       step 4
 
     proc level_one() {.cps:C.} =
       step 1
       level_two()
       step 5
+      echo "level_one: ", recv()
       let v = recv()
-      echo recv()
       step 6
+      check v == 0
 
     var a = whelp level_one()
     trampoline a
