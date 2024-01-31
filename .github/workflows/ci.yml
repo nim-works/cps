@@ -26,7 +26,7 @@ jobs:
         name: Checkout (if not PR)
         uses: actions/checkout@v4
 
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -113,12 +113,7 @@ jobs:
         run: |
           cd project
           nimble --accept develop
-          if [[ $NIM == nimskull ]]; then
-            # Use older balls for nimskull
-            nimble --accept install "https://github.com/disruptek/balls@3.9.11"
-          else
-            nimble --accept install "https://github.com/disruptek/balls"
-          fi
+          nimble --accept install "https://github.com/disruptek/balls"
         env:
           NIM: ${{ matrix.compiler.name }}
 
@@ -127,12 +122,7 @@ jobs:
         run: |
           cd project
           cd examples
-          if [[ $NIM == nimskull ]]; then
-            # Old balls don't have glob
-            balls --path=".." --backend:c --mm:arc --mm:orc --errorMax:3
-          else
-            balls '***' --path=".." --backend:c --mm:arc --mm:orc
-          fi
+          balls '***' --path=".." --backend:c --mm:arc --mm:orc
         env:
           NIM: ${{ matrix.compiler.name }}
 
