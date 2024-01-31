@@ -18,4 +18,3 @@ suite "high-cal":
 
     check 12 == foo(x => x * 3)
     check r == 3
-
