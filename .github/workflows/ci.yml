@@ -100,7 +100,7 @@ jobs:
           # Add nimble binary folder to PATH too
           echo "$HOME/.nimble/bin" >> $GITHUB_PATH
         env:
-          NIMSKULL_BIN: ${{ steps.nimskull.outputs.binPath }}
+          NIMSKULL_BIN: ${{ steps.nimskull.outputs.bin-path }}
 
       - name: Valgrind
         shell: bash
