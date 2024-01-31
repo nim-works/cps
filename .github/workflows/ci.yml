@@ -78,9 +78,9 @@ jobs:
       - name: Compiler (nimskull)
         id: nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: alaviss/setup-nimskull@f6e8ade8ac51191024616216e5da0ee968d9da48
+        uses: nim-works/setup-nimskull@0.1.0
         with:
-          version: ${{ matrix.compiler.version }}
+          nimskull-version: ${{ matrix.compiler.version }}
 
       - if: matrix.compiler.name == 'nimskull'
         name: Fetch nimble's fork for nimskull
@@ -100,7 +100,7 @@ jobs:
           # Add nimble binary folder to PATH too
           echo "$HOME/.nimble/bin" >> $GITHUB_PATH
         env:
-          NIMSKULL_BIN: ${{ steps.nimskull.outputs.binPath }}
+          NIMSKULL_BIN: ${{ steps.nimskull.outputs.bin-path }}
 
       - name: Valgrind
         shell: bash
