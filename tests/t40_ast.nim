@@ -494,3 +494,20 @@ suite "tasteful tests":
 
     foo()
     check r == 2
+
+  block:
+    ## initializing a variable with calls containing object variant access
+    type
+      O = object
+        case switch: bool
+        of true: x: int
+        else: nil
+
+    func bar(x: int): int = x
+
+    proc foo() {.cps: Continuation.} =
+      let o = O(switch: true, x: 1)
+      let x = bar(o.x)
+      check x == 1
+
+    foo()

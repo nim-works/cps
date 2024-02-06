@@ -154,7 +154,8 @@ proc normalizingRewrites*(n: NimNode): NormNode =
             for d in defs[0 .. ^3].items: # last two nodes are type and rhs
               result.add:
                 newNimNode(n.kind, n).add:
-                  newIdentDefs(d, copyNimTree(defs[^2]), copyNimTree(defs[^1]))
+                  newIdentDefs(d, copyNimTree(defs[^2])):
+                    normalizingRewrites(defs[^1])
           else:
             result.add:
               NimNode child.errorAst "unexpected"

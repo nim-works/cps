@@ -220,3 +220,18 @@ suite "returns and results":
       step 3
 
     foo()
+
+  block:
+    ## calling continuation with variant object access as parameter
+    type
+      O = object
+        case switch: bool
+        of true: x: int
+        of false: discard
+
+    proc bar(x: int): int {.cps: Continuation.} = x
+
+    proc foo(o: O) {.cps: Continuation.} =
+      check bar(o.x) == 42
+
+    foo(O(switch: true, x: 42))

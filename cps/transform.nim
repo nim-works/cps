@@ -80,7 +80,7 @@ macro cpsContinuationJump(cont, contType: typed; name: static[string];
   ## a jump to another continuation that must be instantiated
   let
     c = c.NormNode                                      # store child here
-    call = asCall(NormNode call)                        # child bootstrap call
+    call = normalizeCall(call)                          # child bootstrap call
     name = genProcName(name, "child " & $call.name & "()",
                        info = n.NormNode)
     cont = cont.asName                                  # current continuation
