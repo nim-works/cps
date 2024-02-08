@@ -267,51 +267,55 @@ suite "try statements":
   block:
     ## running a continuation that handles exception then raises while handling
     ## an exception in the exception handler
-    r = 0
+    when defined(isNimSkull):
+      skip "semantically invalid under this compiler"
+    else:
 
-    # This is a very delicate test designed to demonstrate an issue with
-    # Nim's exception stack mechanism and CPS
+      r = 0
 
-    proc foo() {.cps: Cont.} =
-      inc r
+      # This is a very delicate test designed to demonstrate an issue with
+      # Nim's exception stack mechanism and CPS
+
+      proc foo() {.cps: Cont.} =
+        inc r
+
+        try:
+          noop()
+          inc r
+          raise newException(CatchableError, "test")
+        except CatchableError:
+          noop()
+          inc r
+          check getCurrentExceptionMsg() == "test"
+          raise
+
+        fail"this statement cannot be run"
+
+      var c: Continuation = whelp foo()
+      # Run two iterations, which should place us right after the raise
+      #
+      # At this point, the parent of our `raise` is `nil`, because there wasn't
+      # any exception being handled at the point of raise.
+      for _ in 1 .. 2:
+        c = c.fn(c)
 
       try:
-        noop()
-        inc r
-        raise newException(CatchableError, "test")
+        raise newException(CatchableError, "outside cps test")
       except CatchableError:
-        noop()
-        inc r
-        check getCurrentExceptionMsg() == "test"
-        raise
+        # Now we handle an exception, which the current exception is now
+        # "outside cps test"
+        try:
+          # Run the tramp to finish `c`, which will end in a re-raise.
+          trampoline c
+          fail"continuing `c` should raise"
+        except CatchableError:
+          check r == 3
+          # Confirm that this is the exception from cps
+          check getCurrentExceptionMsg() == "test"
 
-      fail"this statement cannot be run"
-
-    var c: Continuation = whelp foo()
-    # Run two iterations, which should place us right after the raise
-    #
-    # At this point, the parent of our `raise` is `nil`, because there wasn't
-    # any exception being handled at the point of raise.
-    for _ in 1 .. 2:
-      c = c.fn(c)
-
-    try:
-      raise newException(CatchableError, "outside cps test")
-    except CatchableError:
-      # Now we handle an exception, which the current exception is now
-      # "outside cps test"
-      try:
-        # Run the tramp to finish `c`, which will end in a re-raise.
-        trampoline c
-        fail"continuing `c` should raise"
-      except CatchableError:
-        check r == 3
-        # Confirm that this is the exception from cps
-        check getCurrentExceptionMsg() == "test"
-
-      # Confirm that the stack has been fixed and the parent of the inner
-      # exception is the outer.
-      check getCurrentExceptionMsg() == "outside cps test"
+        # Confirm that the stack has been fixed and the parent of the inner
+        # exception is the outer.
+        check getCurrentExceptionMsg() == "outside cps test"
 
   block:
     ## calling a continuation with finally while handling an exception
