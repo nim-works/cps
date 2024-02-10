@@ -267,7 +267,7 @@ defineToNimNodeConverter(
 allowAutoDowngradeNormalizedNode(
     Name, TypeExpr, Call, Conv, PragmaStmt, PragmaAtom, IdentDef, RoutineDef,
     ProcDef, FormalParams, RoutineParam, VarSection, LetSection, VarLet,
-    VarLetIdentDef, VarLetTuple, DefVarLet, IdentDefLet, Sym
+    VarLetIdentDef, VarLetTuple, DefVarLet, IdentDefLet, Sym, PragmaBlock
   )
 
 # types that go from a specific type to a less specific type, "downgrade"

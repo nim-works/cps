@@ -76,19 +76,29 @@ macro cpsTyped(tipe: typed, n: typed): untyped =
     else:
       result = getAst(cpsTransform(tipe, n))
 
-macro cps*(tipe: typed, n: untyped): untyped =
+macro cpsMarkExtract(n: untyped): untyped =
+  let cpsExtract = bindSym"cpsExtract"
+  result = nnkPragmaBlock.newTree(
+    nnkPragma.newTree(cpsExtract),
+    n
+  )
+
+template cps*(tipe: typed, n: untyped): untyped =
   ## When applied to a procedure, rewrites the procedure into a
   ## continuation form. When applied to a procedure type definition,
   ## rewrites the type into a callback form.
-  result = n
+  bind cpsTyped
+  bind cpsScalpel
+  bind cpsMarkExtract
+
   when not defined(nimdoc):
-    # add the application of the typed transformation pass
-    n.addPragma:
-      nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
-    # let the untyped pass do what it will with this input
-    # XXX: currently disabled because it's a slipperly slope of regret
-    #result = performUntypedPass(T, n)
-    result = n
+    cpsScalpel:
+      const isInCps {.inject.} = true
+
+      cpsMarkExtract:
+        cpsTyped(tipe, n)
+  else:
+    n
 
 proc adaptArguments(sym: NormNode; args: seq[NormNode]): seq[NormNode] =
   ## convert any arguments in the list as necessary to match those of

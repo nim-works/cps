@@ -50,6 +50,7 @@ template cpsTerminate*() {.pragma.}     ## this is the end of this procedure
 template cpsHasException*(cont, ex: typed) {.pragma.}  ##
 ## the continuation has an exception stored in `ex`, with `cont` being the
 ## continuation symbol used.
+template cpsExtract*() {.pragma.} ## extract this block from the scope
 
 const
   cpsStackFrames* {.booldefine, used.} = compileOption"stacktrace"

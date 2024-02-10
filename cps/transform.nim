@@ -975,6 +975,13 @@ macro cpsFloater(n: typed): untyped =
   result = floater:
     copyNimTree n
 
+macro cpsScalpel*(n: typed): untyped =
+  ## returns the first `{.cpsExtract.}` block from `n`
+  debugAnnotation cpsScalpel, n:
+    it = it.findChildRecursive() do (n: NormNode) -> bool:
+      n.kind == nnkPragmaBlock and n.asPragmaBlock().hasPragma("cpsExtract")
+    it = it.last
+
 macro cpsManageException(name: static[string]; n: typed): untyped =
   ## rewrites all continuations in `n` containing an exception so that exception
   ## become the "current" exception of that continuation while preserving the
