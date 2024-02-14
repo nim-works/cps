@@ -9,27 +9,41 @@
 [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
 [![IRC](https://img.shields.io/badge/chat-%23cps%20on%20libera.chat-brightgreen?style=flat)](https://web.libera.chat/#cps)
 
-This project provides a `cps` macro which you can add to a procedure
-declaration to magically rewrite it as a continuation with suspend/resume
-points injected automatically at suitable control-flow transitions.
+## TL;DR
 
-This provides the benefits of CPS while hiding all the verbosity and spaghetti
-code paths of hand-written continuation passing.
+It's a `cps` pragma you annotate a procedure declaration with in order to
+_automagically_ rewrite it as a type which holds 1) all the procedure's locals,
+and 2) a pointer to run the continuation.
 
-The macro performs only the control-flow rewrite; you can implement or import a
-dispatcher to manage your continuations, and you can extend your continuation
-type for nearly limitless composition.
+You instantiate continuations by calling your function with arguments, or via
+typed continuation callbacks. You may extend the Continuation type to add
+custom data and functionality.
 
-As the macro merely rewrites your code as an equivalent continuation, you can
-use CPS with C, C++, or even JavaScript backends, on any platform Nim supports.
+The macro provides comfort for automatic chaining, stack tracing, drying up
+function color, and handling exceptions. Hooks enable precisely-scoped control
+of much of the machinery, including memory management.
+
+## What Is CPS?
 
 <details>
-  <summary>Click here for an awesome infographic explaining the technique.
+  <summary>Click here for an awesome infographic explaining what CPS is and how our transform works.
   </summary>
   <img alt="The Nim CPS Transform" src="https://github.com/nim-works/cps/blob/master/docs/cps.svg"/>
 </details>
 
-## What Are These Continuations Good For?
+A `cps` proc macro enables enjoyment of the CPS abstraction for free, hiding all
+the verbosity and spaghetti code paths of hand-written continuation passing.  It
+takes your standard procedure and rewrites it at compile-time into a continuation
+form.
+
+The macro performs only the control-flow rewrite. You may define your own
+continuation types. To manage them, you can choose from available dispatchers
+or customize your own.
+
+As CPS is essentially a safe transformation of Nim to equivalent Nim, you can
+use it anywhere you can use Nim, _or more accurately_, C, C++, or JavaScript.
+
+## Why Do I Want It?
 
 The continuations produced by this macro are _tiny_ -- as little as 32 bytes
 each -- and run at the speed of any native function call; they…
@@ -43,11 +57,12 @@ each -- and run at the speed of any native function call; they…
 - have no backend or runtime library requirements
 - exploit no unsafe features of the language (`cast`, `ptr`, `addr`, `emit`)
 
-## Is This Project Dead?
+## Why Haven't I Heard of It?
 
-No, it just hasn't needed much development. We have a few small improvements we
-want to make before a 1.0 major release, but the general consensus is that the
-current implementation accomplishes our original goals quite well.
+The project isn't dead; it simply hasn't needed much development. We have a few
+small improvements we want to make before a 1.0 major release, but the general
+consensus is that the current implementation accomplishes our original goals
+quite well.
 
 Major future development will revolve around implementing CPS directly in [the
 Nimskull compiler](https://github.com/nim-works/nimskull).
@@ -70,28 +85,27 @@ why the implementation exists, goals for future development, etc.
 The implementation is comprised of two moving parts:
 
 1. an *environment* is a bespoke type made to carry all locals in a procedure,
-plus a pointer `fn` to a continuation leg, and a `mom` pointer to any parent
-continuation:
+plus a function pointer to the next continuation, like this:
 
 ```nim
 type
-  # instantiated continuations inherit from this type
-  Continuation* = ref object of RootObj
-    fn*: proc(c: Continuation): Continuation {.nimcall.}
-    mom*: Continuation    # a reference to a parent
+  # instantiated continuations inherit from this
+  Continuation = ref object
+    next: proc(c: Continuation): Continuation
 ```
 
 2. a *trampoline* is a procedure that looks like this:
 ```nim
 var c = myContinuationInstance
-while not c.isNil and not c.fn.isNil:
+while not c.isNil and not c.next.isNil:
   # assign to the reference the result of running the stored
   # function pointer with the continuation itself as input
-  c = c.fn(c)
+  c = c.next(c)
 ```
 
-We call the instantiated environment with its `fn` pointer a _continuation_,
-and we call anything that invokes a continuation's `fn` pointer a _dispatcher_.
+We call the instantiated environment with its function pointer a
+_continuation_, and we call anything that invokes a continuation's function
+pointer a _dispatcher_.
 
 ### Application
 
@@ -198,11 +212,17 @@ var later = whelp count(1_000_000)
 echo "we counted ", later(), " trips through the goto"
 ```
 
+## Documentation
+
 ### Ready For More?
 
 [examples/coroutine.nim](https://github.com/nim-works/cps/blob/master/examples/coroutine.nim)
 shows a simple implementation of coroutines communicating with each other on top
 of CPS.  [Here's a walkthrough of how the example works.](https://github.com/nim-works/cps/docs/coroutines.md)
+
+### Complete API
+
+See [the documentation for the cps module](https://nim-works.github.io/cps/cps.html) as generated directly from the source.
 
 ## Dispatchers
 
@@ -212,10 +232,6 @@ _dispatcher_, confusing newcomers.
 
 For a robust dispatcher implementation targeting broad OS support and modern
 async features, take a look at https://github.com/alaviss/nim-sys.
-
-## Documentation
-
-See [the documentation for the cps module](https://nim-works.github.io/cps/cps.html) as generated directly from the source.
 
 ## Examples
 
