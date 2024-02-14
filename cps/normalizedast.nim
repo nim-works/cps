@@ -932,9 +932,11 @@ iterator indexNamePairs*(n: VarLetTuple): (int, Name) =
 
 proc newVarLetIdentDef*(kind: NimNodeKind, i: IdentDef): VarLetIdentDef =
   ## create a new VarLetIdentDef
-  doAssert kind in {nnkLetSection, nnkVarSection},
-    "kind must be nnkLetSection nnkVarSection, got: " & repr(kind)
-  newTree(kind, i).VarLetIdentDef
+  if kind notin {nnkLetSection, nnkVarSection}:
+    error "kind must be nnkLetSection nnkVarSection, got: " & repr(kind)
+  else:
+    result = newTree(kind, i).VarLetIdentDef
+
 proc newVarLetIdentDef*(kind: NimNodeKind, name: Name,
                         typ: TypeExprLike, val: NimNode): VarLetIdentDef =
   ## create a new VarLetIdentDef
