@@ -26,7 +26,7 @@ use CPS with C, C++, or even JavaScript backends, on any platform Nim supports.
 <details>
   <summary>Click here for an awesome infographic explaining the technique.
   </summary>
-  [![The Nim CPS Transform](https://github.com/nim-works/cps/blob/master/docs/cps.svg)]
+  <img alt="The Nim CPS Transform" src="https://github.com/nim-works/cps/blob/master/docs/cps.svg"/>
 </details>
 
 ## What Are These Continuations Good For?
