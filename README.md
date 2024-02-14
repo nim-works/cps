@@ -9,13 +9,65 @@
 [![Matrix](https://img.shields.io/matrix/cps:matrix.org?style=flat&logo=matrix)](https://matrix.to/#/#cps:matrix.org)
 [![IRC](https://img.shields.io/badge/chat-%23cps%20on%20libera.chat-brightgreen?style=flat)](https://web.libera.chat/#cps)
 
-This project provides a `cps` pragma which you can add to a procedure to
-automatically rewrite it to use continuations for control-flow. This provides
-the benefits of CPS while abstracting away the verbosity of continuations.
+## TL;DR
 
-The `cps` pragma performs only the control-flow rewrite; you implement or
-import a dispatcher to define both the type and behavior of your continuations,
-so there is virtually no API and no limitations on composition.
+It's a `cps` pragma you annotate a procedure declaration with in order to
+_automagically_ rewrite it as a type which holds 1) all the procedure's locals,
+and 2) a pointer to run the continuation.
+
+You instantiate continuations by calling your function with arguments, or via
+typed continuation callbacks. You may extend the Continuation type to add
+custom data and functionality.
+
+The macro provides comfort for automatic chaining, stack tracing, drying up
+function color, and handling exceptions. Hooks enable precisely-scoped control
+of much of the machinery, including memory management.
+
+## What Is CPS?
+
+<details>
+  <summary>Click here for an awesome infographic explaining what CPS is and how our transform works.
+  </summary>
+  <img alt="The Nim CPS Transform" src="https://github.com/nim-works/cps/blob/master/docs/cps.svg"/>
+</details>
+
+A `cps` proc macro enables enjoyment of the CPS abstraction for free, hiding all
+the verbosity and spaghetti code paths of hand-written continuation passing.  It
+takes your standard procedure and rewrites it at compile-time into a continuation
+form.
+
+The macro performs only the control-flow rewrite. You may define your own
+continuation types. To manage them, you can choose from available dispatchers
+or customize your own.
+
+As CPS is essentially a safe transformation of Nim to equivalent Nim, you can
+use it anywhere you can use Nim, _or more accurately_, C, C++, or JavaScript.
+
+## Why Do I Want It?
+
+The continuations produced by this macro are _tiny_ -- as little as 32 bytes
+each -- and run at the speed of any native function call; they…
+
+- compose efficient and idiomatic asynchronous code
+- are over a thousand times lighter than threads
+- are leak-free under Nim's modern memory management
+- may be extended with custom inheritance-based types
+- may be managed using custom dispatchers (executors)
+- may be moved between threads to parallelize execution
+- have no backend or runtime library requirements
+- exploit no unsafe features of the language (`cast`, `ptr`, `addr`, `emit`)
+
+## Why Haven't I Heard of It?
+
+The project isn't dead; it simply hasn't needed much development. We have a few
+small improvements we want to make before a 1.0 major release, but the general
+consensus is that the current implementation accomplishes our original goals
+quite well.
+
+Major future development will revolve around implementing CPS directly in [the
+Nimskull compiler](https://github.com/nim-works/nimskull).
+
+## How Does It Work?
 
 A substantial effort to demystify this style of programming, and what it may
 enable, lives [in the docs/ subdirectory](https://github.com/nim-works/cps/tree/master/docs).
@@ -23,104 +75,54 @@ enable, lives [in the docs/ subdirectory](https://github.com/nim-works/cps/tree/
 We also have [a tutorial to help new users on their way to get starting with
 CPS](https://github.com/nim-works/cps/blob/master/tutorial/README.md).
 
-For a description of the origins of our approach, see the included papers and
+For a description of the origins of our approach, see [the included
+papers](https://github.com/nim-works/cps/blob/master/papers) and
 https://github.com/nim-lang/RFCs/issues/295, where we write in more depth about
 why the implementation exists, goals for future development, etc.
 
-## What Are These Continuations Good For?
-
-The continuations produced by this macro…
-
-- compose efficient and idiomatic asynchronous code
-- are over a thousand times lighter than threads
-- are leak-free under Nim's ARC/ORC memory management
-- may be based upon your own custom `ref object` type
-- may be dispatched using your own custom dispatcher
-- may be moved between threads to parallelize execution
-- are faster and lighter than async/await futures
-- are _now_ *2.5x slower* than native closure iterators
-- exploit no unsafe features of the language (`cast`, `ptr`, `addr`, `emit`)
-
-## This is Work In Progress!
-
-The macro itself should be considered beta quality. Corner-cases are being
-nailed down and the API is being adjusted as demonstration applications are
-built and rough edges are identified.
-
-## Uh, So Should I Use it?
-
-Yes. We need more people building toys and small projects and giving feedback
-on what works well and what doesn't.
-
-The `Continuation` type may be changed into a generic soon. If that doesn't
-scare you, then you are as safe to use CPS in larger projects as the quality of
-your tests; the API won't break you badly.
-
-#### CPS has no runtime library requirements
-
-## Cool, How Do I Use It?
-
 ### Architecture
 
-The implementation is comprised of two concepts:
+The implementation is comprised of two moving parts:
 
 1. an *environment* is a bespoke type made to carry all locals in a procedure,
-plus a pointer `fn` to a continuation leg, and a `mom` pointer to any parent
-continuation:
+plus a function pointer to the next continuation, like this:
 
 ```nim
 type
-  Continuation* = ref object of RootObj
-    fn*: proc(c: Continuation): Continuation {.nimcall.}
-    mom*: Continuation
+  # instantiated continuations inherit from this
+  Continuation = ref object
+    next: proc(c: Continuation): Continuation
 ```
 
-2. a *trampoline* is a while loop that looks like this:
+2. a *trampoline* is a procedure that looks like this:
 ```nim
-result = input_continuation
-while result != nil and result.fn != nil:
-  result = result.fn(result)
+var c = myContinuationInstance
+while not c.isNil and not c.next.isNil:
+  # assign to the reference the result of running the stored
+  # function pointer with the continuation itself as input
+  c = c.next(c)
 ```
 
-We call the instantiated environment with its `fn` pointer a _continuation_,
-and we call anything that invokes a continuation's `fn` pointer a _dispatcher_.
+We call the instantiated environment with its function pointer a
+_continuation_, and we call anything that invokes a continuation's function
+pointer a _dispatcher_.
 
 ### Application
 
-The `cps` macro is applied to procedure definitions, and it takes a single
-argument: the type you wish your continuations to inherit from. This
-parent type must be a `ref object of Continuation`. You can simply use the
-`Continuation` type itself, if you prefer.
-
-```nim
-type
-  Whoosh = ref object of Continuation
-```
-
 We use a procedure definition to define the continuation. The type we want to
 base the continuation upon is supplied as the only argument to our `cps` pragma
-macro.
+macro.  You can simply use the `Continuation` type itself, if you prefer.
 
 ```nim
-type
-  Whoosh = ref object of Continuation
-
-proc zoom() {.cps: Whoosh.} =
+proc zoom() {.cps: Continuation.} =
   ## a very fast continuation
   discard
 ```
 
-Calling the procedure (with arguments, as required) runs the continuation to
+Calling the procedure (with arguments, if required) runs the continuation to
 completion.
 
 ```nim
-type
-  Whoosh = ref object of Continuation
-
-proc zoom() {.cps: Whoosh.} =
-  ## a very fast continuation
-  discard
-
 zoom()
 echo "that was fast!"
 ```
@@ -141,16 +143,21 @@ Now we'll introduce two magical procedures for manipulating the table.
 
 ```nim
 proc label(c: Count; name: string): Count {.cpsMagic.} =
+  ## Record a label by `name` which we can later goto().
   c.labels[name] = c.fn
-  result = c
+  return c  # control resumes in the continuation
 
 proc goto(c: Count; name: string): Count {.cpsMagic.} =
+  ## Resume execution at the `name` label in the code.
   c.fn = c.labels[name]
-  result = c
+  return c  # control resumes in the continuation
 ```
 
 These pragma'd procedures act as continuation legs and we can use them in our
-continuations without supplying the initial `Count` argument.
+continuations without supplying the initial `Count` continuation argument.
+
+Some people call this "colorless" syntax, since calls look the same whether
+made inside or outside of a continuation.
 
 ```nim
 proc count(upto: int): int {.cps: Count.} =
@@ -172,13 +179,7 @@ assert many + 1 == count(many)  # (this might take awhile to finish)
 
 Sometimes you don't want to do a lot of counting right away, but, y'know, maybe
 a bit later, after your nap. In that case, you can use `whelp` to instantiate
-your continuation with arguments, without actually running it.
-
-```nim
-var later = whelp count(1_000_000)
-echo "nap time!"
-sleep 30*60*1000
-```
+your continuation with arguments, without actually invoking it.
 
 When you're ready, the `trampoline` will run your continuation to completion
 and bounce it back to you.
@@ -194,197 +195,43 @@ Continuations have a simple `state(c: Continuation): State` enum that is helped
 into `running()`, `finished()`, and `dismissed()` boolean predicates.
 
 ```nim
-var later = whelp count(1_000_000)
-sleep 30*60*1000
-echo "it's later!  time to count!"
-later = trampoline later
-assert later.finished, "laws of physics lost their sway"
+assert later.finished, "counting incomplete!"
 ```
 
-Continuations can themselves be called in order to retrieve their return value.
+Continuations can themselves be called in order to retrieve their result.
 
 ```nim
-var later = whelp count(1_000_000)
-sleep 30*60*1000
-echo "it's later!  time to count!"
-later = trampoline later
-assert later.finished, "laws of physics lost their sway"
 echo "i counted ", later(), " trips through the goto"
 ```
 
-In fact, such a call will run the continuation on your behalf, as well.
+Such a call will run the continuation on your behalf if it has not already run
+to completion.
 
 ```nim
 var later = whelp count(1_000_000)
-sleep 30*60*1000
-echo "it's later!  time to count!"
-echo "i counted ", later(), " trips through the goto"
+echo "we counted ", later(), " trips through the goto"
 ```
-
-### Walkthrough for the `coroutine.nim` example
-
-[examples/coroutine.nim](https://github.com/nim-works/cps/blob/master/examples/coroutine.nim)
-shows a basic implementation of coroutines communicating with each other on top
-of CPS.
-
-We're going to walk through the execution of this example looking into the
-details as we go, but first let's introduce the `Coroutine` type:
-
-```nim
-type
-  Coroutine = ref object of Continuation
-    data: int
-    next: Coroutine
-```
-
-This is a `Continuation` extended with the `data` on which we're going to perform
-a computation and a reference to some other `Coroutine` object. This will allow
-us to resume the execution of one coroutine from the other.
-
-The execution starts with instantiating our coroutines, which is necessary for
-continuations. The order is reversed because we need to pass a specific instance
-of the consumer to the filter. `filter` also takes an anonymous function as its
-second argument; in our case it's a simple doubling written in a short form
-provided by the `std/sugar` module.
-
-```nim
-let coro2 = whelp consumer()
-let coro1 = whelp filter(coro2, x => x * 2)
-```
-
-Both coroutines are already "running" (`coroX.running == true`) but nothing is
-executed yet. For this we need to actually launch them:
-
-```nim
-discard coro1.resume()
-discard coro2.resume()
-```
-
-The `resume` proc is our dispatcher for the coroutines and it's what actually
-runs the continuation via the call to the function pointer stored in the
-continuation:
-
-```nim
-proc resume(c: Coroutine): Coroutine {.discardable.} =
-  var c = Continuation c
-  while c.running:
-    c = c.fn(c)
-  result = Coroutine c
-```
-
-Actually, this is such a basic pattern for CPS code that the library provides a
-[trampoline](https://nim-works.github.io/cps/cps/spec.html#trampoline%2CsinkT)
-template for this, and it would be preferable to just use it here. Also, notice
-how before invoking the function pointer we needed to convert a `Coroutine` to
-its base type so we could set `c` to `fn(c)`, which returns a `Continuation`.
-
-So, `resume` launches the `filter` coroutine:
-
-```nim
-proc filter(dest: Coroutine, f: proc(x: int): int) {.cps:Coroutine.} =
-  while true:
-    jield()
-    let n = f(recv())
-    dest.send(n)
-```
-
-As the first coroutine launches, it yields (suspends execution) by calling
-`jield` immediately (*yield* is a keyword in Nim). This is necessary because we
-haven't actually sent any data to process, yet we need the Coroutines launched
-and waiting for it. We could move the suspension points later, but we don't want
-the coroutines processing the initialized-by-default value prior to the data we
-send them (try moving "jields" around and inspect the results).
-
-```nim
-proc jield(c: Coroutine): Coroutine {.cpsMagic.} =
-  c.next = c
-  return nil
-```
-
-Our `jield` proc is a special function, as signified by the `{.cpsMagic.}`
-pragma. It allows controlling the execution flow of the continuation by
-returning the continuation leg to run next. Usually, it's the same as the proc's
-argument, but in our case, we store the passed continuation in the `next`.
-This way our coroutine could be resumed later.
-
-Since the `cpsMagic` `jield` returns `nil` the coroutine gets suspended. Notice,
-how CPS manages the control flow for us and hides the implementation details
-behind ~~a veil of magic~~ code transformations.
-
-`coro2` is launched next by calling `resume` and in the same manner `consumer`
-starts running and yields immediately.
-
-Next we start feeding our coroutines the data in a loop:
-
-```nim
-for i in 1..10:
-  coro1.send(i)
-```
-
-The `send` proc just sets the data the coroutine holds to the supplied number
-and calls `resume`, which takes us back to the previous `jield`, currently in
-the `filter` continuation. There we receive the data and try to process it with
-the passed function:
-
-```nim
-let n = f(recv())
-```
-
-The `recv` proc is another special one. `{.cpsVoodoo.}` allows returning the
-contents of the concrete instance of the running continuation (which is not
-accessible directly from the coroutine code of `filter` and `consumer`).
-`cpsVoodoo` functions are very similar to `cpsMagic` ones, as they both can
-access the contents of continuation and can only be called from the CPS
-functions (`filter` and `consumer`). While `cpsMagic` procs return the
-continuation (see `jield` description above), `cpsVoodoo` procs return
-arbitrary data.
-
-```nim
-proc recv(c: Coroutine): int {.cpsVoodoo.} =
-  c.data
-```
-
-Then we pass the processed data to the destination `consumer` coroutine:
-
-```nim
-dest.send(n)
-```
-
-Again, the *sending* is just updating the state of the continuation and resuming
-it from `dest.next`. *Receiving*, then done by `consumer`, is just getting that
-data from the continuation.
-
-After setting the `value` to the received integer, we're finally able to print
-it:
-
-```nim
-let value = recv()
-echo value
-```
-
-Since we're at the end of the code of both coroutines, they loop and yield
-again, now in the opposite order: first the `consumer` and then the `filter`
-suspends, which returns us to the main loop, ready to go again.
-
-## Dispatchers
-
-### Notes on the Example Dispatcher
-
-An example dispatcher was included in the past, but demonstrating dispatch
-conflated the purpose of the `cps` macro and made misconceptions about the role
-of continuation-versus-dispatcher common. The reference dispatcher can now be
-found at https://github.com/disruptek/eventqueue and you can also jump directly to
-[the documentation](https://disruptek.github.io/eventqueue/eventqueue.html).
-
-### Other Available Dispatchers
-
-- https://github.com/alaviss/nim-sys -- next generation OS services
-- https://github.com/disruptek/passenger -- create a graph of continuation runtime
-- https://github.com/disruptek/supervisors -- simple dispatch patterns for composition
 
 ## Documentation
 
+### Ready For More?
+
+[examples/coroutine.nim](https://github.com/nim-works/cps/blob/master/examples/coroutine.nim)
+shows a simple implementation of coroutines communicating with each other on top
+of CPS.  [Here's a walkthrough of how the example works.](https://github.com/nim-works/cps/docs/coroutines.md)
+
+### Complete API
+
 See [the documentation for the cps module](https://nim-works.github.io/cps/cps.html) as generated directly from the source.
+
+## Dispatchers
+
+An example dispatcher with support for yields, I/O, and timers was included in
+the past, but demonstrating dispatch conflated the roles of _continuation_ and
+_dispatcher_, confusing newcomers.
+
+For a robust dispatcher implementation targeting broad OS support and modern
+async features, take a look at https://github.com/alaviss/nim-sys.
 
 ## Examples
 
@@ -429,15 +276,6 @@ development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label
 
 - Nim's `for` loops work, but you cannot perform any CPS control-flow inside of
   them; if in doubt, use a `while` loop instead.
-
-- Generic continuations such as the following won't work without changes to
-the compiler.
-
-```nim
-type
-  MyContinuation[T] = ref object of Continuation
-    something: T
-```
 
 ### Call Syntax
 
