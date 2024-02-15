@@ -28,7 +28,7 @@ of much of the machinery, including memory management.
 <details>
   <summary>Click here for an awesome infographic explaining what CPS is and how our transform works.
   </summary>
-  <img alt="The Nim CPS Transform" src="https://github.com/nim-works/cps/blob/master/docs/cps.svg"/>
+  <img alt="The Nim CPS Transform" src="/docs/cps.svg"/>
 </details>
 
 A `cps` proc macro enables enjoyment of the CPS abstraction for free, hiding all
@@ -70,13 +70,13 @@ Nimskull compiler](https://github.com/nim-works/nimskull).
 ## How Does It Work?
 
 A substantial effort to demystify this style of programming, and what it may
-enable, lives [in the docs/ subdirectory](https://github.com/nim-works/cps/tree/master/docs).
+enable, lives [in the docs/ subdirectory](/docs).
 
 We also have [a tutorial to help new users on their way to get starting with
-CPS](https://github.com/nim-works/cps/blob/master/tutorial/README.md).
+CPS](/tutorial/README.md).
 
 For a description of the origins of our approach, see [the included
-papers](https://github.com/nim-works/cps/blob/master/papers) and
+papers](/papers) and
 https://github.com/nim-lang/RFCs/issues/295, where we write in more depth about
 why the implementation exists, goals for future development, etc.
 
@@ -216,9 +216,9 @@ echo "we counted ", later(), " trips through the goto"
 
 ### Ready For More?
 
-[examples/coroutine.nim](https://github.com/nim-works/cps/blob/master/examples/coroutine.nim)
-shows a simple implementation of coroutines communicating with each other on top
-of CPS.  [Here's a walkthrough of how the example works.](https://github.com/nim-works/cps/docs/coroutines.md)
+[examples/coroutine.nim](/examples/coroutine.nim)
+ ([walkthrough](/docs/coroutines.md)): A simple coroutine implementation of
+ coroutines on top of CPS communicating with each other.
 
 ### Complete API
 
@@ -241,16 +241,16 @@ yet demonstrates different exploits of `cps`.
 
 | Example | Description |
 |     --: | :--         |
-|[Channels](https://github.com/nim-works/cps/blob/master/examples/channels.nim)|A channel connects sender and receiver continuations|
-|[Goto](https://github.com/nim-works/cps/blob/master/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
-|[Iterator](https://github.com/nim-works/cps/blob/master/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
-|[Coroutines](https://github.com/nim-works/cps/blob/master/examples/coroutine.nim)|A pair of continuations communicate as coroutines|
-|[Lazy](https://github.com/nim-works/cps/blob/master/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
-|[TryCatch](https://github.com/nim-works/cps/blob/master/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
-|[CpsCps](https://github.com/nim-works/cps/blob/master/examples/cpscps.nim)|Continuations can efficiently call other continuations|
-|[Work](https://github.com/nim-works/cps/blob/master/examples/work.nim)|Implementation of a simple continuation scheduler|
-|[LuaCoroutines](https://github.com/nim-works/cps/blob/master/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
-|[ThreadPool](https://github.com/nim-works/cps/blob/master/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
+|[Channels](/examples/channels.nim)|A channel connects sender and receiver continuations|
+|[Goto](/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
+|[Iterator](/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
+|[Coroutines](/examples/coroutine.nim)|A pair of continuations communicate as coroutines. [Walkthrough](/docs/coroutines.md).|
+|[Lazy](/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
+|[TryCatch](/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
+|[CpsCps](/examples/cpscps.nim)|Continuations can efficiently call other continuations|
+|[Work](/examples/work.nim)|Implementation of a simple continuation scheduler|
+|[LuaCoroutines](/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
+|[ThreadPool](/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
 |[WebServer](https://github.com/zevv/cpstest)|Zevv's "Real World Test" WebServer And More|
 |[Actors](https://github.com/zevv/actors)|Zevv's experimental project to create a threaded, share-nothing actor based framework on top of CPS|
 |[Background](https://github.com/disruptek/background)|Run any function on a background thread|
