@@ -489,10 +489,12 @@ when defined(js):
   template cpsWriteLine(s: string): untyped =
     ## javascript emission of traceback
     console.error s
-else:
+elif cpsTraceDeque or cpsStackFrames:
   template cpsWriteLine(s: string): untyped =
     ## non-javascript emission of traceback
     stdmsg().writeLine line
+else:
+  template cpsWriteLine(s: string): untyped = discard
 
 proc writeStackFramesImpl(c: Continuation) =
   for line in c.renderStackFramesImpl.items:
