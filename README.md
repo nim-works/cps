@@ -217,8 +217,8 @@ echo "we counted ", later(), " trips through the goto"
 ### Ready For More?
 
 [examples/coroutine.nim](/examples/coroutine.nim)
-shows a simple implementation of coroutines communicating with each other on top
-of CPS.  [Here's a walkthrough of how the example works.](/docs/coroutines.md)
+ ([walkthrough](/docs/coroutines.md)): A simple coroutine implementation of
+ coroutines on top of CPS communicating with each other.
 
 ### Complete API
 
@@ -244,7 +244,7 @@ yet demonstrates different exploits of `cps`.
 |[Channels](/examples/channels.nim)|A channel connects sender and receiver continuations|
 |[Goto](/examples/goto.nim)|Implementation of `label` and `goto` statements using CPS|
 |[Iterator](/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
-|[Coroutines](/examples/coroutine.nim)|A pair of continuations communicate as coroutines|
+|[Coroutines](/examples/coroutine.nim)|A pair of continuations communicate as coroutines. [Walkthrough](/docs/coroutines.md).|
 |[Lazy](/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
 |[TryCatch](/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
 |[CpsCps](/examples/cpscps.nim)|Continuations can efficiently call other continuations|
