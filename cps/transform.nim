@@ -972,8 +972,9 @@ macro cpsFloater(n: typed): untyped =
         result = newEmptyNormNode()
     result = newStmtList [floated, filter(n, float)]
 
-  result = floater:
-    copyNimTree n
+  debug("cpsFloater", n.NimNode, Original)
+  result = floater: copyNimTree n
+  debug("cpsFloater", result.NimNode, Transformed)
 
 macro cpsManageException(name: static[string]; n: typed): untyped =
   ## rewrites all continuations in `n` containing an exception so that exception
