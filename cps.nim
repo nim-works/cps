@@ -310,7 +310,8 @@ proc dealloc*[T: Continuation](c: sink T; E: typedesc[T]): E {.used, inline.} =
   ## `c` is the continuation to be deallocated, while `E` is the type of
   ## its environment.  This procedure should generally return `nil`, as
   ## its result may be assigned to another continuation reference.
-  disarm c
+  if not c.dismissed:
+    disarm c
 
 template recover*(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.

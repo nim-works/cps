@@ -117,6 +117,7 @@ suite "hooks":
           coop: Cont nil environment.nim
           trace: cps:foo() loop continuation 👍
           trace: cps:foo() jump noop() continuation 👍
+          dealloc: cps:foo() env 😎 👍
         """
     else:
       const
@@ -154,16 +155,26 @@ suite "hooks":
           coop: Cont nil environment.nim
           trace: cps:foo() loop continuation 👍
           trace: cps:foo() jump noop() continuation 👍
+          dealloc: cps:foo() env 😎 👍
         """
     let x = expected.normalize
     let y = s.normalize
     if x != y:
-      var i = 0
-      for (a, b) in zip(x, y).items:
-        if a != b:
-          checkpoint "#", i, " < ", a
-          checkpoint "#", i, " > ", b
-        inc i
+      if x.len != y.len:
+        checkpoint "expected:"
+        for n in x.items:
+          checkpoint n
+        checkpoint "\n"
+        checkpoint "received:"
+        for n in y.items:
+          checkpoint n
+      else:
+        var i = 0
+        for (a, b) in zip(x, y).items:
+          if a != b:
+            checkpoint "#", i, " < ", a
+            checkpoint "#", i, " > ", b
+          inc i
       fail "trace output doesn't match"
 
   block:
@@ -182,9 +193,9 @@ suite "hooks":
 
   block:
     ## custom continuation deallocators can nil the continuation
-    shouldRun 4:
+    shouldRun 5:
       proc dealloc[T: Cont](c: sink T; E: typedesc[T]): E =
-        ran()
+        ran()    # (runs twice)
         c = nil
 
       proc bar() {.cps: Cont.} =
