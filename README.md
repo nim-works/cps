@@ -285,6 +285,8 @@ Here are a few projects which demonstrate CPS library integration.
 
 #### Smaller
 
+| Project | Description |
+|     --: | :--         |
 |[WebServer](https://github.com/zevv/cpstest)|Zevv's "Real World Test" WebServer And More|
 |[Background](https://github.com/disruptek/background)|Run any function on a background thread|
 |[Passenger](https://github.com/disruptek/passenger)|Compose graph visualizations of CPS control-flow|
@@ -292,6 +294,8 @@ Here are a few projects which demonstrate CPS library integration.
 
 #### Larger
 
+| Project | Description |
+|     --: | :--         |
 |[Balls](https://github.com/disruptek/balls)|A threaded test runner based upon CPS|
 |[Sys](https://github.com/alaviss/nim-sys)|Next-generation operating system service abstractions|
 |[Actors](https://github.com/zevv/actors)|Zevv's experimental project to create a threaded, share-nothing actor based framework on top of CPS|
