@@ -541,7 +541,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result = clone(n, newStmtList())
   result.addPragma "used"  # avoid gratuitous warnings
   result.addPragma "nimcall"
-  result.introduce {Alloc, Boot, Stack}
+  result.introduce {Alloc, Boot, Stack, Dealloc}
 
   let c = genSymVar("c", info = n)
   result.body.add:
@@ -576,14 +576,22 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   elif env.rs.hasType:
     result.body.add:
       # then at runtime, issue an if statement to
-      nnkIfExpr.newTree:
+      nnkIfStmt.newTree:
         nnkElifExpr.newTree(
           # check if the continuation is not nil, and if so, to
           newCall(bindSym"not", newDotExpr(c, asName"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(asName"result",
-            newDotExpr(env.castToChild(c), env.rs.name))
-        )
+                        newCall(ident"move",
+                        newDotExpr(env.castToChild(c), env.rs.name)).NormNode))
+  # perform a dealloc() on the continuation if we can
+  result.body.add:
+    nnkIfStmt.newTree:
+      nnkElifExpr.newTree(
+        # check if the continuation is not nil, and if so, to
+        newCall(bindSym"not", newDotExpr(c, asName"dismissed")),
+        # apply the dealloc() hook on the continuation
+        newAssignment(c, Dealloc.hook(env.castToRoot(c), env.identity)))
 
 proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
   ## Rewrite non-yielding cpsCall calls by inserting the continuation as
