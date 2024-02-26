@@ -2,9 +2,9 @@ import std/[genasts, deques]
 import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
 import std/macros except newStmtList, newTree
 
-export Continuation, ContinuationProc, State, cpsCallOperatorSupported
-export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump
-export cpsMagic, cpsVoodoo, trampoline, trampolineIt, call, recover
+export Continuation, ContinuationProc, ContinuationFn, State
+export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic, cpsVoodoo
+export trampoline, trampolineIt, call, recover, cpsCallOperatorSupported
 export writeStackFrames, writeTraceDeque
 export renderStackFrames, renderTraceDeque
 

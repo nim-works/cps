@@ -8,7 +8,7 @@ import cps, tables
 
 type
   C = ref object of Continuation
-    labels: Table[string, ContinuationProc[Continuation]]
+    labels: Table[string, ContinuationFn]
 
 # Define the CPS magic 'label' and 'goto' procs
 

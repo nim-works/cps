@@ -72,6 +72,7 @@ type
   Continuation* = ref object of ContinuationObj
 
   ContinuationProc*[T] = proc(c: sink T): T {.nimcall.}
+  ContinuationFn* = ContinuationProc[Continuation]
 
   Callback*[C; R; P] = object
     fn*: P                            ##

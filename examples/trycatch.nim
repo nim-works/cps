@@ -12,7 +12,7 @@ type
 var
   err: bool
   msg: string
-  where: ContinuationProc[Continuation]
+  where: ContinuationFn
 
 # CPS magic functions
 
