@@ -84,8 +84,9 @@ why the implementation exists, goals for future development, etc.
 
 The implementation is comprised of two moving parts:
 
-1. an *environment* is a bespoke type made to carry all locals in a procedure,
-plus a function pointer to the next continuation, like this:
+1. a *continuation* is a bespoke type made to carry all locals in a procedure
+-- the _environment_ -- plus a function pointer with which the continuation
+is poised to continue, or _resume_:
 
 ```nim
 type
@@ -94,18 +95,35 @@ type
     next: proc(c: Continuation): Continuation
 ```
 
-2. a *trampoline* is a procedure that looks like this:
+1. a *dispatcher* is a procedure which resumes a continuation by invoking
+the continuation's function pointer with the continuation itself as input.
+It follows that to _suspend_, the function simply returns control to the
+dispatcher.
+
 ```nim
-var c = myContinuationInstance
-while not c.isNil and not c.next.isNil:
-  # assign to the reference the result of running the stored
-  # function pointer with the continuation itself as input
-  c = c.next(c)
+# we tend to replace the continuation with its result -- another continuation
+c = c.next(c)
 ```
 
-We call the instantiated environment with its function pointer a
-_continuation_, and we call anything that invokes a continuation's function
-pointer a _dispatcher_.
+A *trampoline* is common form of dispatcher which resumes a continuation in a
+loop; it bounces control up to the continuation, which returns back down to the
+trampoline when it's ready to suspend.
+
+```nim
+while true:
+  # if the continuation doesn't contain an environment and function pointer,
+  if c.isNil:
+    # then the continuation has been 'dismissed'
+    break
+
+  # if there is no function with which to resume the continuation,
+  if not c.next.isNil:
+    # then the continuation is 'finished'
+    break
+
+  # resume a 'running' (suspended) continuation
+  c = c.next(c)
+```
 
 ### Application
 
@@ -133,7 +151,7 @@ your continuation.
 ```nim
 type
   Count = ref object of Continuation
-    labels: Table[string, Continuation.fn]
+    labels: Table[string, ContinuationFn]
 ```
 
 Here we've introduced a table that maps strings to a continuation "leg", or
@@ -220,9 +238,17 @@ echo "we counted ", later(), " trips through the goto"
  ([walkthrough](/docs/coroutines.md)): A simple coroutine implementation of
  coroutines on top of CPS communicating with each other.
 
-### Complete API
+### Complete API Documentation
 
 See [the documentation for the cps module](https://nim-works.github.io/cps/cps.html) as generated directly from the source.
+
+### Extensive Test Suite
+
+At last count, there are no less than [211 unique tests of the cps
+library](/tests) which confirm successful handling of myriad semantic forms
+and complex continuation composition. The tests are arguably the most valuable
+piece of code in the project and, as per usual, serve as the most complete
+documentation of the specification.
 
 ## Dispatchers
 
@@ -246,14 +272,30 @@ yet demonstrates different exploits of `cps`.
 |[Iterator](/examples/iterator.nim)|A simple demonstration of a CPS-based iterator|
 |[Coroutines](/examples/coroutine.nim)|A pair of continuations communicate as coroutines. [Walkthrough](/docs/coroutines.md).|
 |[Lazy](/examples/lazy.nim)|Lazy streams are composed by continuations in a functional style|
+|[Pipes](/examples/pipes.nim)|Coroutines compose streams which connect arbitrarily|
 |[TryCatch](/examples/trycatch.nim)|Exception handling is reimplemented using only CPS|
 |[CpsCps](/examples/cpscps.nim)|Continuations can efficiently call other continuations|
 |[Work](/examples/work.nim)|Implementation of a simple continuation scheduler|
 |[LuaCoroutines](/examples/lua_coroutines.nim)|Coroutines implemented in the style of Lua|
 |[ThreadPool](/examples/threadpool.nim)|1,000,000 continuations run across all your CPU cores|
+
+## Demonstration Projects
+
+Here are a few projects which demonstrate CPS library integration.
+
+#### Smaller
+
 |[WebServer](https://github.com/zevv/cpstest)|Zevv's "Real World Test" WebServer And More|
-|[Actors](https://github.com/zevv/actors)|Zevv's experimental project to create a threaded, share-nothing actor based framework on top of CPS|
 |[Background](https://github.com/disruptek/background)|Run any function on a background thread|
+|[Passenger](https://github.com/disruptek/passenger)|Compose graph visualizations of CPS control-flow|
+|[HttpLeast](https://github.com/disruptek/httpleast)|A simple web-server for benchmarking CPS|
+
+#### Larger
+
+|[Balls](https://github.com/disruptek/balls)|A threaded test runner based upon CPS|
+|[Sys](https://github.com/alaviss/nim-sys)|Next-generation operating system service abstractions|
+|[Actors](https://github.com/zevv/actors)|Zevv's experimental project to create a threaded, share-nothing actor based framework on top of CPS|
+|[InsideOut](https://github.com/disruptek/insideout)|Another experimental concurrency library which supports CPS over threads|
 
 ## Debugging
 
@@ -263,10 +305,10 @@ See [this list of open Nim issues surfaced by CPS
 development](https://github.com/nim-lang/Nim/issues?q=is%3Aopen+is%3Aissue+label%3ACPS); some repercussions include the following:
 
 - Exceptions are evaluated differently under `panics:on` and `panics:off`, so
-  you may need to use `panics:on` in order to produce correct code.
+  you may need to use `panics:on` in order to produce reliably correct code.
 
 - Expressions are evaluated differently under `gc:[ao]rc`, so you may need to
-  use those memory managers in order to produce correct code.
+  use those memory managers in order to produce reliably correct code.
 
 - The `cpp` backend often doesn't work, particularly due to faulty codegen but
   also, perhaps, due to `exceptions:goto` assumptions that we rely upon.
