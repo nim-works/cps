@@ -576,24 +576,22 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   elif env.rs.hasType:
     result.body.add:
       # then at runtime, issue an if statement to
-      nnkIfExpr.newTree:
+      nnkIfStmt.newTree:
         nnkElifExpr.newTree(
           # check if the continuation is not nil, and if so, to
           newCall(bindSym"not", newDotExpr(c, asName"dismissed")),
           # assign the result from the continuation's result field
           newAssignment(asName"result",
                         newCall(ident"move",
-                        newDotExpr(env.castToChild(c), env.rs.name)).NormNode)
-        )
+                        newDotExpr(env.castToChild(c), env.rs.name)).NormNode))
   # perform a dealloc() on the continuation if we can
   result.body.add:
-    nnkIfExpr.newTree:
+    nnkIfStmt.newTree:
       nnkElifExpr.newTree(
         # check if the continuation is not nil, and if so, to
         newCall(bindSym"not", newDotExpr(c, asName"dismissed")),
         # apply the dealloc() hook on the continuation
-        newAssignment(c, Dealloc.hook(env.castToRoot(c), env.identity))
-      )
+        newAssignment(c, Dealloc.hook(env.castToRoot(c), env.identity)))
 
 proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
   ## Rewrite non-yielding cpsCall calls by inserting the continuation as
