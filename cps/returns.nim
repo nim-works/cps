@@ -106,7 +106,7 @@ proc jumperCall*(cont, contType, to: Name; via: NormNode): NormNode =
   let jump = asCall via.copyNimTree
   # we may need to insert an argument if the call is magical
   if jump.impl.hasPragma "cpsMagicCall":
-    # https://github.com/nim-lang/Nim/issues/18365
+    # https://github.com/nim-lang/Nim/issues/18365 (fixed; inheritance)
     jump.prependArg newCall(contType, cont)
   # we need to desym the jumper; it is currently sem-ed to the
   # variant that doesn't take a continuation.

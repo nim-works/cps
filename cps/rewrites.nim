@@ -114,6 +114,33 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
       discard
   result = filter(n, desymifier)
 
+proc isCallback*(n: NimNode): bool =
+  ## true if the node is of the Callback persuasion.
+  case n.kind
+  of nnkEmpty:
+    false
+  of nnkDotExpr:
+    n.last.isCallback
+  of nnkSym:
+    n.getTypeImpl.isCallback
+  of nnkObjectTy:
+    n.last.isCallback
+  of nnkRecList:
+    n[0].isCallback
+  of nnkIdentDefs:
+    if n[0].repr == "fn":
+      n[1].isCallback
+    else:
+      false
+  of nnkProcTy:
+    for node in n.pragma:
+      if node.kind == nnkCall:
+        if node[0].strVal == "cpsCallback":
+          return true
+    false
+  else:
+    false
+
 proc normalizingRewrites*(n: NimNode): NormNode =
   ## Rewrite AST into a safe form for manipulation without removing semantic
   ## data.
@@ -309,6 +336,18 @@ proc normalizingRewrites*(n: NimNode): NormNode =
             for i in unwrapped.items:
               result.add i
 
+    proc rewriteCallbackCalls(n: NimNode): NimNode =
+      return nil # unused yet
+      if n.isNil or n.kind notin CallNodes: return nil
+      if n.len == 0 or not n[0].isCallback: return nil
+
+    proc rewriteCallNodes(n: NimNode): NimNode =
+      ## perform any rewrites for call nodes
+      result = rewriteVarargsTypedCalls n
+      if result.isNil:
+        # varargs calls are never callback calls
+        result = rewriteCallbackCalls n
+
     proc rewriteCheckedFieldExpr(n: NimNode): NimNode =
       ## Rewrite a checked field access into a normal access as this
       ## node is "special" and cannot be modified by a macro.
@@ -336,7 +375,7 @@ proc normalizingRewrites*(n: NimNode): NormNode =
     of nnkExceptBranch:
       rewriteExceptBranch n
     of CallNodes:
-      rewriteVarargsTypedCalls n
+      rewriteCallNodes n
     of nnkCheckedFieldExpr:
       rewriteCheckedFieldExpr n
     else:

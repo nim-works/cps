@@ -37,9 +37,6 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation -- technically, a whelp()
-template cpsCallback*() {.pragma.}          ## this is a callback typedef
-template cpsCallbackShim*(whelp: typed) {.pragma.}  ##
-## the symbol for creating a continuation which returns a continuation base
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
 template cpsResult*(result: typed) {.pragma.}  ##
@@ -73,12 +70,6 @@ type
 
   ContinuationProc*[T] = proc(c: sink T): T {.nimcall.}
   ContinuationFn* = ContinuationProc[Continuation]
-
-  Callback*[C; R; P] = object
-    fn*: P                            ##
-    ## the bootstrap for continuation C
-    rs*: proc (c: var C): R {.nimcall.}   ##
-    ## the result fetcher for continuation C
 
   TraceFrame* = object ## a record of where the continuation has been
     hook*: Hook        ## the hook that provoked the trace entry
@@ -301,6 +292,15 @@ proc isCpsCall*(n: NormNode): bool =
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
         result = it.impl.hasPragma "cpsMustJump"
+      if false and not result:
+        debugEcho treeRepr(n)
+        if it[0].kind in {nnkSym, nnkDotExpr}:
+          if it[0].kind == nnkSym and it[0].symKind != nskType:
+            result = result or it[0].NimNode.isCallback
+          elif it[0].kind == nnkDotExpr:
+            result = result or it[0].NimNode.isCallback
+          if result:
+            debugEcho "truthy cps call: ", repr(n)
 
 proc isCpsConvCall*(n: NormNode): bool =
   ## true if this node holds a cps call that might be nested within one or more
@@ -604,52 +604,3 @@ proc copyOrVoid*(n: NimNode): NimNode =
     ident"void"
   else:
     copyNimTree n
-
-proc createCallback*(sym: NimNode): NimNode =
-  ## create a new Callback object construction
-  let fn = sym.getImpl.ProcDef.pragmaArgument"cpsCallbackShim"
-  let impl = fn.getImpl.ProcDef                     # convenience
-  let rs = impl.pragmaArgument"cpsResult"
-  let tipe = nnkBracketExpr.newTree bindSym"Callback"
-  tipe.add impl.returnParam # the base cps environment type
-  tipe.add:                 # the return type of the result fetcher
-    copyOrVoid impl.pragmaArgument"cpsReturnType"
-  var params = copyNimTree impl.formalParams # prepare params list
-  # consider desym'ing foo(a: int; b = a) before deleting this loop
-  for defs in impl.callingParams:
-    params = desym(params, defs.name)
-  tipe.add:      # the proc() type of the bootstrap
-    nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
-  result =
-    NimNode:
-      nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
-
-proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NimNode =
-  ## looks like cpsTransformProc but applies to proc typedefs;
-  ## this is where we create our calling convention concept
-  let params = copyNimTree n[0]
-  let r = copyOrVoid params[0]
-  params[0] = tipe
-  let p = nnkProcTy.newTree(params,
-                            nnkPragma.newTree(ident"nimcall", bindSym"cpsCallback"))
-  result = nnkBracketExpr.newTree(bindSym"Callback", tipe, r, p)
-  result = workaroundRewrites result.NormNode
-
-proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: var C): R =
-  ## Using a `callback`, recover the `result` of the given `continuation`.
-  ## This is equivalent to running `()` on a continuation which was
-  ## created with `whelp` against a procedure call.
-  ##
-  ## If the continuation is in the `running` `State`, this operation will
-  ## `trampoline` the continuation until it is `finished`. The `result`
-  ## will then be recovered from the continuation environment.
-  ##
-  ## It is a `Defect` to attempt to recover the `result` of a `dismissed`
-  ## `continuation`.
-  callback.rs(continuation)
-
-macro call*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): C =
-  ## Invoke a `callback` with the given `arguments`; returns a continuation.
-  result = newCall(callback.dot ident"fn")
-  for argument in arguments.items:
-    result.add argument

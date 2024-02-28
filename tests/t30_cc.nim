@@ -81,6 +81,30 @@ suite "calling convention":
     foo: whelp bar
 
   block:
+    ## whelp helps disambiguate cps callbacks at instantiation
+    var k = newKiller 2
+
+    type
+      ContCall {.used.} = proc(a: int): int {.cps: Cont.}
+      MoreCall {.used.} = proc(a: float): float {.cps: Cont.}
+
+    proc bar(a: float): float {.cps: Cont.} =
+      noop()
+      return a * 2.0
+
+    proc bar(a: int): int {.cps: Cont.} =
+      step 2
+      noop()
+      return a * 2
+
+    proc foo(c: ContCall) {.cps: Cont.} =
+      step 1
+      var x = c(4)
+      check x == 8
+
+    foo: whelp(ContCall, bar)
+
+  block:
     ## run a callback in cps with natural syntax
     when not cpsCallOperatorSupported:
       skip "unsupported on nim " & NimVersion
