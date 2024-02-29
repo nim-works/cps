@@ -99,31 +99,38 @@ proc `=destroy`(dest: var ContinuationObj) =
 
 template dot*(a, b: NimNode): NimNode =
   ## for constructing foo.bar
-  newDotExpr(a, b)
+  {.line: instantiationInfo().}:
+    newDotExpr(a, b)
 
 template dot*(a: NimNode; b: string): NimNode =
   ## for constructing `.`(foo, "bar")
-  dot(a, ident(b))
+  {.line: instantiationInfo().}:
+    dot(a, ident(b))
 
 template eq*(a, b: NimNode): NimNode =
   ## for constructing foo=bar in a call
-  nnkExprEqExpr.newNimNode(a).add(a).add(b)
+  {.line: instantiationInfo().}:
+    nnkExprEqExpr.newNimNode(a).add(a).add(b)
 
 template eq*(a: string; b: NimNode): NimNode =
   ## for constructing foo=bar in a call
-  eq(ident(a), b)
+  {.line: instantiationInfo().}:
+    eq(ident(a), b)
 
 template colon*(a, b: NimNode): NimNode =
   ## for constructing foo: bar in a ctor
-  nnkExprColonExpr.newNimNode(a).add(a).add(b)
+  {.line: instantiationInfo().}:
+    nnkExprColonExpr.newNimNode(a).add(a).add(b)
 
 template colon*(a: string; b: NimNode): NimNode =
   ## for constructing foo: bar in a ctor
-  colon(ident(a), b)
+  {.line: instantiationInfo().}:
+    colon(ident(a), b)
 
 template colon*(a: string | NimNode; b: string | int): NimNode =
   ## for constructing foo: bar in a ctor
-  colon(a, newLit(b))
+  {.line: instantiationInfo().}:
+    colon(a, newLit(b))
 
 proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty

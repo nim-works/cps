@@ -13,6 +13,8 @@ import cps/normalizedast except newTree, newStmtList
 template cpsCallback*() {.pragma.}          ## this is a callback typedef
 template cpsCallbackShim*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation which returns a continuation base
+template cpsCallbackRecovery*(base: typed) {.pragma.}  ##
+## a block that can be abbreviated to a child continuation call inside cps
 
 type
   Callback*[C; R; P] = object
@@ -63,6 +65,12 @@ proc createCallback*(sym: NimNode): NimNode =
     NimNode:
       nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
 
+proc createCastCallback*(whelp, callback, sym: NimNode): NimNode =
+  ## Given a `callback` typedesc and a CPS continuation procedure,
+  ## apply a (proc ()) type specifier to help disambiguate overloads.
+  let tipe = getImpl(callback)[2]  # recover bootstrap proc type
+  result = newCall(whelp, newCall(tipe, sym))
+
 proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: var C): R =
   ## Using a `callback`, recover the `result` of the given `continuation`.
   ## This is equivalent to running `()` on a continuation which was
@@ -86,7 +94,7 @@ when cpsCallOperatorSupported and not defined cpsNoCallOperator:
   {.push experimental: "callOperator".}
   macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
     ## Allows for natural use of call syntax to invoke a callback and
-    ## recover its result in a single statement, inside a continuation.
+    ## recover its result in a single expression.
     let call = macros.newCall(macros.bindSym"call", callback)
     for argument in arguments.items:
       call.add argument

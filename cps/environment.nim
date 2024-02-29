@@ -253,6 +253,8 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
     value = newVarLetIdentDef(kind, def.name, stripVar(def.typ), def.val)
     # we stripVar to ident: <no var> type = default
   e = e.set(field, value)
+  when cpsDebug == "Env":
+    echo "env += ", repr(value)
   result = (key: field, val: value)
 
 proc newEnv*(c: Name; store: var NormNode; via: Name; rs: NormNode;
@@ -300,18 +302,13 @@ proc letOrVar(n: IdentDef): NimNodeKind =
 proc addAssignment(e: var Env; d: IdentDef): NimNode =
   ## compose an assignment during addition of identdefs to env. For the
   ## purposes of CPS, even though let and var sections contain identdefs this
-  ## proc should never handle those directly, see overloads.
-  let section = letOrVar(d)
-  when cpsDebug == "Env":
-    echo $section.kind, "\t", repr(section)
-  discard e.addIdentDef(section, d)
+  ## proc should never handle those directly; see the overload below.
+  discard e.addIdentDef(d.letOrVar, d)
   # don't attempt to redefine proc params!
   result = newStmtList()
 
 proc addAssignment(e: var Env; section: VarLetIdentDef): NimNode =
   ## compose an assignment during addition of var|let identDefs to env
-  when cpsDebug == "Env":
-    echo $section.kind, "\t", repr(section)
   let (field, value) = e.addIdentDef(section.kind, section.identdef())
   result = e.initialization(field, value)
 

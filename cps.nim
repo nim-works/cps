@@ -161,8 +161,7 @@ macro whelp*(parent: Continuation; call: typed): untyped =
 macro whelp*[T](callback: typedesc[T]; sym: typed): untyped =
   ## Given a `callback` typedesc and a CPS continuation procedure,
   ## apply a (proc ()) type specifier to help disambiguate overloads.
-  let tipe = getImpl(callback)[2]  # recover bootstrap proc type
-  result = newCall(bindSym"whelp", newCall(tipe, sym))
+  result = createCastCallback(bindSym"whelp", callback, sym)
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## Reimplement this symbol to configure a continuation

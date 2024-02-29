@@ -106,7 +106,7 @@ suite "calling convention":
 
   block:
     ## run a callback in cps with natural syntax
-    when not cpsCallOperatorSupported:
+    when not cpsCallOperatorSupported or defined(cpsNoCallOperator):
       skip "unsupported on nim " & NimVersion
     else:
 

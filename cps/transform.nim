@@ -75,19 +75,28 @@ macro cpsJump(cont, contType: typed; name: static[string];
   ## a version of cpsJump that doesn't take a continuing body.
   result = getAst(cpsJump(cont, contType, name, call, macros.newStmtList()))
 
+proc childCallName(n: NormNode): string =
+  ## come up with a name for a continuation jump target
+  result =
+    case n.kind
+    of nnkSym, nnkIdent:
+      n.strVal
+    else:
+      "continuation"
+  result = "child " & result & "()"
+
 macro cpsContinuationJump(cont, contType: typed; name: static[string];
                           call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
-    c = c.NormNode                                      # store child here
-    call = normalizeCall(call)                          # child bootstrap call
-    name = genProcName(name, "child " & $call.name & "()",
-                       info = n.NormNode)
-    cont = cont.asName                                  # current continuation
-    contType = contType.asName                          # so-called user type
+    c = c.NormNode                                   # store child here
+    call = normalizeCall(call)                       # child bootstrap call
+    name = genProcName(name, childCallName(call), info = n.NormNode)
+    cont = cont.asName                               # current continuation
+    contType = contType.asName                       # so-called user type
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
-      makeContProc(name, cont, contType, n)             # return to this proc
+      makeContProc(name, cont, contType, n)          # return to this proc
     it.add:
       # update the parent's stack frame with the call site of the child
       updateLineInfoForContinuationStackFrame(cont.NimNode, call.NimNode)
