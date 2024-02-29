@@ -101,10 +101,13 @@ when cpsCallOperatorSupported and not defined cpsNoCallOperator:
     let mutable = genSymVar("continuation", callback.NormNode).NimNode
     result = macros.newStmtList()
     result.add:
-      macros.newTree nnkVarSection:
-        macros.newTree(nnkIdentDefs, mutable, newEmptyNode(), call)
+      newTree nnkVarSection:
+        newTree(nnkIdentDefs, mutable, newEmptyNode(), call)
     result.add:
-      macros.newCall(macros.bindSym"recover", callback, mutable)
+      newCall(bindSym"recover", callback, mutable)
+    var cbr = newCall(bindSym"cpsCallbackRecovery", getTypeInst C)
+    cbr = nnkPragma.newTree(cbr)
+    result = nnkPragmaBlock.newTree(cbr, result)
   {.pop.}
 
 when false:
