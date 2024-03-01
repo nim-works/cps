@@ -377,10 +377,10 @@ proc bootstrapSymbol*(n: NimNode): NormNode =
     elif n.hasPragma "cpsBootstrap":
       pragmaArgument(n, "cpsBootstrap")
     else:
-      {.warning: "procedure doesn't seem to be a cps call".}
+      error "procedure doesn't seem to be a cps call"
       normalizedast.newCall("typeOf", n)
   else:
-    {.warning: "procedure doesn't seem to be a cps call".}
+    error "procedure doesn't seem to be a cps call"
     ## XXX: darn ambiguous calls
     normalizedast.newCall("typeOf", n)
 
