@@ -142,6 +142,28 @@ suite "calling convention":
       foo: whelp bar
 
   block:
+    ## run a callback with no return value in cps
+    when not cpsCallOperatorSupported or defined(cpsNoCallOperator):
+      skip "unsupported on nim " & NimVersion
+    else:
+
+      type
+        ContCall = proc(a: int) {.cps: Cont.}
+
+      var k = newKiller 3
+
+      proc bar(a: int) {.cps: Cont.} =
+        noop()
+        step 2
+
+      proc foo(c: ContCall) {.cps: Cont.} =
+        step 1
+        c(4)
+        step 3
+
+      foo: whelp bar
+
+  block:
     ## callback illustration
     type
       C = ref object of Continuation

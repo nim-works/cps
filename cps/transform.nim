@@ -796,7 +796,8 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
       jumpCall.add env.annotate(child)
       # rewrite the assignment to use our new child
       var tail: NormNode = newCall("recover".asName, call[0][0], child)
-      tail = newAssignment(nc.last.last[0], tail)
+      if nc.last.last.kind == nnkAsgn:
+        tail = newAssignment(nc.last.last[0], tail)
       tail = newStmtList(tail, anyTail())
       jumpCall.add:
         env.annotate:
