@@ -364,7 +364,7 @@ proc pragmaArgument*(n: NormNode; s: string): NormNode =
 
 proc bootstrapSymbol*(n: NimNode): NormNode =
   ## given a callable symbol, recover the symbol of
-  ## the bootstrap if possible; otherwise, return
+  ## the bootstrap or produce a compile-time error.
   let n = NormNode n
   case n.kind
   of NormalCallNodes:
