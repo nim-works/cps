@@ -69,6 +69,9 @@ proc createCastCallback*(whelp, callback, sym: NimNode): NimNode =
   ## Given a `callback` typedesc and a CPS continuation procedure,
   ## apply a (proc ()) type specifier to help disambiguate overloads.
   let tipe = getImpl(callback)[2]  # recover bootstrap proc type
+  when not defined(isNimSkull):
+    # erase the pragma so it doesn't blow old nim's mind
+    tipe[1] = nnkPragma.newTree()
   result = newCall(whelp, newCall(tipe, sym))
 
 proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: var C): R =
