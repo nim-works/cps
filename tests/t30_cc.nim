@@ -60,23 +60,36 @@ suite "calling convention":
     check cb.recover(d) == 5.0
 
   block:
-    ## run a callback from inside cps with callback type
-    var k = newKiller 4
+    ## callbacks run from inside cps run pass, tail, etc.
+    var k = newKiller 7
 
     type
       ContCall = proc(a: int): int {.cps: Cont.}
 
+    proc tail(c: Continuation; d: Cont): Cont =
+      d.mom = c
+      step 3
+      d
+
+    proc pass(c: Cont; d: Cont): Cont =
+      step 4
+      d
+
+    proc head(c: Cont): Cont =
+      step 1
+      c
+
     proc bar(a: int): int {.cps: Cont.} =
       noop()
-      step 3
+      step 5
       return a * 2
 
     proc foo(c: ContCall) {.cps: Cont.} =
-      step 1
-      var x = c.call(4)
       step 2
-      check c.recover(x) == 8
-      step 4
+      var x = c(4)
+      step 6
+      check x == 8
+      step 7
 
     foo: whelp bar
 
@@ -126,8 +139,7 @@ suite "calling convention":
         check x == 8
         step 3
 
-      const cb = whelp bar
-      foo cb
+      foo: whelp bar
 
   block:
     ## callback illustration

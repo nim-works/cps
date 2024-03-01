@@ -115,24 +115,30 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
   result = filter(n, desymifier)
 
 proc isCallback*(n: NimNode): bool =
-  ## true if the node is of the Callback persuasion.
+  ## true if the node is essentially a callback call
   case n.kind
   of nnkEmpty:
     false
   of nnkDotExpr:
     n.last.isCallback
   of nnkSym:
-    n.getTypeImpl.isCallback
-  of nnkObjectTy:
+    if symKind(n) in {nskField}:
+      n.getTypeImpl.isCallback
+    else:
+      false
+  of nnkObjectTy:               # arriving from the Callback[] object type
     n.last.isCallback
   of nnkRecList:
-    n[0].isCallback
-  of nnkIdentDefs:
-    if n[0].repr == "fn":
+    n.len == 2 and
+    n[0].kind == nnkIdentDefs and n[0][0].strVal == "fn" and n[0].isCallback and
+    n[1].kind == nnkIdentDefs and n[1][0].strVal == "rs"  # recover() must work
+  of nnkIdentDefs:              # Callback -> Callback.fn
+    if n[0].kind in {nnkSym, nnkIdent} and n[0].strVal == "fn":
       n[1].isCallback
     else:
       false
   of nnkProcTy:
+    # all we really care about is that the callable has a cpsCallback() pragma
     for node in n.pragma:
       if node.kind == nnkCall:
         if node[0].strVal == "cpsCallback":
@@ -336,18 +342,6 @@ proc normalizingRewrites*(n: NimNode): NormNode =
             for i in unwrapped.items:
               result.add i
 
-    proc rewriteCallbackCalls(n: NimNode): NimNode =
-      return nil # unused yet
-      if n.isNil or n.kind notin CallNodes: return nil
-      if n.len == 0 or not n[0].isCallback: return nil
-
-    proc rewriteCallNodes(n: NimNode): NimNode =
-      ## perform any rewrites for call nodes
-      result = rewriteVarargsTypedCalls n
-      if result.isNil:
-        # varargs calls are never callback calls
-        result = rewriteCallbackCalls n
-
     proc rewriteCheckedFieldExpr(n: NimNode): NimNode =
       ## Rewrite a checked field access into a normal access as this
       ## node is "special" and cannot be modified by a macro.
@@ -375,7 +369,7 @@ proc normalizingRewrites*(n: NimNode): NormNode =
     of nnkExceptBranch:
       rewriteExceptBranch n
     of CallNodes:
-      rewriteCallNodes n
+      rewriteVarargsTypedCalls n
     of nnkCheckedFieldExpr:
       rewriteCheckedFieldExpr n
     else:

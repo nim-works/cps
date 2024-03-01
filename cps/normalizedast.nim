@@ -241,7 +241,7 @@ macro defineToNimNodeConverter(ts: varargs[typed]) =
     result.add:
       quote:
         converter `name`*(n: `t`): NimNode =
-          {.line: instantiationInfo().}: n.NimNode
+          n.NimNode
 
 template allowAutoDowngrade(t: typedesc, r: distinct typedesc) =
   ## defined a converter allowing easy downgrading of types, eg:

@@ -75,23 +75,29 @@ macro cpsJump(cont, contType: typed; name: static[string];
   ## a version of cpsJump that doesn't take a continuing body.
   result = getAst(cpsJump(cont, contType, name, call, macros.newStmtList()))
 
-proc childCallName(n: NormNode): string =
+proc childCallName(n: NimNode): string =
   ## come up with a name for a continuation jump target
-  result =
-    case n.kind
-    of nnkSym, nnkIdent:
-      n.strVal
+  case n.kind
+  of NormalCallNodes:
+    "child " & childCallName(n[0]) & "()"
+  of nnkSym, nnkIdent:
+    n.strVal
+  elif n.kind == nnkDotExpr and n.len > 0:
+    # try to grab the user's variable name, such as it is...
+    if n[0].kind == nnkDotExpr:
+      childCallName n[0]
     else:
-      "continuation"
-  result = "child " & result & "()"
+      childCallName n.last
+  else:
+    "callback"
 
 macro cpsContinuationJump(cont, contType: typed; name: static[string];
                           call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
     c = c.NormNode                                   # store child here
+    name = genProcName(name, childCallName(call), info = call.NormNode)
     call = normalizeCall(call)                       # child bootstrap call
-    name = genProcName(name, childCallName(call), info = n.NormNode)
     cont = cont.asName                               # current continuation
     contType = contType.asName                       # so-called user type
   debugAnnotation cpsContinuationJump, n:
@@ -106,7 +112,7 @@ macro cpsContinuationJump(cont, contType: typed; name: static[string];
     it.add:
       # instantiate a new child continuation with the given arguments
       newAssignment c:
-        newCall("whelp", cont, call)
+        newCall("whelp", cont, call)  # FIXME: move whelp() and bindName
     # NOTE: mom should now be set via the tail() hook from whelp
     #
     # return the child continuation
@@ -114,6 +120,34 @@ macro cpsContinuationJump(cont, contType: typed; name: static[string];
       newCall bindName"Continuation":
         Pass.hook newCall(NormNode contType, cont):
           c    # we're basically painting the future
+
+macro cpsCallbackJump(cont, contType: typed; name: static[string];
+                      call, c, n: typed): untyped =
+  ## a jump to another continuation that must be instantiated from a callback
+  let
+    c = c.NormNode                                   # store child here
+    name = genProcName(name, childCallName(call), info = call.NormNode)
+    call = normalizeCall(call)                       # child bootstrap call
+    cont = cont.asName                               # current continuation
+    contType = contType.asName                       # so-called user type
+  debugAnnotation cpsCallbackJump, n:
+    it = newStmtList:
+      makeContProc(name, cont, contType, n)          # return to this proc
+    it.add:
+      # update the parent's stack frame with the call site of the child
+      updateLineInfoForContinuationStackFrame(cont.NimNode, call.NimNode)
+    it.add:
+      # install the return point in the current continuation
+      newAssignment(newDotExpr(cont, asName"fn"), name)
+    it.add:
+      newAssignment c:
+        Tail.hook cont:  # the tail hook presumably assigns mom
+          call           # no ensimilation or argument munging needed here
+    # return the child continuation
+    it = makeReturn(contType, it):
+      newCall bindName"Continuation":
+        Pass.hook newCall(NormNode contType, cont):
+          c
 
 macro cpsMayJump(cont, contType: typed; name: static[string]; n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump
@@ -619,14 +653,13 @@ proc newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
   result.add(NormNode env.first, NormNode env.root)
   result.add newLit(env.procedure)
 
-proc setupChildContinuation(env: var Env; call: Call): (Name, NormNode) =
-  ## create a new child continuation variable and add it to the
-  ## environment.  return the child's symbol and its environment type.
+proc setupChildContinuation(env: var Env; call: Call): (Name, TypeExpr) =
+  ## create a new child continuation variable and add it to the environment.
+  ## return the child's symbol and its environment type.
   let child = genSymVar("child", info = call)
-  let etype = pragmaArgument(call, "cpsEnvironment")
-  env.localSection newIdentDef(child, etype.TypeExpr)
-  # XXX: also sniff and return the child continuation's "user type"?
-  result = (child, etype)
+  let ctype = pragmaArgument(call, "cpsEnvironment").TypeExpr
+  env.localSection newIdentDef(child, ctype)
+  result = (child, ctype)
 
 proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): NormNode =
   ## this rewrite supports `x = contProc()`, `let x = contProc()`,
@@ -634,8 +667,13 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   if not expr.isCpsConvCall:
     return expr.errorAst("cps doesn't know how to shim this")
 
-  let call = asCall:
-    expr.findChildRecursive(isCpsCall)
+  let call = expr.findChildRecursive(isCpsCall).asCall
+  let callbackMode =
+    call.len > 0 and call[0].kind == nnkDotExpr and call[0].last.isCallback
+
+  var recovery: Call
+  var child: Name
+  var ctype: TypeExpr
 
   # create the unshimmed assignment
   var assign = newStmtList()
@@ -651,15 +689,19 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
     return store.errorAst("unsupported store")
 
   # swap the call in the assignment statement(s)
-  let (child, etype) = setupChildContinuation(env, call)
-  let recovery = newCall("recover".asName, child)
+  if callbackMode:
+    (child, ctype) = setupCallbackChild(env, call.asCall)
+    recovery = newCall("recover".asName, call[0][0], child)
+  else:
+    (child, ctype) = setupChildContinuation(env, call)
+    recovery = newCall("recover".asName, child)
   assign = assign.childCallToRecoverResult(call, recovery)
 
   # compose the rewrite as an assignment and any remaining tail
   var body =
     NormNode:
       genAstOpt({}, assign = assign.NimNode, tail = tail.NimNode,
-                child = child.NimNode, etype = etype.NimNode,
+                child = child.NimNode, ctype = ctype.NimNode,
                 root = env.root.NimNode, identity = env.identity.NimNode,
                 dealloc = Dealloc.sym.NimNode):
         case child.state
@@ -670,7 +712,7 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
           assign
           when false:
             # we don't dealloc here, but maybe we should
-            dealloc(etype, child)
+            dealloc(child, ctype)
           tail
         of Running:
           # the child is still running; someone is trying to be clever
@@ -743,6 +785,24 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
             env.annotate newStmtList(nc)
 
           continue
+
+    # if it's a callback recovery block,
+    if nc.len > 0 and nc.isCallbackRecovery:
+      # {.cpsCallbackRecovery(C).}: ... -> C
+      let call = nc.last[0][0][0].last.asCall  # XXX: findChildRecursive?
+      var jumpCall = env.newAnnotation(call, "cpsCallbackJump")
+      let (child, _) = setupCallbackChild(env, call)
+      jumpCall.add env.annotate(call)
+      jumpCall.add env.annotate(child)
+      # rewrite the assignment to use our new child
+      var tail: NormNode = newCall("recover".asName, call[0][0], child)
+      tail = newAssignment(nc.last.last[0], tail)
+      tail = newStmtList(tail, anyTail())
+      jumpCall.add:
+        env.annotate:
+          tail.NormNode
+      result.add jumpCall
+      endAndReturn()
 
     # if it's a cps call,
     if nc.isCpsCall:
@@ -1156,6 +1216,9 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # setup the bootstrap using the old proc name,
   # but the first leg will be the new proc name
   let booty = env.createBootstrap(n, name)
+
+  # we store the user-supplied type from which the environment inherits
+  booty.addPragma(bindName"cpsUserType", tipe.asName)
 
   # we store a pointer to the whelp on the bootstrap
   booty.addPragma(bindName"cpsBootstrap", whelp.name)

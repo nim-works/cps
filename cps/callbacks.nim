@@ -3,7 +3,7 @@
 An attempt to collect all the callback code in one place.
 
 NOTE: currently, cps/rewrites defines `isCallback(NimNode): bool`
-      and `rewriteCallbackCalls(NimNode): NimNode`.
+
 ]##
 import std/macros
 
@@ -95,11 +95,11 @@ when cpsCallOperatorSupported and not defined cpsNoCallOperator:
   macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
     ## Allows for natural use of call syntax to invoke a callback and
     ## recover its result in a single expression.
-    let call = macros.newCall(macros.bindSym"call", callback)
+    let call = newCall(bindSym"call", callback)
     for argument in arguments.items:
       call.add argument
-    let mutable = genSymVar("continuation", callback.NormNode).NimNode
-    result = macros.newStmtList()
+    let mutable = genSymVar("callback_continuation", callback.NormNode).NimNode
+    result = newStmtList()
     result.add:
       newTree nnkVarSection:
         newTree(nnkIdentDefs, mutable, newEmptyNode(), call)
@@ -109,6 +109,46 @@ when cpsCallOperatorSupported and not defined cpsNoCallOperator:
     cbr = nnkPragma.newTree(cbr)
     result = nnkPragmaBlock.newTree(cbr, result)
   {.pop.}
+
+proc isCallbackRecovery*(n: NimNode): bool =
+  ## the node appears to be a {.cpsCallbackRecovery.} pragma block
+  if n.isNil: return false
+  case n.kind
+  of nnkPragmaBlock:
+    n.len > 0 and n[0].isCallbackRecovery
+  of nnkPragma:
+    n.len > 0 and n[0].isCallbackRecovery
+  of nnkCall:
+    n.len > 0 and n[0].isCallbackRecovery
+  of nnkSym:
+    n.strVal == "cpsCallbackRecovery"
+  else:
+    false
+
+proc baseContinuationType*(n: NimNode): NimNode =
+  ## given a callable symbol presumed to be a callback,
+  ## recover the (base) continuation return type of the proc.
+  case n.kind
+  of nnkDotExpr:
+    # continuationEnvironment.callbackLocal.fn(arguments...)
+    if n.len > 0 and n[0].kind == nnkDotExpr:
+      let fun = n.last.getTypeImpl   # proctype from first object record (fn)
+      result = fun[0][0]             # recover proc return type
+  elif not n.isCallback:
+    raise Defect.newException "callable is not a cps callback"
+  else:
+    discard
+  if result.isNil:
+    raise Defect.newException "unable to recover base type from callback"
+
+proc setupCallbackChild*(env: var Env; call: Call): (Name, TypeExpr) =
+  ## create a new child continuation variable to receive the result of
+  ## the callback and add it to the environment.  return the child's
+  ## symbol along with the base continuation type of the child.
+  let ctype = baseContinuationType(call[0].NimNode).TypeExpr
+  let child = genSymVar("callbackChild", info = call)
+  env.localSection newIdentDef(child, ctype)
+  result = (child, ctype)
 
 when false:
   macro naturalize(kind: static[NimNodeKind]; callback: typed;

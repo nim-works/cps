@@ -37,6 +37,8 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation -- technically, a whelp()
+template cpsUserType*(tipe: typed) {.pragma.}  ##
+## the user-supplied type from which the environment extends
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
 template cpsResult*(result: typed) {.pragma.}  ##
@@ -299,15 +301,10 @@ proc isCpsCall*(n: NormNode): bool =
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
         result = it.impl.hasPragma "cpsMustJump"
-      if false and not result:
-        debugEcho treeRepr(n)
-        if it[0].kind in {nnkSym, nnkDotExpr}:
-          if it[0].kind == nnkSym and it[0].symKind != nskType:
-            result = result or it[0].NimNode.isCallback
-          elif it[0].kind == nnkDotExpr:
-            result = result or it[0].NimNode.isCallback
-          if result:
-            debugEcho "truthy cps call: ", repr(n)
+    elif it[0].kind == nnkDotExpr:
+      # we are only interested in c.fn(...) forms; we aren't looking
+      # for Callback types, but rather Callback /calls/...
+      result = it[0].isCallback
 
 proc isCpsConvCall*(n: NormNode): bool =
   ## true if this node holds a cps call that might be nested within one or more
@@ -366,7 +363,8 @@ proc pragmaArgument*(n: NormNode; s: string): NormNode =
     result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
 
 proc bootstrapSymbol*(n: NimNode): NormNode =
-  ## find the return type of the bootstrap
+  ## given a callable symbol, recover the symbol of
+  ## the bootstrap if possible; otherwise, return
   let n = NormNode n
   case n.kind
   of NormalCallNodes:
@@ -376,9 +374,13 @@ proc bootstrapSymbol*(n: NimNode): NormNode =
   of nnkProcDef:
     if n.hasPragma "borrow":
       bootstrapSymbol n.last
-    else:
+    elif n.hasPragma "cpsBootstrap":
       pragmaArgument(n, "cpsBootstrap")
+    else:
+      {.warning: "procedure doesn't seem to be a cps call".}
+      normalizedast.newCall("typeOf", n)
   else:
+    {.warning: "procedure doesn't seem to be a cps call".}
     ## XXX: darn ambiguous calls
     normalizedast.newCall("typeOf", n)
 
