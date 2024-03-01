@@ -90,8 +90,7 @@ is poised to continue, or _resume_:
 
 ```nim
 type
-  # instantiated continuations inherit from this
-  Continuation = ref object
+  Continuation = ref object   # all continuations inherit from this
     next: proc(c: Continuation): Continuation
 ```
 
@@ -101,8 +100,7 @@ It follows that to _suspend_, the function simply returns control to the
 dispatcher.
 
 ```nim
-# we tend to replace the continuation with its result -- another continuation
-c = c.next(c)
+c = c.next(c)           # we often replace the continuation with its result
 ```
 
 A *trampoline* is common form of dispatcher which resumes a continuation in a
@@ -111,18 +109,11 @@ trampoline when it's ready to suspend.
 
 ```nim
 while true:
-  # if the continuation doesn't contain an environment and function pointer,
-  if c.isNil:
-    # then the continuation has been 'dismissed'
+  if c.isNil:           # 'dismissed': a nil continuation result
     break
-
-  # if there is no function with which to resume the continuation,
-  if not c.next.isNil:
-    # then the continuation is 'finished'
+  if not c.next.isNil:  # 'finished': a nil continuation function
     break
-
-  # resume a 'running' (suspended) continuation
-  c = c.next(c)
+  c = c.next(c)         # resuming a 'running' (suspended) continuation
 ```
 
 ### Application
