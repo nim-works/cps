@@ -95,7 +95,7 @@ macro call*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): C 
 
 when cpsCallOperatorSupported and not defined cpsNoCallOperator:
   {.push experimental: "callOperator".}
-  macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
+  macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): untyped =
     ## Allows for natural use of call syntax to invoke a callback and
     ## recover its result in a single expression.
     let call = newCall(bindSym"call", callback)
