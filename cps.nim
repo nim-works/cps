@@ -1,12 +1,14 @@
 import std/[genasts, deques]
-import cps/[spec, transform, rewrites, hooks, exprs, normalizedast]
+import cps/[spec, transform, rewrites, hooks, exprs, normalizedast, callbacks]
 import std/macros except newStmtList, newTree
 
-export Continuation, ContinuationProc, ContinuationFn, State
+export Continuation, ContinuationProc, ContinuationFn, State, Callback
 export cpsCall, cpsMagicCall, cpsVoodooCall, cpsMustJump, cpsMagic, cpsVoodoo
 export trampoline, trampolineIt, call, recover, cpsCallOperatorSupported
-export writeStackFrames, writeTraceDeque
-export renderStackFrames, renderTraceDeque
+export writeStackFrames, writeTraceDeque, renderStackFrames, renderTraceDeque
+
+when cpsCallOperatorSupported and not defined cpsNoCallOperator:
+  export `()`
 
 # exporting some symbols that we had to bury for bindSym reasons
 from cps/returns import pass, dismiss
@@ -20,7 +22,7 @@ when not(defined(gcArc) or defined(gcOrc)):
 # we only support panics because we don't want to run finally on defect
 when not defined(nimPanics):
   {.warning: "cps supports --panics:on only; " &
-             " see https://github.com/nim-works/cps/issues/110".}
+             "see https://github.com/nim-works/cps/issues/110".}
 
 when (NimMajor, NimMinor, NimPatch) < (1, 7, 3):
   # we recommend against threads:on without define:useMalloc
@@ -55,40 +57,37 @@ template dismissed*(c: Continuation): bool =
 
 macro cpsTyped(tipe: typed, n: typed): untyped =
   ## This is the typed CPS transformation pass which follows the untyped pass below.
-  when defined(nimdoc):
-    n
+  when defined(nimdoc): return n
+  case n.kind
+  of nnkProcDef:
+    # Typically we would add these as pragmas, however it appears
+    # that the compiler will run through macros in proc pragmas
+    # one-by-one without re-seming the body in between...
+    {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
+    result =
+      # Add the main transform phase
+      newCall(bindSym"cpsTransform", tipe):
+        # Add the flattening phase which will be run first
+        newCall(bindSym"cpsFlattenExpr"):
+          n
+  of nnkProcTy:
+    # converting a cps callback
+    result = cpsCallbackTypeDef(tipe, n)
   else:
-    case n.kind
-    of nnkProcDef:
-      # Typically we would add these as pragmas, however it appears
-      # that the compiler will run through macros in proc pragmas
-      # one-by-one without re-seming the body in between...
-      {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18349".}
-      result =
-        # Add the main transform phase
-        newCall(bindSym"cpsTransform", tipe):
-          # Add the flattening phase which will be run first
-          newCall(bindSym"cpsFlattenExpr"):
-            n
-    of nnkProcTy:
-      # converting a cps callback
-      result = cpsCallbackTypeDef(tipe, n)
-    else:
-      result = getAst(cpsTransform(tipe, n))
+    result = getAst(cpsTransform(tipe, n))
 
 macro cps*(tipe: typed, n: untyped): untyped =
   ## When applied to a procedure, rewrites the procedure into a
   ## continuation form. When applied to a procedure type definition,
   ## rewrites the type into a callback form.
+  when defined(nimdoc): return n
+  # add the application of the typed transformation pass
+  n.addPragma:
+    nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
+  # let the untyped pass do what it will with this input
+  # XXX: currently disabled because it's a slipperly slope of regret
+  #result = performUntypedPass(T, n)
   result = n
-  when not defined(nimdoc):
-    # add the application of the typed transformation pass
-    n.addPragma:
-      nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
-    # let the untyped pass do what it will with this input
-    # XXX: currently disabled because it's a slipperly slope of regret
-    #result = performUntypedPass(T, n)
-    result = n
 
 proc adaptArguments(sym: NormNode; args: seq[NormNode]): seq[NormNode] =
   ## convert any arguments in the list as necessary to match those of
@@ -158,6 +157,11 @@ macro whelp*(parent: Continuation; call: typed): untyped =
     it =
       sym.ensimilate:
         Tail.hook(parent.NormNode, newCall(base, it))
+
+macro whelp*[T](callback: typedesc[T]; sym: typed): untyped =
+  ## Given a `callback` typedesc and a CPS continuation procedure,
+  ## apply a (proc ()) type specifier to help disambiguate overloads.
+  result = createCastCallback(bindSym"whelp", callback, sym)
 
 template head*[T: Continuation](first: T): T {.used.} =
   ## Reimplement this symbol to configure a continuation
@@ -316,20 +320,3 @@ proc dealloc*[T: Continuation](c: sink T; E: typedesc[T]): E {.used, inline.} =
 template recover*(c: Continuation): untyped {.used.} =
   ## Returns the result, i.e. the return value, of a continuation.
   discard
-
-when cpsCallOperatorSupported and not defined cpsNoCallOperator:
-  {.push experimental: "callOperator".}
-  macro `()`*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): R =
-    ## Allows for natural use of call syntax to invoke a callback and
-    ## recover its result in a single statement, inside a continuation.
-    let call = macros.newCall(macros.bindSym"call", callback)
-    for argument in arguments.items:
-      call.add argument
-    let mutable = genSymVar("continuation", callback.NormNode).NimNode
-    result = macros.newStmtList()
-    result.add:
-      macros.newTree nnkVarSection:
-        macros.newTree(nnkIdentDefs, mutable, newEmptyNode(), call)
-    result.add:
-      macros.newCall(macros.bindSym"recover", callback, mutable)
-  {.pop.}

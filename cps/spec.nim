@@ -37,9 +37,8 @@ template cpsContinue*() {.pragma.}      ##
 template cpsCont*() {.pragma.}          ## this is a continuation
 template cpsBootstrap*(whelp: typed) {.pragma.}  ##
 ## the symbol for creating a continuation -- technically, a whelp()
-template cpsCallback*() {.pragma.}          ## this is a callback typedef
-template cpsCallbackShim*(whelp: typed) {.pragma.}  ##
-## the symbol for creating a continuation which returns a continuation base
+template cpsUserType*(tipe: typed) {.pragma.}  ##
+## the user-supplied type from which the environment extends
 template cpsEnvironment*(tipe: typed) {.pragma.}  ##
 ## the environment type that composed the target
 template cpsResult*(result: typed) {.pragma.}  ##
@@ -74,12 +73,6 @@ type
   ContinuationProc*[T] = proc(c: sink T): T {.nimcall.}
   ContinuationFn* = ContinuationProc[Continuation]
 
-  Callback*[C; R; P] = object
-    fn*: P                            ##
-    ## the bootstrap for continuation C
-    rs*: proc (c: var C): R {.nimcall.}   ##
-    ## the result fetcher for continuation C
-
   TraceFrame* = object ## a record of where the continuation has been
     hook*: Hook        ## the hook that provoked the trace entry
     fun*: string       ## a short label for the notable symbol
@@ -108,31 +101,38 @@ proc `=destroy`(dest: var ContinuationObj) =
 
 template dot*(a, b: NimNode): NimNode =
   ## for constructing foo.bar
-  newDotExpr(a, b)
+  {.line: instantiationInfo().}:
+    newDotExpr(a, b)
 
 template dot*(a: NimNode; b: string): NimNode =
   ## for constructing `.`(foo, "bar")
-  dot(a, ident(b))
+  {.line: instantiationInfo().}:
+    dot(a, ident(b))
 
 template eq*(a, b: NimNode): NimNode =
   ## for constructing foo=bar in a call
-  nnkExprEqExpr.newNimNode(a).add(a).add(b)
+  {.line: instantiationInfo().}:
+    nnkExprEqExpr.newNimNode(a).add(a).add(b)
 
 template eq*(a: string; b: NimNode): NimNode =
   ## for constructing foo=bar in a call
-  eq(ident(a), b)
+  {.line: instantiationInfo().}:
+    eq(ident(a), b)
 
 template colon*(a, b: NimNode): NimNode =
   ## for constructing foo: bar in a ctor
-  nnkExprColonExpr.newNimNode(a).add(a).add(b)
+  {.line: instantiationInfo().}:
+    nnkExprColonExpr.newNimNode(a).add(a).add(b)
 
 template colon*(a: string; b: NimNode): NimNode =
   ## for constructing foo: bar in a ctor
-  colon(ident(a), b)
+  {.line: instantiationInfo().}:
+    colon(ident(a), b)
 
 template colon*(a: string | NimNode; b: string | int): NimNode =
   ## for constructing foo: bar in a ctor
-  colon(a, newLit(b))
+  {.line: instantiationInfo().}:
+    colon(a, newLit(b))
 
 proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
@@ -301,6 +301,10 @@ proc isCpsCall*(n: NormNode): bool =
         # be a magic or it could be another continuation leg
         # or it could be a completely new continuation
         result = it.impl.hasPragma "cpsMustJump"
+    elif it[0].kind == nnkDotExpr:
+      # we are only interested in c.fn(...) forms; we aren't looking
+      # for Callback types, but rather Callback /calls/...
+      result = it[0].isCallback
 
 proc isCpsConvCall*(n: NormNode): bool =
   ## true if this node holds a cps call that might be nested within one or more
@@ -359,7 +363,8 @@ proc pragmaArgument*(n: NormNode; s: string): NormNode =
     result = n.errorAst "unsupported pragmaArgument target: " & $n.kind
 
 proc bootstrapSymbol*(n: NimNode): NormNode =
-  ## find the return type of the bootstrap
+  ## given a callable symbol, recover the symbol of
+  ## the bootstrap or produce a compile-time error.
   let n = NormNode n
   case n.kind
   of NormalCallNodes:
@@ -369,9 +374,13 @@ proc bootstrapSymbol*(n: NimNode): NormNode =
   of nnkProcDef:
     if n.hasPragma "borrow":
       bootstrapSymbol n.last
-    else:
+    elif n.hasPragma "cpsBootstrap":
       pragmaArgument(n, "cpsBootstrap")
+    else:
+      error "procedure doesn't seem to be a cps call"
+      normalizedast.newCall("typeOf", n)
   else:
+    error "procedure doesn't seem to be a cps call"
     ## XXX: darn ambiguous calls
     normalizedast.newCall("typeOf", n)
 
@@ -604,52 +613,3 @@ proc copyOrVoid*(n: NimNode): NimNode =
     ident"void"
   else:
     copyNimTree n
-
-proc createCallback*(sym: NimNode): NimNode =
-  ## create a new Callback object construction
-  let fn = sym.getImpl.ProcDef.pragmaArgument"cpsCallbackShim"
-  let impl = fn.getImpl.ProcDef                     # convenience
-  let rs = impl.pragmaArgument"cpsResult"
-  let tipe = nnkBracketExpr.newTree bindSym"Callback"
-  tipe.add impl.returnParam # the base cps environment type
-  tipe.add:                 # the return type of the result fetcher
-    copyOrVoid impl.pragmaArgument"cpsReturnType"
-  var params = copyNimTree impl.formalParams # prepare params list
-  # consider desym'ing foo(a: int; b = a) before deleting this loop
-  for defs in impl.callingParams:
-    params = desym(params, defs.name)
-  tipe.add:      # the proc() type of the bootstrap
-    nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
-  result =
-    NimNode:
-      nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
-
-proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NimNode =
-  ## looks like cpsTransformProc but applies to proc typedefs;
-  ## this is where we create our calling convention concept
-  let params = copyNimTree n[0]
-  let r = copyOrVoid params[0]
-  params[0] = tipe
-  let p = nnkProcTy.newTree(params,
-                            nnkPragma.newTree(ident"nimcall", bindSym"cpsCallback"))
-  result = nnkBracketExpr.newTree(bindSym"Callback", tipe, r, p)
-  result = workaroundRewrites result.NormNode
-
-proc recover*[C, R, P](callback: Callback[C, R, P]; continuation: var C): R =
-  ## Using a `callback`, recover the `result` of the given `continuation`.
-  ## This is equivalent to running `()` on a continuation which was
-  ## created with `whelp` against a procedure call.
-  ##
-  ## If the continuation is in the `running` `State`, this operation will
-  ## `trampoline` the continuation until it is `finished`. The `result`
-  ## will then be recovered from the continuation environment.
-  ##
-  ## It is a `Defect` to attempt to recover the `result` of a `dismissed`
-  ## `continuation`.
-  callback.rs(continuation)
-
-macro call*[C; R; P](callback: Callback[C, R, P]; arguments: varargs[typed]): C =
-  ## Invoke a `callback` with the given `arguments`; returns a continuation.
-  result = newCall(callback.dot ident"fn")
-  for argument in arguments.items:
-    result.add argument

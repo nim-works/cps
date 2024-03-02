@@ -1,7 +1,7 @@
 import std/[tables, hashes, genasts]
 import std/macros except newStmtList, newTree
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
-            normalizedast]
+            normalizedast, callbacks]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
 
 #{.experimental: "strictNotNil".}
@@ -13,7 +13,7 @@ proc makeContProc(name, cont, contType: Name; source: NimNode): ProcDef =
   ## `cont` with the given body.
   let
     contParam = desym cont
-    # https://github.com/nim-lang/Nim/issues/18365
+    # https://github.com/nim-lang/Nim/issues/18365 (fixed; inheritance)
     contType = TypeExpr: bindName"Continuation"
 
   result = newProcDef(name, contType, newIdentDef(contParam, sinkAnnotated contType))
@@ -75,19 +75,34 @@ macro cpsJump(cont, contType: typed; name: static[string];
   ## a version of cpsJump that doesn't take a continuing body.
   result = getAst(cpsJump(cont, contType, name, call, macros.newStmtList()))
 
+proc childCallName(n: NimNode): string =
+  ## come up with a name for a continuation jump target
+  case n.kind
+  of NormalCallNodes:
+    "child " & childCallName(n[0]) & "()"
+  of nnkSym, nnkIdent:
+    n.strVal
+  elif n.kind == nnkDotExpr and n.len > 0:
+    # try to grab the user's variable name, such as it is...
+    if n[0].kind == nnkDotExpr:
+      childCallName n[0]
+    else:
+      childCallName n.last
+  else:
+    "callback"
+
 macro cpsContinuationJump(cont, contType: typed; name: static[string];
                           call, c, n: typed): untyped =
   ## a jump to another continuation that must be instantiated
   let
-    c = c.NormNode                                      # store child here
-    call = normalizeCall(call)                          # child bootstrap call
-    name = genProcName(name, "child " & $call.name & "()",
-                       info = n.NormNode)
-    cont = cont.asName                                  # current continuation
-    contType = contType.asName                          # so-called user type
+    c = c.NormNode                                   # store child here
+    name = genProcName(name, childCallName(call), info = call.NormNode)
+    call = normalizeCall(call)                       # child bootstrap call
+    cont = cont.asName                               # current continuation
+    contType = contType.asName                       # so-called user type
   debugAnnotation cpsContinuationJump, n:
     it = newStmtList:
-      makeContProc(name, cont, contType, n)             # return to this proc
+      makeContProc(name, cont, contType, n)          # return to this proc
     it.add:
       # update the parent's stack frame with the call site of the child
       updateLineInfoForContinuationStackFrame(cont.NimNode, call.NimNode)
@@ -97,7 +112,7 @@ macro cpsContinuationJump(cont, contType: typed; name: static[string];
     it.add:
       # instantiate a new child continuation with the given arguments
       newAssignment c:
-        newCall("whelp", cont, call)
+        newCall("whelp", cont, call)  # FIXME: move whelp() and bindName
     # NOTE: mom should now be set via the tail() hook from whelp
     #
     # return the child continuation
@@ -105,6 +120,34 @@ macro cpsContinuationJump(cont, contType: typed; name: static[string];
       newCall bindName"Continuation":
         Pass.hook newCall(NormNode contType, cont):
           c    # we're basically painting the future
+
+macro cpsCallbackJump(cont, contType: typed; name: static[string];
+                      call, c, n: typed): untyped =
+  ## a jump to another continuation that must be instantiated from a callback
+  let
+    c = c.NormNode                                   # store child here
+    name = genProcName(name, childCallName(call), info = call.NormNode)
+    call = normalizeCall(call)                       # child bootstrap call
+    cont = cont.asName                               # current continuation
+    contType = contType.asName                       # so-called user type
+  debugAnnotation cpsCallbackJump, n:
+    it = newStmtList:
+      makeContProc(name, cont, contType, n)          # return to this proc
+    it.add:
+      # update the parent's stack frame with the call site of the child
+      updateLineInfoForContinuationStackFrame(cont.NimNode, call.NimNode)
+    it.add:
+      # install the return point in the current continuation
+      newAssignment(newDotExpr(cont, asName"fn"), name)
+    it.add:
+      newAssignment c:
+        Tail.hook cont:  # the tail hook presumably assigns mom
+          call           # no ensimilation or argument munging needed here
+    # return the child continuation
+    it = makeReturn(contType, it):
+      newCall bindName"Continuation":
+        Pass.hook newCall(NormNode contType, cont):
+          c
 
 macro cpsMayJump(cont, contType: typed; name: static[string]; n, after: typed): untyped =
   ## The block in `n` is tainted by a `cpsJump` and may require a jump
@@ -610,14 +653,13 @@ proc newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
   result.add(NormNode env.first, NormNode env.root)
   result.add newLit(env.procedure)
 
-proc setupChildContinuation(env: var Env; call: Call): (Name, NormNode) =
-  ## create a new child continuation variable and add it to the
-  ## environment.  return the child's symbol and its environment type.
+proc setupChildContinuation(env: var Env; call: Call): (Name, TypeExpr) =
+  ## create a new child continuation variable and add it to the environment.
+  ## return the child's symbol and its environment type.
   let child = genSymVar("child", info = call)
-  let etype = pragmaArgument(call, "cpsEnvironment")
-  env.localSection newIdentDef(child, etype.TypeExpr)
-  # XXX: also sniff and return the child continuation's "user type"?
-  result = (child, etype)
+  let ctype = pragmaArgument(call, "cpsEnvironment").TypeExpr
+  env.localSection newIdentDef(child, ctype)
+  result = (child, ctype)
 
 proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): NormNode =
   ## this rewrite supports `x = contProc()`, `let x = contProc()`,
@@ -625,8 +667,13 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   if not expr.isCpsConvCall:
     return expr.errorAst("cps doesn't know how to shim this")
 
-  let call = asCall:
-    expr.findChildRecursive(isCpsCall)
+  let call = expr.findChildRecursive(isCpsCall).asCall
+  let callbackMode =
+    call.len > 0 and call[0].kind == nnkDotExpr and call[0].last.isCallback
+
+  var recovery: Call
+  var child: Name
+  var ctype: TypeExpr
 
   # create the unshimmed assignment
   var assign = newStmtList()
@@ -642,15 +689,19 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
     return store.errorAst("unsupported store")
 
   # swap the call in the assignment statement(s)
-  let (child, etype) = setupChildContinuation(env, call)
-  let recovery = newCall("recover".asName, child)
+  if callbackMode:
+    (child, ctype) = setupCallbackChild(env, call.asCall)
+    recovery = newCall("recover".asName, call[0][0], child)
+  else:
+    (child, ctype) = setupChildContinuation(env, call)
+    recovery = newCall("recover".asName, child)
   assign = assign.childCallToRecoverResult(call, recovery)
 
   # compose the rewrite as an assignment and any remaining tail
   var body =
     NormNode:
       genAstOpt({}, assign = assign.NimNode, tail = tail.NimNode,
-                child = child.NimNode, etype = etype.NimNode,
+                child = child.NimNode, ctype = ctype.NimNode,
                 root = env.root.NimNode, identity = env.identity.NimNode,
                 dealloc = Dealloc.sym.NimNode):
         case child.state
@@ -661,7 +712,7 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
           assign
           when false:
             # we don't dealloc here, but maybe we should
-            dealloc(etype, child)
+            dealloc(child, ctype)
           tail
         of Running:
           # the child is still running; someone is trying to be clever
@@ -734,6 +785,25 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
             env.annotate newStmtList(nc)
 
           continue
+
+    # if it's a callback recovery block,
+    if nc.len > 0 and nc.isCallbackRecovery:
+      # {.cpsCallbackRecovery(C).}: ... -> C
+      let call = nc.last[0][0][0].last.asCall  # XXX: findChildRecursive?
+      var jumpCall = env.newAnnotation(call, "cpsCallbackJump")
+      let (child, _) = setupCallbackChild(env, call)
+      jumpCall.add env.annotate(call)
+      jumpCall.add env.annotate(child)
+      # rewrite the assignment to use our new child
+      var tail: NormNode = newCall("recover".asName, call[0][0], child)
+      if nc.last.last.kind == nnkAsgn:
+        tail = newAssignment(nc.last.last[0], tail)
+      tail = newStmtList(tail, anyTail())
+      jumpCall.add:
+        env.annotate:
+          tail.NormNode
+      result.add jumpCall
+      endAndReturn()
 
     # if it's a cps call,
     if nc.isCpsCall:
@@ -1139,17 +1209,23 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # the whelp is a limited bootstrap that merely creates
   # the continuation without invoking it in a trampoline
   let whelp = env.createWhelp(n, name)
-  let whelpShim = env.createCallbackShim(whelp)
+
+  # the callback shim is a clone of the whelp procedure
+  # which returns the user's base continuation type
+  let callbackShim = env.createCallbackShim(whelp)
 
   # setup the bootstrap using the old proc name,
   # but the first leg will be the new proc name
   let booty = env.createBootstrap(n, name)
 
+  # we store the user-supplied type from which the environment inherits
+  booty.addPragma(bindName"cpsUserType", tipe.asName)
+
   # we store a pointer to the whelp on the bootstrap
   booty.addPragma(bindName"cpsBootstrap", whelp.name)
 
-  # we store a pointer to the whelp shim on the bootstrap
-  booty.addPragma(bindName"cpsCallbackShim", whelpShim.name)
+  # we store a pointer to the callback shim on the bootstrap
+  booty.addPragma(bindName"cpsCallbackShim", callbackShim.name)
 
   # like magics, the bootstrap must jump
   booty.addPragma "cpsMustJump"
@@ -1157,8 +1233,8 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # give the booty the sym we got from the original, which
   # causes the bootstrap symbol to adopt the original procedure's symbol;
   # this is a workaround for nim bugs:
-  # https://github.com/nim-lang/Nim/issues/18203 (used hints)
-  # https://github.com/nim-lang/Nim/issues/18235 (export leaks)
+  # https://github.com/nim-lang/Nim/issues/18203 (fixed; used hints)
+  # https://github.com/nim-lang/Nim/issues/18235 (fixed; export leaks)
   booty.name = originalProcSym
 
   # now we'll reset the name of the new proc
@@ -1173,7 +1249,7 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # Replace the proc params: its sole argument and return type is T:
   #   proc name(continuation: T): T
   n.formalParams =
-    # https://github.com/nim-lang/Nim/issues/18365
+    # https://github.com/nim-lang/Nim/issues/18365 (fixed; inheritance)
     newFormalParams(asTypeExpr bindName"Continuation", env.firstDef)
 
   var body = newStmtList()     # a statement list will wrap the body
@@ -1230,10 +1306,10 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
     # storing the result fetcher on the booty
     p.addPragma(bindName"cpsResult", recoverProc.name)
 
-  for p in [whelp, whelpShim]:
-    # storing the result fetcher on the whelp and whelp shim
+  for p in [whelp, callbackShim]:
+    # storing the result fetcher on the whelp and callback shim
     p.addPragma(bindName"cpsResult", recoverProc.name)
-    # storing the return type on the whelp and whelp shim
+    # storing the return type on the whelp and callback shim
     p.addPragma(bindName"cpsReturnType", copyOrVoid recoverProc.params[0])
 
   # "encouraging" a write of the current accumulating type
@@ -1241,7 +1317,7 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
 
   # generated proc bodies, remaining proc, result fetchers, whelp, bootstrap
   result = newStmtList(types, processMainContinuation, recover.NormNode,
-                       whelp, whelpShim, booty)
+                       whelp, callbackShim, booty)
 
   # this is something that happens a lot in cps-generated code, so hide it
   # here to not spam the user with hints.
@@ -1263,73 +1339,3 @@ macro cpsTransform*(tipe, n: typed): untyped =
   debug("cpsTransform", n, Original)
   result = cpsTransformProc(tipe, n)
   debug("cpsTransform", result, Transformed, n)
-
-proc looksLikeCallback(n: NimNode): bool =
-  ## true if the symbol appears to be of the Callback persuasion.
-  case n.kind
-  of nnkEmpty:
-    false
-  of nnkDotExpr:
-    looksLikeCallback(n.last)
-  of nnkSym:
-    looksLikeCallback(getTypeImpl n)
-  of nnkObjectTy:
-    looksLikeCallback(n.last)
-  of nnkRecList:
-    looksLikeCallback(n[0])
-  of nnkIdentDefs:
-    if n[0].repr == "fn":
-      looksLikeCallback(n[1])
-    else:
-      false
-  of nnkProcTy:
-    for node in n.pragma:
-      if node.kind == nnkCall:
-        if node[0].strVal == "cpsCallback":
-          return true
-    false
-  else:
-    false
-
-macro naturalize(kind: static[NimNodeKind]; callback: typed;
-                 args: varargs[untyped]): untyped =
-  ## perform a conditional typed rewrite for natural callback syntax inside cps
-  if callback.looksLikeCallback:
-    # convert it to callback.call(...)
-    result = macros.newTree(kind, newDotExpr(callback, bindSym"call"))
-    for arg in args.items:
-      result.add arg
-    # wrap that in recover(callback, ...)
-    result = newCall(bindSym"recover", callback, result)
-  else:
-    result = kind.newTree(desym callback)
-    for arg in args.items:
-      result.add arg
-
-proc unwrapAnyDotExpr(n: NimNode): seq[NimNode] =
-  ## turn a caller like foo.inc into @[inc, foo] so that we can flatten/reorder
-  ## arguments correctly
-  case n.kind
-  of nnkDotExpr:
-    @[n[1], n[0]]
-  else:
-    @[n]
-
-proc rewriteCalls*(n: NimNode): NimNode =
-  ## rewriting `callback(x)` into `recover(callback, call(callback, x))` for use
-  ## inside of an untyped pass; this should be applied only to Callback symbols...
-  proc recall(n: NimNode): NimNode =
-    case n.kind
-    of CallNodes:
-      result = newCall(bindSym"naturalize", newLit(n.kind))
-      result.add unwrapAnyDotExpr(n[0])  # help foo.inc(...) into inc(foo, ...)
-      result.add n[1..^1]
-    else:
-      discard
-  result = filter(n, recall)
-
-proc performUntypedPass*(tipe: NimNode; n: NimNode): NimNode =
-  ## Perform any rewrites needed prior to a `.cps: T.` transformation.
-  if n.kind != nnkProcDef: return n
-  result = n
-  result.body = rewriteCalls result.body

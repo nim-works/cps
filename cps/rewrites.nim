@@ -114,6 +114,39 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
       discard
   result = filter(n, desymifier)
 
+proc isCallback*(n: NimNode): bool =
+  ## true if the node is essentially a callback call
+  case n.kind
+  of nnkEmpty:
+    false
+  of nnkDotExpr:
+    n.last.isCallback
+  of nnkSym:
+    if symKind(n) in {nskField}:
+      n.getTypeImpl.isCallback
+    else:
+      false
+  of nnkObjectTy:               # arriving from the Callback[] object type
+    n.last.isCallback
+  of nnkRecList:
+    n.len == 2 and
+    n[0].kind == nnkIdentDefs and n[0][0].strVal == "fn" and n[0].isCallback and
+    n[1].kind == nnkIdentDefs and n[1][0].strVal == "rs"  # recover() must work
+  of nnkIdentDefs:              # Callback -> Callback.fn
+    if n[0].kind in {nnkSym, nnkIdent} and n[0].strVal == "fn":
+      n[1].isCallback
+    else:
+      false
+  of nnkProcTy:
+    # all we really care about is that the callable has a cpsCallback() pragma
+    for node in n.pragma:
+      if node.kind == nnkCall:
+        if node[0].strVal == "cpsCallback":
+          return true
+    false
+  else:
+    false
+
 proc normalizingRewrites*(n: NimNode): NormNode =
   ## Rewrite AST into a safe form for manipulation without removing semantic
   ## data.

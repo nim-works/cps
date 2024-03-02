@@ -169,7 +169,7 @@ proc makeType*(e: Env): NimNode =
 proc first*(e: Env): Name = e.c
 
 proc firstDef*(e: Env): IdentDef =
-  # https://github.com/nim-lang/Nim/issues/18365
+  # https://github.com/nim-lang/Nim/issues/18365 (fixed; inheritance)
   newIdentDef(e.first, sinkAnnotated asTypeExpr bindName"Continuation", newEmptyNode())
 
 proc getResult*(e: Env): NormNode =
@@ -253,6 +253,8 @@ proc addIdentDef(e: var Env; kind: NimNodeKind; def: IdentDef): CachePair =
     value = newVarLetIdentDef(kind, def.name, stripVar(def.typ), def.val)
     # we stripVar to ident: <no var> type = default
   e = e.set(field, value)
+  when cpsDebug == "Env":
+    echo "env += ", repr(value)
   result = (key: field, val: value)
 
 proc newEnv*(c: Name; store: var NormNode; via: Name; rs: NormNode;
@@ -300,18 +302,13 @@ proc letOrVar(n: IdentDef): NimNodeKind =
 proc addAssignment(e: var Env; d: IdentDef): NimNode =
   ## compose an assignment during addition of identdefs to env. For the
   ## purposes of CPS, even though let and var sections contain identdefs this
-  ## proc should never handle those directly, see overloads.
-  let section = letOrVar(d)
-  when cpsDebug == "Env":
-    echo $section.kind, "\t", repr(section)
-  discard e.addIdentDef(section, d)
+  ## proc should never handle those directly; see the overload below.
+  discard e.addIdentDef(d.letOrVar, d)
   # don't attempt to redefine proc params!
   result = newStmtList()
 
 proc addAssignment(e: var Env; section: VarLetIdentDef): NimNode =
   ## compose an assignment during addition of var|let identDefs to env
-  when cpsDebug == "Env":
-    echo $section.kind, "\t", repr(section)
   let (field, value) = e.addIdentDef(section.kind, section.identdef())
   result = e.initialization(field, value)
 
@@ -524,18 +521,6 @@ proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   for defs in result.callingParams:
     result = desym(result, defs.name)
 
-proc createCallbackShim*(env: Env; whelp: ProcDef): ProcDef =
-  ## this is a version of whelp that returns the base continuation type
-  result = clone(whelp, newStmtList())
-  result.returnParam = env.inherits
-  result.name = genProcName(procedure env, "callback", info=whelp)
-  # whelp_234(a, b, c)
-  result.body = newCall whelp.name
-  for defs in result.callingParams:
-    result.body.add defs.name
-  # C: whelp_234(a, b, c)
-  result.body = newCall(result.returnParam, result.body)
-
 proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   ## the bootstrap needs to create a continuation and trampoline it
   result = clone(n, newStmtList())
@@ -599,7 +584,7 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
   proc voodoo(n: NormNode): NormNode =
     if n.isVoodooCall:
       let it = asCall n.copyNimTree
-      # https://github.com/nim-lang/Nim/issues/18365
+      # https://github.com/nim-lang/Nim/issues/18365 (fixed; inheritance)
       it.prependArg newCall(env.root, env.first)
       desym it
       result = env.rewriteVoodoo it

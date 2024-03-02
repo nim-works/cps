@@ -60,29 +60,66 @@ suite "calling convention":
     check cb.recover(d) == 5.0
 
   block:
-    ## run a callback from inside cps with callback type
-    var k = newKiller 4
+    ## callbacks run from inside cps run pass, tail, etc.
+    var k = newKiller 7
 
     type
       ContCall = proc(a: int): int {.cps: Cont.}
 
+    proc tail(c: Continuation; d: Cont): Cont =
+      d.mom = c
+      step 3
+      d
+
+    proc pass(c: Cont; d: Cont): Cont =
+      step 4
+      d
+
+    proc head(c: Cont): Cont =
+      step 1
+      c
+
     proc bar(a: int): int {.cps: Cont.} =
       noop()
-      step 3
+      step 5
       return a * 2
 
     proc foo(c: ContCall) {.cps: Cont.} =
-      step 1
-      var x = c.call(4)
       step 2
-      check c.recover(x) == 8
-      step 4
+      var x = c(4)
+      step 6
+      check x == 8
+      step 7
 
     foo: whelp bar
 
   block:
+    ## whelp helps disambiguate cps callbacks at instantiation
+    var k = newKiller 2
+
+    type
+      ContCall {.used.} = proc(a: int): int {.cps: Cont.}
+      MoreCall {.used.} = proc(a: float): float {.cps: Cont.}
+
+    proc bar(a: float): float {.cps: Cont.} =
+      noop()
+      return a * 2.0
+
+    proc bar(a: int): int {.cps: Cont.} =
+      step 2
+      noop()
+      return a * 2
+
+    proc foo(c: ContCall) {.cps: Cont.} =
+      step 1
+      var x = c(4)
+      check x == 8
+
+    foo: whelp(ContCall, bar)
+
+  block:
     ## run a callback in cps with natural syntax
-    when not cpsCallOperatorSupported:
+    when not cpsCallOperatorSupported or defined(cpsNoCallOperator):
       skip "unsupported on nim " & NimVersion
     else:
 
@@ -102,8 +139,29 @@ suite "calling convention":
         check x == 8
         step 3
 
-      const cb = whelp bar
-      foo cb
+      foo: whelp bar
+
+  block:
+    ## run a callback with no return value in cps
+    when not cpsCallOperatorSupported or defined(cpsNoCallOperator):
+      skip "unsupported on nim " & NimVersion
+    else:
+
+      type
+        ContCall = proc(a: int) {.cps: Cont.}
+
+      var k = newKiller 3
+
+      proc bar(a: int) {.cps: Cont.} =
+        noop()
+        step 2
+
+      proc foo(c: ContCall) {.cps: Cont.} =
+        step 1
+        c(4)
+        step 3
+
+      foo: whelp bar
 
   block:
     ## callback illustration
