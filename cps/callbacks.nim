@@ -134,7 +134,7 @@ proc baseContinuationType*(n: NimNode): NimNode =
   case n.kind
   of nnkDotExpr:
     # continuationEnvironment.callbackLocal.fn(arguments...)
-    if n.len > 0 and n[0].kind == nnkDotExpr:
+    if n[0].kind in {nnkDotExpr, nnkSym}:
       let fun = n.last.getTypeImpl   # proctype from first object record (fn)
       result = fun[0][0]             # recover proc return type
   elif not n.isCallback:
