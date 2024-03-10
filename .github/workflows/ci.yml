@@ -54,8 +54,8 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         compiler:
-          - name: nim
-            version: devel
+          #- name: nim
+          #  version: devel
 
           - name: nimskull
             version: "*"
