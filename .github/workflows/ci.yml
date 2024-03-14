@@ -78,7 +78,7 @@ jobs:
       - name: Compiler (nimskull)
         id: nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: nim-works/setup-nimskull@0.1.0
+        uses: nim-works/setup-nimskull@0.1.1
         with:
           nimskull-version: ${{ matrix.compiler.version }}
 
