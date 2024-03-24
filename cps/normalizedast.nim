@@ -4,6 +4,9 @@ from std/hashes import Hash, hash
 from std/sequtils import anyIt, toSeq
 from std/typetraits import distinctBase
 
+when defined(nimPreviewSlimSystem):
+  import std/assertions
+
 from cps/rewrites import NormNode, normalizingRewrites, replace,
                          desym, resym, childCallToRecoverResult,
                          NormalCallNodes
