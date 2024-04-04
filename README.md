@@ -282,6 +282,7 @@ Here are a few projects which demonstrate CPS library integration.
 |[Background](https://github.com/disruptek/background)|Run any function on a background thread|
 |[Passenger](https://github.com/disruptek/passenger)|Compose graph visualizations of CPS control-flow|
 |[HttpLeast](https://github.com/disruptek/httpleast)|A simple web-server for benchmarking CPS|
+|[solo5_dispatcher](https://git.sr.ht/~ehmry/solo5_dispatcher)|A simple CPS scheduler for Solo5 unikernels|
 
 #### Larger
 
@@ -291,6 +292,8 @@ Here are a few projects which demonstrate CPS library integration.
 |[Sys](https://github.com/alaviss/nim-sys)|Next-generation operating system service abstractions|
 |[Actors](https://github.com/zevv/actors)|Zevv's experimental project to create a threaded, share-nothing actor based framework on top of CPS|
 |[InsideOut](https://github.com/disruptek/insideout)|Another experimental concurrency library which supports CPS over threads|
+|[Taps](https://git.sr.ht/~ehmry/nim_taps)|A portable, asynchronous, network abstraction library|
+|[Syndicate](https://git.syndicate-lang.org/ehmry/syndicate-nim)|The Syndicated Actor Model for Nim|
 
 ## Debugging
 
