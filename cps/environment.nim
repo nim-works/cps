@@ -9,6 +9,9 @@ import std/macros except newStmtList, newTree
 import std/[sets, sequtils, hashes, tables, algorithm, genasts]
 import cps/[spec, hooks, help, rewrites, normalizedast]
 
+when defined(nimPreviewSlimSystem):
+  import std/assertions
+
 #{.experimental: "strictNotNil".}
 
 const
