@@ -56,15 +56,19 @@ jobs:
         compiler:
           - name: nim
             version: devel
+            broken: true
 
           - name: nimskull
             version: "*"
+            broken: true
 
           - name: nimskull
             version: "<0.1.0-dev.21268"
+            broken: false
 
-    name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }}"
+    name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }}${{ matrix.compiler.broken && ', broken' || '' }})"
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.compiler.broken }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
