@@ -60,7 +60,26 @@ jobs:
           - name: nimskull
             version: "*"
 
-    name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }})"
+          - name: nimskull
+            version: "<0.1.0-dev.21268"
+
+        broken: [false]
+
+        include:
+          - compiler:
+              name: nim
+              version: devel
+            broken: true
+
+          - compiler:
+              name: nimskull
+              # Broken due to https://github.com/nim-works/nimskull/pull/1236
+              version: "*"
+            broken: true
+
+    continue-on-error: ${{ matrix.broken }}
+
+    name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }}, broken: ${{ matrix.broken }})"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
