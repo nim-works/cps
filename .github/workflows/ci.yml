@@ -58,6 +58,10 @@ jobs:
             version: devel
             broken: true
 
+          - name: nim
+            version: version-2-0
+            broken: false
+
           - name: nimskull
             version: "*"
             broken: true
