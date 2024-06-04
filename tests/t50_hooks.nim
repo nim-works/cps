@@ -332,5 +332,6 @@ suite "hooks":
       bar()
       step 4
 
-    expect IOError:
-      foo()
+    k.run:
+      expect IOError:
+        foo()

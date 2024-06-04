@@ -417,90 +417,91 @@ proc reset*(v: var K) =
 proc `=destroy`(v: var K) =
   inc k
 
-suite "lifetimes":
-  block:
-    ## child continuation lifetimes canary
-    when not defined(release) and not defined(isNimSkull):
-      skip"triggers compiler error outside release"
-    else:
+k.run:
+  suite "lifetimes":
+    block:
+      ## child continuation lifetimes canary
+      when not defined(release) and not defined(isNimSkull):
+        skip"triggers compiler error outside release"
+      else:
+        type
+          K = object
+          C = ref object of Cont
+            n: K
+          D = ref object of C
+            m: K
+
+        var k = initKiller 11
+
+        proc `=destroy`(v: var K) =
+          inc k
+
+        proc setup(c: C): C {.cpsMagic.} =
+          c.n = K()
+          inc k
+          c
+
+        proc create(d: D): D {.cpsMagic.} =
+          d.m = K()
+          inc k
+          d
+
+        proc bar() {.cps: D.} =
+          step 4
+          create()
+          check k.step == 6, "expected create/destroy in bar: " & $k.step
+          step 7
+
+        proc foo() {.cps: C.} =
+          step 1
+          setup()
+          check k.step == 3, "expected create/destroy in foo: " & $k.step
+          bar()
+          check k.step == 7, "expected child to exist"
+          step 8
+          # destroy foo.n; eg. step == 9
+          # destroy bar.n; eg. step == 10
+          # destroy bar.m; eg. step == 11
+
+        k.run: foo()
+
+    block:
+      ## lifetime canary for distinct objects
+
       type
-        K = object
         C = ref object of Cont
           n: K
         D = ref object of C
           m: K
 
-      var k = initKiller 11
-
-      proc `=destroy`(v: var K) =
-        inc k
-
       proc setup(c: C): C {.cpsMagic.} =
-        c.n = K()
+        c.n = newK()
         inc k
         c
 
       proc create(d: D): D {.cpsMagic.} =
-        d.m = K()
+        d.m = newK()
         inc k
         d
 
       proc bar() {.cps: D.} =
-        step 4
+        step 3
         create()
-        check k.step == 6, "expected create/destroy in bar: " & $k.step
-        step 7
+        check k.step == 4, "expected create/destroy in bar: " & $k.step
+        step 5
 
       proc foo() {.cps: C.} =
         step 1
         setup()
-        check k.step == 3, "expected create/destroy in foo: " & $k.step
+        check k.step == 2, "expected create/destroy in foo: " & $k.step
         bar()
-        check k.step == 7, "expected child to exist"
-        step 8
-        # destroy foo.n; eg. step == 9
-        # destroy bar.n; eg. step == 10
-        # destroy bar.m; eg. step == 11
+        check k.step == 5, "expected child to exist: " & $k.step
+        step 6
+        # destroy foo.n; eg. step == 7
+        # destroy bar.n; eg. step == 8
+        # destroy bar.m; eg. step == 9
 
       foo()
-
-  block:
-    ## lifetime canary for distinct objects
-
-    type
-      C = ref object of Cont
-        n: K
-      D = ref object of C
-        m: K
-
-    proc setup(c: C): C {.cpsMagic.} =
-      c.n = newK()
-      inc k
-      c
-
-    proc create(d: D): D {.cpsMagic.} =
-      d.m = newK()
-      inc k
-      d
-
-    proc bar() {.cps: D.} =
-      step 3
-      create()
-      check k.step == 4, "expected create/destroy in bar: " & $k.step
-      step 5
-
-    proc foo() {.cps: C.} =
-      step 1
-      setup()
-      check k.step == 2, "expected create/destroy in foo: " & $k.step
-      bar()
-      check k.step == 5, "expected child to exist: " & $k.step
-      step 6
-      # destroy foo.n; eg. step == 7
-      # destroy bar.n; eg. step == 8
-      # destroy bar.m; eg. step == 9
-
-    foo()
 
 import std/sugar
 

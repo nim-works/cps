@@ -13,9 +13,10 @@ suite "cps api":
       noop()
       return 3
 
-    var i = bootstrap()
-    check i is int, "bootstrap's output is not an int"
-    check i == 3, "bootstrap's output has the wrong value"
+    k.run:
+      var i = bootstrap()
+      check i is int, "bootstrap's output is not an int"
+      check i == 3, "bootstrap's output has the wrong value"
 
   block:
     ## whelp
@@ -26,9 +27,10 @@ suite "cps api":
       noop()
       return 3
 
-    var c = whelp whelped()
-    check "whelp's output is bogus":
-      c is Cont
+    k.run:
+      var c = whelp whelped()
+      check "whelp's output is bogus":
+        c is Cont
 
   block:
     ## state symbols and trampoline
@@ -39,18 +41,19 @@ suite "cps api":
       noop()
       return 3
 
-    var c = whelp states()
-    check "whelp initial state surprised us":
-      not c.dismissed
-      not c.finished
-      c.state == State.Running
-      c.running
-    c = cps.trampoline c
-    check "whelp state after trampoline surprised us":
-      not c.dismissed
-      c.state == State.Finished
-      c.finished
-      not c.running
+    k.run:
+      var c = whelp states()
+      check "whelp initial state surprised us":
+        not c.dismissed
+        not c.finished
+        c.state == State.Running
+        c.running
+      c = cps.trampoline c
+      check "whelp state after trampoline surprised us":
+        not c.dismissed
+        c.state == State.Finished
+        c.finished
+        not c.running
 
   block:
     ## trampolineIt
@@ -61,14 +64,15 @@ suite "cps api":
       noop()
       return 3
 
-    var c = whelp boing()
-    trampolineIt c:
-      check "state inside trampolineIt is " & $it.state:
-        not it.dismissed
-        it.running
-    check "state post-trampolineIt is " & $c.state:
-      not c.dismissed
-      c.finished
+    k.run:
+      var c = whelp boing()
+      trampolineIt c:
+        check "state inside trampolineIt is " & $it.state:
+          not it.dismissed
+          it.running
+      check "state post-trampolineIt is " & $c.state:
+        not c.dismissed
+        c.finished
 
   block:
     ## magic voodoo
@@ -98,7 +102,7 @@ suite "cps api":
       step 4
       return 3
 
-    check foo() == 3
+    k.run: check foo() == 3
 
   block:
     ## exporting CPS procedures works
@@ -112,7 +116,7 @@ suite "cps api":
       check entry() == 42
       step 2
 
-    foo()
+    k.run: foo()
 
   block:
     ## one can whelp a cps'd proc that was borrowed
@@ -124,7 +128,7 @@ suite "cps api":
 
     proc bar(d: D) {.borrow.}
 
-    discard whelp bar(42.D)
+    k.run: discard whelp bar(42.D)
 
   block:
     ## one can call a cps'd proc that was borrowed... from inside cps
@@ -145,7 +149,7 @@ suite "cps api":
       bar(y = 3.5, d = 42.D)
       step 3
 
-    foo()
+    k.run: foo()
 
   block:
     ## calling magic that is not defined for the base type should not compile
@@ -208,7 +212,7 @@ suite "cps api":
         step 4
         return 3
 
-      check foo() == 3
+      k.run: check foo() == 3
 
   block:
     ## parent-child voodoo works correctly
@@ -243,5 +247,6 @@ suite "cps api":
       step 6
       check v == 0
 
-    var a = whelp level_one()
-    trampoline a
+    k.run:
+      var a = whelp level_one()
+      trampoline a

@@ -181,4 +181,5 @@ suite "loops":
         step 6
         break
         step 7
-    foo()
+
+    k.run: foo()

@@ -11,7 +11,7 @@ suite "expression flattening":
       step 5
       check x == [1, 2, 42, 10, 20]
 
-    foo()
+    k.run: foo()
 
   test "flatten tuple construction":
     var k = newKiller(5)
@@ -26,7 +26,7 @@ suite "expression flattening":
       check x.b == 2
       check x == (1, 2, 42, 10, 20)
 
-    foo()
+    k.run: foo()
 
   test "flatten object construction":
     type
@@ -45,7 +45,7 @@ suite "expression flattening":
       # A few checks to verify that the names stay
       check x == O(x: 42, y: 10, z: 20)
 
-    foo()
+    k.run: foo()
 
   test "flatten calls":
     var k = newKiller(5)
@@ -68,7 +68,7 @@ suite "expression flattening":
       x = 42
       barvar(x, (noop(); step 4; x = 20; x))
 
-    foo()
+    k.run: foo()
 
   test "flatten and/or with short circuiting":
     var k = newKiller(7)
@@ -80,7 +80,7 @@ suite "expression flattening":
       check (noop(); step 5; false) or (noop(); step 6; true)
       check (noop(); step 7; true) or (noop(); fail "this should not run"; false)
 
-    foo()
+    k.run: foo()
 
   test "flatten raise statement":
     var k = newKiller(3)
@@ -93,4 +93,4 @@ suite "expression flattening":
         step 3
         check e.msg == "test"
 
-    foo()
+    k.run: foo()

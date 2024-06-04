@@ -5,8 +5,14 @@ type
   Killer* = object
     final: int
     n: int
+    finished: bool ## Guard for unchecked Killer
 
-proc `=destroy`*(k: var Killer) {.raises: [FailError].} =
+proc `=destroy`(k: var Killer) =
+  doAssert not k.finished, "finish() was not called on this killer"
+
+proc finish*(k: var Killer) {.raises: [FailError].} =
+  k.finished = true
+
   if k.final != k.n:
     let e = getCurrentException()
     # don't obliterate current exception
@@ -35,3 +41,9 @@ template step*(i: int) {.dirty.} =
   check k.n == i, "expected step " & $k.n & " but hit " & $i
   inc k.n
   k.final = max(i, k.final)
+
+template run*(k: var Killer, body: untyped): untyped =
+  try:
+    body
+  finally:
+    finish k

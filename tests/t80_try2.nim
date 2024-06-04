@@ -33,7 +33,7 @@ suite "try statements":
       barbar()
       step 6
 
-    trampoline whelp(foobar())
+    k.run: trampoline whelp(foobar())
 
   block:
     ## try statement with a single statement which is a cps assignment
@@ -52,7 +52,7 @@ suite "try statements":
       step 2
       check x == 42
 
-    trampoline whelp(foo())
+    k.run: trampoline whelp(foo())
 
   block:
     ## try-finally-reraise escape via break statements.
@@ -69,8 +69,9 @@ suite "try statements":
         fail "statement in while-loop after break"
       fail "statement after unhandled exception"
 
-    expect ValueError:
-      trampoline whelp(foo())
+    k.run:
+      expect ValueError:
+        trampoline whelp(foo())
 
   block:
     ## try-finally-reraise escape via continue statements.
@@ -87,8 +88,9 @@ suite "try statements":
         fail "statement in while-loop after finally"
       fail "statement after unhandled exception"
 
-    expect ValueError:
-      trampoline whelp(foo())
+    k.run:
+      expect ValueError:
+        trampoline whelp(foo())
 
   block:
     ## try: raise() except: continue
@@ -109,7 +111,8 @@ suite "try statements":
       except ValueError:
         fail "uncaught exception"
 
-    trampoline whelp(foo())
+    k.run:
+      trampoline whelp(foo())
 
   block:
     ## try-finally-reraise escape via return statements.
@@ -124,8 +127,9 @@ suite "try statements":
         return
       fail "statement after return"
 
-    expect ValueError:
-      trampoline whelp(foo())
+    k.run:
+      expect ValueError:
+        trampoline whelp(foo())
 
   block:
     ## try-finally-reraise handle after escape attempt
@@ -143,7 +147,8 @@ suite "try statements":
       except ValueError:
         step 2
 
-    trampoline whelp(foo())
+    k.run:
+      trampoline whelp(foo())
 
   block:
     ## the stack trace probably still works
@@ -268,7 +273,7 @@ when defined(gcArc) or defined(gcOrc):
           fail "this branch should not run"
         step 3
 
-      foo()
+      k.run: foo()
 
     block:
       ## try-except splits with raise
@@ -284,7 +289,7 @@ when defined(gcArc) or defined(gcOrc):
           step 3
         step 4
 
-      foo()
+      k.run: foo()
 
     block:
       ## try-finally-statement splits
@@ -298,7 +303,7 @@ when defined(gcArc) or defined(gcOrc):
           step 3
         step 4
 
-      foo()
+      k.run: foo()
 
     block:
       ## try-except-finally splits with raise
@@ -316,4 +321,4 @@ when defined(gcArc) or defined(gcOrc):
           step 4
         step 5
 
-      foo()
+      k.run: foo()

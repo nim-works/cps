@@ -18,7 +18,7 @@ suite "returns and results":
       step 3
       check x == 8
 
-    foo()
+    k.run: foo()
 
   block:
     ## continuations can return values via bootstrap
@@ -28,8 +28,9 @@ suite "returns and results":
       step 1
       return x * x
 
-    let x = foo(3)
-    check x == 9
+    k.run:
+      let x = foo(3)
+      check x == 9
 
   block:
     ## continuations can return values via whelp
@@ -39,10 +40,11 @@ suite "returns and results":
       step 1
       return x * x
 
-    var c = whelp foo(5)
-    trampoline c
-    check "recover operator works correctly":
-      recover(c) == 25
+    k.run:
+      var c = whelp foo(5)
+      trampoline c
+      check "recover operator works correctly":
+        recover(c) == 25
 
   block:
     ## assignments to the special result symbol work
@@ -53,8 +55,9 @@ suite "returns and results":
         step 1
         result = x * x
 
-      let x = foo(3)
-      check x == 9
+      k.run:
+        let x = foo(3)
+        check x == 9
 
     block:
       var k = newKiller 1
@@ -63,8 +66,9 @@ suite "returns and results":
         step 1
         result = x * x
 
-      var c = whelp foo(5)
-      trampoline c
+      k.run:
+        var c = whelp foo(5)
+        trampoline c
 
   block:
     ## naked returns in continuations with a complication are fine
@@ -76,7 +80,7 @@ suite "returns and results":
         return
       step 2
 
-    foo()
+    k.run: foo()
 
   block:
     ## dismissing a child continuation is fun
@@ -93,7 +97,7 @@ suite "returns and results":
       step 3
       check x == 8
 
-    foo()
+    k.run: foo()
 
   block:
     ## assignment to a continuation return value
@@ -110,7 +114,7 @@ suite "returns and results":
       step 3
       check x == 8
 
-    foo()
+    k.run: foo()
 
   block:
     ## local assignment tuple unpacking a continution return value
@@ -128,10 +132,11 @@ suite "returns and results":
       check b == 2
       (a + b) * 2
 
-    var c = whelp foo()
-    trampoline c
-    check "recover operator works correctly":
-      6 == recover c
+    k.run:
+      var c = whelp foo()
+      trampoline c
+      check "recover operator works correctly":
+        6 == recover c
 
   block:
     ## discarding a continuation return value works
@@ -144,7 +149,7 @@ suite "returns and results":
       discard bar()
       step 2
 
-    foo()
+    k.run: foo()
 
   block:
     ## returning a continuation return value works
@@ -156,7 +161,8 @@ suite "returns and results":
     proc foo(): string {.cps: Cont.} =
       return bar()
 
-    check foo() == "test"
+    k.run:
+      check foo() == "test"
 
   block:
     ## returning an anonymous tuple declaration type
@@ -172,7 +178,7 @@ suite "returns and results":
       step 2
       check (x, y) == (10, 20)
 
-    foo()
+    k.run: foo()
 
   block:
     ## returning a named tuple type
@@ -191,7 +197,7 @@ suite "returns and results":
       step 2
       check (x, y) == (10, 20)
 
-    foo()
+    k.run: foo()
 
   block:
     ## converting a cps return value
@@ -219,7 +225,7 @@ suite "returns and results":
       discard Natural int Natural bar()
       step 3
 
-    foo()
+    k.run: foo()
 
   block:
     ## calling continuation with variant object access as parameter
@@ -234,4 +240,4 @@ suite "returns and results":
     proc foo(o: O) {.cps: Continuation.} =
       check bar(o.x) == 42
 
-    foo(O(switch: true, x: 42))
+    k.run: foo(O(switch: true, x: 42))

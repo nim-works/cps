@@ -15,7 +15,7 @@ suite "expression flattening":
       step 3
       check x == 10
 
-    foo()
+    k.run: foo()
 
   test "flatten result expressions":
     var k = newKiller(1)
@@ -24,7 +24,8 @@ suite "expression flattening":
       step 1
       42.Natural
 
-    check foo() == 42
+    k.run:
+      check foo() == 42
 
   test "flatten bracket expressions (array access)":
     var k = newKiller(2)
@@ -32,7 +33,8 @@ suite "expression flattening":
     proc foo() {.cps: Cont.} =
       check (noop(); step 1; [42])[(noop(); step 2; 0)] == 42
 
-    foo()
+    k.run:
+      foo()
 
   test "flatten dot expressions":
     type
@@ -44,7 +46,8 @@ suite "expression flattening":
     proc foo() {.cps: Cont.} =
       check (noop(); step 1; P(val: 42)).val == 42
 
-    foo()
+    k.run:
+      foo()
 
   test "flatten dereference expressions":
     type
@@ -56,7 +59,8 @@ suite "expression flattening":
     proc foo() {.cps: Cont.} =
       check (noop(); step 1; P(val: 42))[].val == 42
 
-    foo()
+    k.run:
+      foo()
 
   test "flatten hidden dereference expressions":
     type
@@ -68,7 +72,8 @@ suite "expression flattening":
     proc foo() {.cps: Cont.} =
       check (noop(); step 1; P(val: 42)).val == 42
 
-    foo()
+    k.run:
+      foo()
 
   test "flatten magic calls with mutable variables":
     var k = newKiller(3)
@@ -86,4 +91,5 @@ suite "expression flattening":
 
       step 3
 
-    foo()
+    k.run:
+      foo()

@@ -16,7 +16,7 @@ suite "expression flattening":
 
       step 4
 
-    foo()
+    k.run: foo()
 
   test "flatten case elif branches":
     var k = newKiller(4)
@@ -35,7 +35,7 @@ suite "expression flattening":
 
       step 4
 
-    foo()
+    k.run: foo()
 
   test "flatten while condition":
     var k = newKiller(4)
@@ -48,7 +48,7 @@ suite "expression flattening":
 
       step 4
 
-    foo()
+    k.run: foo()
 
   test "flatten assignments with LHS being a symbol":
     var k = newKiller(3)
@@ -68,7 +68,7 @@ suite "expression flattening":
 
       check x == 42
 
-    foo()
+    k.run: foo()
 
   test "flatten assignments with LHS being an object access":
     type
@@ -94,7 +94,7 @@ suite "expression flattening":
 
       check o.a.i == 42
 
-    foo()
+    k.run: foo()
 
   test "flatten assignments with LHS being a ref access from immutable location":
     type
@@ -120,4 +120,4 @@ suite "expression flattening":
 
       check o.a.i == 42
 
-    foo()
+    k.run: foo()

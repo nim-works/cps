@@ -91,7 +91,8 @@ suite "calling convention":
       check x == 8
       step 7
 
-    foo: whelp bar
+    k.run:
+      foo: whelp bar
 
   block:
     ## whelp helps disambiguate cps callbacks at instantiation
@@ -115,7 +116,8 @@ suite "calling convention":
       var x = c(4)
       check x == 8
 
-    foo: whelp(ContCall, bar)
+    k.run:
+      foo: whelp(ContCall, bar)
 
   block:
     ## run a callback in cps with natural syntax
@@ -139,7 +141,8 @@ suite "calling convention":
         check x == 8
         step 3
 
-      foo: whelp bar
+      k.run:
+        foo: whelp bar
 
   block:
     ## run a callback with no return value in cps
@@ -161,7 +164,8 @@ suite "calling convention":
         c(4)
         step 3
 
-      foo: whelp bar
+      k.run:
+        foo: whelp bar
 
   block:
     ## callback illustration

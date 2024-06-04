@@ -14,7 +14,7 @@ suite "expression flattening":
       check a == 10
       check b == y
 
-    foo()
+    k.run: foo()
 
   test "flatten block expression":
     var k = newKiller(3)
@@ -29,7 +29,7 @@ suite "expression flattening":
       step 3
       check x == 42
 
-    foo()
+    k.run: foo()
 
   test "flatten if expression":
     var k = newKiller(5)
@@ -66,7 +66,7 @@ suite "expression flattening":
       step 5
       check y == 30
 
-    foo()
+    k.run: foo()
 
   test "flatten case expression":
     var k = newKiller(3)
@@ -95,7 +95,7 @@ suite "expression flattening":
       step 3
       check x == 42
 
-    foo()
+    k.run: foo()
 
   test "flatten try statement":
     var k = newKiller(4)
@@ -122,7 +122,7 @@ suite "expression flattening":
       step 4
       check x == 42
 
-    foo()
+    k.run: foo()
 
   test "flatten if condition":
     var k = newKiller(5)
@@ -140,4 +140,4 @@ suite "expression flattening":
 
       step 5
 
-    foo()
+    k.run: foo()

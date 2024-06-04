@@ -25,7 +25,7 @@ suite "expression flattening":
       check o.x == 42
       check o.y == 10
 
-    foo()
+    k.run: foo()
 
   test "flatten upcasting assignments":
     when not defined(release) and not defined(isNimSkull):
@@ -56,7 +56,7 @@ suite "expression flattening":
         check o.x == 42
         check o.y == 10
 
-      foo()
+      k.run: foo()
 
   test "flatten implicitly converted assignments":
     var k = newKiller(3)
@@ -75,7 +75,7 @@ suite "expression flattening":
 
       check o == 42
 
-    foo()
+    k.run: foo()
 
   test "flatten explicitly converted assignments":
     var k = newKiller(3)
@@ -87,7 +87,7 @@ suite "expression flattening":
 
       check i == 42
 
-    foo()
+    k.run: foo()
 
   test "flatten discard statements":
     var k = newKiller(3)
@@ -97,7 +97,7 @@ suite "expression flattening":
 
       step 3
 
-    foo()
+    k.run: foo()
 
   test "flatten return statements":
     var k = newKiller(2)
@@ -105,4 +105,5 @@ suite "expression flattening":
       step 1
       return (block: (noop(); step 2; 42.Natural))
 
-    check foo() == 42
+    k.run:
+      check foo() == 42
