@@ -403,7 +403,8 @@ suite "tuples":
     check r == 2
 
 type
-  K = distinct object
+  KObj = object
+  K = distinct KObj
 
 var k = initKiller 9
 
@@ -463,6 +464,7 @@ suite "lifetimes":
         # destroy bar.m; eg. step == 11
 
       foo()
+      check k
 
   block:
     ## lifetime canary for distinct objects
@@ -501,6 +503,7 @@ suite "lifetimes":
       # destroy bar.m; eg. step == 9
 
     foo()
+    check k
 
 import std/sugar
 

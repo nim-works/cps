@@ -64,10 +64,10 @@ jobs:
 
           - name: nimskull
             version: "*"
-            broken: true
+            broken: false
 
           - name: nimskull
-            version: "<0.1.0-dev.21268"
+            version: "0.1.0-dev.21407"
             broken: false
 
     name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }}${{ matrix.compiler.broken && ', broken' || '' }})"

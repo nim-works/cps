@@ -92,6 +92,7 @@ suite "calling convention":
       step 7
 
     foo: whelp bar
+    check k
 
   block:
     ## whelp helps disambiguate cps callbacks at instantiation
@@ -116,6 +117,7 @@ suite "calling convention":
       check x == 8
 
     foo: whelp(ContCall, bar)
+    check k
 
   block:
     ## run a callback in cps with natural syntax
@@ -140,6 +142,7 @@ suite "calling convention":
         step 3
 
       foo: whelp bar
+      check k
 
   block:
     ## run a callback with no return value in cps
@@ -162,6 +165,7 @@ suite "calling convention":
         step 3
 
       foo: whelp bar
+      check k
 
   block:
     ## callback illustration

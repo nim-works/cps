@@ -16,6 +16,7 @@ suite "expression flattening":
       check x == 10
 
     foo()
+    check k
 
   test "flatten result expressions":
     var k = newKiller(1)
@@ -25,6 +26,7 @@ suite "expression flattening":
       42.Natural
 
     check foo() == 42
+    check k
 
   test "flatten bracket expressions (array access)":
     var k = newKiller(2)
@@ -33,6 +35,7 @@ suite "expression flattening":
       check (noop(); step 1; [42])[(noop(); step 2; 0)] == 42
 
     foo()
+    check k
 
   test "flatten dot expressions":
     type
@@ -45,6 +48,7 @@ suite "expression flattening":
       check (noop(); step 1; P(val: 42)).val == 42
 
     foo()
+    check k
 
   test "flatten dereference expressions":
     type
@@ -57,6 +61,7 @@ suite "expression flattening":
       check (noop(); step 1; P(val: 42))[].val == 42
 
     foo()
+    check k
 
   test "flatten hidden dereference expressions":
     type
@@ -69,6 +74,7 @@ suite "expression flattening":
       check (noop(); step 1; P(val: 42)).val == 42
 
     foo()
+    check k
 
   test "flatten magic calls with mutable variables":
     var k = newKiller(3)
@@ -87,3 +93,4 @@ suite "expression flattening":
       step 3
 
     foo()
+    check k

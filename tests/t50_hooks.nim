@@ -334,3 +334,4 @@ suite "hooks":
 
     expect IOError:
       foo()
+    check k

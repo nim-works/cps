@@ -182,3 +182,4 @@ suite "loops":
         break
         step 7
     foo()
+    check k

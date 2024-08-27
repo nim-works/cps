@@ -5,7 +5,7 @@ boring utilities likely useful to multiple pieces of cps machinery
 ]##
 
 import std/[hashes, sequtils, deques]
-import std/macros except newStmtList, newTree
+import std/macros except newStmtList, newTree, quote, stamp
 
 when (NimMajor, NimMinor) < (1, 5):
   {.fatal: "requires nim-1.5".}
@@ -98,6 +98,14 @@ proc `=copy`(dest: var ContinuationObj; src: ContinuationObj) {.error.} =
 proc `=destroy`(dest: var ContinuationObj) =
   for key, value in dest.fieldPairs:
     reset value
+
+# quote() shim for nimskull
+when declared(macros.stamp):
+  template quote(body: untyped): NimNode =
+    macros.stamp(body)
+else:
+  template quote(body: untyped): NimNode =
+    macros.quote(body)
 
 template dot*(a, b: NimNode): NimNode =
   ## for constructing foo.bar

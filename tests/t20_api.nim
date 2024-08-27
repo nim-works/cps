@@ -16,6 +16,7 @@ suite "cps api":
     var i = bootstrap()
     check i is int, "bootstrap's output is not an int"
     check i == 3, "bootstrap's output has the wrong value"
+    check k
 
   block:
     ## whelp
@@ -29,6 +30,7 @@ suite "cps api":
     var c = whelp whelped()
     check "whelp's output is bogus":
       c is Cont
+    check k
 
   block:
     ## state symbols and trampoline
@@ -51,6 +53,7 @@ suite "cps api":
       c.state == State.Finished
       c.finished
       not c.running
+    check k
 
   block:
     ## trampolineIt
@@ -69,6 +72,7 @@ suite "cps api":
     check "state post-trampolineIt is " & $c.state:
       not c.dismissed
       c.finished
+    check k
 
   block:
     ## magic voodoo
@@ -99,6 +103,7 @@ suite "cps api":
       return 3
 
     check foo() == 3
+    check k
 
   block:
     ## exporting CPS procedures works
@@ -113,6 +118,7 @@ suite "cps api":
       step 2
 
     foo()
+    check k
 
   block:
     ## one can whelp a cps'd proc that was borrowed
@@ -146,6 +152,7 @@ suite "cps api":
       step 3
 
     foo()
+    check k
 
   block:
     ## calling magic that is not defined for the base type should not compile
@@ -158,25 +165,23 @@ suite "cps api":
 
   block:
     ## calling magic/voodoo with generics continuation parameter works
-    # XXX: Not sure why, but Killer doesn't work here, complaining about
-    #      `k` not in scope.
-    var r = 0
+    var k = newKiller 3
 
     type AnotherCont = ref object of Continuation
     proc magic(c: Cont or AnotherCont): auto {.cpsMagic.} =
-      inc r
+      k.step 3
       c
 
     proc voodoo(c: Cont or AnotherCont) {.cpsVoodoo.} =
-      inc r
+      k.step 2
 
     proc foo() {.cps: Cont.} =
-      inc r
+      step 1
       voodoo()
       magic()
 
     foo()
-    check r == 3
+    check k
 
   block:
     ## magic/voodoo can be defined with `using`
@@ -209,6 +214,7 @@ suite "cps api":
         return 3
 
       check foo() == 3
+      check k
 
   block:
     ## parent-child voodoo works correctly
@@ -245,3 +251,4 @@ suite "cps api":
 
     var a = whelp level_one()
     trampoline a
+    check k

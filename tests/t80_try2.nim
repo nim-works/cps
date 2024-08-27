@@ -34,6 +34,7 @@ suite "try statements":
       step 6
 
     trampoline whelp(foobar())
+    check k
 
   block:
     ## try statement with a single statement which is a cps assignment
@@ -53,6 +54,7 @@ suite "try statements":
       check x == 42
 
     trampoline whelp(foo())
+    check k
 
   block:
     ## try-finally-reraise escape via break statements.
@@ -71,6 +73,7 @@ suite "try statements":
 
     expect ValueError:
       trampoline whelp(foo())
+    check k
 
   block:
     ## try-finally-reraise escape via continue statements.
@@ -89,6 +92,7 @@ suite "try statements":
 
     expect ValueError:
       trampoline whelp(foo())
+    check k
 
   block:
     ## try: raise() except: continue
@@ -110,6 +114,7 @@ suite "try statements":
         fail "uncaught exception"
 
     trampoline whelp(foo())
+    check k
 
   block:
     ## try-finally-reraise escape via return statements.
@@ -126,6 +131,7 @@ suite "try statements":
 
     expect ValueError:
       trampoline whelp(foo())
+    check k
 
   block:
     ## try-finally-reraise handle after escape attempt
@@ -144,6 +150,7 @@ suite "try statements":
         step 2
 
     trampoline whelp(foo())
+    check k
 
   block:
     ## the stack trace probably still works
@@ -267,6 +274,7 @@ when defined(gcArc) or defined(gcOrc):
         except CatchableError:
           fail "this branch should not run"
         step 3
+        check k
 
       foo()
 
@@ -283,6 +291,7 @@ when defined(gcArc) or defined(gcOrc):
         except CatchableError:
           step 3
         step 4
+        check k
 
       foo()
 
@@ -297,6 +306,7 @@ when defined(gcArc) or defined(gcOrc):
         finally:
           step 3
         step 4
+        check k
 
       foo()
 
@@ -315,5 +325,6 @@ when defined(gcArc) or defined(gcOrc):
         finally:
           step 4
         step 5
+        check k
 
       foo()
