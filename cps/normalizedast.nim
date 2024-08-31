@@ -1,4 +1,4 @@
-import std/macros
+import std/macros except newTree
 import std/strformat
 from std/hashes import Hash, hash
 from std/sequtils import anyIt, toSeq
