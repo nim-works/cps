@@ -1,5 +1,5 @@
 import std/[genasts, deques]
-import cps/[spec, transform, rewrites, hooks, exprs, normalizedast, callbacks]
+import cps/[docgen, spec, transform, rewrites, hooks, exprs, normalizedast, callbacks]
 import std/macros except newStmtList, newTree
 
 export Continuation, ContinuationProc, ContinuationFn, State, Callback
@@ -80,7 +80,8 @@ macro cps*(tipe: typed, n: untyped): untyped =
   ## When applied to a procedure, rewrites the procedure into a
   ## continuation form. When applied to a procedure type definition,
   ## rewrites the type into a callback form.
-  when defined(nimdoc): return n
+  when defined(nimdoc): return cpsDocAnnotate(tipe, n)
+
   # add the application of the typed transformation pass
   n.addPragma:
     nnkExprColonExpr.newTree(bindSym"cpsTyped", tipe)
@@ -139,6 +140,7 @@ macro whelp*(call: typed): untyped =
   ## If you pass `whelp` a continuation procedure *symbol* instead, the
   ## result is a `Callback` which you can use to create many individual
   ## continuations or recover the `result` of an extant continuation.
+  when defined(nimdoc): return docWhelp(call)
   result =
     case call.kind
     of nnkSym:
