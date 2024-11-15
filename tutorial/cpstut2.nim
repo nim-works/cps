@@ -6,14 +6,12 @@ import deques
 
 type
   MyCont = ref object of Continuation
-  
+
 var work: Deque[Continuation]
 
 proc runWork() =
   while work.len > 0:
-    var c = work.popFirst()
-    while c.running:
-      c = c.fn(c)
+    discard trampoline work.popFirst()
 
 proc schedule(c: MyCont): MyCont {.cpsMagic.} =
   work.addLast c

@@ -137,6 +137,15 @@ jobs:
         env:
           NIM: ${{ matrix.compiler.name }}
 
+      - name: Tutorial
+        shell: bash
+        run: |
+          cd project
+          cd tutorial
+          balls '***' --path=".." --backend:c --mm:arc --mm:orc
+        env:
+          NIM: ${{ matrix.compiler.name }}
+
       - name: Tests
         shell: bash
         run: |
