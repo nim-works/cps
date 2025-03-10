@@ -220,6 +220,11 @@ to completion.
 var later = whelp count(1_000_000)
 echo "we counted ", later(), " trips through the goto"
 ```
+## Installation
+
+```sh
+$ nimble install https://github.com/nim-works/cps
+```
 
 ## Documentation
 
