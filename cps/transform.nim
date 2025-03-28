@@ -847,16 +847,6 @@ proc annotate(parent: var Env; n: NormNode): NormNode =
           endAndReturn()
 
     case nc.kind
-    of nnkReturnStmt:
-      # add a return statement with a potential result assignment
-      # stored in the environment; note that we're adding a new
-      # return statement without regard to the contents of `result`
-      # because it may hold, eg. `ElifBranch ...` or similar.
-      result.add:
-        env.annotate:
-          env.rewriteReturn nc
-      endAndReturn()
-
     of nnkVarSection, nnkLetSection:
       let section = asVarLet nc
       if section.val.isCpsConvCall:
@@ -1258,8 +1248,8 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
     Trace.hook env.first, n    # hooking against the proc (minus cloned body)
   body.add n.body              # add in the cloned body of the original proc
 
-  # replace the result symbols with the environment's result field
-  body = env.rewriteResult body
+  # rewrite return statements and result symbols to use environment's result field
+  body = env.rewriteResultReturn body
 
   # perform sym substitutions (or whatever)
   n.body = env.rewriteSymbolsIntoEnvDotField body

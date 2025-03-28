@@ -511,3 +511,18 @@ suite "tasteful tests":
       check x == 1
 
     foo()
+
+  block:
+    ## don't rewrite return or result of nested procedures
+    proc foo() {.cps: Continuation.} =
+      proc other(): int = return 100
+
+      check other() == 100
+
+    proc bar() {.cps: Continuation.} =
+      proc other2(): int =
+        result = 2
+
+      check other2() == 2
+
+    foo()

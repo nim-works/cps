@@ -179,20 +179,6 @@ proc getResult*(e: Env): NormNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
-proc rewriteResult*(e: Env; n: NormNode): NormNode =
-  ## replaces result symbols with the env's result; this should be
-  ## safe to run on sem'd ast (for obvious reasons)
-  proc rewriter(n: NormNode): NormNode =
-    ## Rewrite any result symbols to use the result field from the Env.
-    case n.kind
-    of nnkSym:
-      if n.symKind == nskResult:
-        result = e.getResult
-    of nnkProcDef, nnkLambda:
-      result = n  # don't rewrite `result` in nested procedures
-    else: discard
-  result = filter(n, rewriter)
-
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
   ## or on-demand in the back-end (with copy = on)
@@ -365,29 +351,40 @@ proc localSection*(e: var Env; n: RoutineParam; into: NimNode = nil) {.borrow.}
   ## consume proc definition params and yield name, node pairs representing
   ## assignments to local scope.
 
-proc rewriteReturn*(e: var Env; n: NormNode): NormNode =
-  ## Rewrite a return statement to use our result field.
-  if n.len != 1:
-    result = n.errorAst "return len != 1"
-  else:
-    case n[0].kind
-    of nnkAsgn:
-      # okay, it's a return: result = ...
-      result = newStmtList()
-      # ignore the result symbol and create a new assignment
-      result.add newAssignment(e.getResult, n.last.last)
-      # and add the termination annotation
-      result.add newCpsTerminate()
-    of nnkEmpty:
-      # this is an empty return
-      result = newCpsTerminate()
-    else:
-      # okay, it's a return of some rando expr
-      result = newStmtList()
-      # ignore the result symbol and create a new assignment
-      result.add newAssignment(e.getResult, n.last)
-      # and add the termination annotation
-      result.add newCpsTerminate()
+proc rewriteResultReturn*(e: Env; n: NormNode): NormNode =
+  ## Rewrite return statements and result symbols to use our result field.
+  proc rewriter(n: NormNode): NormNode =
+    case n.kind
+    of nnkProcDef, nnkLambda:
+      result = n  # don't rewrite `return` in nested procedures
+    of nnkSym:
+      if n.symKind == nskResult:
+        result = e.getResult
+    of nnkReturnStmt:
+      if n.len != 1:
+        result = n.errorAst "return len != 1"
+      else:
+        case n[0].kind
+        of nnkAsgn:
+          # okay, it's a return: result = ...
+          result = newStmtList()
+          # ignore the result symbol and create a new assignment
+          result.add newAssignment(e.getResult, n.last.last)
+          # and add the termination annotation
+          result.add newCpsTerminate()
+        of nnkEmpty:
+          # this is an empty return
+          result = newCpsTerminate()
+        else:
+          # okay, it's a return of some rando expr
+          result = newStmtList()
+          # ignore the result symbol and create a new assignment
+          result.add newAssignment(e.getResult, n.last)
+          # and add the termination annotation
+          result.add newCpsTerminate()
+    else: discard
+
+  result = filter(n, rewriter)
 
 proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormNode): NormNode =
   ## swap symbols for those in the continuation
