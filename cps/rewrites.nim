@@ -487,16 +487,16 @@ proc workaroundRewrites(n: NimNode): NimNode =
 proc workaroundRewrites*(n: NormNode): NormNode =
   workaroundRewrites(n.NimNode).NormNode
 
-proc replace*(n: NimNode, match: Matcher, replacement: NimNode): NimNode =
-  ## Replace any node in `n` that is matched by `match` with a copy of
-  ## `replacement`
-  proc replacer(n: NimNode): NimNode =
-    if match(n):
-      copyNimTree replacement
-    else:
-      nil
+proc replace*(n: NimNode, match: Matcher, replacement: NimNode): NormNode =
+   ## Replace any node in `n` that is matched by `match` with a copy of
+   ## `replacement`
+   proc replacer(n: NimNode): NimNode =
+     if match(n):
+       copyNimTree replacement
+     else:
+       nil
 
-  filter(n, replacer)
+   filter(n, replacer)
 
 proc replace*(n: NimNode | NormNode, match: NormMatcher, replacement: NormNode): NormNode =
   ## Replace any node in `n` that is matched by `match` with a copy of
