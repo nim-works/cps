@@ -142,7 +142,7 @@ template colon*(a: string | NimNode; b: string | int): NimNode =
   {.line: instantiationInfo().}:
     colon(a, newLit(b))
 
-proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
+proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): PragmaStmt =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
   newPragmaStmt(filterIt(ns, it.getPragmaName != liftee))
 
