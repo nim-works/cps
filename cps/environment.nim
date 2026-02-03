@@ -26,7 +26,7 @@ type
     via: Name                       # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
     locals: LocalCache              # locals and their typedefs|generics
-    store: NimNode                  # where to put typedefs, a stmtlist
+    store: NormNode                 # where to put typedefs, a stmtlist
     procedure: string               # name of procedure we are transforming
     when cpsReparent:
       seen: HashSet[string]         # count/measure idents/syms by string
@@ -98,9 +98,9 @@ proc set(e: var Env; key: Name; val: VarLetIdentDef): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
-    e.fn = "fn".asName(info = e.store.NormNode)
+    e.fn = "fn".asName(info = e.store)
   if e.mom.isNil:
-    e.mom = "mom".asName(info = e.store.NormNode)
+    e.mom = "mom".asName(info = e.store)
   e.id = genTypeName(procedure(e), "env", info = e.via)
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarIdentDef(e.rs))
@@ -442,7 +442,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
 
   # the result fetcher used in the Callback shim has a gensym'd proc name
   let fetch =
-    genProcName(procedure env, "recover", info=env.store.NormNode).NimNode
+    genProcName(procedure env, "recover", info=env.store).NimNode
 
   # the recover procedure name
   let recover = NimNode: ident"recover"
