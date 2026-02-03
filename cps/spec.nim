@@ -189,7 +189,7 @@ func isCpsPending*(n: NormNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.asPragmaStmt.hasPragma("cpsPending")
 
-func newCpsBreak*(n: NormNode, label = newNilLit().NormNode): NormNode =
+func newCpsBreak*(n: NormNode, label = newNilLit().NormNode): PragmaStmt =
   ## Produce a {.cpsBreak.} annotation with the given label
   let label =
     if label.kind == nnkEmpty:
@@ -203,7 +203,7 @@ proc isCpsBreak*(n: NormNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsBreak")
 
-func newCpsContinue*(n: NormNode): NormNode =
+func newCpsContinue*(n: NormNode): PragmaStmt =
   ## Produce a {.cpsContinue.} annotation
   newPragmaStmtWithInfo(n, asPragmaAtom(bindName"cpsContinue"))
 
@@ -235,7 +235,7 @@ proc getContSym*(n: NormNode): Name =
   else:
     nil.Name
 
-proc newCpsTerminate*(): NormNode =
+proc newCpsTerminate*(): PragmaStmt =
   ## Create a new node signifying early termination of the procedure
   newPragmaStmt(bindName"cpsTerminate")
 
