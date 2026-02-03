@@ -128,7 +128,7 @@ proc isCallbackRecovery*(n: NimNode): bool =
   else:
     false
 
-proc baseContinuationType*(n: NimNode): TypeExpr =
+proc baseContinuationType*(n: NormNode): TypeExpr =
    ## given a callable symbol presumed to be a callback,
    ## recover the (base) continuation return type of the proc.
    var raw: NimNode
@@ -150,7 +150,7 @@ proc setupCallbackChild*(env: var Env; call: Call): (Name, TypeExpr) =
   ## create a new child continuation variable to receive the result of
   ## the callback and add it to the environment.  return the child's
   ## symbol along with the base continuation type of the child.
-  let ctype = baseContinuationType(call[0].NimNode).TypeExpr
+  let ctype = baseContinuationType(call[0]).TypeExpr
   let child = genSymVar("callbackChild", info = call)
   env.localSection newIdentDef(child, ctype)
   result = (child, ctype)
