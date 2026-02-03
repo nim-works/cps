@@ -12,7 +12,7 @@ func doc*(s: string): Statement =
    else:
      Statement(newEmptyNode())
 
-proc doc*(n: NimNode; s: string) =
+proc doc*(n: NormNode; s: string) =
   ## add a doc statement to the ast for debugging
   when comments:
     if n.kind == nnkStmtList:
