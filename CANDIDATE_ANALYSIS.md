@@ -219,12 +219,12 @@ These should remain NormNode due to polymorphism or type variability:
 
 ## Recommended Conversion Order
 
-### Phase 12a - Easy Wins (Very Safe)
-1. `newCpsContinue()` (spec.nim:206) → Pragma
-2. `newCpsTerminate()` (spec.nim:238) → Pragma
-3. `newCpsBreak()` (spec.nim:192) → Pragma
-4. `breakLabel()` (spec.nim:214) → Name
-5. `flattenStmtList()` (spec.nim:262) → Statement
+### Phase 12a - Easy Wins (Very Safe) ✅ COMPLETED
+1. ✅ `newCpsContinue()` (spec.nim:206) → PragmaStmt - CONVERTED
+2. ✅ `newCpsTerminate()` (spec.nim:238) → PragmaStmt - CONVERTED
+3. ✅ `newCpsBreak()` (spec.nim:192) → PragmaStmt - CONVERTED
+4. ❌ `breakLabel()` (spec.nim:214) → Name - REVERTED (callers use .kind attribute)
+5. ❌ `flattenStmtList()` (spec.nim:262) → Statement - SKIPPED (may return non-Statement)
 
 ### Phase 12b - Returns Module (Safe)
 6. `makeReturn()` (returns.nim:23) → Statement
@@ -246,14 +246,50 @@ These should remain NormNode due to polymorphism or type variability:
 18. `newCpsMustLift()` (exprs.nim:7) → Pragma
 19. `assignTo()` (exprs.nim:169) → Statement
 
+## Lessons Learned from Phase 12a
+
+### What Worked
+- **Pure constructor functions**: Functions that only create and return specific node types are safe
+- `newCpsContinue()`, `newCpsTerminate()`, `newCpsBreak()` all worked perfectly
+- These functions have single purposes: create and return pragma statements
+- No complex logic, no polymorphism, no downstream type sensitivity
+
+### What Didn't Work
+- **Functions with attribute access**: `breakLabel()` callers check `.kind` attribute
+  - Distinct types lose access to NimNode attributes
+  - Would require creating `kind()` getter for each type
+  - Better to keep as NormNode for now
+
+- **Functions with variable return types**: `flattenStmtList()` can return different types
+  - When unwrapping single-element lists, returns `n[0]` which could be anything
+  - Statement type too restrictive
+  - Better to keep as NormNode for flexibility
+
+- **Functions with callers expecting base type**: returns.nim functions
+  - `makeReturn()` and `tailCall()` have complex call chains
+  - Callers in transform.nim expect `NormNode`, not `Statement`
+  - Would require updating all callers - high risk
+  - Better approach: create typed wrappers instead
+
+### Key Insight
+Not all functions should be converted, even if they seem to return specific types. The real constraint is:
+1. **What attributes do callers access?** (e.g., `.kind`)
+2. **What types do callers expect?** (e.g., other functions)
+3. **Is polymorphism needed?** (e.g., add() function)
+
+Pure constructors with single-purpose are the sweet spot for conversion.
+
 ## Testing Strategy
 
 For each conversion:
 1. Change return type in function signature
 2. Run smoke test: `timeout 15 balls tests/t00_smoke --define:release`
 3. If pass → run full tests: `timeout 150 balls --define:release`
-4. If fail → revert and document why
+4. If fail → understand why and revert
 5. If pass → commit and move to next
+
+Important: Don't convert functions just because they *could* return a specific type.
+Only convert if it's clearly safe and the function has single responsibility.
 
 ## Expected Results
 
