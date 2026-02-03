@@ -23,16 +23,16 @@ type
     rs*: proc (c: var C): R {.nimcall.}   ##
     ## the result fetcher for continuation C
 
-proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NimNode =
-  ## looks like cpsTransformProc but applies to proc typedefs;
-  ## this is where we create our calling convention concept
-  let params = copyNimTree n[0]
-  let r = copyOrVoid params[0]
-  params[0] = tipe
-  let p = nnkProcTy.newTree(params,
-                            nnkPragma.newTree(ident"nimcall", bindSym"cpsCallback"))
-  result = nnkBracketExpr.newTree(bindSym"Callback", tipe, r, p)
-  result = workaroundRewrites result.NormNode
+proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NormNode =
+   ## looks like cpsTransformProc but applies to proc typedefs;
+   ## this is where we create our calling convention concept
+   let params = copyNimTree n[0]
+   let r = copyOrVoid params[0]
+   params[0] = tipe
+   let p = nnkProcTy.newTree(params,
+                             nnkPragma.newTree(ident"nimcall", bindSym"cpsCallback"))
+   let bracketExpr = nnkBracketExpr.newTree(bindSym"Callback", tipe, r, p)
+   result = workaroundRewrites bracketExpr.NormNode
 
 proc createCallbackShim*(env: Env; whelp: ProcDef): ProcDef =
   ## this is a version of whelp that returns the base continuation type
