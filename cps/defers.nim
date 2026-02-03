@@ -90,15 +90,14 @@ proc rewriteDefer*(n: NormNode): NormNode =
             finallyNode
           )
       else:
-        # There are no splits, thus this is a defer without a container
-        #
-        # Construct a naked try-finally for it.
-        result = NormNode:
-          newNimNode(nnkTryStmt, deferNode).add(
-            # Use an empty statement list for the body
-            newNimNode(nnkStmtList, deferNode),
-            finallyNode
-          )
+         # There are no splits, thus this is a defer without a container
+         #
+         # Construct a naked try-finally for it.
+         result = NormNode(newNimNode(nnkTryStmt, deferNode).add(
+           # Use an empty statement list for the body
+           newNimNode(nnkStmtList, deferNode),
+           finallyNode
+         ))
 
       # Also rewrite the result to eliminate all defers in it
       result = rewriteDefer(result)
