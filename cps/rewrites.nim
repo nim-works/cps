@@ -91,24 +91,24 @@ proc childCallToRecoverResult*(n: NimNode; sym: NimNode; field: NimNode): NormNo
 proc childCallToRecoverResult*(n, sym, field: NormNode): NormNode {.borrow.}
   ## this is used to rewrite continuation calls into their results
 
-proc resym*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
-  ## seems we only use this for rewriting local symbols into symbols
-  ## in the env, so we'll do custom handling of identDefs here also
-  expectKind(sym, nnkSym)
-  proc resymify(n: NimNode): NimNode =
-    case n.kind
-    of nnkIdentDefs:
-      # we want to skip the name and rewrite the other children
-      for i in 1 ..< n.len:
-        if n[i].kind != nnkEmpty:
-          n[i] = filter(n[i], resymify)
-      result = n
-    of nnkSym:
-      if n == sym:
-        result = field
-    else:
-      discard
-  result = filter(n, resymify)
+proc resym*(n: NimNode; sym: NimNode; field: NimNode): NormNode =
+   ## seems we only use this for rewriting local symbols into symbols
+   ## in the env, so we'll do custom handling of identDefs here also
+   expectKind(sym, nnkSym)
+   proc resymify(n: NimNode): NimNode =
+     case n.kind
+     of nnkIdentDefs:
+       # we want to skip the name and rewrite the other children
+       for i in 1 ..< n.len:
+         if n[i].kind != nnkEmpty:
+           n[i] = filter(n[i], resymify).NimNode
+       result = n
+     of nnkSym:
+       if n == sym:
+         result = field
+     else:
+       discard
+   filter(n, resymify)
 proc resym*(n, sym, field: NormNode): NormNode =
   resym(n.NimNode, sym.NimNode, field.NimNode).NormNode
 
