@@ -117,6 +117,9 @@ proc replacedSymsWithIdents*(n: NimNode): NimNode =
       discard
   result = filter(n, desymifier)
 
+proc replacedSymsWithIdents*(n: NormNode): NormNode =
+  replacedSymsWithIdents(n.NimNode).NormNode
+
 proc isCallback*(n: NimNode): bool =
   ## true if the node is essentially a callback call
   case n.kind
