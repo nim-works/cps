@@ -562,17 +562,17 @@ proc multiReplace*(n: NormNode;
 
   filter(n, replacer).NormNode
 
-proc addInitializationToDefault*(n: NimNode): NimNode =
-  ## Turn an IdentDefs as in `var x: Foo` into `var x: Foo = default Foo`;
-  ## this ensures a reset of the field in the environment occurs when the
-  ## scope is re-entrant for any reason.
-  result = n
-  if n.kind == nnkIdentDefs:
-    if n[2].isEmpty:
-      n[2] =
-        newCall bindSym"default":
-          newCall bindSym"typeOf":
-            n[1]
+proc addInitializationToDefault*(n: NimNode): NormNode =
+   ## Turn an IdentDefs as in `var x: Foo` into `var x: Foo = default Foo`;
+   ## this ensures a reset of the field in the environment occurs when the
+   ## scope is re-entrant for any reason.
+   result = NormNode(n)
+   if n.kind == nnkIdentDefs:
+     if n[2].isEmpty:
+       n[2] =
+         newCall bindSym"default":
+           newCall bindSym"typeOf":
+             n[1]
 
 proc addInitializationToDefault*(n: NormNode): NormNode =
   addInitializationToDefault(n.NimNode).NormNode
