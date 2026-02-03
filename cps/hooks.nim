@@ -63,17 +63,17 @@ proc sym*(hook: Hook): Name =
     # rely on a `mixin $hook` in (high) scope
     ident($hook).Name
 
-proc abbreviation(n: NimNode): NimNode =
-  ## "abbreviate" a node so it can be passed succinctly
-  case n.kind
-  of nnkProcDef:
-    n.name
-  of nnkSym, nnkIdent, nnkDotExpr:
-    n
-  of NormalCallNodes:
-    n[0]
-  else:
-    n.errorAst "dunno how to abbreviate " & $n.kind
+proc abbreviation(n: NimNode): NormNode =
+   ## "abbreviate" a node so it can be passed succinctly
+   result = case n.kind
+   of nnkProcDef:
+     n.name.NormNode
+   of nnkSym, nnkIdent, nnkDotExpr:
+     n.NormNode
+   of NormalCallNodes:
+     n[0].NormNode
+   else:
+     n.errorAst "dunno how to abbreviate " & $n.kind
 
 proc nameForNode*(n: NimNode): string =
   ## produce some kind of useful string that names a node
