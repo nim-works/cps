@@ -591,3 +591,16 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
       desym it
       result = env.rewriteVoodoo it
   result = filter(n, voodoo)
+
+# Typed variants for transformation functions
+proc rewriteResultReturn*(e: Env; n: Statement): Statement =
+  ## Typed variant: rewrite result symbols in a Statement
+  rewriteResultReturn(e, n.NormNode).Statement
+
+proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: Statement): Statement =
+  ## Typed variant: rewrite symbols in a Statement
+  rewriteSymbolsIntoEnvDotField(e, n.NormNode).Statement
+
+proc rewriteVoodoo*(env: Env; n: Statement): Statement =
+  ## Typed variant: rewrite voodoo calls in a Statement
+  rewriteVoodoo(env, n.NormNode).Statement

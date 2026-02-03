@@ -605,12 +605,20 @@ proc nilAsEmpty*(n: NimNode): NormNode =
   else:
     n.NormNode
 
+proc nilAsEmpty*(n: Statement): Statement =
+  ## Typed variant: normalize nil, nnkNilLit to nnkEmpty in a Statement
+  nilAsEmpty(n.NimNode).Statement
+
 proc emptyAsNil*(n: NimNode): NormNode =
   ## normalize nil, nnkEmpty to nnkNilLit
   if n.isNil or n.kind == nnkEmpty:
     NormNode newNilLit()
   else:
     n.NormNode
+
+proc emptyAsNil*(n: Statement): Statement =
+  ## Typed variant: normalize nil, nnkEmpty to nnkNilLit in a Statement
+  emptyAsNil(n.NimNode).Statement
 
 macro etype*(e: enum): string =
   ## Coop -> "Coop", not "coop"
