@@ -44,11 +44,12 @@ proc findColonLit*(n: NimNode; s: string; T: typedesc): T =
     else:
       raise Defect.newException "we can't be friends"
 
-proc makeLineInfo*(n: NimNode): LineInfo =
-  ## return a run-time LineInfo into a compile-time LineInfo object
-  LineInfo(filename: n.findColonLit("filename", string),
-           line: n.findColonLit("line", int),
-           column: n.findColonLit("column", int))
+proc makeLineInfo*(n: NimNode|NormNode): LineInfo =
+   ## return a run-time LineInfo into a compile-time LineInfo object
+   let n = n.NimNode
+   LineInfo(filename: n.findColonLit("filename", string),
+            line: n.findColonLit("line", int),
+            column: n.findColonLit("column", int))
 
 template makeLineInfo*(n: LineInfo): NimNode =
   ## turn a compile-time LineInfo object into a runtime LineInfo object
