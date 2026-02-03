@@ -698,26 +698,25 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   assign = assign.childCallToRecoverResult(call, recovery)
 
   # compose the rewrite as an assignment and any remaining tail
-  var body =
-    NormNode:
-      genAstOpt({}, assign = assign.NimNode, tail = tail.NimNode,
-                child = child.NimNode, ctype = ctype.NimNode,
-                root = env.root.NimNode, identity = env.identity.NimNode,
-                dealloc = Dealloc.sym.NimNode):
-        case child.state
-        of Dismissed:
-          # the child moved; dismiss ourselves
-          dismiss()
-        of Finished:
-          assign
-          when false:
-            # we don't dealloc here, but maybe we should
-            dealloc(child, ctype)
-          tail
-        of Running:
-          # the child is still running; someone is trying to be clever
-          raise Defect.newException:
-            "parent continuation ran before child finished"
+  let bodyTemp = genAstOpt({}, assign = assign.NimNode, tail = tail.NimNode,
+                           child = child.NimNode, ctype = ctype.NimNode,
+                           root = env.root.NimNode, identity = env.identity.NimNode,
+                           dealloc = Dealloc.sym.NimNode):
+    case child.state
+    of Dismissed:
+      # the child moved; dismiss ourselves
+      dismiss()
+    of Finished:
+      assign
+      when false:
+        # we don't dealloc here, but maybe we should
+        dealloc(child, ctype)
+      tail
+    of Running:
+      # the child is still running; someone is trying to be clever
+      raise Defect.newException:
+        "parent continuation ran before child finished"
+  var body = NormNode(bodyTemp)
 
   # the shim is simply an annotation comprised of annotations
   let shim = env.newAnnotation(call, "cpsContinuationJump")
