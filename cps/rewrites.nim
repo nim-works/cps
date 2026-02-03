@@ -68,6 +68,9 @@ proc desym*(n: NimNode): NimNode =
     result = ident(repr n)
     result.copyLineInfo n
 
+proc desym*(n: NormNode): NormNode =
+  desym(n.NimNode).NormNode
+
 proc childCallToRecoverResult*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
   ## this is used to rewrite continuation calls into their results
   if sym.kind notin NormalCallNodes:
