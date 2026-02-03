@@ -2,6 +2,13 @@
 
 These functions were successfully converted from `NimNode` to `NormNode` return types.
 
+## Phase 11 Conversions (1 function - in progress)
+
+### rewrites.nim
+1. **addInitializationToDefault** (line 565) - Converts IdentDefs initialization, now returns NormNode ✅
+   - Commit: Phase 11.1
+   - Impact: NimNode → NormNode conversion
+
 ## Phase 10 Conversions (7 functions)
 
 ### rewrites.nim

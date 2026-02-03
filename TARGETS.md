@@ -41,128 +41,117 @@ These should convert to more specific AST types like Statement, Expression, Call
 
 ## Failed Conversions (LOSERS) ❌
 
+- **newStmtList** (ast.nim:439) - Too specific as Statement, breaks add() function
+- **copyOrVoid** (spec.nim:618) - Converting to TypeExpr breaks downstream usage
+
 ## NormNode Conversions (NORMALS) 🔵
+
+(See NORMALS.md for phase 10 - 7 functions already converted)
 
 ## Functions to Review
 
 ### ast.nim
-- [ ] **copy** (line 225) - Creates normalized copy, should return NormNode ✓
-- [ ] **copyNimNode** (line 226) - Borrows from copy, returns NormNode ✓
-- [ ] **copyNimTree** (line 227) - Full tree copy, returns NormNode ✓
-- [ ] **newEmptyNormNode** (line 313) - Creates empty node, returns NormNode ✓
-- [ ] **kind** (line 355) - Getter function, might be ok as NimNode (borrowed)
-- [ ] **add** (line 358) - Adds children, returns NormNode ✓
-- [ ] **add** (line 365) - Adds NormNode children, returns NormNode ✓
-- [ ] **findChild** (line 370) - Template search, could return Expression or Statement
-- [ ] **getImpl** (line 386) - Gets implementation, could be ProcDef or Expression
-- [ ] **getPragmaName** (line 419) - Gets pragma, could be Name or Expression
-- [ ] **newStmtList** (line 439) - Creates stmt list, should return Statement
-- [ ] **newTree** (line 445) - Creates tree, varies by kind
-- [ ] **wrap** (line 467) - Wraps expression, could be Expression
-- [ ] **resym** (line 539) - Rewrites symbols, should return Statement or Expression
-- [ ] **dot** (line 602) - Creates dot expr, should return Expression
-- [ ] **dot** (line 608) - Creates dot expr, should return Expression
-- [ ] **val** (line 746) - Extracts value, could be Expression or TypeExpr
-- [ ] **val** (line 818) - Extracts value, could be Expression or TypeExpr
-- [ ] **kind** (line 829) - Getter, borrowed from NimNode
-- [ ] **expr** (line 1138) - Creates expression, should return Expression
-- [ ] **body** (line 1162) - Returns body, should return Statement
+- [x] **copy** (line 225) - Already returns NormNode ✓
+- [x] **copyNimNode** (line 226) - Already returns NormNode ✓
+- [x] **copyNimTree** (line 227) - Already returns NormNode ✓
+- [x] **newEmptyNormNode** (line 313) - Already returns NormNode ✓
+- [x] **kind** (line 355) - Returns NimNodeKind, correct ✓
+- [x] **add** (line 358) - Already returns NormNode ✓
+- [x] **add** (line 365) - Already returns NormNode ✓
+- [x] **findChild** (line 370) - Already returns NormNode ✓
+- [x] **getImpl** (line 386) - Already returns NormNode ✓
+- [x] **getPragmaName** (line 419) - LOSER: Deprecated function
+- [x] **resym** (line 539) - Already returns NormNode ✓
+- [x] **kind** (line 829) - Returns NimNodeKind, correct ✓
+- [x] **expr** (line 1138) - LOSER: Indexes Conv node, type varies
+- [x] **body** (line 1162) - LOSER: Statement too specific
 
 ### callbacks.nim
-- [ ] **cpsCallbackTypeDef** (line 26) - Creates type def, should return TypeExpr or Call
-- [ ] **createCallback** (line 49) - Creates callback, returns Call (construction)
-- [ ] **createCastCallback** (line 70) - Creates cast callback, returns Call
-- [ ] **rewriteCalls** (line 185) - Should return NormNode or Statement
-- [ ] **recall** (line 188) - Should return NormNode or Expression
-- [ ] **performUntypedPass** (line 198) - Should return ProcDef
+- [x] **cpsCallbackTypeDef** (line 26) - Already returns NormNode ✓
+- [x] **createCallback** (line 49) - LOSER: Breaks macro context (whelp)
+- [x] **createCastCallback** (line 70) - LOSER: Breaks macro context (whelp)
+- [x] **rewriteCalls** (line 185) - LOSER: In `when false` block, unused
+- [x] **recall** (line 188) - LOSER: In `when false` block, unused
+- [x] **performUntypedPass** (line 198) - LOSER: In `when false` block, unused
 
 ### defers.nim
-- [ ] **rewriteDefer** (line 64) - Should return Statement
-- [ ] **rewriter** (line 67) - Should return Statement or NormNode
+- [x] **rewriteDefer** (line 64) - LOSER: NormNode is correct, Statement breaks
+- [x] **rewriter** (line 67) - LOSER: Internal nested function
 
 ### environment.nim
-- [ ] **maybeConvertToRoot** (line 89) - Should return Expression or TypeExpr
-- [ ] **objectType** (line 133) - Should return TypeExpr
-- [ ] **getResult** (line 178) - Should return Expression
-- [ ] **initialization** (line 272) - Should return Expression
-- [ ] **letOrVar** (line 281) - Should return Statement (var/let section)
-- [ ] **addAssignment** (line 291) - Should return Statement
-- [ ] **addAssignment** (line 299) - Should return Statement
-- [ ] **getFieldViaLocal** (line 305) - Should return Expression or Name
-- [ ] **rewriteResultReturn** (line 354) - Should return Statement
-- [ ] **rewriter** (line 356) - Should return Statement or NormNode
-- [ ] **rewriteSymbolsIntoEnvDotField** (line 389) - Should return NormNode or Statement
-- [ ] **createContinuation** (line 402) - Should return Statement ✓ (already is)
-- [ ] **resultdot** (line 405) - Should return Expression
-- [ ] **genException** (line 421) - Should return Statement or NormNode
-- [ ] **createRecover** (line 430) - Should return Statement or NormNode
-- [ ] **star** (line 459) - Should return NimNode (utility)
-- [ ] **rewriteVoodoo** (line 583) - Should return Statement or NormNode
-- [ ] **voodoo** (line 586) - Should return Statement or NormNode
+- [x] **maybeConvertToRoot** (line 89) - Already returns NormNode ✓
+- [x] **objectType** (line 133) - LOSER: TypeExpr too specific
+- [x] **letOrVar** (line 281) - Returns NimNodeKind, correct ✓
+- [x] **rewriteSymbolsIntoEnvDotField** (line 389) - Already returns NormNode ✓
+- [x] **createContinuation** (line 402) - Already returns NormNode ✓
+- [x] **resultdot** (line 405) - LOSER: Nested function
+- [x] **genException** (line 421) - Already returns NormNode ✓
+- [x] **createRecover** (line 430) - Already returns NormNode ✓
+- [x] **star** (line 459) - LOSER: Nested function
+- [x] **rewriteVoodoo** (line 583) - Already returns NormNode ✓
+- [x] **voodoo** (line 586) - Nested function, already returns NormNode ✓
 
 ### exprs.nim
-- [ ] **newCpsMustLift** (line 7) - Should return Statement
-- [ ] **rewriteElifOf** (line 55) - Should return Statement
-- [ ] **assignTo** (line 169) - Should return Statement or Expression
-- [ ] **assign** (line 173) - Should return Statement
-- [ ] **addConv** (line 326) - Should return Statement
-- [ ] **addDiscard** (line 334) - Should return Statement
-- [ ] **addReturn** (line 342) - Should return Statement
-- [ ] **addRaise** (line 350) - Should return Statement
-- [ ] **lift** (line 359) - Should return Statement or NormNode
-- [ ] **lifter** (line 361) - Should return Statement or NormNode
-- [ ] **annotate** (line 394) - Should return Expression or NormNode
+- [x] **newCpsMustLift** (line 7) - Already returns NormNode ✓
+- [x] **rewriteElifOf** (line 55) - Already returns NormNode ✓
+- [x] **assignTo** (line 169) - Already returns NormNode ✓
+- [x] **assign** (line 173) - Already returns NormNode ✓
+- [x] **addConv** (line 326) - Already returns NormNode ✓
+- [x] **addDiscard** (line 334) - Already returns NormNode ✓
+- [x] **addReturn** (line 342) - Already returns NormNode ✓
+- [x] **addRaise** (line 350) - Already returns NormNode ✓
+- [x] **lift** (line 359) - Already returns NormNode ✓
+- [x] **lifter** (line 361) - Already returns NormNode ✓
+- [x] **annotate** (line 394) - Already returns NormNode ✓
 
 ### hooks.nim
-- [ ] **makeLineInfo** (line 54) - Template, returns NimNode (tricky)
-- [ ] **abbreviation** (line 67) - Should return Name or Expression ✓ (already is NormNode)
-- [ ] **entrace** (line 90) - Template, should return NormNode (already is)
-- [ ] **entrace** (line 95) - Template, should return NormNode (already is)
-- [ ] **hook** (line 104) - Should return Statement or NormNode
-- [ ] **hook** (line 115) - Should return Statement or NormNode
-- [ ] **initFrame** (line 156) - Should return Statement or NormNode
-- [ ] **updateLineInfoForContinuationStackFrame** (line 163) - Should return Statement ✓ (already is)
+- [x] **makeLineInfo** (line 54) - Template returning NimNode, correct ✓
+- [x] **abbreviation** (line 67) - Already returns NormNode ✓
+- [x] **entrace** (line 90) - Template already returns NormNode ✓
+- [x] **hook** (line 104) - Already returns NormNode ✓
+- [x] **hook** (line 115) - Already returns NormNode ✓
+- [x] **initFrame** (line 156) - Already returns NormNode ✓
+- [x] **updateLineInfoForContinuationStackFrame** (line 163) - Already returns Statement ✓
 
 ### returns.nim
-- [ ] **firstReturn** (line 5) - Should return Statement or Expression
-- [ ] **makeReturn** (line 23) - Should return Statement
-- [ ] **makeReturn** (line 37) - Should return Statement
-- [ ] **terminator** (line 61) - Should return Statement
-- [ ] **tailCall** (line 90) - Should return Statement
-- [ ] **jumperCall** (line 103) - Should return Statement
+- [x] **firstReturn** (line 5) - LOSER: Statement too specific
+- [x] **makeReturn** (line 23) - Already returns NormNode ✓
+- [x] **makeReturn** (line 37) - Already returns NormNode ✓
+- [x] **terminator** (line 61) - Already returns NormNode ✓
+- [x] **tailCall** (line 90) - Already returns NormNode ✓
+- [x] **jumperCall** (line 103) - Already returns NormNode ✓
 
 ### rewrites.nim
-- [ ] **filter** (line 24) - Should return NormNode (utility)
-- [ ] **filter** (line 34) - Already returns NormNode ✓
-- [ ] **filter** (line 40) - Already returns NormNode ✓
-- [ ] **errorAst** (line 50) - Already returns NormNode ✓
-- [ ] **errorAst** (line 60) - Already returns NormNode ✓
-- [ ] **desym** (line 65) - Should return NormNode or Name
-- [ ] **desym** (line 71) - Already returns NormNode ✓
-- [ ] **childCallToRecoverResult** (line 74) - Should return Expression or NormNode
-- [ ] **childCallToRecoverResult** (line 87) - Already returns NormNode ✓
-- [ ] **resym** (line 90) - Should return NormNode or Statement
-- [ ] **resym** (line 108) - Already returns NormNode ✓
-- [ ] **replacedSymsWithIdents** (line 111) - Should return NormNode
-- [ ] **replacedSymsWithIdents** (line 120) - Already returns NormNode ✓
+- [x] **filter** (line 24) - Phase 10.2: Converted NimNode → NormNode ✓
+- [x] **filter** (line 34) - Already returns NormNode ✓
+- [x] **filter** (line 40) - Already returns NormNode ✓
+- [x] **errorAst** (line 50) - Already returns NormNode ✓
+- [x] **errorAst** (line 60) - Already returns NormNode ✓
+- [x] **desym** (line 65) - Phase 10.1: Converted NimNode → NormNode ✓
+- [x] **desym** (line 71) - Already returns NormNode ✓
+- [x] **childCallToRecoverResult** (line 74) - Phase 10.5: Converted NimNode → NormNode ✓
+- [x] **childCallToRecoverResult** (line 87) - Already returns NormNode ✓
+- [x] **resym** (line 90) - Phase 10.6: Converted NimNode → NormNode ✓
+- [x] **resym** (line 108) - Already returns NormNode ✓
+- [x] **replacedSymsWithIdents** (line 111) - Phase 10.7: Converted NimNode → NormNode ✓
+- [x] **replacedSymsWithIdents** (line 120) - Already returns NormNode ✓
 - [ ] **isCallback** (line 123) - Returns bool, skip
-- [ ] **normalizingRewrites** (line 156) - Already returns NormNode ✓
-- [ ] **workaroundRewrites** (line 386) - Already returns NormNode ✓
-- [ ] **workaroundRewrites** (line 483) - Already returns NormNode ✓
-- [ ] **replace** (line 486) - Should return NormNode
-- [ ] **replace** (line 497) - Already returns NormNode ✓
-- [ ] **multiReplace** (line 516) - Should return NormNode
-- [ ] **multiReplace** (line 531) - Already returns NormNode ✓
-- [ ] **multiReplace** (line 546) - Already returns NormNode ✓
-- [ ] **addInitializationToDefault** (line 561) - Should return NormNode ✓
+- [x] **normalizingRewrites** (line 156) - Already returns NormNode ✓
+- [x] **replace** (line 490) - Already returns NormNode ✓
+- [x] **replace** (line 501) - Already returns NormNode ✓
+- [x] **replace** (line 510) - Template already returns NimNode ✓
+- [x] **replace** (line 515) - Template already returns NormNode ✓
+- [x] **multiReplace** (line 520) - Already returns NormNode ✓
+- [x] **multiReplace** (line 535) - Already returns NormNode ✓
+- [x] **addInitializationToDefault** (line 565) - Phase 11.1: Converted NimNode → NormNode ✓
 
 ### spec.nim
-- [ ] **nilAsEmpty** (line 597) - Should return Expression or NormNode
-- [ ] **emptyAsNil** (line 604) - Should return Expression or NormNode
-- [ ] **copyOrVoid** (line 618) - Should return Expression or TypeExpr
-- [ ] **bootstrapSymbol** (line 373) - Should return Name or Expression
-- [ ] **enbasen** (line 395) - Should return TypeExpr
-- [ ] **makeErrorShim** (line 418) - Should return ProcDef
+- [x] **nilAsEmpty** (line 597) - Already returns NormNode ✓
+- [x] **emptyAsNil** (line 604) - Already returns NormNode ✓
+- [x] **copyOrVoid** (line 618) - LOSER: TypeExpr too specific
+- [x] **bootstrapSymbol** (line 373) - Already returns NormNode ✓
+- [x] **enbasen** (line 395) - Already returns TypeExpr ✓
+- [x] **makeErrorShim** (line 418) - LOSER: Macro context issues
 - [ ] **hash** (line 178) - Returns Hash, skip
 
 ### transform.nim
