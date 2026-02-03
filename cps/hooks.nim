@@ -158,9 +158,9 @@ proc initFrame*(hook: Hook; fun: string; info: LineInfo): NormNode =
   result.add: "info".colon info.makeLineInfo
   result.add: "fun".colon fun
 
-proc updateLineInfoForContinuationStackFrame*(c, n: NimNode): NimNode =
+proc updateLineInfoForContinuationStackFrame*(c, n: NimNode): NormNode =
   ## `c` holds the continuation symbol, while `n` is a node with info
   when cpsStackFrames:
-    newAssignment(c.dot("stack").dot("info"), n.lineInfoObj.makeLineInfo)
+    NormNode newAssignment(c.dot("stack").dot("info"), n.lineInfoObj.makeLineInfo)
   else:
-    newEmptyNode()
+    NormNode newEmptyNode()
