@@ -1213,8 +1213,9 @@ iterator callingParams*(n: ProcDef): RoutineParam =
   for a in n.formalParams[1..^1].items:
     yield a.RoutineParam
 
-proc clone*(n: ProcDef, body: NimNode = NilNimNode): ProcDef =
+proc clone*(n: ProcDef, body: NimNode|NormNode = NilNimNode): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
+  let body = if body.isNil: NilNimNode else: body.NimNode
   result = nnkProcDef.newTree(
     ident(repr n.name),         # repr to handle gensymbols
     newEmptyNode(),
