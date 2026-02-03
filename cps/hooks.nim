@@ -75,14 +75,15 @@ proc abbreviation(n: NimNode): NormNode =
    else:
      n.errorAst "dunno how to abbreviate " & $n.kind
 
-proc nameForNode*(n: NimNode): string =
-  ## produce some kind of useful string that names a node
-  let abbrev = abbreviation n
-  case abbrev.kind
-  of nnkSym, nnkIdent:
-    $abbrev
-  else:
-    repr n
+proc nameForNode*(n: NimNode|NormNode): string =
+   ## produce some kind of useful string that names a node
+   let n = n.NimNode
+   let abbrev = abbreviation n
+   case abbrev.kind
+   of nnkSym, nnkIdent:
+     $abbrev
+   else:
+     repr n
 
 when defined(cpsNoTrace):
   template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
