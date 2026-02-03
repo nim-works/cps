@@ -1314,11 +1314,11 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # before they enter cps, so we don't need to care about those.
   #
   # TODO: we should track down why these hints occur.
-  result = NormNode:
-    quote:
-      {.push hint[ConvFromXtoItselfNotNeeded]: off.}
-      `result`
-      {.pop.}
+  let suppressTemp = quote:
+    {.push hint[ConvFromXtoItselfNotNeeded]: off.}
+    `result`
+    {.pop.}
+  result = NormNode(suppressTemp)
 
   result = workaroundRewrites result
 
