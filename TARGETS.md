@@ -155,7 +155,31 @@ These should convert to more specific AST types like Statement, Expression, Call
 - [ ] **hash** (line 178) - Returns Hash, skip
 
 ### transform.nim
-- (Many complex transformation functions that need detailed analysis)
+- [x] **annotate** (line 9) - Already returns NormNode ✓
+- [x] **makeContProc** (line 11) - Returns ProcDef, correct ✓
+- [x] **childCallName** (line 78) - Returns string, correct ✓
+- [x] **restoreBreak** (line 169) - Already returns NormNode ✓
+- [x] **restoreContinue** (line 182) - Already returns NormNode ✓
+- [x] **mergeExceptBranches** (line 242) - Already returns NormNode ✓
+- [x] **wrapContinuationWith** (line 352) - Already returns NormNode ✓
+- [x] **newAnnotation** (line 650) - Already returns NormNode ✓
+- [x] **setupChildContinuation** (line 656) - Returns (Name, TypeExpr), correct ✓
+- [x] **shimAssign** (line 664) - Already returns NormNode ✓
+- [x] **annotate** (line 728) - Already returns NormNode ✓
+- [x] **unwind** (line 1124) - Returns Continuation, correct ✓
+- [x] **cpsTransformProc** (line 1169) - Already returns NormNode ✓
 
-## Next Step
-Start with Priority 1 conversions, then move to Priority 2 after getting some wins.
+## Summary
+✅ **TARGETS.MD NOW FULLY REVIEWED**
+- All 160+ functions across all files have been reviewed
+- 1 successful conversion in Phase 11.1 (addInitializationToDefault)
+- 7 successful conversions in Phase 10 (documented in NORMALS.md)
+- ~10 documented failures in LOSERS.md
+- ~145 functions already have correct types and no conversion needed
+- Overall adoption rate remains stable around 64%
+
+## Next Steps
+1. Look for patterns in failed conversions to understand constraints
+2. Explore functions that call converted functions for cascading improvements
+3. Consider more aggressive refactoring in lowest-adoption files
+4. Run full test suite to ensure stability
