@@ -66,26 +66,26 @@ proc terminator*(c: Name; contType: Name; tipe: NormNode): NormNode =
   let pass = hook(Pass, newCall(contType, c), c.dot "mom")
   let dealloc = hook(Dealloc, newCall(contType, c), tipe)
   let c = c.NormNode
-  NormNode:
-    quote:
-      if `c`.isNil:
-        result = nil
+  let terminatorTemp = quote:
+    if `c`.isNil:
+      result = nil
+    else:
+      `c`.fn = nil
+      if `c`.mom.isNil:
+        result = `c`
       else:
-        `c`.fn = nil
-        if `c`.mom.isNil:
-          result = `c`
-        else:
-          # pass(continuation, c.mom)
-          #result = (typeof `c`) `pass` Error: expected type, but got: Continuation(continuation.mom)
-          result = `pass`
-          if result != `c`:
-            `c`.mom = nil
-            # perform a cooperative yield if pass() chose mom
-            result = `coop`
-            # dealloc(env_234234, continuation)
-            discard `dealloc`
-      # critically, terminate control-flow here!
-      return
+        # pass(continuation, c.mom)
+        #result = (typeof `c`) `pass` Error: expected type, but got: Continuation(continuation.mom)
+        result = `pass`
+        if result != `c`:
+          `c`.mom = nil
+          # perform a cooperative yield if pass() chose mom
+          result = `coop`
+          # dealloc(env_234234, continuation)
+          discard `dealloc`
+    # critically, terminate control-flow here!
+    return
+  result = NormNode(terminatorTemp)
 
 proc tailCall*(cont, contType, to: Name; jump: NormNode = NilNormNode): NormNode =
   ## a tail call to `to` with `cont` as the continuation; if the `jump`
