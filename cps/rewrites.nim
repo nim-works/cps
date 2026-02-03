@@ -569,3 +569,6 @@ proc addInitializationToDefault*(n: NimNode): NimNode =
         newCall bindSym"default":
           newCall bindSym"typeOf":
             n[1]
+
+proc addInitializationToDefault*(n: NormNode): NormNode =
+  addInitializationToDefault(n.NimNode).NormNode
