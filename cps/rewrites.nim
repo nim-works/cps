@@ -21,15 +21,17 @@ converter normNodeToNimNode(n: NormNode): NimNode =
   ## in `filter`, `normalizingRewrites`, etc  below.
   n.NimNode
 
-proc filter*(n: NimNode; f: NodeFilter): NimNode =
-  ## rewrites a node and its children by passing each node to the filter;
-  ## if the filter yields nil, the node is simply copied.  otherwise, the
-  ## node is replaced.
-  result = f(n)
-  if result.isNil:
-    result = copyNimNode n
-    for kid in items(n):
-      result.add filter(kid, f)
+proc filter*(n: NimNode; f: NodeFilter): NormNode =
+   ## rewrites a node and its children by passing each node to the filter;
+   ## if the filter yields nil, the node is simply copied.  otherwise, the
+   ## node is replaced.
+   let res = f(n)
+   if res.isNil:
+     result = copyNimNode(n).NormNode
+     for kid in items(n):
+       result.add filter(kid, f).NimNode
+   else:
+     result = res.NormNode
 
 proc filter*(n: NimNode; f: NormalizingFilter): NormNode =
   ## rewrites a node and its children by passing each node to the filter;
