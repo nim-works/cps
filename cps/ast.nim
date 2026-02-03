@@ -500,6 +500,14 @@ proc wrap*(kind: NimNodeKind, n: NormNode): NormNode =
   ## wraps a node `n` within a new node of `kind`
   newTree(kind, n)
 
+proc wrap*(kind: NimNodeKind, n: Statement): Statement =
+  ## typed variant: wrap a Statement within a new node of `kind`
+  wrap(kind, n.NormNode).Statement
+
+proc wrap*(kind: NimNodeKind, n: Expression): Expression =
+  ## typed variant: wrap an Expression within a new node of `kind`
+  wrap(kind, n.NormNode).Expression
+
 converter seqNormalizedToSeqNimNode*(n: seq[NormNode]): seq[NimNode] =
   ## convert a `seq[NormNode]` to `seq[NimNode]` for ease of use
   seq[NimNode] n
