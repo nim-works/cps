@@ -399,23 +399,24 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormNode): NormNode =
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
 
-proc createContinuation*(e: Env; name: Name; goto: NimNode): NormNode =
-  ## allocate a continuation as `name` and maybe aim it at the leg `goto`
-  proc resultdot(n: Name): NormNode =
-    newDotExpr(e.castToChild(name), n)
-  result = newStmtList:
-    newAssignment name:
-      Alloc.hook(e.inherits, e.identity)
-  for field, section in e.pairs:
-    # omit special fields in the env that we use for holding
-    # custom functions, results, exceptions, and parent respectively
-    if field notin [e.fn, e.rs.name, e.mom]:
-      # the name from identdefs is not gensym'd (usually!)
-      result.add:
-        newAssignment(resultdot field, section.name)
-  if not goto.isNil:
-    result.add:
-      newAssignment(resultdot e.fn, goto)
+proc createContinuation*(e: Env; name: Name; goto: NimNode|NormNode = NilNimNode): NormNode =
+   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
+   let goto = if goto.isNil: NilNimNode else: goto.NimNode
+   proc resultdot(n: Name): NormNode =
+     newDotExpr(e.castToChild(name), n)
+   result = newStmtList:
+     newAssignment name:
+       Alloc.hook(e.inherits, e.identity)
+   for field, section in e.pairs:
+     # omit special fields in the env that we use for holding
+     # custom functions, results, exceptions, and parent respectively
+     if field notin [e.fn, e.rs.name, e.mom]:
+       # the name from identdefs is not gensym'd (usually!)
+       result.add:
+         newAssignment(resultdot field, section.name)
+   if not goto.isNil:
+     result.add:
+       newAssignment(resultdot e.fn, goto)
 
 proc genException*(e: var Env): NormNode =
   ## generates a new symbol of type ref Exception, then put it in the env.
