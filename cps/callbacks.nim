@@ -47,23 +47,25 @@ proc createCallbackShim*(env: Env; whelp: ProcDef): ProcDef =
   result.body = newCall(result.returnParam, result.body)
 
 proc createCallback*(sym: NimNode): NimNode =
-  ## create a new Callback object construction
-  let fn = sym.getImpl.ProcDef.pragmaArgument"cpsCallbackShim"
-  let impl = fn.getImpl.ProcDef                     # convenience
-  let rs = impl.pragmaArgument"cpsResult"
-  let tipe = nnkBracketExpr.newTree bindSym"Callback"
-  tipe.add impl.returnParam # the base cps environment type
-  tipe.add:                 # the return type of the result fetcher
-    copyOrVoid impl.pragmaArgument"cpsReturnType"
-  var params = copyNimTree impl.formalParams # prepare params list
-  # consider desym'ing foo(a: int; b = a) before deleting this loop
-  for defs in impl.callingParams:
-    params = desym(params, defs.name)
-  tipe.add:      # the proc() type of the bootstrap
-    nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
-  result =
-    NimNode:
-      nnkObjConstr.newTree(tipe, "fn".colon fn.NimNode, "rs".colon rs.NimNode)
+   ## create a new Callback object construction
+   let fn = sym.getImpl.ProcDef.pragmaArgument"cpsCallbackShim"
+   let impl = fn.getImpl.ProcDef                     # convenience
+   let rs = impl.pragmaArgument"cpsResult"
+   let tipe = nnkBracketExpr.newTree bindSym"Callback"
+   tipe.add impl.returnParam # the base cps environment type
+   tipe.add:                 # the return type of the result fetcher
+     copyOrVoid impl.pragmaArgument"cpsReturnType"
+   var params = copyNimTree impl.formalParams # prepare params list
+   # consider desym'ing foo(a: int; b = a) before deleting this loop
+   for defs in impl.callingParams:
+     params = desym(params, defs.name)
+   tipe.add:      # the proc() type of the bootstrap
+     nnkProcTy.newTree(params, nnkPragma.newTree ident"nimcall")
+   # Build object constructor
+   var obj = nnkObjConstr.newTree(tipe)
+   obj.add: "fn".colon fn.NimNode
+   obj.add: "rs".colon rs.NimNode
+   result = obj
 
 proc createCastCallback*(whelp, callback, sym: NimNode): NimNode =
   ## Given a `callback` typedesc and a CPS continuation procedure,
