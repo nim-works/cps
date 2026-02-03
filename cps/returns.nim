@@ -34,6 +34,10 @@ proc makeReturn*(contType: Name; n: NormNode): NormNode =
   else:
     n
 
+proc firstReturnOfStatement*(n: Statement): NormNode =
+  ## Typed variant: Find the first return statement in a Statement
+  firstReturn(n.NormNode)
+
 proc makeReturn*(contType: Name; pre, n: NormNode): NormNode =
   ## if `pre` holds no `return`, produce a `return` of `n` after `pre`
   if not pre.firstReturn.isNil:
@@ -45,8 +49,12 @@ proc makeReturn*(contType: Name; pre, n: NormNode): NormNode =
       makeReturn(contType, n)
     else:
       newEmptyNode().NormNode
-    #else:
-    #  doc "omitted a return of " & repr(n)
+     #else:
+     #  doc "omitted a return of " & repr(n)
+
+proc makeReturnOfStatement*(contType: Name; n: Statement): Statement =
+  ## Typed variant: Ensure Statement has proper return wrapping
+  makeReturn(contType, n.NormNode).Statement
 
 template pass*(source: Continuation; destination: Continuation): Continuation {.used.} =
   ## This symbol may be reimplemented to introduce logic during

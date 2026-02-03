@@ -179,6 +179,10 @@ proc restoreBreak(n: NormNode, label = newEmptyNormNode()): NormNode =
 
   filter(n, restorer)
 
+proc restoreBreakOfStatement*(n: Statement, label = newEmptyNormNode()): Statement =
+  ## Typed variant: restore {.cpsBreak: label.} into break statements in a Statement
+  restoreBreak(n.NormNode, label).Statement
+
 proc restoreContinue(n: NormNode): NormNode =
   ## restore {.cpsContinue.} into continue statements
   proc restorer(n: NormNode): NormNode =
@@ -189,6 +193,10 @@ proc restoreContinue(n: NormNode): NormNode =
       NilNormNode
 
   filter(n, restorer)
+
+proc restoreContinueOfStatement*(n: Statement): Statement =
+  ## Typed variant: restore {.cpsContinue.} into continue statements in a Statement
+  restoreContinue(n.NormNode).Statement
 
 macro cpsBlock(cont, contType: typed; name: static[string]; label, n: typed): untyped =
   ## The block with `label` is tainted by a `cpsJump` and may require a

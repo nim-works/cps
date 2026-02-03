@@ -223,6 +223,10 @@ proc breakLabel*(n: NormNode): NormNode =
   else:
     raise newException(Defect, "this node is not a break: " & $n.kind)
 
+proc breakLabelOfStatement*(n: Statement): NormNode =
+  ## Typed variant: Return the break label from a Statement (break or cpsBreak)
+  breakLabel(n.NormNode)
+
 proc isCpsCont*(n: NormNode): bool =
   ## Return whether the given procedure is a cps continuation
   n.kind in RoutineNodes and n.asRoutineDef.hasPragma("cpsCont")
