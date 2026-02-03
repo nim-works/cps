@@ -399,7 +399,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormNode): NormNode =
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
 
-proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
+proc createContinuation*(e: Env; name: Name; goto: NimNode): NormNode =
   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
   proc resultdot(n: Name): NormNode =
     newDotExpr(e.castToChild(name), n)
