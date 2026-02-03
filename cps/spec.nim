@@ -594,19 +594,19 @@ proc ensimilate*(source, destination: NormNode): Call =
   # fallback to typeOf
   result = newCall(newCall(bindName"typeOf", source), destination)
 
-proc nilAsEmpty*(n: NimNode): NimNode =
+proc nilAsEmpty*(n: NimNode): NormNode =
   ## normalize nil, nnkNilLit to nnkEmpty
   if n.isNil or n.kind == nnkNilLit:
-    newEmptyNode()
+    NormNode newEmptyNode()
   else:
-    n
+    n.NormNode
 
-proc emptyAsNil*(n: NimNode): NimNode =
+proc emptyAsNil*(n: NimNode): NormNode =
   ## normalize nil, nnkEmpty to nnkNilLit
   if n.isNil or n.kind == nnkEmpty:
-    newNilLit()
+    NormNode newNilLit()
   else:
-    n
+    n.NormNode
 
 macro etype*(e: enum): string =
   ## Coop -> "Coop", not "coop"
@@ -615,9 +615,9 @@ macro etype*(e: enum): string =
       return newLit sym.strVal
   error "unexpected"
 
-proc copyOrVoid*(n: NimNode): NimNode =
+proc copyOrVoid*(n: NimNode): NormNode =
   ## if the node is empty, `ident"void"`; else, a copy of the node
   if n.isEmpty:
-    ident"void"
+    NormNode ident"void"
   else:
-    copyNimTree n
+    NormNode copyNimTree n
