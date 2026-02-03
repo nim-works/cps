@@ -513,7 +513,7 @@ proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   # hook the bootstrap
   result.body.add:
     newAssignment resultName:
-      Stack.hook initFrame(Stack, $goto, goto.lineInfoObj).NormNode:
+      Stack.hook initFrame(Stack, $goto, goto.lineInfoObj):
         newCall env.identity:
           Boot.hook newCall(env.root, resultName)
 
@@ -541,7 +541,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.body.add:
     newAssignment c:
       Head.hook:
-        Stack.hook initFrame(Stack, $goto, goto.lineInfoObj).NormNode:
+        Stack.hook initFrame(Stack, $goto, goto.lineInfoObj):
           Boot.hook c
 
   # rewrite the symbols used in the arguments to identifiers

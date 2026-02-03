@@ -115,7 +115,7 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
   case hook
   of Unwind:
     # hook(continuation, Cont)
-    let unwind = hook.sym.NimNode
+    let unwind = hook.sym
     Unwind.entrace a, b:
       NormNode:
         quote:
@@ -151,9 +151,9 @@ proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
   else:
     b.errorAst "the " & $hook & " hook doesn't take two arguments"
 
-proc initFrame*(hook: Hook; fun: string; info: LineInfo): NimNode =
+proc initFrame*(hook: Hook; fun: string; info: LineInfo): NormNode =
   ## prepare a tracing frame constructor
-  result = nnkObjConstr.newTree bindSym"TraceFrame"
+  result = nnkObjConstr.newTree(bindSym"TraceFrame").NormNode
   result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
   result.add: "info".colon info.makeLineInfo
   result.add: "fun".colon fun
