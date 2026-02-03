@@ -130,7 +130,7 @@ proc populateType(e: Env; n: var NimNode) =
     n.add:
       newIdentDef(name, section.inferTypFromImpl, newEmptyNode()).NimNode
 
-proc objectType(e: Env): NimNode =
+proc objectType(e: Env): NormNode =
   ## turn an env into an object type
   # XXX: remove NimNode
   var pragma = newEmptyNode()
@@ -269,7 +269,7 @@ proc identity*(e: var Env): Name =
   ## identifier of our continuation type
   result = e.id
 
-proc initialization(e: Env; field: Name, section: VarLetIdentDef): NimNode =
+proc initialization(e: Env; field: Name, section: VarLetIdentDef): NormNode =
   ## produce the `x = 34`
   result = newStmtList()
   # let/var sections basically become env2323(cont).foo34 = "some default"
@@ -288,7 +288,7 @@ proc letOrVar(n: IdentDef): NimNodeKind =
   else:
     result = nnkLetSection
 
-proc addAssignment(e: var Env; d: IdentDef): NimNode =
+proc addAssignment(e: var Env; d: IdentDef): NormNode =
   ## compose an assignment during addition of identdefs to env. For the
   ## purposes of CPS, even though let and var sections contain identdefs this
   ## proc should never handle those directly; see the overload below.
@@ -296,7 +296,7 @@ proc addAssignment(e: var Env; d: IdentDef): NimNode =
   # don't attempt to redefine proc params!
   result = newStmtList()
 
-proc addAssignment(e: var Env; section: VarLetIdentDef): NimNode =
+proc addAssignment(e: var Env; section: VarLetIdentDef): NormNode =
   ## compose an assignment during addition of var|let identDefs to env
   let (field, value) = e.addIdentDef(section.kind, section.identdef())
   result = e.initialization(field, value)
@@ -417,7 +417,7 @@ proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
     result.add:
       newAssignment(resultdot e.fn, goto)
 
-proc genException*(e: var Env): NimNode =
+proc genException*(e: var Env): NormNode =
   ## generates a new symbol of type ref Exception, then put it in the env.
   ##
   ## returns the access to the exception symbol from the env.
