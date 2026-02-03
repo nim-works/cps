@@ -265,6 +265,10 @@ func flattenStmtList*(n: NormNode): NormNode =
   while result.kind in {nnkStmtList, nnkStmtListExpr} and result.len == 1:
     result = result[0]
 
+func flattenStmtList*(n: Statement): Statement =
+  ## Typed variant: unwrap 1-element StmtList preserving Statement type
+  flattenStmtList(n.NormNode).Statement
+
 func matchCpsBreak*(label: NormNode): NormMatcher =
   ## create a matcher matching cpsBreak with the given label
   ## and cpsBreak without any label
