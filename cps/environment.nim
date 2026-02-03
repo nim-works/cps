@@ -426,7 +426,7 @@ proc genException*(e: var Env): NormNode =
     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
   result = newDotExpr(e.castToChild(e.first), ex)
 
-proc createRecover*(env: Env, exported = false): NimNode =
+proc createRecover*(env: Env, exported = false): NormNode =
   ## define procedures for retrieving the result of a continuation
   ##
   ## `exported` determines whether these procedures will be exported
@@ -461,7 +461,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
     if exported:
       result = postfix(result, "*")
 
-  result =
+  let temp = 
     genAstOpt({}, tipe, recoveredResult, fetch, fetchStar = fetch.star,
               recoverStar = recover.star, c = env.first.NimNode,
               cont = env.identity.NimNode, contBase = env.inherits.NimNode,
@@ -485,6 +485,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
         defer: c = cont(move base)     # due to void return types
         fetch(base)
 
+  result = temp.NormNode
   when cpsCallOperatorSupported and not defined cpsNoCallOperator:
     let callOperator = nnkAccQuoted.newTree ident"()"
     result.add:
