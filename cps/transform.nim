@@ -1095,28 +1095,27 @@ macro cpsManageException(name: static[string]; n: typed): untyped =
           ex = hasException[2].resym(exCont, cont)
 
         # Add the manager itself
-        c.body.add:
-          NormNode:
-            genAst(cont = cont.NimNode, ex = ex.NimNode, innerFn, result = ident"result"):
-              # Save the old exception from the enviroment
-              let oldException = getCurrentException()
-              # Set the exception to what is in the continuation
-              setCurrentException(ex)
-              try:
-                # Run our continuation
-                result = innerFn(cont)
-                # Restore the old exception
-                setCurrentException(oldException)
-              except CatchableError:
-                # If the continuation raise an unhandled exception,
-                # capture it.
-                let e = getCurrentException()
-                # Restore the old exception
-                setCurrentException(oldException)
-                # Now reraise the continuation's exception, which will
-                # make `oldException` as `e`'s parent, preserving the
-                # exception stack outside of CPS
-                raise e
+        let managerTemp = genAst(cont = cont.NimNode, ex = ex.NimNode, innerFn, result = ident"result"):
+          # Save the old exception from the enviroment
+          let oldException = getCurrentException()
+          # Set the exception to what is in the continuation
+          setCurrentException(ex)
+          try:
+            # Run our continuation
+            result = innerFn(cont)
+            # Restore the old exception
+            setCurrentException(oldException)
+          except CatchableError:
+            # If the continuation raise an unhandled exception,
+            # capture it.
+            let e = getCurrentException()
+            # Restore the old exception
+            setCurrentException(oldException)
+            # Now reraise the continuation's exception, which will
+            # make `oldException` as `e`'s parent, preserving the
+            # exception stack outside of CPS
+            raise e
+        c.body.add NormNode(managerTemp)
         result = c
 
   debugAnnotation cpsManageException, n:
