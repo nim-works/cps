@@ -4,12 +4,12 @@ import cps/[spec, ast, help, rewrites]
 
 template cpsMustLift() {.pragma.} ## signify a code block that has to be lifted
 
-proc newCpsMustLift(n: NormNode): NormNode =
+proc newCpsMustLift(n: NormNode): PragmaBlock =
   ## Wrap `n` in a `cpsMustLift` block.
   nnkPragmaBlock.newTree(
     nnkPragma.newTree(bindName"cpsMustLift"),
     n
-  )
+  ).PragmaBlock
 
 proc isCpsMustLift(n: NormNode): bool =
   ## Check whether `n` is a cpsMustLift block
