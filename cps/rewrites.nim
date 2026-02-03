@@ -51,9 +51,9 @@ proc errorAst*(s: string, info: NimNode = nil): NormNode =
   ## produce {.error: s.} in order to embed errors in the ast
   ##
   ## optionally take a node to set the error line information
-  result = NormNode:
-    nnkPragma.newTree:
-      ident"error".newColonExpr: newLit s
+  let errorTemp = nnkPragma.newTree:
+    ident"error".newColonExpr: newLit s
+  result = NormNode(errorTemp)
   if not info.isNil:
     result.NimNode[0].copyLineInfo info
 
