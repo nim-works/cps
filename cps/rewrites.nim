@@ -75,18 +75,18 @@ proc desym*(n: NimNode): NormNode =
 proc desym*(n: NormNode): NormNode =
   desym(n.NimNode).NormNode
 
-proc childCallToRecoverResult*(n: NimNode; sym: NimNode; field: NimNode): NimNode =
-  ## this is used to rewrite continuation calls into their results
-  if sym.kind notin NormalCallNodes:
-    raise Defect.newException: "resymCall is for calls, not " & $sym.kind
-  proc resymify(n: NimNode): NimNode =
-    case n.kind
-    of NormalCallNodes:
-      if n == sym:
-        result = field
-    else:
-      discard
-  result = filter(n, resymify)
+proc childCallToRecoverResult*(n: NimNode; sym: NimNode; field: NimNode): NormNode =
+   ## this is used to rewrite continuation calls into their results
+   if sym.kind notin NormalCallNodes:
+     raise Defect.newException: "resymCall is for calls, not " & $sym.kind
+   proc resymify(n: NimNode): NimNode =
+     case n.kind
+     of NormalCallNodes:
+       if n == sym:
+         result = field
+     else:
+       discard
+   filter(n, resymify)
 
 proc childCallToRecoverResult*(n, sym, field: NormNode): NormNode {.borrow.}
   ## this is used to rewrite continuation calls into their results
