@@ -367,6 +367,38 @@ proc add*(f: NimNode, c: NormNode): NormNode {.discardable.} =
   ## created in order to fix ambiguous call issues ... again.
   f.NormNode.add(c.NormNode)
 
+proc add*(f: Statement, c: Statement): Statement {.discardable.} =
+  ## typed variant: add a Statement child to a Statement parent
+  f.NormNode.add(c.NormNode).Statement
+
+proc add*(f: Expression, c: Expression): Expression {.discardable.} =
+  ## typed variant: add an Expression child to an Expression parent
+  f.NormNode.add(c.NormNode).Expression
+
+proc copy*(n: Statement): Statement =
+  ## typed variant: copy a Statement node
+  n.NormNode.copy().Statement
+
+proc copy*(n: Expression): Expression =
+  ## typed variant: copy an Expression node
+  n.NormNode.copy().Expression
+
+proc copyNimNode*(n: Statement): Statement =
+  ## typed variant: shallow copy a Statement node
+  n.NormNode.copyNimNode().Statement
+
+proc copyNimNode*(n: Expression): Expression =
+  ## typed variant: shallow copy an Expression node
+  n.NormNode.copyNimNode().Expression
+
+proc copyNimTree*(n: Statement): Statement =
+  ## typed variant: deep copy a Statement node
+  n.NormNode.copyNimTree().Statement
+
+proc copyNimTree*(n: Expression): Expression =
+  ## typed variant: deep copy an Expression node
+  n.NormNode.copyNimTree().Expression
+
 template findChild*(n: NormNode; cond: untyped): NormNode =
   ## finds the first child node matching the condition or nil
   NormNode macros.findChild(n, cond)
@@ -1244,6 +1276,14 @@ proc hasPragma*(n: NormNode; s: static[string]): bool =
     result = anyIt(toSeq items(n), hasPragma(it, s))
   else:
     result = false
+
+func hasPragma*(n: Statement; s: static[string]): bool =
+  ## Typed variant: check if a Statement has pragma `s`
+  n.NormNode.hasPragma(s)
+
+func hasPragma*(n: TypeExpr; s: static[string]): bool =
+  ## Typed variant: check if a TypeExpr has pragma `s`
+  n.NormNode.hasPragma(s)
 
 proc genProcName*(a: string; info = NilNormNode): Name {.deprecated.} =
   genSymProc(fmt"cps:{a}", info=info)

@@ -175,6 +175,14 @@ proc assignTo*(location, n: NormNode): NormNode =
 
   filterExpr(n, assign)
 
+proc assignTo*(location, n: Statement): Statement =
+  ## Typed variant: assign an expression to a location, returning a Statement
+  assignTo(location.NormNode, n.NormNode).Statement
+
+proc assignTo*(location: Expression, n: Expression): Expression =
+  ## Typed variant: assign an expression to a location, returning an Expression
+  assignTo(location.NormNode, n.NormNode).Expression
+
 func isMutableLocation(location: NormNode): bool
 
 func isMutable(n: NormNode): bool =
