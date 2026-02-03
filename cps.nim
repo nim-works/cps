@@ -1,5 +1,5 @@
 import std/[genasts, deques]
-import cps/[spec, transform, rewrites, hooks, exprs, normalizedast, callbacks]
+import cps/[spec, transform, rewrites, hooks, exprs, ast, callbacks]
 import std/macros except newStmtList, newTree
 
 export Continuation, ContinuationProc, ContinuationFn, State, Callback

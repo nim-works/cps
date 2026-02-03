@@ -21,7 +21,7 @@ const
     else:
       true
 
-import cps/[rewrites, help, normalizedast]
+import cps/[rewrites, help, ast]
 export errorAst, desym, isEmpty, genField
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
@@ -386,11 +386,11 @@ proc bootstrapSymbol*(n: NimNode): NormNode =
       pragmaArgument(n, "cpsBootstrap")
     else:
       error "procedure doesn't seem to be a cps call"
-      normalizedast.newCall("typeOf", n)
+      ast.newCall("typeOf", n)
   else:
     error "procedure doesn't seem to be a cps call"
     ## XXX: darn ambiguous calls
-    normalizedast.newCall("typeOf", n)
+    ast.newCall("typeOf", n)
 
 proc enbasen*(n: NimNode): TypeExpr =
   ## find the parent type of the given symbol/type

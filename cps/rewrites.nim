@@ -12,7 +12,7 @@ type
     ## A proc that returns whether a NimNode should be replaced
   NormNode* = distinct NimNode
     ## a normalized node, but this should not be useed directly, use a
-    ## specialized type instead, see the `normalizedast` module.
+    ## specialized type instead, see the `ast` module.
 
 const NormalCallNodes* = CallNodes - {nnkHiddenCallConv}
 

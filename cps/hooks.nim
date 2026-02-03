@@ -1,6 +1,6 @@
 import std/macros except newStmtList, newTree
 
-import cps/[spec, normalizedast]
+import cps/[spec, ast]
 
 # we use mixin instead
 #{.experimental: "dynamicBindSym".}

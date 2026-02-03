@@ -135,6 +135,13 @@ type
   TypeDef* = distinct NormNode
     ## `nnkTypeDef`
 
+  Statement* = distinct NormNode
+    ## opaque sum: any statement node (var, let, assignment, if, while, etc.)
+    ## represents a syntactic statement in the normalized AST
+  Expression* = distinct NormNode
+    ## opaque sum: any expression node (call, ident, literal, etc.)
+    ## represents a syntactic expression in the normalized AST
+
   # Naming Convention Notes for Var and Let:
   # - first part of name is the Node, while the later parts add/narrow context
   # - `_` denotes if we're talking about it in a prefix or suffix context

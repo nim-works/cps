@@ -1,6 +1,6 @@
 import std/sequtils
 import std/macros except newStmtList, items, pairs, newTree
-import cps/[spec, normalizedast, help, rewrites]
+import cps/[spec, ast, help, rewrites]
 
 template cpsMustLift() {.pragma.} ## signify a code block that has to be lifted
 

@@ -8,7 +8,7 @@ NOTE: currently, cps/rewrites defines `isCallback(NimNode): bool`
 import std/macros
 
 import cps/[spec, rewrites, environment]
-import cps/normalizedast except newTree, newStmtList
+import cps/ast except newTree, newStmtList
 
 template cpsCallback*() {.pragma.}          ## this is a callback typedef
 template cpsCallbackShim*(whelp: typed) {.pragma.}  ##

@@ -7,7 +7,7 @@ they are comprised.
 
 import std/macros except newStmtList, newTree
 import std/[sets, sequtils, hashes, tables, algorithm, genasts]
-import cps/[spec, hooks, help, rewrites, normalizedast]
+import cps/[spec, hooks, help, rewrites, ast]
 
 when defined(nimPreviewSlimSystem):
   import std/assertions

@@ -1,6 +1,6 @@
 import std/macros except newStmtList, items
 
-import cps/[spec, hooks, normalizedast]
+import cps/[spec, hooks, ast]
 
 proc firstReturn*(p: NormNode): NormNode =
   ## Find the first control-flow return statement or cps

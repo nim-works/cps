@@ -97,9 +97,9 @@ suite "hooks":
           trace: bar continuation 👍
           trace: cps:bar() jump noop() continuation 👍
           pass: continuation.mom Cont(continuation) environment.nim
-          coop: result nil normalizedast.nim
+          coop: result nil ast.nim
           dealloc: cps:bar() env 😎 environment.nim
-          trace: cps:foo() child bar() continuation normalizedast.nim
+          trace: cps:foo() child bar() continuation ast.nim
           coop: Cont nil environment.nim
           trace: cps:foo() loop continuation 👍
           trace: cps:foo() jump noop() continuation 👍
@@ -111,9 +111,9 @@ suite "hooks":
           trace: bar continuation 👍
           trace: cps:bar() jump noop() continuation 👍
           pass: continuation.mom Cont(continuation) environment.nim
-          coop: result nil normalizedast.nim
+          coop: result nil ast.nim
           dealloc: cps:bar() env 😎 environment.nim
-          trace: cps:foo() child bar() continuation normalizedast.nim
+          trace: cps:foo() child bar() continuation ast.nim
           coop: Cont nil environment.nim
           trace: cps:foo() loop continuation 👍
           trace: cps:foo() jump noop() continuation 👍
@@ -136,9 +136,9 @@ suite "hooks":
           trace: bar continuation 👍
           trace: cps:bar() jump noop() continuation 👍
           pass: continuation.mom Cont(continuation) environment.nim
-          coop: result nil normalizedast.nim
+          coop: result nil ast.nim
           dealloc: cps:bar() env 😎 environment.nim
-          trace: cps:foo() child bar() continuation normalizedast.nim
+          trace: cps:foo() child bar() continuation ast.nim
           coop: Cont nil environment.nim
           trace: cps:foo() loop continuation 👍
           trace: cps:foo() jump noop() continuation 👍
@@ -149,9 +149,9 @@ suite "hooks":
           trace: bar continuation 👍
           trace: cps:bar() jump noop() continuation 👍
           pass: continuation.mom Cont(continuation) environment.nim
-          coop: result nil normalizedast.nim
+          coop: result nil ast.nim
           dealloc: cps:bar() env 😎 environment.nim
-          trace: cps:foo() child bar() continuation normalizedast.nim
+          trace: cps:foo() child bar() continuation ast.nim
           coop: Cont nil environment.nim
           trace: cps:foo() loop continuation 👍
           trace: cps:foo() jump noop() continuation 👍

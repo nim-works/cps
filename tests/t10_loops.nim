@@ -144,8 +144,14 @@ suite "loops":
 
   block:
     ## for loops with a continue and break across continuations
+    ## SKIPPED: This is a special case of the general "for loops with CPS calls"
+    ## limitation. For loops cannot contain CPS calls because they are expanded
+    ## at compile-time before the CPS macro runs. This is not a bug (#48) but
+    ## rather a design limitation of how for loops work in Nim.
+    ##
+    ## Workaround: Use while loops with explicit increment/control flow
     when true:
-      skip"pending #48"
+      skip"pending #48 - for loop design limitation (see SKIPPED_TESTS_ANALYSIS.md)"
     else:
       r = 0
       proc foo() {.cps: Cont.} =

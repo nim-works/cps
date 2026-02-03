@@ -1,7 +1,7 @@
 import std/[tables, hashes, genasts]
 import std/macros except newStmtList, newTree
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
-            normalizedast, callbacks]
+            ast, callbacks]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
 
 #{.experimental: "strictNotNil".}

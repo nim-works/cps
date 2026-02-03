@@ -284,8 +284,12 @@ suite "tasteful tests":
 
   block:
     ## implicit generics in continuation creation
+    ## SKIPPED: Generic type parameters not yet supported in CPS procedures.
+    ## This is a feature request tracked as issue #51.
+    ## Unskip when CPS generics support is implemented.
+    ## See SKIPPED_TESTS_ANALYSIS.md Category 5 for details.
     when true:
-      skip "not working, ref #51"
+      skip "not working, ref #51 - generics not yet supported in CPS"
     else:
       proc foo(v: auto) {.cps: Cont.} =
         discard $v
@@ -301,8 +305,12 @@ suite "tasteful tests":
 
   block:
     ## explicit generics in continuation creation
+    ## SKIPPED: Generic type parameters not yet supported in CPS procedures.
+    ## This is a feature request tracked as issue #51.
+    ## Unskip when CPS generics support is implemented.
+    ## See SKIPPED_TESTS_ANALYSIS.md Category 5 for details.
     when true:
-      skip "not working, ref #51"
+      skip "not working, ref #51 - generics not yet supported in CPS"
     else:
       proc foo[T](v: T) {.cps: Cont.} =
         discard $v

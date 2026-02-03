@@ -1,4 +1,4 @@
-import cps/[normalizedast, rewrites]
+import cps/[ast, rewrites]
 import std/macros except newStmtList
 
 template isNotNil*(x: untyped): bool = not(isNil(x))
