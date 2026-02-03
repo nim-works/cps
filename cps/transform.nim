@@ -1322,6 +1322,11 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
 
   result = workaroundRewrites result
 
+# Typed wrappers for transformation functions
+proc annotateStatement(parent: var Env; n: Statement): Statement =
+  ## Typed wrapper: annotate a Statement node while preserving its type
+  annotate(parent, n.NormNode).Statement
+
 macro cpsTransform*(tipe, n: typed): untyped =
   ## This is the macro performing the main cps transformation
   debug("cpsTransform", n, Original)
