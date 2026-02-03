@@ -112,14 +112,14 @@ proc resym*(n: NimNode; sym: NimNode; field: NimNode): NormNode =
 proc resym*(n, sym, field: NormNode): NormNode =
   resym(n.NimNode, sym.NimNode, field.NimNode).NormNode
 
-proc replacedSymsWithIdents*(n: NimNode): NimNode =
-  proc desymifier(n: NimNode): NimNode =
-    case n.kind
-    of nnkSym:
-      result = desym n
-    else:
-      discard
-  result = filter(n, desymifier)
+proc replacedSymsWithIdents*(n: NimNode): NormNode =
+   proc desymifier(n: NimNode): NimNode =
+     case n.kind
+     of nnkSym:
+       desym(n).NimNode
+     else:
+       nil
+   filter(n, desymifier)
 
 proc replacedSymsWithIdents*(n: NormNode): NormNode =
   replacedSymsWithIdents(n.NimNode).NormNode
