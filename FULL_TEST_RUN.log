@@ -1,0 +1,164 @@
+🏃 00_smoke: c arc release execute                                   
+🏃 00_smoke: c arc debug execute                                     
+🏃 00_smoke: c orc release execute                                   
+🏃 00_smoke: c orc debug execute                                     
+🏃 00_smoke: c arc danger execute                                    
+🏃 00_smoke: c arc danger asan                                       
+🏃 00_smoke: c orc danger execute                                    
+🏃 00_smoke: c arc danger usan                                       
+🏃 00_smoke: c orc danger tsan                                       
+🏃 00_smoke: c arc danger tsan                                       
+🏃 10_loops: c orc debug execute                                     
+🏃 00_smoke: c orc danger asan                                       
+🏃 00_smoke: c orc danger usan                                       
+🏃 10_loops: c arc debug execute                                     
+🏃 10_loops: c orc release execute                                   
+🏃 10_loops: c arc release execute                                   
+🟢 00_smoke: c orc debug execute                                         2.5s
+🏃 10_loops: c arc danger execute                                    
+🟢 00_smoke: c arc debug execute                                         2.8s
+🏃 10_loops: c orc danger execute                                    
+🟢 00_smoke: c arc danger execute                                        3.1s
+🏃 10_loops: c arc danger asan                                       
+🟢 00_smoke: c orc danger execute                                        3.1s
+🏃 10_loops: c orc danger asan                                       
+🟢 00_smoke: c arc danger tsan                                           3.6s
+🏃 10_loops: c arc danger tsan                                       
+🟢 10_loops: c orc debug execute                                         3.7s
+🏃 10_loops: c orc danger tsan                                       
+🟢 10_loops: c arc debug execute                                         3.8s
+🏃 10_loops: c arc danger usan                                       
+🟢 00_smoke: c arc release execute                                       3.8s
+🏃 10_loops: c orc danger usan                                       
+🟢 00_smoke: c orc danger tsan                                           3.9s
+🏃 10_loops_skipped: c arc debug execute                             
+🟢 00_smoke: c orc release execute                                       4.0s
+🏃 10_loops_skipped: c orc debug execute                             
+🟢 00_smoke: c arc danger asan                                           4.3s
+🏃 10_loops_skipped: c arc release execute                           
+/home/adavidoff/.asdf/shims/nim c --parallelBuild:1 --define:danger --gc:arc --threads:on --define:useMalloc --debuginfo:on --linedir:on --passC:'-fno-omit-frame-pointer' --passC:'-mno-omit-leaf-frame-pointer' --passC:"-fsanitize=undefined" --passL:"-fsanitize=undefined" --passC:"-fno-sanitize-recover=undefined" --passL:"-fno-sanitize-recover=undefined" tests/t00_smoke.nim
+#11263/1 okay.
+/run/user/1000/balls-nimcache-2402917100.c.usan.arc-11147/00_smoke_11263_7779790211243621717
+#11263/2 fail!
+[3m[90m## [3m[97mbasic testing assumptions[0m
+/home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84: runtime error: call to function eqdestroy___t484895smoke_1506 through pointer to incorrect function type 'void (*)(void *)'
+/home/adavidoff/git/cps/<none>:4: note: eqdestroy___t484895smoke_1506 defined here
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84 
+🔴 00_smoke: c arc danger usan                                           4.5s
+🏃 10_loops_skipped: c orc release execute                           
+🟢 00_smoke: c orc danger asan                                           4.6s
+🏃 10_loops_skipped: c arc danger execute                            
+/home/adavidoff/.asdf/shims/nim c --parallelBuild:1 --define:danger --gc:orc --threads:on --define:useMalloc --debuginfo:on --linedir:on --passC:'-fno-omit-frame-pointer' --passC:'-mno-omit-leaf-frame-pointer' --passC:"-fsanitize=undefined" --passL:"-fsanitize=undefined" --passC:"-fno-sanitize-recover=undefined" --passL:"-fno-sanitize-recover=undefined" tests/t00_smoke.nim
+#11259/1 okay.
+/run/user/1000/balls-nimcache-2402917100.c.usan.orc-11147/00_smoke_11259_-8573595450142932915
+#11259/2 fail!
+[3m[90m## [3m[97mbasic testing assumptions[0m
+/home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84: runtime error: call to function eqdestroy___t484895smoke_1670 through pointer to incorrect function type 'void (*)(void *)'
+/home/adavidoff/git/cps/<none>:4: note: eqdestroy___t484895smoke_1670 defined here
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84 
+🔴 00_smoke: c orc danger usan                                           4.8s
+🏃 10_loops_skipped: c orc danger execute                            
+🟢 10_loops: c arc release execute                                       5.2s
+🏃 10_loops_skipped: c arc danger asan                               
+🟢 10_loops: c orc release execute                                       5.4s
+🏃 10_loops_skipped: c orc danger asan                               
+🟢 10_loops: c arc danger execute                                        3.8s
+🏃 10_loops_skipped: c arc danger tsan                               
+🟢 10_loops_skipped: c arc debug execute                                 2.7s
+🏃 10_loops_skipped: c orc danger tsan                               
+🟢 10_loops_skipped: c orc debug execute                                 2.7s
+🏃 10_loops_skipped: c arc danger usan                               
+🟢 10_loops: c orc danger execute                                        4.1s
+🏃 10_loops_skipped: c orc danger usan                               
+🟢 10_loops_skipped: c arc danger execute                                3.4s
+🏃 20_api: c arc debug execute                                       
+🟢 10_loops_skipped: c arc release execute                               4.1s
+🏃 20_api: c orc debug execute                                       
+🟢 10_loops_skipped: c orc danger execute                                3.6s
+🏃 20_api: c arc release execute                                     
+🟢 10_loops: c arc danger tsan                                           5.0s
+🏃 20_api: c orc release execute                                     
+🟢 10_loops: c orc danger tsan                                           5.2s
+🏃 20_api: c arc danger execute                                      
+🟢 10_loops_skipped: c orc release execute                               4.5s
+🏃 20_api: c orc danger execute                                      
+🟢 10_loops: c arc danger asan                                           6.3s
+🏃 20_api: c arc danger asan                                         
+🟢 10_loops: c orc danger asan                                           6.4s
+🏃 20_api: c orc danger asan                                         
+/home/adavidoff/.asdf/shims/nim c --parallelBuild:1 --define:danger --gc:arc --threads:on --define:useMalloc --debuginfo:on --linedir:on --passC:'-fno-omit-frame-pointer' --passC:'-mno-omit-leaf-frame-pointer' --passC:"-fsanitize=undefined" --passL:"-fsanitize=undefined" --passC:"-fno-sanitize-recover=undefined" --passL:"-fno-sanitize-recover=undefined" tests/t10_loops.nim
+#11261/1 okay.
+/run/user/1000/balls-nimcache-2402022191.c.usan.arc-11147/10_loops_11261_7780162889255955113
+#11261/2 fail!
+[3m[90m## [3m[97mloops[0m
+🟢 var r = 0
+/home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84: runtime error: call to function eqdestroy___t494895loops_1336 through pointer to incorrect function type 'void (*)(void *)'
+/home/adavidoff/git/cps/<none>:4: note: eqdestroy___t494895loops_1336 defined here
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84 
+🔴 10_loops: c arc danger usan                                           6.2s
+🏃 20_api: c arc danger tsan                                         
+/home/adavidoff/.asdf/shims/nim c --parallelBuild:1 --define:danger --gc:orc --threads:on --define:useMalloc --debuginfo:on --linedir:on --passC:'-fno-omit-frame-pointer' --passC:'-mno-omit-leaf-frame-pointer' --passC:"-fsanitize=undefined" --passL:"-fsanitize=undefined" --passC:"-fno-sanitize-recover=undefined" --passL:"-fno-sanitize-recover=undefined" tests/t10_loops.nim
+#11254/1 okay.
+/run/user/1000/balls-nimcache-2402022191.c.usan.orc-11147/10_loops_11254_-8573934464309965929
+#11254/2 fail!
+[3m[90m## [3m[97mloops[0m
+🟢 var r = 0
+/home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84: runtime error: call to function eqdestroy___t494895loops_1466 through pointer to incorrect function type 'void (*)(void *)'
+/home/adavidoff/git/cps/<none>:4: note: eqdestroy___t494895loops_1466 defined here
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system/arc.nim:185:84 
+🔴 10_loops: c orc danger usan                                           6.4s
+🏃 20_api: c orc danger tsan                                         
+🟢 10_loops_skipped: c arc danger asan                                   5.4s
+🏃 20_api: c arc danger usan                                         
+🟢 10_loops_skipped: c arc danger tsan                                   4.3s
+🏃 20_api: c orc danger usan                                         
+🟢 10_loops_skipped: c orc danger asan                                   5.5s
+🏃 25_compile_fail_magic_type: c arc debug execute                   
+🟢 10_loops_skipped: c orc danger tsan                                   4.4s
+🏃 25_compile_fail_magic_type: c orc debug execute                   
+/home/adavidoff/.asdf/shims/nim c --parallelBuild:1 --debuginfo:on --lineTrace:on --stackTrace:on --excessiveStackTrace:on --gc:orc --threads:on tests/t25_compile_fail_magic_type.nim
+#11262/1 fail!
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 14) template/generic instantiation of `cps` from here
+/home/adavidoff/git/cps/cps.nim(86, 37) template/generic instantiation of `cpsTyped` from here
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 1) template/generic instantiation of `cpsTransform` from here
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(26, 8) Error: type mismatch: got <Cont>
+but expected one of:
+proc magic()
+  first type mismatch at position: 1
+  extra argument given
+proc magic(c: AnotherCont): AnotherCont
+  first type mismatch at position: 1
+  required type for c: AnotherCont
+  but expression 'Cont(continuation)' is of type: Cont
+
+expression: magic(Cont(continuation))
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 14) template/generic instantiation of `cps` from here
+/home/adavidoff/git/cps/cps.nim(86, 37) template/generic instantiation of `cpsTyped` from here
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 1) Error: undeclared identifier: 'foo_50331989'
+candidates (edit distance, scope distance); see '--spellSuggest':
+ (8, 4): 'float32' [type declared in /home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system.nim(27, 3)]
+failure; compiler NimSkull-0.1.0-dev.21571 in /home/adavidoff/.asdf/shims/nim
+date 2026-01-18 sha1 7898cfcb12cd97fe7cd6c0ccfeb0d35cb6dd8c75
+/home/adavidoff/.asdf/shims/nim c --parallelBuild:1 --debuginfo:on --lineTrace:on --stackTrace:on --excessiveStackTrace:on --gc:arc --threads:on tests/t25_compile_fail_magic_type.nim
+#11256/1 fail!
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 14) template/generic instantiation of `cps` from here
+/home/adavidoff/git/cps/cps.nim(86, 37) template/generic instantiation of `cpsTyped` from here
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 1) template/generic instantiation of `cpsTransform` from here
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(26, 8) Error: type mismatch: got <Cont>
+but expected one of:
+proc magic()
+  first type mismatch at position: 1
+  extra argument given
+proc magic(c: AnotherCont): AnotherCont
+  first type mismatch at position: 1
+  required type for c: AnotherCont
+  but expression 'Cont(continuation)' is of type: Cont
+
+expression: magic(Cont(continuation))
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 14) template/generic instantiation of `cps` from here
+/home/adavidoff/git/cps/cps.nim(86, 37) template/generic instantiation of `cpsTyped` from here
+/home/adavidoff/git/cps/tests/t25_compile_fail_magic_type.nim(23, 1) Error: undeclared identifier: 'foo_50331980'
+candidates (edit distance, scope distance); see '--spellSuggest':
+ (8, 4): 'float32' [type declared in /home/adavidoff/.asdf/installs/nimskull/0.1.0-dev.21571/lib/system.nim(27, 3)]
+failure; compiler NimSkull-0.1.0-dev.21571 in /home/adavidoff/.asdf/shims/nim
+date 2026-01-18 sha1 7898cfcb12cd97fe7cd6c0ccfeb0d35cb6dd8c75

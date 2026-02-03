@@ -165,9 +165,9 @@ when cpsReparent:
       # offer ourselves to our parent instead
       reparent(e.parent, e)
 
-proc makeType*(e: Env): NimNode =
-  ## turn an env into a named object typedef `foo = object ...`
-  nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType)
+proc makeType*(e: Env): TypeDef =
+   ## turn an env into a named object typedef `foo = object ...`
+   nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType).TypeDef
 
 proc first*(e: Env): Name = e.c
 
