@@ -62,11 +62,13 @@ proc errorAst*(n: NimNode|NormNode; s = "creepy ast"): NormNode =
   ## the line info is copied from the node
   errorAst(s & ":\n" & treeRepr(n) & "\n", n)
 
-proc desym*(n: NimNode): NimNode =
-  result = n
-  if n.kind == nnkSym:
-    result = ident(repr n)
-    result.copyLineInfo n
+proc desym*(n: NimNode): NormNode =
+   let r = n
+   if r.kind == nnkSym:
+     result = NormNode(ident(repr r))
+     result.NimNode.copyLineInfo r
+   else:
+     result = r.NormNode
 
 proc desym*(n: NormNode): NormNode =
   desym(n.NimNode).NormNode
