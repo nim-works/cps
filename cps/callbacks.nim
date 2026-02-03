@@ -128,21 +128,23 @@ proc isCallbackRecovery*(n: NimNode): bool =
   else:
     false
 
-proc baseContinuationType*(n: NimNode): NimNode =
-  ## given a callable symbol presumed to be a callback,
-  ## recover the (base) continuation return type of the proc.
-  case n.kind
-  of nnkDotExpr:
-    # continuationEnvironment.callbackLocal.fn(arguments...)
-    if n[0].kind in {nnkDotExpr, nnkSym}:
-      let fun = n.last.getTypeImpl   # proctype from first object record (fn)
-      result = fun[0][0]             # recover proc return type
-  elif not n.isCallback:
-    raise Defect.newException "callable is not a cps callback"
-  else:
-    discard
-  if result.isNil:
-    raise Defect.newException "unable to recover base type from callback"
+proc baseContinuationType*(n: NimNode): TypeExpr =
+   ## given a callable symbol presumed to be a callback,
+   ## recover the (base) continuation return type of the proc.
+   var raw: NimNode
+   case n.kind
+   of nnkDotExpr:
+     # continuationEnvironment.callbackLocal.fn(arguments...)
+     if n[0].kind in {nnkDotExpr, nnkSym}:
+       let fun = n.last.getTypeImpl   # proctype from first object record (fn)
+       raw = fun[0][0]             # recover proc return type
+   elif not n.isCallback:
+     raise Defect.newException "callable is not a cps callback"
+   else:
+     discard
+   if raw.isNil:
+     raise Defect.newException "unable to recover base type from callback"
+   result = raw.TypeExpr
 
 proc setupCallbackChild*(env: var Env; call: Call): (Name, TypeExpr) =
   ## create a new child continuation variable to receive the result of
