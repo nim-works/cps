@@ -518,19 +518,19 @@ template replace*(n, noob: NormNode; body: untyped): NormNode {.dirty.} =
   replace(n, match, noob)
 
 proc multiReplace*(n: NimNode;
-                   replacements: varargs[(Matcher, NimNode)]): NimNode =
-  ## Replace any node in `n` that is matched by a matcher in replacements
-  ## with a copy of the accompanying NimNode.
-  # Nim's closure capture algo strikes again
-  let replacements = @replacements
-  proc replacer(n: NimNode): NimNode =
-    result = nil
-    for (match, replacement) in replacements:
-      if match(n):
-        result = copyNimTree replacement
-        break
+                   replacements: varargs[(Matcher, NimNode)]): NormNode =
+   ## Replace any node in `n` that is matched by a matcher in replacements
+   ## with a copy of the accompanying NimNode.
+   # Nim's closure capture algo strikes again
+   let replacements = @replacements
+   proc replacer(n: NimNode): NimNode =
+     result = nil
+     for (match, replacement) in replacements:
+       if match(n):
+         result = copyNimTree replacement
+         break
 
-  filter(n, replacer)
+   filter(n, replacer)
 
 proc multiReplace*(n: NormNode;
                    replacements: varargs[(Matcher, NormNode)]): NormNode =
