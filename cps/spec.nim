@@ -637,3 +637,8 @@ proc copyOrVoid*(n: NimNode): NormNode =
     NormNode ident"void"
   else:
     NormNode copyNimTree n
+
+proc copyOrVoidOfStatement*(n: Statement): Statement =
+  ## Typed variant: copy a Statement or return void ident
+  copyOrVoid(n.NimNode).Statement
+
