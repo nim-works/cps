@@ -179,6 +179,10 @@ proc getResult*(e: Env): NormNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
 
+proc getResultAsCall*(e: Env): Call =
+  ## Typed variant: retrieve a continuation's result value as a Call
+  Call e.getResult()
+
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
   ## or on-demand in the back-end (with copy = on)
