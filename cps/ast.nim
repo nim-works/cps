@@ -418,6 +418,10 @@ proc findChildRecursive*(n: NormNode, cmp: proc(n: NormNode): bool): NormNode =
 proc getImpl*(n: NormNode): NormNode {.borrow.}
   ## the implementaiton of a normalized node should be normalized itself
 
+proc getImplOfName*(n: Name): ProcDef =
+  ## Typed variant: Get the procedure implementation from a Name
+  ProcDef getImpl(n.NormNode)
+
 proc getTypeInst*(n: NormNode): TypeExpr {.borrow.}
   ## return the type instance, via `getTypeInst` of a NimNode
 
@@ -1179,6 +1183,10 @@ proc expr*(n: Conv): NormNode =
   ## the expression being converted
   n[1]
 
+proc exprAsExpression*(n: Conv): Expression =
+  ## Typed variant: Get the expression being converted as Expression type
+  Expression expr(n)
+
 # fn-FormalParams
 
 proc newFormalParams*(ret: TypeExpr, ps: varargs[IdentDef]): FormalParams =
@@ -1201,6 +1209,11 @@ proc `name=`*(n: RoutineDef, name: Name) =
 
 proc body*(n: RoutineDef): NormNode =
   n.NimNode.body.NormNode
+
+proc bodyAsStatement*(n: RoutineDef): Statement =
+  ## Typed variant: Get the body of a RoutineDef as a Statement
+  Statement body(n)
+
 proc `body=`*(n: RoutineDef, b: NormNode) =
   n.NimNode.body = b
 
