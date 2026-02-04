@@ -650,3 +650,11 @@ proc pragmaArgumentOfProcDef*(n: ProcDef; s: string): NormNode =
   ## Typed variant: Get pragma argument from ProcDef
   pragmaArgument(n.NormNode, s)
 
+proc makeErrorShimOfProcDef*(n: ProcDef): ProcDef =
+  ## Typed variant: Create error shim from ProcDef
+  ProcDef makeErrorShim(n.NimNode)
+
+proc newEmptyStatement*(): Statement =
+  ## Typed variant: Create an empty statement
+  Statement newEmptyNormNode()
+
