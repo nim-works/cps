@@ -120,3 +120,12 @@ proc jumperCall*(cont, contType, to: Name; via: NormNode): NormNode =
   # variant that doesn't take a continuation.
   desym jump
   result = tailCall(cont, contType, to, jump)
+
+proc jumperCallAsStatement*(cont, contType, to: Name; via: NormNode): Statement =
+  ## Typed variant: Produce a tail call statement with jumper
+  Statement jumperCall(cont, contType, to, via)
+
+proc terminatorAsStatement*(c, contType: Name; tipe: NormNode): Statement =
+  ## Typed variant: Produce the terminating return statement
+  Statement terminator(c, contType, tipe)
+
