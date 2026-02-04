@@ -1317,6 +1317,10 @@ proc genProcName*(a: string; info = NilNormNode): Name {.deprecated.} =
 proc genProcName*(a, b: string; info = NilNormNode): Name =
   genSymProc(fmt"cps:{a} {b}", info=info)
 
+proc getImplAsProcDef*(n: Name): ProcDef =
+  ## Typed variant: Get implementation of Name as ProcDef
+  ProcDef getImpl(n.NormNode)
+
 proc genTypeName*(a, b: string; info = NilNormNode): Name =
   genSymType(fmt"cps:{a} {b}", info=info)
 

@@ -642,3 +642,11 @@ proc copyOrVoidOfStatement*(n: Statement): Statement =
   ## Typed variant: copy a Statement or return void ident
   copyOrVoid(n.NimNode).Statement
 
+proc bootstrapSymbolOfName*(n: Name): ProcDef =
+  ## Typed variant: Get bootstrap symbol from Name
+  ProcDef bootstrapSymbol(n.NimNode)
+
+proc pragmaArgumentOfProcDef*(n: ProcDef; s: string): NormNode =
+  ## Typed variant: Get pragma argument from ProcDef
+  pragmaArgument(n.NormNode, s)
+
