@@ -790,6 +790,11 @@ func typ*(n: DefLike): TypeExpr =
 func val*(n: DefLike): NormNode =
   ## get the value of this identdef or vartuple
   n.NormNode[^1]
+
+func valAsExpression*(n: DefLike): Expression =
+  ## Typed variant: Get the value as an Expression
+  Expression val(n)
+
 func hasValue*(n: DefLike): bool =
   ## has a non-Empty initial value defined for the ident, sym or tuple
   ## Yes, proc, you ARE a good proc. You have value, hasValue, in fact.
