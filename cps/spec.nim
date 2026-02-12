@@ -175,6 +175,14 @@ proc stripPragma*(n: NormNode; s: static[string]): NormNode =
   else:
     result = n
 
+proc stripPragmaOfProcDef*(n: ProcDef; s: static[string]): ProcDef =
+  ## Typed variant: strip pragma from ProcDef
+  stripPragma(n.NormNode, s).ProcDef
+
+proc stripPragmaOfTypeDef*(n: TypeDef; s: static[string]): TypeDef =
+  ## Typed variant: strip pragma from TypeDef
+  stripPragma(n.NormNode, s).TypeDef
+
 proc hash*(n: NimNode): Hash =
   ## Hash a NimNode via it's representation
   var h: Hash = 0
