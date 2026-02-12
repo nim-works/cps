@@ -357,6 +357,10 @@ proc mergeExceptBranches(n, ex: NormNode): NormNode =
         newStmtList:
           ifStmt.NormNode
 
+proc mergeExceptBranchesAsStatement*(n: Statement, ex: NormNode): Statement =
+  ## Typed variant: merge except branches returning Statement
+  mergeExceptBranches(n.NormNode, ex).Statement
+
 proc wrapContinuationWith(n: NormNode, cont, replace: Name, templ: NormNode): NormNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
   ## replaced with the `n`.
@@ -383,6 +387,10 @@ proc wrapContinuationWith(n: NormNode, cont, replace: Name, templ: NormNode): No
     newStmtList:
       # wrap all continuations of `n` with the template
       filter(n, wrapCont)
+
+proc wrapContinuationWithAsStatement*(n: Statement, cont, replace: Name, templ: NormNode): Statement =
+  ## Typed variant: wrap continuation with template returning Statement
+  wrapContinuationWith(n.NormNode, cont, replace, templ).Statement
 
 macro cpsWithException(cont, ex, n: typed): untyped =
   ## Given the exception handler continuation `n`, set the global exception of
@@ -661,6 +669,10 @@ proc newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
   result.add(NormNode env.first, NormNode env.root)
   result.add newLit(env.procedure)
 
+proc newAnnotationAsCall*(env: Env; n: NormNode; a: static[string]): Call =
+  ## Typed variant: create annotation call
+  newAnnotation(env, n, a).Call
+
 proc setupChildContinuation(env: var Env; call: Call): (Name, TypeExpr) =
   ## create a new child continuation variable and add it to the environment.
   ## return the child's symbol and its environment type.
@@ -732,6 +744,10 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   shim.add env.annotate(child)
   shim.add env.annotate(body)
   result = shim
+
+proc shimAssignAsStatement*(env: var Env; store, expr, tail: NormNode): Statement =
+  ## Typed variant: shim assignment returning Statement
+  shimAssign(env, store, expr, tail).Statement
 
 proc annotate(parent: var Env; n: NormNode): NormNode =
   ## annotate `input` or otherwise prepare it for conversion into a
@@ -1329,6 +1345,10 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   result = NormNode(suppressTemp)
 
   result = workaroundRewrites result
+
+proc cpsTransformProcAsStatement*(tipe: NimNode, n: NimNode): Statement =
+  ## Typed variant: transform proc returning Statement
+  cpsTransformProc(tipe, n).Statement
 
 # Typed wrappers for transformation functions
 proc annotateStatement(parent: var Env; n: Statement): Statement =
