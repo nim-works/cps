@@ -626,6 +626,10 @@ proc newStmtList*(stmts: AnyNodeVarargs): NormNode =
   if stmts.len > 0:
     result.copyLineInfo stmts[0]
 
+proc newStmtListAsStatement*(stmts: AnyNodeVarargs): Statement =
+  ## Typed variant: create a new statement list as Statement
+  newStmtList(stmts).Statement
+
 proc newTree*(kind: NimNodeKind, n: AnyNodeVarargs): NormNode =
   ## creates a new tree (`newTree`) of `kind`, with child `n`
   NormNode macros.newTree(kind, varargs[NimNode] n)
@@ -791,6 +795,10 @@ binaryExprOrStmt newDotExpr:
   ## create a new dot expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
 
+proc newDotExprAsExpression*(l: ExprLike, r: distinct ExprLike): Expression =
+  ## Typed variant: create a new dot expression as Expression
+  newDotExpr(l, r).Expression
+
 template dot*(a, b: NormNode): NormNode =
   ## for constructing foo.bar
   let expression = newDotExpr(a, b)
@@ -805,8 +813,16 @@ binaryExprOrStmt newColonExpr:
   ## create a new colon expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
 
+proc newColonExprAsExpression*(l: ExprLike, r: distinct ExprLike): Expression =
+  ## Typed variant: create a new colon expression as Expression
+  newColonExpr(l, r).Expression
+
 binaryExprOrStmt newAssignment:
   ## create a new assignment, meant for executable code
+
+proc newAssignmentAsStatement*(l: ExprLike, r: distinct ExprLike): Statement =
+  ## Typed variant: create a new assignment as Statement
+  newAssignment(l, r).Statement
 
 proc newCall*(n: NormNode, args: AnyNodeVarargs): Call =
   ## create a new call, with `n` as name some args
@@ -1015,6 +1031,10 @@ func def*(n: VarLetLike): DefVarLet|TupleDefVarLet =
 func val*(n: VarLetLike): NormNode =
   ## the ident or sym being defined, or tuple being defined
   n.def.val
+
+func valAsExpression*(n: VarLetLike): Expression =
+  ## Typed variant: get the value as an Expression
+  Expression val(n)
 
 func typ*(n: VarLetLike): TypeExpr =
   ## the type of this definition (IdentDef or VarTuple)
