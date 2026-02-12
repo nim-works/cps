@@ -1528,5 +1528,40 @@ proc newTreeAsExpression*(kind: NimNodeKind, n: AnyNodeVarargs): Expression =
   ## Typed variant: Create new tree as Expression
   Expression newTree(kind, n)
 
+# === Typed Wrappers for Rewrite Functions ===
+# These preserve the input type through the rewrite.
+
+proc normalizingRewritesAsStatement*(n: NimNode): Statement =
+  ## Typed variant: normalize a NimNode expected to be a Statement
+  normalizingRewrites(n).Statement
+
+proc normalizingRewritesAsStatement*(n: Statement): Statement =
+  ## Typed variant: normalize a Statement, preserving type
+  normalizingRewrites(n.NimNode).Statement
+
+proc normalizingRewritesAsProcDef*(n: NimNode): ProcDef =
+  ## Typed variant: normalize a NimNode expected to be a ProcDef
+  normalizingRewrites(n).ProcDef
+
+proc normalizingRewritesAsProcDef*(n: ProcDef): ProcDef =
+  ## Typed variant: normalize a ProcDef, preserving type
+  normalizingRewrites(n.NimNode).ProcDef
+
+proc workaroundRewritesAsStatement*(n: Statement): Statement =
+  ## Typed variant: apply workaround rewrites to Statement
+  workaroundRewrites(n.NormNode).Statement
+
+proc workaroundRewritesAsProcDef*(n: ProcDef): ProcDef =
+  ## Typed variant: apply workaround rewrites to ProcDef
+  workaroundRewrites(n.NormNode).ProcDef
+
+proc addInitializationToDefaultAsIdentDef*(n: IdentDef): IdentDef =
+  ## Typed variant: add default initialization to IdentDef
+  addInitializationToDefault(n.NimNode).IdentDef
+
+proc addInitializationToDefaultAsIdentDef*(n: NimNode): IdentDef =
+  ## Typed variant: add default initialization, returns IdentDef
+  addInitializationToDefault(n).IdentDef
+
 # === Compromise Types (temporary scaffolding) ===
 include cps/untyped
