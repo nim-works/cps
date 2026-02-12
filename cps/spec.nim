@@ -297,6 +297,10 @@ func wrappedFinally*(n, final: NormNode): NormNode =
   result = copyNimNode n
   result.add(newStmtList(newTry), final)
 
+func wrappedFinallyAsStatement*(n, final: Statement): Statement =
+  ## Typed variant: rewrite try/except/finally into try/try-except/finally
+  Statement wrappedFinally(n.NormNode, final.NormNode)
+
 proc isVoodooCall*(n: NormNode): bool =
   ## true if this is a call to a voodoo procedure
   ifCallThenIt n:
@@ -657,4 +661,6 @@ proc makeErrorShimOfProcDef*(n: ProcDef): ProcDef =
 proc newEmptyStatement*(): Statement =
   ## Typed variant: Create an empty statement
   Statement newEmptyNormNode()
+
+
 

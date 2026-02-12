@@ -1127,6 +1127,43 @@ proc addPragma*(n: RoutineDefLike, prag: Name, pragArgs: openArray[Name]) =
   ## add pragmas of the form `{.raise: [IOError, OSError].}`
   addPragma(n, prag, pragArgs)
 
+# Typed variants for addPragma
+proc addPragmaOfProcDef*(n: ProcDef, prag: Name) =
+  ## Typed variant: add a pragma to a ProcDef
+  n.NimNode.addPragma(NimNode prag)
+
+proc addPragmaOfProcDef*(n: ProcDef, prag: string) =
+  ## Typed variant: add a pragma string to a ProcDef
+  let name = prag.asName(n)
+  addPragmaOfProcDef(n, name)
+
+proc addPragmaOfProcDef*(n: ProcDef, prag: Name, pragArg: NimNode) =
+  ## Typed variant: add a pragma with argument to a ProcDef
+  n.NimNode.addPragma:
+    nnkExprColonExpr.newTree(prag, pragArg)
+
+proc addPragmaOfProcDef*(n: ProcDef, prag: Name, pragArg: Name) =
+  ## Typed variant: add a pragma with Name argument to a ProcDef
+  addPragmaOfProcDef(n, prag, pragArg.NimNode)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: Name) =
+  ## Typed variant: add a pragma to a RoutineDef
+  n.NimNode.addPragma(NimNode prag)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: string) =
+  ## Typed variant: add a pragma string to a RoutineDef
+  let name = prag.asName(n)
+  addPragmaOfRoutineDef(n, name)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: Name, pragArg: NimNode) =
+  ## Typed variant: add a pragma with argument to a RoutineDef
+  n.NimNode.addPragma:
+    nnkExprColonExpr.newTree(prag, pragArg)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: Name, pragArg: Name) =
+  ## Typed variant: add a pragma with Name argument to a RoutineDef
+  addPragmaOfRoutineDef(n, prag, pragArg.NimNode)
+
 # fn-Call
 
 createAsTypeFunc(CallKind, nnkCallKinds, "node is not a call kind")
@@ -1326,3 +1363,19 @@ proc genTypeName*(a, b: string; info = NilNormNode): Name =
 
 proc postfix*(n: Name; op: string): Name =
   postfix(n.NimNode, op).Name
+
+proc newStatementList*(stmts: AnyNodeVarargs): Statement =
+  ## Typed variant: Create a statement list
+  Statement newStmtList(stmts)
+
+proc newExpressionList*(exprs: AnyNodeVarargs): Expression =
+  ## Typed variant: Create an expression list
+  Expression newStmtList(exprs)
+
+proc newTreeAsStatement*(kind: NimNodeKind, n: AnyNodeVarargs): Statement =
+  ## Typed variant: Create new tree as Statement
+  Statement newTree(kind, n)
+
+proc newTreeAsExpression*(kind: NimNodeKind, n: AnyNodeVarargs): Expression =
+  ## Typed variant: Create new tree as Expression
+  Expression newTree(kind, n)

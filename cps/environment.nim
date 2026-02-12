@@ -608,3 +608,7 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: Statement): Statement =
 proc rewriteVoodoo*(env: Env; n: Statement): Statement =
   ## Typed variant: rewrite voodoo calls in a Statement
   rewriteVoodoo(env, n.NormNode).Statement
+
+proc maybeConvertToRootAsStatement*(e: Env; locals: Statement): Statement =
+  ## Typed variant: maybe convert to root and return Statement
+  maybeConvertToRoot(e, locals.NormNode).Statement

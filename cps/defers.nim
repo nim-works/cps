@@ -103,3 +103,8 @@ proc rewriteDefer*(n: NormNode): NormNode =
       result = rewriteDefer(result)
 
   result = filter(n, rewriter)
+
+proc rewriteDeferAsStatement*(n: Statement): Statement =
+  ## Typed variant: rewrite defer to try-finally
+  Statement rewriteDefer(n.NormNode)
+
