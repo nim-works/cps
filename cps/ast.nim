@@ -1,3 +1,13 @@
+##[
+  Normalized AST types and utilities for CPS.
+  
+  This module defines:
+  - NormNode (private) - the base normalized node type
+  - Semantic types (Statement, Expression, Call, etc.)
+  - Generic AST utilities (filter, desym, resym, etc.)
+  - Compromise types (via include untyped)
+]##
+
 import std/macros except newTree
 import std/strformat
 from std/hashes import Hash, hash
@@ -7,15 +17,153 @@ from std/typetraits import distinctBase
 when defined(nimPreviewSlimSystem):
   import std/assertions
 
-from cps/rewrites import NormNode, normalizingRewrites, replace,
-                         desym, resym, childCallToRecoverResult,
-                         NormalCallNodes
+# === Base Types ===
+
+type
+  NodeFilter* = proc(n: NimNode): NimNode
+    ## Filter function for NimNode tree traversal
+  NormFilter* = proc(n: NormNode): NormNode
+    ## Filter function for NormNode tree traversal  
+  Matcher* = proc(n: NimNode): bool
+    ## Predicate for NimNode matching
+  NormMatcher* = proc(n: NormNode): bool {.noSideEffect.}
+    ## Predicate for NormNode matching
+  NormNode* = distinct NimNode
+    ## A normalized node. Prefer semantic types (Statement, Expression, etc.)
 
 const
+  NormalCallNodes* = CallNodes - {nnkHiddenCallConv}
   NilNormNode* = nil.NormNode
   NilNimNode* = nil.NimNode
 
-export NormNode, NormalCallNodes
+# Converter scoped to module
+converter toNimNode*(n: NormNode): NimNode = n.NimNode
+
+# === Generic AST Utilities ===
+
+proc filter*(n: NimNode; f: NodeFilter): NormNode =
+  ## Rewrites a node and its children by passing each node to the filter;
+  ## if the filter yields nil, the node is simply copied. Otherwise, the
+  ## node is replaced.
+  let res = f(n)
+  if res.isNil:
+    result = copyNimNode(n).NormNode
+    for kid in items(n):
+      result.add filter(kid, f).NimNode
+  else:
+    result = res.NormNode
+
+proc filter*(n: NormNode, f: NormFilter): NormNode =
+  ## Rewrites a NormNode tree using a NormFilter
+  filter(n.NimNode, proc (n: NimNode): NimNode = f(n.NormNode)).NormNode
+
+func isEmpty*(n: NimNode): bool =
+  ## `true` if the node `n` is Empty
+  result = not n.isNil and n.kind == nnkEmpty
+
+proc errorAst*(s: string, info: NimNode = nil): NormNode =
+  ## Produce {.error: s.} in order to embed errors in the AST
+  let errorTemp = macros.newTree(nnkPragma,
+    ident("error").newColonExpr(newLit s)
+  )
+  result = NormNode(errorTemp)
+  if not info.isNil:
+    result.NimNode[0].copyLineInfo info
+
+proc errorAst*(n: NimNode|NormNode; s = "creepy ast"): NormNode =
+  ## Embed an error with a message; line info is copied from the node
+  errorAst(s & ":\n" & treeRepr(n) & "\n", n)
+
+proc desym*(n: NimNode): NormNode =
+  ## Convert a symbol to an identifier
+  let r = n
+  if r.kind == nnkSym:
+    result = NormNode(ident(repr r))
+    result.NimNode.copyLineInfo r
+  else:
+    result = r.NormNode
+
+proc desym*(n: NormNode): NormNode =
+  desym(n.NimNode)
+
+proc resym*(n: NimNode; sym: NimNode; field: NimNode): NormNode =
+  ## Replace occurrences of sym with field in the tree
+  expectKind(sym, nnkSym)
+  proc resymify(n: NimNode): NimNode =
+    case n.kind
+    of nnkIdentDefs:
+      for i in 1 ..< n.len:
+        if n[i].kind != nnkEmpty:
+          n[i] = filter(n[i], resymify).NimNode
+      result = n
+    of nnkSym:
+      if n == sym:
+        result = field
+    else:
+      discard
+  filter(n, resymify)
+
+proc resym*(n, sym, field: NormNode): NormNode =
+  resym(n.NimNode, sym.NimNode, field.NimNode)
+
+proc replacedSymsWithIdents*(n: NimNode): NormNode =
+  ## Replace all symbols with identifiers in the tree
+  proc desymifier(n: NimNode): NimNode =
+    case n.kind
+    of nnkSym: desym(n).NimNode
+    else: nil
+  filter(n, desymifier)
+
+proc replacedSymsWithIdents*(n: NormNode): NormNode =
+  replacedSymsWithIdents(n.NimNode)
+
+proc replace*(n: NimNode, match: Matcher, replacement: NimNode): NormNode =
+  ## Replace any node matched by `match` with a copy of `replacement`
+  proc replacer(n: NimNode): NimNode =
+    if match(n): copyNimTree replacement
+    else: nil
+  filter(n, replacer)
+
+proc replace*(n: NimNode | NormNode, match: NormMatcher, replacement: NormNode): NormNode =
+  ## Replace any node matched by `match` with a copy of `replacement`
+  replace(n, proc (n: NimNode): bool = match(n.NormNode), replacement)
+
+template replace*(n, noob: NimNode; body: untyped): NimNode {.dirty.} =
+  let match = proc(it {.inject.}: NimNode): bool = body
+  replace(n, match, noob)
+
+template replace*(n, noob: NormNode; body: untyped): NormNode {.dirty.} =
+  let match = proc(it {.inject.}: NormNode): bool = body
+  replace(n, match, noob)
+
+proc multiReplace*(n: NimNode; replacements: varargs[(Matcher, NimNode)]): NormNode =
+  ## Replace nodes matching any matcher with corresponding replacement
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    for (match, replacement) in replacements:
+      if match(n): return copyNimTree replacement
+  filter(n, replacer)
+
+proc multiReplace*(n: NormNode; replacements: varargs[(Matcher, NormNode)]): NormNode =
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    for (match, replacement) in replacements:
+      if match(n): return copyNimTree(replacement).NimNode
+  filter(n, replacer)
+
+proc multiReplace*(n: NormNode; replacements: varargs[(NormMatcher, NormNode)]): NormNode =
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    for (match, replacement) in replacements:
+      if match(n.NormNode): return copyNimTree(replacement).NimNode
+  filter(n, replacer)
+
+# === Import CPS-specific rewrites ===
+
+import cps/rewrites
+
+export NormNode, NormalCallNodes, normalizingRewrites, replace, resym,
+       childCallToRecoverResult
 
 # # Structure of the Module
 # * distinct types representing normalized/transformed variants of distinct AST
@@ -1379,3 +1527,6 @@ proc newTreeAsStatement*(kind: NimNodeKind, n: AnyNodeVarargs): Statement =
 proc newTreeAsExpression*(kind: NimNodeKind, n: AnyNodeVarargs): Expression =
   ## Typed variant: Create new tree as Expression
   Expression newTree(kind, n)
+
+# === Compromise Types (temporary scaffolding) ===
+include cps/untyped

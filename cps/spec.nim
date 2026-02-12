@@ -21,7 +21,7 @@ const
     else:
       true
 
-import cps/[rewrites, help, ast]
+import cps/[ast, rewrites, help]
 export errorAst, desym, isEmpty, genField
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
