@@ -34,6 +34,10 @@ proc cpsCallbackTypeDef*(tipe: NimNode, n: NimNode): NormNode =
    let bracketExpr = nnkBracketExpr.newTree(bindSym"Callback", tipe, r, p)
    result = workaroundRewrites bracketExpr.NormNode
 
+proc cpsCallbackTypeDefAsTypeExpr*(tipe: NimNode, n: NimNode): TypeExpr =
+  ## Typed variant: create callback type definition as TypeExpr
+  cpsCallbackTypeDef(tipe, n).TypeExpr
+
 proc createCallbackShim*(env: Env; whelp: ProcDef): ProcDef =
   ## this is a version of whelp that returns the base continuation type
   result = clone(whelp, newStmtList())

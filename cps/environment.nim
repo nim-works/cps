@@ -274,13 +274,17 @@ proc identity*(e: var Env): Name =
   result = e.id
 
 proc initialization(e: Env; field: Name, section: VarLetIdentDef): NormNode =
-  ## produce the `x = 34`
-  result = newStmtList()
-  # let/var sections basically become env2323(cont).foo34 = "some default"
-  if section.hasValue:
-    # this is our continuation type, fully cast
-    let child = e.castToChild(e.first)
-    result.add newAssignment(newDotExpr(child, field), section.val)
+   ## produce the `x = 34`
+   result = newStmtList()
+   # let/var sections basically become env2323(cont).foo34 = "some default"
+   if section.hasValue:
+     # this is our continuation type, fully cast
+     let child = e.castToChild(e.first)
+     result.add newAssignment(newDotExpr(child, field), section.val)
+
+proc initializationAsStatement(e: Env; field: Name, section: VarLetIdentDef): Statement =
+  ## Typed variant: produce initialization assignment as Statement
+  initialization(e, field, section).Statement
 
 proc letOrVar(n: IdentDef): NimNodeKind =
   ## choose between let or var for proc parameters
@@ -293,17 +297,25 @@ proc letOrVar(n: IdentDef): NimNodeKind =
     result = nnkLetSection
 
 proc addAssignment(e: var Env; d: IdentDef): NormNode =
-  ## compose an assignment during addition of identdefs to env. For the
-  ## purposes of CPS, even though let and var sections contain identdefs this
-  ## proc should never handle those directly; see the overload below.
-  discard e.addIdentDef(d.letOrVar, d)
-  # don't attempt to redefine proc params!
-  result = newStmtList()
+   ## compose an assignment during addition of identdefs to env. For the
+   ## purposes of CPS, even though let and var sections contain identdefs this
+   ## proc should never handle those directly; see the overload below.
+   discard e.addIdentDef(d.letOrVar, d)
+   # don't attempt to redefine proc params!
+   result = newStmtList()
+
+proc addAssignmentAsStatement(e: var Env; d: IdentDef): Statement =
+  ## Typed variant: compose assignment for IdentDef as Statement
+  addAssignment(e, d).Statement
 
 proc addAssignment(e: var Env; section: VarLetIdentDef): NormNode =
-  ## compose an assignment during addition of var|let identDefs to env
-  let (field, value) = e.addIdentDef(section.kind, section.identdef())
-  result = e.initialization(field, value)
+   ## compose an assignment during addition of var|let identDefs to env
+   let (field, value) = e.addIdentDef(section.kind, section.identdef())
+   result = e.initialization(field, value)
+
+proc addAssignmentAsStatement(e: var Env; section: VarLetIdentDef): Statement =
+  ## Typed variant: compose assignment for VarLetIdentDef as Statement
+  addAssignment(e, section).Statement
 
 when false:
   proc getFieldViaLocal*(e: Env; n: NimNode): NimNode =
@@ -404,32 +416,40 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormNode): NormNode =
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
 
 proc createContinuation*(e: Env; name: Name; goto: NimNode|NormNode = NilNimNode): NormNode =
-   ## allocate a continuation as `name` and maybe aim it at the leg `goto`
-   let goto = if goto.isNil: NilNimNode else: goto.NimNode
-   proc resultdot(n: Name): NormNode =
-     newDotExpr(e.castToChild(name), n)
-   result = newStmtList:
-     newAssignment name:
-       Alloc.hook(e.inherits, e.identity)
-   for field, section in e.pairs:
-     # omit special fields in the env that we use for holding
-     # custom functions, results, exceptions, and parent respectively
-     if field notin [e.fn, e.rs.name, e.mom]:
-       # the name from identdefs is not gensym'd (usually!)
-       result.add:
-         newAssignment(resultdot field, section.name)
-   if not goto.isNil:
-     result.add:
-       newAssignment(resultdot e.fn, goto)
+    ## allocate a continuation as `name` and maybe aim it at the leg `goto`
+    let goto = if goto.isNil: NilNimNode else: goto.NimNode
+    proc resultdot(n: Name): NormNode =
+      newDotExpr(e.castToChild(name), n)
+    result = newStmtList:
+      newAssignment name:
+        Alloc.hook(e.inherits, e.identity)
+    for field, section in e.pairs:
+      # omit special fields in the env that we use for holding
+      # custom functions, results, exceptions, and parent respectively
+      if field notin [e.fn, e.rs.name, e.mom]:
+        # the name from identdefs is not gensym'd (usually!)
+        result.add:
+          newAssignment(resultdot field, section.name)
+    if not goto.isNil:
+      result.add:
+        newAssignment(resultdot e.fn, goto)
+
+proc createContinuationAsStatement*(e: Env; name: Name; goto: NimNode|NormNode = NilNimNode): Statement =
+  ## Typed variant: allocate continuation as Statement
+  createContinuation(e, name, goto).Statement
 
 proc genException*(e: var Env): NormNode =
-  ## generates a new symbol of type ref Exception, then put it in the env.
-  ##
-  ## returns the access to the exception symbol from the env.
-  let ex = genField("ex")
-  e = e.set ex:
-    newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
-  result = newDotExpr(e.castToChild(e.first), ex)
+   ## generates a new symbol of type ref Exception, then put it in the env.
+   ##
+   ## returns the access to the exception symbol from the env.
+   let ex = genField("ex")
+   e = e.set ex:
+     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
+   result = newDotExpr(e.castToChild(e.first), ex)
+
+proc genExceptionAsExpression*(e: var Env): Expression =
+  ## Typed variant: generate exception symbol access as Expression
+  genException(e).Expression
 
 proc createRecover*(env: Env, exported = false): NormNode =
   ## define procedures for retrieving the result of a continuation
