@@ -183,6 +183,10 @@ proc getResultAsCall*(e: Env): Call =
   ## Typed variant: retrieve a continuation's result value as a Call
   Call e.getResult()
 
+proc getResultAsExpression*(e: Env): Expression =
+  ## Typed variant: retrieve a continuation's result value as Expression
+  Expression e.getResult()
+
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
   ## or on-demand in the back-end (with copy = on)
@@ -520,6 +524,10 @@ proc createRecover*(env: Env, exported = false): NormNode =
         proc callOperatorStar(c: var cont): tipe {.used, nimcall.} =
           recover(c)
         {.pop.}
+
+proc createRecoverAsStatement*(env: Env, exported = false): Statement =
+  ## Typed variant: define recover procedures as Statement
+  createRecover(env, exported).Statement
 
 proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation

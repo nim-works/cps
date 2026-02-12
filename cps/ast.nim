@@ -1583,5 +1583,13 @@ proc addInitializationToDefaultAsIdentDef*(n: NimNode): IdentDef =
   ## Typed variant: add default initialization, returns IdentDef
   addInitializationToDefault(n).IdentDef
 
+proc replacedSymsWithIdentsAsStatement*(n: Statement): Statement =
+  ## Typed variant: replace symbols with idents in a Statement
+  replacedSymsWithIdents(n.NormNode).Statement
+
+proc replacedSymsWithIdentsAsExpression*(n: Expression): Expression =
+  ## Typed variant: replace symbols with idents in an Expression
+  replacedSymsWithIdents(n.NormNode).Expression
+
 # === Compromise Types (temporary scaffolding) ===
 include cps/untyped
