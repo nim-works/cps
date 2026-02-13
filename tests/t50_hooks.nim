@@ -1,6 +1,3 @@
-when defined(isNimSkull):
-  {.passC: "-fbracket-depth=1024".}
-
 include preamble
 
 import std/genasts
