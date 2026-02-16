@@ -1,6 +1,6 @@
 import std/macros except newStmtList, newTree
 
-import cps/[spec, normalizedast]
+import cps/[spec, ast]
 
 # we use mixin instead
 #{.experimental: "dynamicBindSym".}
@@ -44,11 +44,12 @@ proc findColonLit*(n: NimNode; s: string; T: typedesc): T =
     else:
       raise Defect.newException "we can't be friends"
 
-proc makeLineInfo*(n: NimNode): LineInfo =
-  ## return a run-time LineInfo into a compile-time LineInfo object
-  LineInfo(filename: n.findColonLit("filename", string),
-           line: n.findColonLit("line", int),
-           column: n.findColonLit("column", int))
+proc makeLineInfo*(n: NimNode|NormNode): LineInfo =
+   ## return a run-time LineInfo into a compile-time LineInfo object
+   let n = n.NimNode
+   LineInfo(filename: n.findColonLit("filename", string),
+            line: n.findColonLit("line", int),
+            column: n.findColonLit("column", int))
 
 template makeLineInfo*(n: LineInfo): NimNode =
   ## turn a compile-time LineInfo object into a runtime LineInfo object
@@ -63,26 +64,31 @@ proc sym*(hook: Hook): Name =
     # rely on a `mixin $hook` in (high) scope
     ident($hook).Name
 
-proc abbreviation(n: NimNode): NimNode =
-  ## "abbreviate" a node so it can be passed succinctly
-  case n.kind
-  of nnkProcDef:
-    n.name
-  of nnkSym, nnkIdent, nnkDotExpr:
-    n
-  of NormalCallNodes:
-    n[0]
-  else:
-    n.errorAst "dunno how to abbreviate " & $n.kind
+proc abbreviation(n: NimNode): NormNode =
+    ## "abbreviate" a node so it can be passed succinctly
+    result = case n.kind
+    of nnkProcDef:
+      n.name.NormNode
+    of nnkSym, nnkIdent, nnkDotExpr:
+      n.NormNode
+    of NormalCallNodes:
+      n[0].NormNode
+    else:
+      n.errorAst "dunno how to abbreviate " & $n.kind
 
-proc nameForNode*(n: NimNode): string =
-  ## produce some kind of useful string that names a node
-  let abbrev = abbreviation n
-  case abbrev.kind
-  of nnkSym, nnkIdent:
-    $abbrev
-  else:
-    repr n
+proc abbreviationAsName*(n: NimNode): Name =
+  ## Typed variant: abbreviate a node to a Name
+  Name abbreviation(n)
+
+proc nameForNode*(n: NimNode|NormNode): string =
+   ## produce some kind of useful string that names a node
+   let n = n.NimNode
+   let abbrev = abbreviation n
+   case abbrev.kind
+   of nnkSym, nnkIdent:
+     $abbrev
+   else:
+     repr n
 
 when defined(cpsNoTrace):
   template entrace(hook: static[Hook]; c, n, body: NormNode): NormNode =
@@ -100,67 +106,83 @@ else:
     call
 
 proc hook*(hook: static[Hook]; n: NormNode): NormNode =
-  ## execute the given hook on the given node
-  case hook
-  of Boot, Coop, Head:
-    # hook(continuation)
-    hook.entrace NilNormNode, n:
-      newCall(hook.sym, n)
-  else:
-    # cast to `Call` avoids type mismatch as converters can't figure this out
-    Call n.errorAst "the " & $hook & " hook doesn't take one argument"
+   ## execute the given hook on the given node
+   case hook
+   of Boot, Coop, Head:
+     # hook(continuation)
+     hook.entrace NilNormNode, n:
+       newCall(hook.sym, n)
+   else:
+     # cast to `Call` avoids type mismatch as converters can't figure this out
+     Call n.errorAst "the " & $hook & " hook doesn't take one argument"
+
+proc hookAsCall*(hook: static[Hook]; n: NormNode): Call =
+  ## Typed variant: execute hook returning a Call
+  Call hook(hook, n)
 
 proc hook*(hook: static[Hook]; a, b: NormNode): NormNode =
-  ## execute the given hook with two arguments
-  case hook
-  of Unwind:
-    # hook(continuation, Cont)
-    let unwind = hook.sym.NimNode
-    Unwind.entrace a, b:
-      NormNode:
-        quote:
-          if not `a`.ex.isNil:
-            return `unwind`(`a`, `a`.ex).`b`
-  of Pass:
-    Pass.entrace a, b:
-      newCall(hook.sym, a, b)
-  of Tail:
-    Tail.entrace a, b:
-      newCall(hook.sym, a, b)
-  of Alloc:
-    Alloc.entrace a, b:
-      newCall(hook.sym, a, b)
-  of Dealloc:
-    Dealloc.entrace a, b:
-      newCall(hook.sym, a, b)
-  of Stack:
-    # hook(source, destination), or
-    # dealloc(continuation, env_234234), or
-    # alloc(Cont, env_234234), or
-    # stack(symbol, continuation)
-    when cpsStackFrames:
-      Stack.entrace a, b:
-        newCall(hook.sym, a, b)
-    else:
-      b
-  of Trace:
-    # trace(Pass, continuation, "whileLoop_2323",
-    # LineInfo(filename: "...", line: 23, column: 44)): nil
-    Trace.entrace a, b:
-      NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
-  else:
-    b.errorAst "the " & $hook & " hook doesn't take two arguments"
+   ## execute the given hook with two arguments
+   case hook
+   of Unwind:
+     # hook(continuation, Cont)
+     let unwind = hook.sym
+     Unwind.entrace a, b:
+       NormNode:
+         quote:
+           if not `a`.ex.isNil:
+             return `unwind`(`a`, `a`.ex).`b`
+   of Pass:
+     Pass.entrace a, b:
+       newCall(hook.sym, a, b)
+   of Tail:
+     Tail.entrace a, b:
+       newCall(hook.sym, a, b)
+   of Alloc:
+     Alloc.entrace a, b:
+       newCall(hook.sym, a, b)
+   of Dealloc:
+     Dealloc.entrace a, b:
+       newCall(hook.sym, a, b)
+   of Stack:
+     # hook(source, destination), or
+     # dealloc(continuation, env_234234), or
+     # alloc(Cont, env_234234), or
+     # stack(symbol, continuation)
+     when cpsStackFrames:
+       Stack.entrace a, b:
+         newCall(hook.sym, a, b)
+     else:
+       b
+   of Trace:
+     # trace(Pass, continuation, "whileLoop_2323",
+     # LineInfo(filename: "...", line: 23, column: 44)): nil
+     Trace.entrace a, b:
+       NormNode newNilLit()    # FIXME: nnkEmpty more appropriate
+   else:
+     b.errorAst "the " & $hook & " hook doesn't take two arguments"
 
-proc initFrame*(hook: Hook; fun: string; info: LineInfo): NimNode =
-  ## prepare a tracing frame constructor
-  result = nnkObjConstr.newTree bindSym"TraceFrame"
-  result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
-  result.add: "info".colon info.makeLineInfo
-  result.add: "fun".colon fun
+proc hookAsCall*(hook: static[Hook]; a, b: NormNode): Call =
+  ## Typed variant: execute 2-arg hook returning a Call
+  Call hook(hook, a, b)
 
-proc updateLineInfoForContinuationStackFrame*(c, n: NimNode): NimNode =
-  ## `c` holds the continuation symbol, while `n` is a node with info
-  when cpsStackFrames:
-    newAssignment(c.dot("stack").dot("info"), n.lineInfoObj.makeLineInfo)
-  else:
-    newEmptyNode()
+proc initFrame*(hook: Hook; fun: string; info: LineInfo): NormNode =
+   ## prepare a tracing frame constructor
+   result = nnkObjConstr.newTree(bindSym"TraceFrame").NormNode
+   result.add: "hook".colon newCall(bindSym"Hook", hook.ord.newLit)
+   result.add: "info".colon info.makeLineInfo
+   result.add: "fun".colon fun
+
+proc initFrameAsExpression*(hook: Hook; fun: string; info: LineInfo): Expression =
+  ## Typed variant: prepare tracing frame as Expression
+  Expression initFrame(hook, fun, info)
+
+proc updateLineInfoForContinuationStackFrame*(c, n: NimNode): NormNode =
+   ## `c` holds the continuation symbol, while `n` is a node with info
+   when cpsStackFrames:
+     NormNode newAssignment(c.dot("stack").dot("info"), n.lineInfoObj.makeLineInfo)
+   else:
+     NormNode newEmptyNode()
+
+proc updateLineInfoAsStatement*(c, n: NimNode): Statement =
+  ## Typed variant: update line info returning Statement
+  Statement updateLineInfoForContinuationStackFrame(c, n)

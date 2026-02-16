@@ -1,4 +1,4 @@
-import cps/[normalizedast, rewrites]
+import cps/[ast, rewrites]
 import std/macros except newStmtList
 
 template isNotNil*(x: untyped): bool = not(isNil(x))
@@ -90,17 +90,21 @@ proc rewriteDefer*(n: NormNode): NormNode =
             finallyNode
           )
       else:
-        # There are no splits, thus this is a defer without a container
-        #
-        # Construct a naked try-finally for it.
-        result = NormNode:
-          newNimNode(nnkTryStmt, deferNode).add(
-            # Use an empty statement list for the body
-            newNimNode(nnkStmtList, deferNode),
-            finallyNode
-          )
+         # There are no splits, thus this is a defer without a container
+         #
+         # Construct a naked try-finally for it.
+         result = NormNode(newNimNode(nnkTryStmt, deferNode).add(
+           # Use an empty statement list for the body
+           newNimNode(nnkStmtList, deferNode),
+           finallyNode
+         ))
 
       # Also rewrite the result to eliminate all defers in it
       result = rewriteDefer(result)
 
   result = filter(n, rewriter)
+
+proc rewriteDeferAsStatement*(n: Statement): Statement =
+  ## Typed variant: rewrite defer to try-finally
+  Statement rewriteDefer(n.NormNode)
+

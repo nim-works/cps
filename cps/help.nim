@@ -1,17 +1,18 @@
 import std/macros
+import cps/ast
 
 const
   cpsDebug* {.strdefine.} = "" ## produce gratuitous output
   comments* = cpsDebug != ""   ## embed comments within the transformation
 
-func doc*(s: string): NimNode =
-  ## generate a doc statement for debugging
-  when comments:
-    newCommentStmtNode(s)
-  else:
-    newEmptyNode()
+func doc*(s: string): Statement =
+   ## generate a doc statement for debugging
+   when comments:
+     Statement(newCommentStmtNode(s))
+   else:
+     Statement(newEmptyNode())
 
-proc doc*(n: NimNode; s: string) =
+proc doc*(n: NormNode; s: string) =
   ## add a doc statement to the ast for debugging
   when comments:
     if n.kind == nnkStmtList:

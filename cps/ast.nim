@@ -1,3 +1,13 @@
+##[
+  Normalized AST types and utilities for CPS.
+  
+  This module defines:
+  - NormNode (private) - the base normalized node type
+  - Semantic types (Statement, Expression, Call, etc.)
+  - Generic AST utilities (filter, desym, resym, etc.)
+  - Compromise types (via include untyped)
+]##
+
 import std/macros except newTree
 import std/strformat
 from std/hashes import Hash, hash
@@ -7,15 +17,153 @@ from std/typetraits import distinctBase
 when defined(nimPreviewSlimSystem):
   import std/assertions
 
-from cps/rewrites import NormNode, normalizingRewrites, replace,
-                         desym, resym, childCallToRecoverResult,
-                         NormalCallNodes
+# === Base Types ===
+
+type
+  NodeFilter* = proc(n: NimNode): NimNode
+    ## Filter function for NimNode tree traversal
+  NormFilter* = proc(n: NormNode): NormNode
+    ## Filter function for NormNode tree traversal  
+  Matcher* = proc(n: NimNode): bool
+    ## Predicate for NimNode matching
+  NormMatcher* = proc(n: NormNode): bool {.noSideEffect.}
+    ## Predicate for NormNode matching
+  NormNode* = distinct NimNode
+    ## A normalized node. Prefer semantic types (Statement, Expression, etc.)
 
 const
+  NormalCallNodes* = CallNodes - {nnkHiddenCallConv}
   NilNormNode* = nil.NormNode
   NilNimNode* = nil.NimNode
 
-export NormNode, NormalCallNodes
+# Converter scoped to module
+converter toNimNode*(n: NormNode): NimNode = n.NimNode
+
+# === Generic AST Utilities ===
+
+proc filter*(n: NimNode; f: NodeFilter): NormNode =
+  ## Rewrites a node and its children by passing each node to the filter;
+  ## if the filter yields nil, the node is simply copied. Otherwise, the
+  ## node is replaced.
+  let res = f(n)
+  if res.isNil:
+    result = copyNimNode(n).NormNode
+    for kid in items(n):
+      result.add filter(kid, f).NimNode
+  else:
+    result = res.NormNode
+
+proc filter*(n: NormNode, f: NormFilter): NormNode =
+  ## Rewrites a NormNode tree using a NormFilter
+  filter(n.NimNode, proc (n: NimNode): NimNode = f(n.NormNode)).NormNode
+
+func isEmpty*(n: NimNode): bool =
+  ## `true` if the node `n` is Empty
+  result = not n.isNil and n.kind == nnkEmpty
+
+proc errorAst*(s: string, info: NimNode = nil): NormNode =
+  ## Produce {.error: s.} in order to embed errors in the AST
+  let errorTemp = macros.newTree(nnkPragma,
+    ident("error").newColonExpr(newLit s)
+  )
+  result = NormNode(errorTemp)
+  if not info.isNil:
+    result.NimNode[0].copyLineInfo info
+
+proc errorAst*(n: NimNode|NormNode; s = "creepy ast"): NormNode =
+  ## Embed an error with a message; line info is copied from the node
+  errorAst(s & ":\n" & treeRepr(n) & "\n", n)
+
+proc desym*(n: NimNode): NormNode =
+  ## Convert a symbol to an identifier
+  let r = n
+  if r.kind == nnkSym:
+    result = NormNode(ident(repr r))
+    result.NimNode.copyLineInfo r
+  else:
+    result = r.NormNode
+
+proc desym*(n: NormNode): NormNode =
+  desym(n.NimNode)
+
+proc resym*(n: NimNode; sym: NimNode; field: NimNode): NormNode =
+  ## Replace occurrences of sym with field in the tree
+  expectKind(sym, nnkSym)
+  proc resymify(n: NimNode): NimNode =
+    case n.kind
+    of nnkIdentDefs:
+      for i in 1 ..< n.len:
+        if n[i].kind != nnkEmpty:
+          n[i] = filter(n[i], resymify).NimNode
+      result = n
+    of nnkSym:
+      if n == sym:
+        result = field
+    else:
+      discard
+  filter(n, resymify)
+
+proc resym*(n, sym, field: NormNode): NormNode =
+  resym(n.NimNode, sym.NimNode, field.NimNode)
+
+proc replacedSymsWithIdents*(n: NimNode): NormNode =
+  ## Replace all symbols with identifiers in the tree
+  proc desymifier(n: NimNode): NimNode =
+    case n.kind
+    of nnkSym: desym(n).NimNode
+    else: nil
+  filter(n, desymifier)
+
+proc replacedSymsWithIdents*(n: NormNode): NormNode =
+  replacedSymsWithIdents(n.NimNode)
+
+proc replace*(n: NimNode, match: Matcher, replacement: NimNode): NormNode =
+  ## Replace any node matched by `match` with a copy of `replacement`
+  proc replacer(n: NimNode): NimNode =
+    if match(n): copyNimTree replacement
+    else: nil
+  filter(n, replacer)
+
+proc replace*(n: NimNode | NormNode, match: NormMatcher, replacement: NormNode): NormNode =
+  ## Replace any node matched by `match` with a copy of `replacement`
+  replace(n, proc (n: NimNode): bool = match(n.NormNode), replacement)
+
+template replace*(n, noob: NimNode; body: untyped): NimNode {.dirty.} =
+  let match = proc(it {.inject.}: NimNode): bool = body
+  replace(n, match, noob)
+
+template replace*(n, noob: NormNode; body: untyped): NormNode {.dirty.} =
+  let match = proc(it {.inject.}: NormNode): bool = body
+  replace(n, match, noob)
+
+proc multiReplace*(n: NimNode; replacements: varargs[(Matcher, NimNode)]): NormNode =
+  ## Replace nodes matching any matcher with corresponding replacement
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    for (match, replacement) in replacements:
+      if match(n): return copyNimTree replacement
+  filter(n, replacer)
+
+proc multiReplace*(n: NormNode; replacements: varargs[(Matcher, NormNode)]): NormNode =
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    for (match, replacement) in replacements:
+      if match(n): return copyNimTree(replacement).NimNode
+  filter(n, replacer)
+
+proc multiReplace*(n: NormNode; replacements: varargs[(NormMatcher, NormNode)]): NormNode =
+  let replacements = @replacements
+  proc replacer(n: NimNode): NimNode =
+    for (match, replacement) in replacements:
+      if match(n.NormNode): return copyNimTree(replacement).NimNode
+  filter(n, replacer)
+
+# === Import CPS-specific rewrites ===
+
+import cps/rewrites
+
+export NormNode, NormalCallNodes, normalizingRewrites, replace, resym,
+       childCallToRecoverResult
 
 # # Structure of the Module
 # * distinct types representing normalized/transformed variants of distinct AST
@@ -134,6 +282,13 @@ type
     ## `nnkTypeSection`
   TypeDef* = distinct NormNode
     ## `nnkTypeDef`
+
+  Statement* = distinct NormNode
+    ## opaque sum: any statement node (var, let, assignment, if, while, etc.)
+    ## represents a syntactic statement in the normalized AST
+  Expression* = distinct NormNode
+    ## opaque sum: any expression node (call, ident, literal, etc.)
+    ## represents a syntactic expression in the normalized AST
 
   # Naming Convention Notes for Var and Let:
   # - first part of name is the Node, while the later parts add/narrow context
@@ -360,6 +515,38 @@ proc add*(f: NimNode, c: NormNode): NormNode {.discardable.} =
   ## created in order to fix ambiguous call issues ... again.
   f.NormNode.add(c.NormNode)
 
+proc add*(f: Statement, c: Statement): Statement {.discardable.} =
+  ## typed variant: add a Statement child to a Statement parent
+  f.NormNode.add(c.NormNode).Statement
+
+proc add*(f: Expression, c: Expression): Expression {.discardable.} =
+  ## typed variant: add an Expression child to an Expression parent
+  f.NormNode.add(c.NormNode).Expression
+
+proc copy*(n: Statement): Statement =
+  ## typed variant: copy a Statement node
+  n.NormNode.copy().Statement
+
+proc copy*(n: Expression): Expression =
+  ## typed variant: copy an Expression node
+  n.NormNode.copy().Expression
+
+proc copyNimNode*(n: Statement): Statement =
+  ## typed variant: shallow copy a Statement node
+  n.NormNode.copyNimNode().Statement
+
+proc copyNimNode*(n: Expression): Expression =
+  ## typed variant: shallow copy an Expression node
+  n.NormNode.copyNimNode().Expression
+
+proc copyNimTree*(n: Statement): Statement =
+  ## typed variant: deep copy a Statement node
+  n.NormNode.copyNimTree().Statement
+
+proc copyNimTree*(n: Expression): Expression =
+  ## typed variant: deep copy an Expression node
+  n.NormNode.copyNimTree().Expression
+
 template findChild*(n: NormNode; cond: untyped): NormNode =
   ## finds the first child node matching the condition or nil
   NormNode macros.findChild(n, cond)
@@ -378,6 +565,10 @@ proc findChildRecursive*(n: NormNode, cmp: proc(n: NormNode): bool): NormNode =
 
 proc getImpl*(n: NormNode): NormNode {.borrow.}
   ## the implementaiton of a normalized node should be normalized itself
+
+proc getImplOfName*(n: Name): ProcDef =
+  ## Typed variant: Get the procedure implementation from a Name
+  ProcDef getImpl(n.NormNode)
 
 proc getTypeInst*(n: NormNode): TypeExpr {.borrow.}
   ## return the type instance, via `getTypeInst` of a NimNode
@@ -435,6 +626,10 @@ proc newStmtList*(stmts: AnyNodeVarargs): NormNode =
   if stmts.len > 0:
     result.copyLineInfo stmts[0]
 
+proc newStmtListAsStatement*(stmts: AnyNodeVarargs): Statement =
+  ## Typed variant: create a new statement list as Statement
+  newStmtList(stmts).Statement
+
 proc newTree*(kind: NimNodeKind, n: AnyNodeVarargs): NormNode =
   ## creates a new tree (`newTree`) of `kind`, with child `n`
   NormNode macros.newTree(kind, varargs[NimNode] n)
@@ -460,6 +655,14 @@ template copyNodeAndTransformIt*(n: NimNode, body: untyped): untyped =
 proc wrap*(kind: NimNodeKind, n: NormNode): NormNode =
   ## wraps a node `n` within a new node of `kind`
   newTree(kind, n)
+
+proc wrap*(kind: NimNodeKind, n: Statement): Statement =
+  ## typed variant: wrap a Statement within a new node of `kind`
+  wrap(kind, n.NormNode).Statement
+
+proc wrap*(kind: NimNodeKind, n: Expression): Expression =
+  ## typed variant: wrap an Expression within a new node of `kind`
+  wrap(kind, n.NormNode).Expression
 
 converter seqNormalizedToSeqNimNode*(n: seq[NormNode]): seq[NimNode] =
   ## convert a `seq[NormNode]` to `seq[NimNode]` for ease of use
@@ -592,6 +795,10 @@ binaryExprOrStmt newDotExpr:
   ## create a new dot expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
 
+proc newDotExprAsExpression*(l: ExprLike, r: distinct ExprLike): Expression =
+  ## Typed variant: create a new dot expression as Expression
+  newDotExpr(l, r).Expression
+
 template dot*(a, b: NormNode): NormNode =
   ## for constructing foo.bar
   let expression = newDotExpr(a, b)
@@ -606,8 +813,16 @@ binaryExprOrStmt newColonExpr:
   ## create a new colon expression, meant for executable code. In the future
   ## this is unlikely to work for type expressions for example
 
+proc newColonExprAsExpression*(l: ExprLike, r: distinct ExprLike): Expression =
+  ## Typed variant: create a new colon expression as Expression
+  newColonExpr(l, r).Expression
+
 binaryExprOrStmt newAssignment:
   ## create a new assignment, meant for executable code
+
+proc newAssignmentAsStatement*(l: ExprLike, r: distinct ExprLike): Statement =
+  ## Typed variant: create a new assignment as Statement
+  newAssignment(l, r).Statement
 
 proc newCall*(n: NormNode, args: AnyNodeVarargs): Call =
   ## create a new call, with `n` as name some args
@@ -739,6 +954,11 @@ func typ*(n: DefLike): TypeExpr =
 func val*(n: DefLike): NormNode =
   ## get the value of this identdef or vartuple
   n.NormNode[^1]
+
+func valAsExpression*(n: DefLike): Expression =
+  ## Typed variant: Get the value as an Expression
+  Expression val(n)
+
 func hasValue*(n: DefLike): bool =
   ## has a non-Empty initial value defined for the ident, sym or tuple
   ## Yes, proc, you ARE a good proc. You have value, hasValue, in fact.
@@ -811,6 +1031,10 @@ func def*(n: VarLetLike): DefVarLet|TupleDefVarLet =
 func val*(n: VarLetLike): NormNode =
   ## the ident or sym being defined, or tuple being defined
   n.def.val
+
+func valAsExpression*(n: VarLetLike): Expression =
+  ## Typed variant: get the value as an Expression
+  Expression val(n)
 
 func typ*(n: VarLetLike): TypeExpr =
   ## the type of this definition (IdentDef or VarTuple)
@@ -1071,6 +1295,43 @@ proc addPragma*(n: RoutineDefLike, prag: Name, pragArgs: openArray[Name]) =
   ## add pragmas of the form `{.raise: [IOError, OSError].}`
   addPragma(n, prag, pragArgs)
 
+# Typed variants for addPragma
+proc addPragmaOfProcDef*(n: ProcDef, prag: Name) =
+  ## Typed variant: add a pragma to a ProcDef
+  n.NimNode.addPragma(NimNode prag)
+
+proc addPragmaOfProcDef*(n: ProcDef, prag: string) =
+  ## Typed variant: add a pragma string to a ProcDef
+  let name = prag.asName(n)
+  addPragmaOfProcDef(n, name)
+
+proc addPragmaOfProcDef*(n: ProcDef, prag: Name, pragArg: NimNode) =
+  ## Typed variant: add a pragma with argument to a ProcDef
+  n.NimNode.addPragma:
+    nnkExprColonExpr.newTree(prag, pragArg)
+
+proc addPragmaOfProcDef*(n: ProcDef, prag: Name, pragArg: Name) =
+  ## Typed variant: add a pragma with Name argument to a ProcDef
+  addPragmaOfProcDef(n, prag, pragArg.NimNode)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: Name) =
+  ## Typed variant: add a pragma to a RoutineDef
+  n.NimNode.addPragma(NimNode prag)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: string) =
+  ## Typed variant: add a pragma string to a RoutineDef
+  let name = prag.asName(n)
+  addPragmaOfRoutineDef(n, name)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: Name, pragArg: NimNode) =
+  ## Typed variant: add a pragma with argument to a RoutineDef
+  n.NimNode.addPragma:
+    nnkExprColonExpr.newTree(prag, pragArg)
+
+proc addPragmaOfRoutineDef*(n: RoutineDef, prag: Name, pragArg: Name) =
+  ## Typed variant: add a pragma with Name argument to a RoutineDef
+  addPragmaOfRoutineDef(n, prag, pragArg.NimNode)
+
 # fn-Call
 
 createAsTypeFunc(CallKind, nnkCallKinds, "node is not a call kind")
@@ -1132,6 +1393,10 @@ proc expr*(n: Conv): NormNode =
   ## the expression being converted
   n[1]
 
+proc exprAsExpression*(n: Conv): Expression =
+  ## Typed variant: Get the expression being converted as Expression type
+  Expression expr(n)
+
 # fn-FormalParams
 
 proc newFormalParams*(ret: TypeExpr, ps: varargs[IdentDef]): FormalParams =
@@ -1154,6 +1419,11 @@ proc `name=`*(n: RoutineDef, name: Name) =
 
 proc body*(n: RoutineDef): NormNode =
   n.NimNode.body.NormNode
+
+proc bodyAsStatement*(n: RoutineDef): Statement =
+  ## Typed variant: Get the body of a RoutineDef as a Statement
+  Statement body(n)
+
 proc `body=`*(n: RoutineDef, b: NormNode) =
   n.NimNode.body = b
 
@@ -1206,8 +1476,9 @@ iterator callingParams*(n: ProcDef): RoutineParam =
   for a in n.formalParams[1..^1].items:
     yield a.RoutineParam
 
-proc clone*(n: ProcDef, body: NimNode = NilNimNode): ProcDef =
+proc clone*(n: ProcDef, body: NimNode|NormNode = NilNimNode): ProcDef =
   ## create a copy of a typed proc which satisfies the compiler
+  let body = if body.isNil: NilNimNode else: body.NimNode
   result = nnkProcDef.newTree(
     ident(repr n.name),         # repr to handle gensymbols
     newEmptyNode(),
@@ -1237,14 +1508,88 @@ proc hasPragma*(n: NormNode; s: static[string]): bool =
   else:
     result = false
 
+func hasPragma*(n: Statement; s: static[string]): bool =
+  ## Typed variant: check if a Statement has pragma `s`
+  n.NormNode.hasPragma(s)
+
+func hasPragma*(n: TypeExpr; s: static[string]): bool =
+  ## Typed variant: check if a TypeExpr has pragma `s`
+  n.NormNode.hasPragma(s)
+
 proc genProcName*(a: string; info = NilNormNode): Name {.deprecated.} =
   genSymProc(fmt"cps:{a}", info=info)
 
 proc genProcName*(a, b: string; info = NilNormNode): Name =
   genSymProc(fmt"cps:{a} {b}", info=info)
 
+proc getImplAsProcDef*(n: Name): ProcDef =
+  ## Typed variant: Get implementation of Name as ProcDef
+  ProcDef getImpl(n.NormNode)
+
 proc genTypeName*(a, b: string; info = NilNormNode): Name =
   genSymType(fmt"cps:{a} {b}", info=info)
 
 proc postfix*(n: Name; op: string): Name =
   postfix(n.NimNode, op).Name
+
+proc newStatementList*(stmts: AnyNodeVarargs): Statement =
+  ## Typed variant: Create a statement list
+  Statement newStmtList(stmts)
+
+proc newExpressionList*(exprs: AnyNodeVarargs): Expression =
+  ## Typed variant: Create an expression list
+  Expression newStmtList(exprs)
+
+proc newTreeAsStatement*(kind: NimNodeKind, n: AnyNodeVarargs): Statement =
+  ## Typed variant: Create new tree as Statement
+  Statement newTree(kind, n)
+
+proc newTreeAsExpression*(kind: NimNodeKind, n: AnyNodeVarargs): Expression =
+  ## Typed variant: Create new tree as Expression
+  Expression newTree(kind, n)
+
+# === Typed Wrappers for Rewrite Functions ===
+# These preserve the input type through the rewrite.
+
+proc normalizingRewritesAsStatement*(n: NimNode): Statement =
+  ## Typed variant: normalize a NimNode expected to be a Statement
+  normalizingRewrites(n).Statement
+
+proc normalizingRewritesAsStatement*(n: Statement): Statement =
+  ## Typed variant: normalize a Statement, preserving type
+  normalizingRewrites(n.NimNode).Statement
+
+proc normalizingRewritesAsProcDef*(n: NimNode): ProcDef =
+  ## Typed variant: normalize a NimNode expected to be a ProcDef
+  normalizingRewrites(n).ProcDef
+
+proc normalizingRewritesAsProcDef*(n: ProcDef): ProcDef =
+  ## Typed variant: normalize a ProcDef, preserving type
+  normalizingRewrites(n.NimNode).ProcDef
+
+proc workaroundRewritesAsStatement*(n: Statement): Statement =
+  ## Typed variant: apply workaround rewrites to Statement
+  workaroundRewrites(n.NormNode).Statement
+
+proc workaroundRewritesAsProcDef*(n: ProcDef): ProcDef =
+  ## Typed variant: apply workaround rewrites to ProcDef
+  workaroundRewrites(n.NormNode).ProcDef
+
+proc addInitializationToDefaultAsIdentDef*(n: IdentDef): IdentDef =
+  ## Typed variant: add default initialization to IdentDef
+  addInitializationToDefault(n.NimNode).IdentDef
+
+proc addInitializationToDefaultAsIdentDef*(n: NimNode): IdentDef =
+  ## Typed variant: add default initialization, returns IdentDef
+  addInitializationToDefault(n).IdentDef
+
+proc replacedSymsWithIdentsAsStatement*(n: Statement): Statement =
+  ## Typed variant: replace symbols with idents in a Statement
+  replacedSymsWithIdents(n.NormNode).Statement
+
+proc replacedSymsWithIdentsAsExpression*(n: Expression): Expression =
+  ## Typed variant: replace symbols with idents in an Expression
+  replacedSymsWithIdents(n.NormNode).Expression
+
+# === Compromise Types (temporary scaffolding) ===
+include cps/untyped

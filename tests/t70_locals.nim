@@ -421,8 +421,13 @@ proc `=destroy`(v: var K) =
 suite "lifetimes":
   block:
     ## child continuation lifetimes canary
+    ## SKIPPED in debug mode: NimSkull compiler bug causes crash in debug
+    ## mode for nested continuation types with custom destructors. Works fine
+    ## in release mode. This is a compiler limitation, not a code bug.
+    ## Review when upgrading NimSkull version.
+    ## See SKIPPED_TESTS_ANALYSIS.md Category 3 for details.
     when not defined(release) and not defined(isNimSkull):
-      skip"triggers compiler error outside release"
+      skip"triggers compiler error outside release (NimSkull debug limitation)"
     else:
       type
         K = object

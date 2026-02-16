@@ -1,15 +1,15 @@
 import std/sequtils
 import std/macros except newStmtList, items, pairs, newTree
-import cps/[spec, normalizedast, help, rewrites]
+import cps/[spec, ast, help, rewrites]
 
 template cpsMustLift() {.pragma.} ## signify a code block that has to be lifted
 
-proc newCpsMustLift(n: NormNode): NormNode =
+proc newCpsMustLift(n: NormNode): PragmaBlock =
   ## Wrap `n` in a `cpsMustLift` block.
   nnkPragmaBlock.newTree(
     nnkPragma.newTree(bindName"cpsMustLift"),
     n
-  )
+  ).PragmaBlock
 
 proc isCpsMustLift(n: NormNode): bool =
   ## Check whether `n` is a cpsMustLift block
@@ -174,6 +174,14 @@ proc assignTo*(location, n: NormNode): NormNode =
     newAssignment(copy(location), copy(n))
 
   filterExpr(n, assign)
+
+proc assignTo*(location, n: Statement): Statement =
+  ## Typed variant: assign an expression to a location, returning a Statement
+  assignTo(location.NormNode, n.NormNode).Statement
+
+proc assignTo*(location: Expression, n: Expression): Expression =
+  ## Typed variant: assign an expression to a location, returning an Expression
+  assignTo(location.NormNode, n.NormNode).Expression
 
 func isMutableLocation(location: NormNode): bool
 

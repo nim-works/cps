@@ -1,5 +1,5 @@
 import std/[macros, genasts]
-import pkg/cps/normalizedast
+import pkg/cps/ast
 
 include preamble
 
@@ -27,7 +27,7 @@ suite "basic testing assumptions":
     check r == 2, "who let the smoke out?"
 
 
-# these tests were initially motivated because the normalizedast was not
+# these tests were initially motivated because the ast was not
 # forgiving enough for various return types.
 
 macro checkType(s: untyped): untyped =
@@ -46,7 +46,7 @@ macro checkType(s: untyped): untyped =
   result = genast(checkStatus, msg):
     check checkStatus, msg
 
-suite "normalizedast tests to quickly test APIs":
+suite "ast tests to quickly test APIs":
   # the expectation is that these tests can easily be changed if in the way
 
   block:

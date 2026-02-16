@@ -1,7 +1,7 @@
 import std/[tables, hashes, genasts]
 import std/macros except newStmtList, newTree
 import cps/[spec, environment, hooks, returns, defers, rewrites, help,
-            normalizedast, callbacks]
+            ast, callbacks]
 export Continuation, ContinuationProc, cpsCall, cpsMustJump
 
 #{.experimental: "strictNotNil".}
@@ -179,6 +179,10 @@ proc restoreBreak(n: NormNode, label = newEmptyNormNode()): NormNode =
 
   filter(n, restorer)
 
+proc restoreBreakOfStatement*(n: Statement, label = newEmptyNormNode()): Statement =
+  ## Typed variant: restore {.cpsBreak: label.} into break statements in a Statement
+  restoreBreak(n.NormNode, label).Statement
+
 proc restoreContinue(n: NormNode): NormNode =
   ## restore {.cpsContinue.} into continue statements
   proc restorer(n: NormNode): NormNode =
@@ -189,6 +193,10 @@ proc restoreContinue(n: NormNode): NormNode =
       NilNormNode
 
   filter(n, restorer)
+
+proc restoreContinueOfStatement*(n: Statement): Statement =
+  ## Typed variant: restore {.cpsContinue.} into continue statements in a Statement
+  restoreContinue(n.NormNode).Statement
 
 macro cpsBlock(cont, contType: typed; name: static[string]; label, n: typed): untyped =
   ## The block with `label` is tainted by a `cpsJump` and may require a
@@ -349,6 +357,10 @@ proc mergeExceptBranches(n, ex: NormNode): NormNode =
         newStmtList:
           ifStmt.NormNode
 
+proc mergeExceptBranchesAsStatement*(n: Statement, ex: NormNode): Statement =
+  ## Typed variant: merge except branches returning Statement
+  mergeExceptBranches(n.NormNode, ex).Statement
+
 proc wrapContinuationWith(n: NormNode, cont, replace: Name, templ: NormNode): NormNode =
   ## Given the StmtList `n`, return `templ` with children matching `replace`
   ## replaced with the `n`.
@@ -375,6 +387,10 @@ proc wrapContinuationWith(n: NormNode, cont, replace: Name, templ: NormNode): No
     newStmtList:
       # wrap all continuations of `n` with the template
       filter(n, wrapCont)
+
+proc wrapContinuationWithAsStatement*(n: Statement, cont, replace: Name, templ: NormNode): Statement =
+  ## Typed variant: wrap continuation with template returning Statement
+  wrapContinuationWith(n.NormNode, cont, replace, templ).Statement
 
 macro cpsWithException(cont, ex, n: typed): untyped =
   ## Given the exception handler continuation `n`, set the global exception of
@@ -653,6 +669,10 @@ proc newAnnotation(env: Env; n: NormNode; a: static[string]): NormNode =
   result.add(NormNode env.first, NormNode env.root)
   result.add newLit(env.procedure)
 
+proc newAnnotationAsCall*(env: Env; n: NormNode; a: static[string]): Call =
+  ## Typed variant: create annotation call
+  newAnnotation(env, n, a).Call
+
 proc setupChildContinuation(env: var Env; call: Call): (Name, TypeExpr) =
   ## create a new child continuation variable and add it to the environment.
   ## return the child's symbol and its environment type.
@@ -698,26 +718,25 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   assign = assign.childCallToRecoverResult(call, recovery)
 
   # compose the rewrite as an assignment and any remaining tail
-  var body =
-    NormNode:
-      genAstOpt({}, assign = assign.NimNode, tail = tail.NimNode,
-                child = child.NimNode, ctype = ctype.NimNode,
-                root = env.root.NimNode, identity = env.identity.NimNode,
-                dealloc = Dealloc.sym.NimNode):
-        case child.state
-        of Dismissed:
-          # the child moved; dismiss ourselves
-          dismiss()
-        of Finished:
-          assign
-          when false:
-            # we don't dealloc here, but maybe we should
-            dealloc(child, ctype)
-          tail
-        of Running:
-          # the child is still running; someone is trying to be clever
-          raise Defect.newException:
-            "parent continuation ran before child finished"
+  let bodyTemp = genAstOpt({}, assign = assign.NimNode, tail = tail.NimNode,
+                           child = child.NimNode, ctype = ctype.NimNode,
+                           root = env.root.NimNode, identity = env.identity.NimNode,
+                           dealloc = Dealloc.sym.NimNode):
+    case child.state
+    of Dismissed:
+      # the child moved; dismiss ourselves
+      dismiss()
+    of Finished:
+      assign
+      when false:
+        # we don't dealloc here, but maybe we should
+        dealloc(child, ctype)
+      tail
+    of Running:
+      # the child is still running; someone is trying to be clever
+      raise Defect.newException:
+        "parent continuation ran before child finished"
+  var body = NormNode(bodyTemp)
 
   # the shim is simply an annotation comprised of annotations
   let shim = env.newAnnotation(call, "cpsContinuationJump")
@@ -725,6 +744,10 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
   shim.add env.annotate(child)
   shim.add env.annotate(body)
   result = shim
+
+proc shimAssignAsStatement*(env: var Env; store, expr, tail: NormNode): Statement =
+  ## Typed variant: shim assignment returning Statement
+  shimAssign(env, store, expr, tail).Statement
 
 proc annotate(parent: var Env; n: NormNode): NormNode =
   ## annotate `input` or otherwise prepare it for conversion into a
@@ -1096,28 +1119,27 @@ macro cpsManageException(name: static[string]; n: typed): untyped =
           ex = hasException[2].resym(exCont, cont)
 
         # Add the manager itself
-        c.body.add:
-          NormNode:
-            genAst(cont = cont.NimNode, ex = ex.NimNode, innerFn, result = ident"result"):
-              # Save the old exception from the enviroment
-              let oldException = getCurrentException()
-              # Set the exception to what is in the continuation
-              setCurrentException(ex)
-              try:
-                # Run our continuation
-                result = innerFn(cont)
-                # Restore the old exception
-                setCurrentException(oldException)
-              except CatchableError:
-                # If the continuation raise an unhandled exception,
-                # capture it.
-                let e = getCurrentException()
-                # Restore the old exception
-                setCurrentException(oldException)
-                # Now reraise the continuation's exception, which will
-                # make `oldException` as `e`'s parent, preserving the
-                # exception stack outside of CPS
-                raise e
+        let managerTemp = genAst(cont = cont.NimNode, ex = ex.NimNode, innerFn, result = ident"result"):
+          # Save the old exception from the enviroment
+          let oldException = getCurrentException()
+          # Set the exception to what is in the continuation
+          setCurrentException(ex)
+          try:
+            # Run our continuation
+            result = innerFn(cont)
+            # Restore the old exception
+            setCurrentException(oldException)
+          except CatchableError:
+            # If the continuation raise an unhandled exception,
+            # capture it.
+            let e = getCurrentException()
+            # Restore the old exception
+            setCurrentException(oldException)
+            # Now reraise the continuation's exception, which will
+            # make `oldException` as `e`'s parent, preserving the
+            # exception stack outside of CPS
+            raise e
+        c.body.add NormNode(managerTemp)
         result = c
 
   debugAnnotation cpsManageException, n:
@@ -1316,13 +1338,22 @@ proc cpsTransformProc(tipe: NimNode, n: NimNode): NormNode =
   # before they enter cps, so we don't need to care about those.
   #
   # TODO: we should track down why these hints occur.
-  result = NormNode:
-    quote:
-      {.push hint[ConvFromXtoItselfNotNeeded]: off.}
-      `result`
-      {.pop.}
+  let suppressTemp = quote:
+    {.push hint[ConvFromXtoItselfNotNeeded]: off.}
+    `result`
+    {.pop.}
+  result = NormNode(suppressTemp)
 
   result = workaroundRewrites result
+
+proc cpsTransformProcAsStatement*(tipe: NimNode, n: NimNode): Statement =
+  ## Typed variant: transform proc returning Statement
+  cpsTransformProc(tipe, n).Statement
+
+# Typed wrappers for transformation functions
+proc annotateStatement(parent: var Env; n: Statement): Statement =
+  ## Typed wrapper: annotate a Statement node while preserving its type
+  annotate(parent, n.NormNode).Statement
 
 macro cpsTransform*(tipe, n: typed): untyped =
   ## This is the macro performing the main cps transformation

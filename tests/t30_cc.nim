@@ -121,8 +121,10 @@ suite "calling convention":
 
   block:
     ## run a callback in cps with natural syntax
+    ## Requires: Call operator support in compiler
+    ## Note: Skip automatically enables when compiler supports this feature
     when not cpsCallOperatorSupported or defined(cpsNoCallOperator):
-      skip "unsupported on nim " & NimVersion
+      skip "unsupported on nim " & NimVersion & " (see SKIPPED_TESTS_ANALYSIS.md)"
     else:
 
       type
@@ -146,8 +148,10 @@ suite "calling convention":
 
   block:
     ## run a callback with no return value in cps
+    ## Requires: Call operator support in compiler
+    ## Note: Skip automatically enables when compiler supports this feature
     when not cpsCallOperatorSupported or defined(cpsNoCallOperator):
-      skip "unsupported on nim " & NimVersion
+      skip "unsupported on nim " & NimVersion & " (see SKIPPED_TESTS_ANALYSIS.md)"
     else:
 
       type

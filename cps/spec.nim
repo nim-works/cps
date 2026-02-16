@@ -21,7 +21,7 @@ const
     else:
       true
 
-import cps/[rewrites, help, normalizedast]
+import cps/[ast, rewrites, help]
 export errorAst, desym, isEmpty, genField
 
 template cpsLift*() {.pragma.}          ## lift this proc|type
@@ -142,7 +142,7 @@ template colon*(a: string | NimNode; b: string | int): NimNode =
   {.line: instantiationInfo().}:
     colon(a, newLit(b))
 
-proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): NormNode =
+proc filterPragma*(ns: seq[PragmaAtom], liftee: Name): PragmaStmt =
   ## given a seq of pragmas, omit a match and return Pragma or Empty
   newPragmaStmt(filterIt(ns, it.getPragmaName != liftee))
 
@@ -175,6 +175,14 @@ proc stripPragma*(n: NormNode; s: static[string]): NormNode =
   else:
     result = n
 
+proc stripPragmaOfProcDef*(n: ProcDef; s: static[string]): ProcDef =
+  ## Typed variant: strip pragma from ProcDef
+  stripPragma(n.NormNode, s).ProcDef
+
+proc stripPragmaOfTypeDef*(n: TypeDef; s: static[string]): TypeDef =
+  ## Typed variant: strip pragma from TypeDef
+  stripPragma(n.NormNode, s).TypeDef
+
 proc hash*(n: NimNode): Hash =
   ## Hash a NimNode via it's representation
   var h: Hash = 0
@@ -189,7 +197,7 @@ func isCpsPending*(n: NormNode): bool =
   ## Return whether a node is a {.cpsPending.} annotation
   n.kind == nnkPragma and n.len == 1 and n.asPragmaStmt.hasPragma("cpsPending")
 
-func newCpsBreak*(n: NormNode, label = newNilLit().NormNode): NormNode =
+func newCpsBreak*(n: NormNode, label = newNilLit().NormNode): PragmaStmt =
   ## Produce a {.cpsBreak.} annotation with the given label
   let label =
     if label.kind == nnkEmpty:
@@ -203,7 +211,7 @@ proc isCpsBreak*(n: NormNode): bool =
   ## Return whether a node is a {.cpsBreak.} annotation
   n.kind == nnkPragma and n.len == 1 and asPragmaStmt(n).hasPragma("cpsBreak")
 
-func newCpsContinue*(n: NormNode): NormNode =
+func newCpsContinue*(n: NormNode): PragmaStmt =
   ## Produce a {.cpsContinue.} annotation
   newPragmaStmtWithInfo(n, asPragmaAtom(bindName"cpsContinue"))
 
@@ -223,6 +231,10 @@ proc breakLabel*(n: NormNode): NormNode =
   else:
     raise newException(Defect, "this node is not a break: " & $n.kind)
 
+proc breakLabelOfStatement*(n: Statement): NormNode =
+  ## Typed variant: Return the break label from a Statement (break or cpsBreak)
+  breakLabel(n.NormNode)
+
 proc isCpsCont*(n: NormNode): bool =
   ## Return whether the given procedure is a cps continuation
   n.kind in RoutineNodes and n.asRoutineDef.hasPragma("cpsCont")
@@ -235,7 +247,7 @@ proc getContSym*(n: NormNode): Name =
   else:
     nil.Name
 
-proc newCpsTerminate*(): NormNode =
+proc newCpsTerminate*(): PragmaStmt =
   ## Create a new node signifying early termination of the procedure
   newPragmaStmt(bindName"cpsTerminate")
 
@@ -265,6 +277,10 @@ func flattenStmtList*(n: NormNode): NormNode =
   while result.kind in {nnkStmtList, nnkStmtListExpr} and result.len == 1:
     result = result[0]
 
+func flattenStmtList*(n: Statement): Statement =
+  ## Typed variant: unwrap 1-element StmtList preserving Statement type
+  flattenStmtList(n.NormNode).Statement
+
 func matchCpsBreak*(label: NormNode): NormMatcher =
   ## create a matcher matching cpsBreak with the given label
   ## and cpsBreak without any label
@@ -288,6 +304,10 @@ func wrappedFinally*(n, final: NormNode): NormNode =
   # wrap the try-finally outside of `nc`
   result = copyNimNode n
   result.add(newStmtList(newTry), final)
+
+func wrappedFinallyAsStatement*(n, final: Statement): Statement =
+  ## Typed variant: rewrite try/except/finally into try/try-except/finally
+  Statement wrappedFinally(n.NormNode, final.NormNode)
 
 proc isVoodooCall*(n: NormNode): bool =
   ## true if this is a call to a voodoo procedure
@@ -386,11 +406,11 @@ proc bootstrapSymbol*(n: NimNode): NormNode =
       pragmaArgument(n, "cpsBootstrap")
     else:
       error "procedure doesn't seem to be a cps call"
-      normalizedast.newCall("typeOf", n)
+      ast.newCall("typeOf", n)
   else:
     error "procedure doesn't seem to be a cps call"
     ## XXX: darn ambiguous calls
-    normalizedast.newCall("typeOf", n)
+    ast.newCall("typeOf", n)
 
 proc enbasen*(n: NimNode): TypeExpr =
   ## find the parent type of the given symbol/type
@@ -594,19 +614,27 @@ proc ensimilate*(source, destination: NormNode): Call =
   # fallback to typeOf
   result = newCall(newCall(bindName"typeOf", source), destination)
 
-proc nilAsEmpty*(n: NimNode): NimNode =
+proc nilAsEmpty*(n: NimNode): NormNode =
   ## normalize nil, nnkNilLit to nnkEmpty
   if n.isNil or n.kind == nnkNilLit:
-    newEmptyNode()
+    NormNode newEmptyNode()
   else:
-    n
+    n.NormNode
 
-proc emptyAsNil*(n: NimNode): NimNode =
+proc nilAsEmpty*(n: Statement): Statement =
+  ## Typed variant: normalize nil, nnkNilLit to nnkEmpty in a Statement
+  nilAsEmpty(n.NimNode).Statement
+
+proc emptyAsNil*(n: NimNode): NormNode =
   ## normalize nil, nnkEmpty to nnkNilLit
   if n.isNil or n.kind == nnkEmpty:
-    newNilLit()
+    NormNode newNilLit()
   else:
-    n
+    n.NormNode
+
+proc emptyAsNil*(n: Statement): Statement =
+  ## Typed variant: normalize nil, nnkEmpty to nnkNilLit in a Statement
+  emptyAsNil(n.NimNode).Statement
 
 macro etype*(e: enum): string =
   ## Coop -> "Coop", not "coop"
@@ -615,9 +643,32 @@ macro etype*(e: enum): string =
       return newLit sym.strVal
   error "unexpected"
 
-proc copyOrVoid*(n: NimNode): NimNode =
+proc copyOrVoid*(n: NimNode): NormNode =
   ## if the node is empty, `ident"void"`; else, a copy of the node
   if n.isEmpty:
-    ident"void"
+    NormNode ident"void"
   else:
-    copyNimTree n
+    NormNode copyNimTree n
+
+proc copyOrVoidOfStatement*(n: Statement): Statement =
+  ## Typed variant: copy a Statement or return void ident
+  copyOrVoid(n.NimNode).Statement
+
+proc bootstrapSymbolOfName*(n: Name): ProcDef =
+  ## Typed variant: Get bootstrap symbol from Name
+  ProcDef bootstrapSymbol(n.NimNode)
+
+proc pragmaArgumentOfProcDef*(n: ProcDef; s: string): NormNode =
+  ## Typed variant: Get pragma argument from ProcDef
+  pragmaArgument(n.NormNode, s)
+
+proc makeErrorShimOfProcDef*(n: ProcDef): ProcDef =
+  ## Typed variant: Create error shim from ProcDef
+  ProcDef makeErrorShim(n.NimNode)
+
+proc newEmptyStatement*(): Statement =
+  ## Typed variant: Create an empty statement
+  Statement newEmptyNormNode()
+
+
+

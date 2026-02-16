@@ -7,7 +7,7 @@ they are comprised.
 
 import std/macros except newStmtList, newTree
 import std/[sets, sequtils, hashes, tables, algorithm, genasts]
-import cps/[spec, hooks, help, rewrites, normalizedast]
+import cps/[spec, hooks, help, rewrites, ast]
 
 when defined(nimPreviewSlimSystem):
   import std/assertions
@@ -26,7 +26,7 @@ type
     via: Name                       # the identifier of the type we inherit
     parent: Env                     # the parent environment (scope)
     locals: LocalCache              # locals and their typedefs|generics
-    store: NimNode                  # where to put typedefs, a stmtlist
+    store: NormNode                 # where to put typedefs, a stmtlist
     procedure: string               # name of procedure we are transforming
     when cpsReparent:
       seen: HashSet[string]         # count/measure idents/syms by string
@@ -98,9 +98,9 @@ proc set(e: var Env; key: Name; val: VarLetIdentDef): Env
 
 proc init(e: var Env) =
   if e.fn.isNil:
-    e.fn = "fn".asName(info = e.store.NormNode)
+    e.fn = "fn".asName(info = e.store)
   if e.mom.isNil:
-    e.mom = "mom".asName(info = e.store.NormNode)
+    e.mom = "mom".asName(info = e.store)
   e.id = genTypeName(procedure(e), "env", info = e.via)
   if e.rs.hasType:
     e = e.set(e.rs.name, newVarIdentDef(e.rs))
@@ -130,7 +130,7 @@ proc populateType(e: Env; n: var NimNode) =
     n.add:
       newIdentDef(name, section.inferTypFromImpl, newEmptyNode()).NimNode
 
-proc objectType(e: Env): NimNode =
+proc objectType(e: Env): NormNode =
   ## turn an env into an object type
   # XXX: remove NimNode
   var pragma = newEmptyNode()
@@ -165,9 +165,9 @@ when cpsReparent:
       # offer ourselves to our parent instead
       reparent(e.parent, e)
 
-proc makeType*(e: Env): NimNode =
-  ## turn an env into a named object typedef `foo = object ...`
-  nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType)
+proc makeType*(e: Env): TypeDef =
+   ## turn an env into a named object typedef `foo = object ...`
+   nnkTypeDef.newTree(e.identity, newEmptyNode(), e.objectType).TypeDef
 
 proc first*(e: Env): Name = e.c
 
@@ -178,6 +178,14 @@ proc firstDef*(e: Env): IdentDef =
 proc getResult*(e: Env): NormNode =
   ## retrieve a continuation's result value from the env
   newDotExpr(e.castToChild(e.first), e.rs.name)
+
+proc getResultAsCall*(e: Env): Call =
+  ## Typed variant: retrieve a continuation's result value as a Call
+  Call e.getResult()
+
+proc getResultAsExpression*(e: Env): Expression =
+  ## Typed variant: retrieve a continuation's result value as Expression
+  Expression e.getResult()
 
 proc newEnv*(parent: Env; copy = off): Env =
   ## this is called as part of the recursion in the front-end,
@@ -269,14 +277,18 @@ proc identity*(e: var Env): Name =
   ## identifier of our continuation type
   result = e.id
 
-proc initialization(e: Env; field: Name, section: VarLetIdentDef): NimNode =
-  ## produce the `x = 34`
-  result = newStmtList()
-  # let/var sections basically become env2323(cont).foo34 = "some default"
-  if section.hasValue:
-    # this is our continuation type, fully cast
-    let child = e.castToChild(e.first)
-    result.add newAssignment(newDotExpr(child, field), section.val)
+proc initialization(e: Env; field: Name, section: VarLetIdentDef): NormNode =
+   ## produce the `x = 34`
+   result = newStmtList()
+   # let/var sections basically become env2323(cont).foo34 = "some default"
+   if section.hasValue:
+     # this is our continuation type, fully cast
+     let child = e.castToChild(e.first)
+     result.add newAssignment(newDotExpr(child, field), section.val)
+
+proc initializationAsStatement(e: Env; field: Name, section: VarLetIdentDef): Statement =
+  ## Typed variant: produce initialization assignment as Statement
+  initialization(e, field, section).Statement
 
 proc letOrVar(n: IdentDef): NimNodeKind =
   ## choose between let or var for proc parameters
@@ -288,18 +300,26 @@ proc letOrVar(n: IdentDef): NimNodeKind =
   else:
     result = nnkLetSection
 
-proc addAssignment(e: var Env; d: IdentDef): NimNode =
-  ## compose an assignment during addition of identdefs to env. For the
-  ## purposes of CPS, even though let and var sections contain identdefs this
-  ## proc should never handle those directly; see the overload below.
-  discard e.addIdentDef(d.letOrVar, d)
-  # don't attempt to redefine proc params!
-  result = newStmtList()
+proc addAssignment(e: var Env; d: IdentDef): NormNode =
+   ## compose an assignment during addition of identdefs to env. For the
+   ## purposes of CPS, even though let and var sections contain identdefs this
+   ## proc should never handle those directly; see the overload below.
+   discard e.addIdentDef(d.letOrVar, d)
+   # don't attempt to redefine proc params!
+   result = newStmtList()
 
-proc addAssignment(e: var Env; section: VarLetIdentDef): NimNode =
-  ## compose an assignment during addition of var|let identDefs to env
-  let (field, value) = e.addIdentDef(section.kind, section.identdef())
-  result = e.initialization(field, value)
+proc addAssignmentAsStatement(e: var Env; d: IdentDef): Statement =
+  ## Typed variant: compose assignment for IdentDef as Statement
+  addAssignment(e, d).Statement
+
+proc addAssignment(e: var Env; section: VarLetIdentDef): NormNode =
+   ## compose an assignment during addition of var|let identDefs to env
+   let (field, value) = e.addIdentDef(section.kind, section.identdef())
+   result = e.initialization(field, value)
+
+proc addAssignmentAsStatement(e: var Env; section: VarLetIdentDef): Statement =
+  ## Typed variant: compose assignment for VarLetIdentDef as Statement
+  addAssignment(e, section).Statement
 
 when false:
   proc getFieldViaLocal*(e: Env; n: NimNode): NimNode =
@@ -399,34 +419,43 @@ proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: NormNode): NormNode =
     else:
       {.warning: "pending https://github.com/nim-lang/Nim/issues/17851".}
 
-proc createContinuation*(e: Env; name: Name; goto: NimNode): NimNode =
-  ## allocate a continuation as `name` and maybe aim it at the leg `goto`
-  proc resultdot(n: Name): NormNode =
-    newDotExpr(e.castToChild(name), n)
-  result = newStmtList:
-    newAssignment name:
-      Alloc.hook(e.inherits, e.identity)
-  for field, section in e.pairs:
-    # omit special fields in the env that we use for holding
-    # custom functions, results, exceptions, and parent respectively
-    if field notin [e.fn, e.rs.name, e.mom]:
-      # the name from identdefs is not gensym'd (usually!)
+proc createContinuation*(e: Env; name: Name; goto: NimNode|NormNode = NilNimNode): NormNode =
+    ## allocate a continuation as `name` and maybe aim it at the leg `goto`
+    let goto = if goto.isNil: NilNimNode else: goto.NimNode
+    proc resultdot(n: Name): NormNode =
+      newDotExpr(e.castToChild(name), n)
+    result = newStmtList:
+      newAssignment name:
+        Alloc.hook(e.inherits, e.identity)
+    for field, section in e.pairs:
+      # omit special fields in the env that we use for holding
+      # custom functions, results, exceptions, and parent respectively
+      if field notin [e.fn, e.rs.name, e.mom]:
+        # the name from identdefs is not gensym'd (usually!)
+        result.add:
+          newAssignment(resultdot field, section.name)
+    if not goto.isNil:
       result.add:
-        newAssignment(resultdot field, section.name)
-  if not goto.isNil:
-    result.add:
-      newAssignment(resultdot e.fn, goto)
+        newAssignment(resultdot e.fn, goto)
 
-proc genException*(e: var Env): NimNode =
-  ## generates a new symbol of type ref Exception, then put it in the env.
-  ##
-  ## returns the access to the exception symbol from the env.
-  let ex = genField("ex")
-  e = e.set ex:
-    newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
-  result = newDotExpr(e.castToChild(e.first), ex)
+proc createContinuationAsStatement*(e: Env; name: Name; goto: NimNode|NormNode = NilNimNode): Statement =
+  ## Typed variant: allocate continuation as Statement
+  createContinuation(e, name, goto).Statement
 
-proc createRecover*(env: Env, exported = false): NimNode =
+proc genException*(e: var Env): NormNode =
+   ## generates a new symbol of type ref Exception, then put it in the env.
+   ##
+   ## returns the access to the exception symbol from the env.
+   let ex = genField("ex")
+   e = e.set ex:
+     newLetIdentDef(ex, newRefType(bindName("Exception")), newNilLit())
+   result = newDotExpr(e.castToChild(e.first), ex)
+
+proc genExceptionAsExpression*(e: var Env): Expression =
+  ## Typed variant: generate exception symbol access as Expression
+  genException(e).Expression
+
+proc createRecover*(env: Env, exported = false): NormNode =
   ## define procedures for retrieving the result of a continuation
   ##
   ## `exported` determines whether these procedures will be exported
@@ -442,7 +471,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
 
   # the result fetcher used in the Callback shim has a gensym'd proc name
   let fetch =
-    genProcName(procedure env, "recover", info=env.store.NormNode).NimNode
+    genProcName(procedure env, "recover", info=env.store).NimNode
 
   # the recover procedure name
   let recover = NimNode: ident"recover"
@@ -461,7 +490,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
     if exported:
       result = postfix(result, "*")
 
-  result =
+  let temp = 
     genAstOpt({}, tipe, recoveredResult, fetch, fetchStar = fetch.star,
               recoverStar = recover.star, c = env.first.NimNode,
               cont = env.identity.NimNode, contBase = env.inherits.NimNode,
@@ -485,6 +514,7 @@ proc createRecover*(env: Env, exported = false): NimNode =
         defer: c = cont(move base)     # due to void return types
         fetch(base)
 
+  result = temp.NormNode
   when cpsCallOperatorSupported and not defined cpsNoCallOperator:
     let callOperator = nnkAccQuoted.newTree ident"()"
     result.add:
@@ -494,6 +524,10 @@ proc createRecover*(env: Env, exported = false): NimNode =
         proc callOperatorStar(c: var cont): tipe {.used, nimcall.} =
           recover(c)
         {.pop.}
+
+proc createRecoverAsStatement*(env: Env, exported = false): Statement =
+  ## Typed variant: define recover procedures as Statement
+  createRecover(env, exported).Statement
 
 proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   ## the whelp needs to create a continuation
@@ -513,7 +547,7 @@ proc createWhelp*(env: Env; n: ProcDef; goto: NormNode): ProcDef =
   # hook the bootstrap
   result.body.add:
     newAssignment resultName:
-      Stack.hook initFrame(Stack, $goto, goto.lineInfoObj).NormNode:
+      Stack.hook initFrame(Stack, $goto, goto.lineInfoObj):
         newCall env.identity:
           Boot.hook newCall(env.root, resultName)
 
@@ -541,7 +575,7 @@ proc createBootstrap*(env: Env; n: ProcDef, goto: NormNode): ProcDef =
   result.body.add:
     newAssignment c:
       Head.hook:
-        Stack.hook initFrame(Stack, $goto, goto.lineInfoObj).NormNode:
+        Stack.hook initFrame(Stack, $goto, goto.lineInfoObj):
           Boot.hook c
 
   # rewrite the symbols used in the arguments to identifiers
@@ -589,3 +623,20 @@ proc rewriteVoodoo*(env: Env; n: NormNode): NormNode =
       desym it
       result = env.rewriteVoodoo it
   result = filter(n, voodoo)
+
+# Typed variants for transformation functions
+proc rewriteResultReturn*(e: Env; n: Statement): Statement =
+  ## Typed variant: rewrite result symbols in a Statement
+  rewriteResultReturn(e, n.NormNode).Statement
+
+proc rewriteSymbolsIntoEnvDotField*(e: var Env; n: Statement): Statement =
+  ## Typed variant: rewrite symbols in a Statement
+  rewriteSymbolsIntoEnvDotField(e, n.NormNode).Statement
+
+proc rewriteVoodoo*(env: Env; n: Statement): Statement =
+  ## Typed variant: rewrite voodoo calls in a Statement
+  rewriteVoodoo(env, n.NormNode).Statement
+
+proc maybeConvertToRootAsStatement*(e: Env; locals: Statement): Statement =
+  ## Typed variant: maybe convert to root and return Statement
+  maybeConvertToRoot(e, locals.NormNode).Statement
