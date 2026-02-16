@@ -728,9 +728,8 @@ proc shimAssign(env: var Env; store: NormNode, expr: NormNode, tail: NormNode): 
       dismiss()
     of Finished:
       assign
-      when false:
-        # we don't dealloc here, but maybe we should
-        dealloc(child, ctype)
+      # dealloc the dismissed child continuation
+      discard dealloc(child, ctype)
       tail
     of Running:
       # the child is still running; someone is trying to be clever
